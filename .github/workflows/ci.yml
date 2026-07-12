@@ -1,0 +1,94 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "integration/**"]
+  pull_request:
+    branches: [main, "integration/**"]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  secrets:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  javascript:
+    name: JS/TS — format, lint, typecheck, test, audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run format:check
+      - run: pnpm run lint
+      - run: pnpm run typecheck
+      - run: pnpm run test
+      - run: pnpm audit
+
+  python:
+    name: Python — format, lint, typecheck, test, security
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version-file: .python-version
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - run: pip install -r requirements-dev.txt
+      - run: black --check apps workers evals
+      - run: ruff check apps workers evals
+      - run: mypy apps/api/app workers/src evals/graders
+      - run: pytest
+      - run: bandit -q -r apps workers evals -c pyproject.toml
+      - run: pip-audit -r requirements-dev.txt
+
+  database:
+    name: DB — migration and backup-restore smoke
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: fel
+          POSTGRES_PASSWORD: fel-ci-only
+          POSTGRES_DB: fel_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U fel -d fel_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      # Run the smoke test inside the service container so the client tools
+      # (psql/pg_dump/pg_restore) always match the server version exactly —
+      # the runner's postgresql-client lags the postgres:17 image, and
+      # pg_dump refuses to dump a newer server.
+      - name: Apply migrations and run backup-restore smoke test
+        run: |
+          docker cp infra/scripts/backup_restore_smoke.sh ${{ job.services.postgres.id }}:/tmp/smoke.sh
+          docker cp db/migrations ${{ job.services.postgres.id }}:/tmp/migrations
+          docker exec \
+            -e PGHOST=localhost -e PGPORT=5432 -e PGUSER=fel \
+            -e PGPASSWORD=fel-ci-only -e PGDATABASE=fel_ci \
+            -e MIGRATIONS_DIR=/tmp/migrations \
+            ${{ job.services.postgres.id }} bash /tmp/smoke.sh
