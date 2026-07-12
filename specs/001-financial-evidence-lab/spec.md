@@ -1,10 +1,17 @@
 # Financial Evidence Lab — Product and Technical Specification
 
 **Status:** Clarified and implementation-ready
-**Version:** 1.1
-**Date:** 2026-07-11
+**Version:** 1.2
+**Date:** 2026-07-12
 **Owner:** wilsonhj
 **Working name:** Financial Evidence Lab (FEL)
+
+---
+
+## Changelog
+
+- **1.2 (2026-07-12):** This file is now the sole canonical specification; root `SPEC.md` is a pointer stub. Embedding Atlas deferred to P1/post-MVP. MVP retrieval lanes reduced from seven to four (dense, lexical, XBRL facts, tables). Extraction agents reduced from ten to five; normalization, validation, and citation verification reclassified as deterministic pipeline components. Benchmark phased: 50–100-question smoke set at M2, frozen >= 300-question set at M5. Section 25 replaced by a pointer to `docs/decisions/ADR-0002-mvp-stack.md`. Added RLS connection rules, job-queue heartbeat/reaper details, embedding dimension/`halfvec` decisions, reranker trigger rule, and SSE heartbeat/reconnect requirements. Removed stale Docker references.
+- **1.1 (2026-07-11):** Clarified team SaaS, B2B SaaS vertical, revenue/gross-profit scope, and locked MVP defaults.
 
 ---
 
@@ -113,7 +120,7 @@ The launch persona is the **public-equity analyst working in a team**. Portfolio
 | Deployment | Team-oriented SaaS | OIDC, organizations, collaboration, tenant isolation, and managed infrastructure are required |
 | Financial model | Revenue and gross profit | Full statements and valuation remain post-MVP |
 | Initial vertical | B2B SaaS | Initial ontology covers ARR, retention, customers, seats, pricing, bookings, billings, and gross margin |
-| Embedding Atlas | Required MVP capability | Atlas delivery and acceptance tests are P0 |
+| Embedding Atlas | Deferred to P1 (post-MVP) | Atlas delivery and acceptance tests move out of the MVP; retrieval observability ships via the Search Observatory |
 | Market data | Bring-your-own provider | A provider contract is required; the product does not redistribute unlicensed data |
 
 ---
@@ -123,7 +130,7 @@ The launch persona is the **public-equity analyst working in a team**. Portfolio
 1. The user selects a company and an **as-of timestamp**.
 2. The system shows available filings, facts, evidence coverage, and freshness.
 3. The user asks a question in natural language or starts from a research template.
-4. A query planner selects lexical, vector, financial-fact, table, graph, and time-series retrieval lanes.
+4. A query planner selects lexical, vector, financial-fact, and table retrieval lanes (graph and time-series lanes are post-MVP).
 5. The Search Observatory streams candidates, filters, scores, and reranking decisions.
 6. The answer is composed as atomic claims with claim-level citations.
 7. The user sends evidence to the Extraction Studio.
@@ -131,7 +138,7 @@ The launch persona is the **public-equity analyst working in a team**. Portfolio
 9. Deterministic validators check units, periods, duplicates, accounting identities, and schema constraints.
 10. The user approves or edits extracted values.
 11. Approved drivers populate a visual revenue model.
-12. The Forecast Lab compares baselines, scenarios, and historical analogues.
+12. The Forecast Lab compares baselines and scenarios (historical analogues are post-MVP).
 13. The user exports a brief containing evidence, assumptions, calculations, uncertainty, and cutoff metadata.
 
 ---
@@ -141,11 +148,11 @@ The launch persona is the **public-equity analyst working in a team**. Portfolio
 ### 7.1 Global navigation
 
 - **Home:** recent workspaces, alerts, ingestion health.
-- **Universe:** companies, sectors, watchlists, embedding atlas.
+- **Universe:** companies, sectors, watchlists, embedding atlas (atlas deferred post-MVP).
 - **Research:** question answering, search observatory, document reader.
 - **Extract:** agent runs, review queues, normalized facts.
 - **Model:** revenue-driver graph, statements, scenarios, sensitivities.
-- **Forecast:** models, backtests, analogues, uncertainty.
+- **Forecast:** models, backtests, uncertainty (analogues deferred post-MVP).
 - **Audit:** citations, lineage, data quality, evaluation.
 - **Settings:** providers, data sources, permissions, retention.
 
@@ -168,7 +175,9 @@ Changing the as-of timestamp must invalidate or recompute downstream results tha
 
 ## 8. Experience specifications
 
-### 8.1 Universe and Embedding Atlas
+### 8.1 Universe and Embedding Atlas — post-MVP (deferred to P1)
+
+The Embedding Atlas is deferred from the MVP to P1. The requirements below are retained for the post-MVP delivery; the `UX-ATL-*` identifiers are preserved and marked deferred. In the MVP, retrieval observability is provided by the Search Observatory (Section 8.2) and exact-neighbor detail views.
 
 The Embedding Atlas is a GPU-rendered, zoomable projection of passages, facts, events, or companies.
 
@@ -186,13 +195,13 @@ The Embedding Atlas is a GPU-rendered, zoomable projection of passages, facts, e
 
 The interface must state that UMAP/t-SNE or similar two-dimensional projections distort global and local distances. Exact nearest-neighbor scores remain available in the detail panel.
 
-#### Acceptance criteria
+#### Acceptance criteria (all deferred, post-MVP)
 
-- `UX-ATL-001`: Render 100,000 projected points at p95 >= 30 frames per second on the reference client defined in Section 16.1.
-- `UX-ATL-002`: Clicking a point opens source evidence in two interactions or fewer.
-- `UX-ATL-003`: Filters update the visible set without reloading the page.
-- `UX-ATL-004`: Projection method, parameters, corpus version, and embedding model are recorded.
-- `UX-ATL-005`: A keyboard-accessible table exposes the filtered point set and exact neighbor distances without requiring the projection.
+- `UX-ATL-001` (deferred, post-MVP): Render 100,000 projected points at p95 >= 30 frames per second on the reference client defined in Section 16.1.
+- `UX-ATL-002` (deferred, post-MVP): Clicking a point opens source evidence in two interactions or fewer.
+- `UX-ATL-003` (deferred, post-MVP): Filters update the visible set without reloading the page.
+- `UX-ATL-004` (deferred, post-MVP): Projection method, parameters, corpus version, and embedding model are recorded.
+- `UX-ATL-005` (deferred, post-MVP): A keyboard-accessible table exposes the filtered point set and exact neighbor distances without requiring the projection.
 
 ### 8.2 Search Observatory
 
@@ -200,13 +209,14 @@ The Search Observatory is the default research surface. It combines an answer ar
 
 #### Retrieval lanes
 
+The MVP ships four retrieval lanes:
+
 - dense vector search;
 - lexical/full-text search;
-- XBRL fact lookup;
-- table/row retrieval;
-- entity-event graph traversal;
-- time-series analogue retrieval; and
-- optional external/web evidence.
+- XBRL fact lookup; and
+- table/row retrieval.
+
+Deferred lanes (post-MVP): entity-event graph traversal, time-series analogue retrieval, and optional external/web evidence.
 
 #### Visual trace
 
@@ -260,16 +270,15 @@ The studio renders an execution graph and a review queue. Each agent has a typed
 
 #### Initial agents
 
+The MVP ships five agents:
+
 1. Document and section classifier.
-2. Entity and product resolver.
-3. Financial-fact and table extractor.
-4. KPI definition and value extractor.
-5. Management guidance extractor.
-6. Revenue-driver mapper.
-7. Risk and contradiction detector.
-8. Period, unit, currency, and scale normalizer.
-9. Accounting and schema validator.
-10. Citation verifier.
+2. Financial-fact and table extractor.
+3. KPI definition and value extractor.
+4. Management guidance extractor.
+5. Revenue-driver mapper.
+
+Period/unit/currency/scale normalization, accounting and schema validation, and citation verification are explicitly deterministic pipeline components, not agents. They run in versioned code on every extraction and answer path (Sections 12, 13.3). A dedicated entity/product resolver agent and risk/contradiction detector agent are deferred (post-MVP); contradiction detection is owned by the claim/citation pipeline (`FR-RAG-008`, Section 19.6).
 
 #### Agent constraints
 
@@ -345,9 +354,10 @@ The Forecast Lab compares approaches rather than treating an LLM response as a f
 
 - naive last-value and seasonal baselines;
 - analyst driver model;
-- configurable statistical model;
-- retrieved historical analogues; and
+- configurable statistical model; and
 - ensemble of approved models.
+
+The historical-analogue forecast lane is deferred (post-MVP): retrieved historical analogues and similarity rationales are not an MVP lane or output, but the point-in-time retrieval design must not preclude adding them later.
 
 #### MVP forecast contract
 
@@ -368,7 +378,6 @@ LLMs may extract drivers, classify regimes, explain differences, and propose sce
 - historical backtest and rolling-origin error;
 - error by forecast horizon;
 - assumptions and feature/driver contributions;
-- retrieved analogues and similarity rationale;
 - data cutoff and training window; and
 - model/version identifiers.
 
@@ -432,7 +441,7 @@ The manifest includes corpus IDs, document hashes, model and prompt versions, re
 
 ### 9.3 Retrieval and answers
 
-- `FR-RAG-001`: Support dense, lexical, structured-fact, table, and graph retrieval.
+- `FR-RAG-001`: Support dense, lexical, structured-fact, and table retrieval (graph, time-series analogue, and external/web lanes are deferred, post-MVP).
 - `FR-RAG-002`: Apply entity, document type, period, publication time, and source filters before generation.
 - `FR-RAG-003`: Support reciprocal rank fusion and pluggable rerankers.
 - `FR-RAG-004`: Store full retrieval traces for evaluation and replay.
@@ -487,7 +496,7 @@ Web client (Next.js/React/TypeScript)
 - Next.js with React and TypeScript.
 - React Flow for extraction and financial-driver graphs.
 - Apache ECharts for financial charts, heatmaps, Sankey/flow, and high-volume canvas views.
-- deck.gl for the embedding atlas and large point clouds.
+- deck.gl for the embedding atlas and large point clouds (deferred with the Embedding Atlas, post-MVP).
 - TanStack Query for server state.
 - Zustand or equivalent for local interaction state.
 - Web Workers for CPU-heavy projection and chart transforms. DuckDB-Wasm is deferred until measured client-side analytical demand justifies it.
@@ -496,12 +505,12 @@ Web client (Next.js/React/TypeScript)
 
 - FastAPI and Pydantic for typed APIs and extraction schemas.
 - Supabase Postgres for application, temporal, and audit data.
-- Supabase pgvector for dense search and PostgreSQL full-text search for lexical retrieval.
-- A PostgreSQL jobs table claimed with `FOR UPDATE SKIP LOCKED` for asynchronous ingestion and agent runs; Redis and Celery are deferred.
+- Supabase pgvector (>= 0.8.2, which fixes CVE-2026-3172) for dense search and PostgreSQL full-text search for lexical retrieval; embeddings are truncated to <= 512 dimensions and stored as `halfvec`, and filtered queries use `hnsw.iterative_scan = relaxed_order` in the tuning baseline.
+- A PostgreSQL jobs table claimed with `FOR UPDATE SKIP LOCKED` for asynchronous ingestion and agent runs. The table carries `queue`/`priority` and `heartbeat_at` columns; workers claim inside a short transaction and process outside it (claim-short pattern), and a stale-heartbeat reaper returns abandoned jobs to the queue. Redis and Celery are deferred.
 - Supabase Storage for immutable source documents, rendered pages, and exports.
-- Supabase Auth and row-level security for user identity and tenant isolation.
-- OpenAI behind provider interfaces for initial generation and embeddings; reciprocal-rank fusion is the initial reranker.
-- Alpha Vantage behind the market-data adapter for initial adjusted price, volume, dividend, and split data.
+- Supabase Auth and row-level security for user identity and tenant isolation. FastAPI request paths connect with a non-privileged database role and set `request.jwt.claims` per request via `SET LOCAL` so RLS policies apply to application queries; the service-role key is confined to workers and admin paths. Organization membership is checked against membership tables, not JWT claims alone, and `user_metadata` is forbidden in RLS policies.
+- OpenAI behind provider interfaces for initial generation and `text-embedding-3` embeddings; reciprocal-rank fusion is the initial reranker (Section 10.2 defines the cross-encoder trigger).
+- Alpha Vantage behind the market-data adapter for initial adjusted price, volume, dividend, and split data (paid tier >= USD 49.99/month required; the free tier is 25 requests/day and adjusted daily series are premium-only).
 - Polars/PyArrow for columnar transforms.
 
 #### Deployment
@@ -536,6 +545,8 @@ RRF(d) = sum_r 1 / (k + rank_r(d))
 ```
 
 Weights, `k`, top-k, and reranker versions are stored with the retrieval trace.
+
+**Reranker trigger rule.** RRF fusion ships first without a dedicated reranker. If frozen-benchmark Recall@10 falls below 90%, add a cross-encoder reranker over the top-100 fused candidates before attempting any index re-engineering.
 
 ### 10.3 Point-in-time correctness
 
@@ -667,7 +678,7 @@ Use decimal arithmetic for financial values. Do not store authoritative monetary
 8. Normalize XBRL facts and entity identifiers.
 9. Chunk by disclosure structure.
 10. Generate embeddings.
-11. Build lexical, vector, structured, and graph indexes.
+11. Build lexical, vector, and structured indexes (graph indexes are deferred, post-MVP).
 12. Run quality checks.
 13. Publish a corpus version atomically.
 
@@ -776,6 +787,8 @@ Documents are untrusted data. The agent runtime must:
 ## 15. API specification
 
 Use REST for commands and stable resources, Server-Sent Events for streamed runs, and signed object URLs for large artifacts. GraphQL can be reconsidered after the domain stabilizes.
+
+SSE streams send heartbeat events every 15–30 seconds, and clients reconnect with `Last-Event-ID` to resume without losing events. Streamed runs are designed to complete or checkpoint within Railway's 15-minute HTTP cap (5-minute idle cap); runs that could exceed it must checkpoint and let the client resume.
 
 ### 15.1 Representative endpoints
 
@@ -888,7 +901,7 @@ Latest two stable versions of Chrome, Safari, Firefox, and Edge. The atlas may r
 ### 17.1 Security controls
 
 - OIDC authentication and organization-scoped authorization.
-- Row-level tenant isolation.
+- Row-level tenant isolation. FastAPI request paths connect with a non-privileged role and apply per-request `SET LOCAL request.jwt.claims` so RLS policies govern application queries; the service-role key is confined to workers and admin paths. Membership is checked against membership tables, not JWT claims alone, and `user_metadata` is forbidden in RLS policies.
 - Encryption in transit and at rest.
 - Secrets in a managed secret store.
 - Signed, expiring object-storage URLs.
@@ -984,9 +997,14 @@ Evaluation is a product feature, not a launch-only activity.
 - Comparison with naive and seasonal baselines.
 - Error and calibration by horizon, company, sector, and regime.
 - Interval coverage.
-- Performance before and after retrieved analogues.
+- Performance before and after retrieved analogues (deferred with the analogue lane, post-MVP).
 
-### 19.5 Initial benchmark set
+### 19.5 Benchmark set and phasing
+
+The benchmark is delivered in two phases:
+
+- **M2 smoke benchmark:** the Milestone 2 exit gate uses a 50–100-question smoke benchmark drawn from the categories below, sufficient to exercise every retrieval lane and citation state.
+- **M5 frozen benchmark:** the frozen, dual-adjudicated set of at least 300 questions described below is required at the Milestone 5 release gate.
 
 Create a versioned internal benchmark containing:
 
@@ -1001,7 +1019,7 @@ Create a versioned internal benchmark containing:
 - restatement handling; and
 - insufficient-evidence cases.
 
-The initial benchmark contains at least 300 adjudicated questions across at least 20 US-listed B2B SaaS issuers, including a minimum of 30 cases in each listed category. Two qualified reviewers adjudicate disagreements.
+The frozen M5 benchmark contains at least 300 adjudicated questions across at least 20 US-listed B2B SaaS issuers, including a minimum of 30 cases in each listed category. Two qualified reviewers adjudicate disagreements. The M2 smoke benchmark does not require full category minimums or dual adjudication.
 
 ### 19.6 Release gates
 
@@ -1016,7 +1034,7 @@ A release candidate must meet all of the following on the frozen benchmark:
 | Retrieval Recall@10 | >= 90.0% |
 | Guidance extraction F1 | >= 90.0% |
 | KPI/revenue-driver extraction F1 | >= 88.0% |
-| Contradiction-detection recall | >= 90.0% |
+| Contradiction-detection recall (owned by the claim/citation pipeline, `FR-RAG-008`, not a dedicated agent) | >= 90.0% |
 | Unsupported-answer abstention precision | >= 95.0% |
 | 80% forecast-interval empirical coverage | 75%–85% |
 
@@ -1035,7 +1053,7 @@ No release is promoted if any gate fails. Advanced forecasting models must also 
 - Integration tests from ingestion through cited answer.
 - End-to-end tests for the north-star workflow.
 - Visual regression tests for high-value screens.
-- Load tests for ingestion, retrieval, atlas rendering, and recalculation.
+- Load tests for ingestion, retrieval, and recalculation (atlas-rendering load tests deferred with the Atlas, post-MVP).
 - Security tests for tenant isolation, prompt injection, SSRF, and unsafe HTML.
 
 ### 20.2 Required CI checks
@@ -1059,7 +1077,7 @@ Use milestone exit criteria rather than fixed calendar promises.
 Deliver:
 
 - repository and CI;
-- local containerized development environment;
+- direct local Next.js/FastAPI/worker processes against a hosted Supabase development project (no Docker requirement);
 - authentication skeleton;
 - PostgreSQL/pgvector schema;
 - object storage abstraction;
@@ -1090,10 +1108,9 @@ Deliver:
 - query planner;
 - rank fusion/reranking;
 - Search Observatory; and
-- structured claims and citations; and
-- production Embedding Atlas with accessible table fallback.
+- structured claims and citations.
 
-Exit criteria: benchmark questions meet retrieval and citation thresholds with point-in-time filtering enabled.
+Exit criteria: the 50–100-question smoke benchmark (Section 19.5) meets retrieval and citation thresholds with point-in-time filtering enabled.
 
 ### Milestone 3 — Agentic extraction
 
@@ -1126,12 +1143,13 @@ Deliver:
 
 - baseline and driver forecasts;
 - rolling backtests;
-- historical analogue retrieval;
 - uncertainty visualization;
 - audit graph; and
 - Markdown/PDF/CSV/JSON exports.
 
-Exit criteria: the north-star workflow is reproducible from cutoff to exported brief.
+Historical analogue retrieval is deferred (post-MVP) with the analogue forecast lane.
+
+Exit criteria: the north-star workflow is reproducible from cutoff to exported brief, and all Section 19.6 gates pass on the frozen >= 300-question benchmark (Section 19.5).
 
 ---
 
@@ -1148,10 +1166,10 @@ Exit criteria: the north-star workflow is reproducible from cutoff to exported b
 - Human approval for extracted facts.
 - Revenue driver graph and scenarios.
 - Evaluation harness.
-- Embedding Atlas and exact-neighbor detail view.
 
 ### P1
 
+- Embedding Atlas and exact-neighbor detail view.
 - Side-by-side filing change detection.
 - Guidance-versus-actual tracking.
 - Forecast analogue retrieval.
@@ -1210,18 +1228,9 @@ Guardrails include unsupported-claim rate, temporal-violation rate, citation fai
 
 ## 25. Resolved architecture decisions
 
-All MVP architecture decisions are locked:
+The locked MVP stack is recorded in a single place: [`docs/decisions/ADR-0002-mvp-stack.md`](../../docs/decisions/ADR-0002-mvp-stack.md) (Status: Accepted). This specification does not restate it.
 
-1. Next.js App Router and TypeScript provide the frontend; FastAPI and Python provide the modular backend.
-2. Supabase provides Postgres, pgvector, Auth, row-level security, and Storage.
-3. PostgreSQL `FOR UPDATE SKIP LOCKED` jobs provide the initial durable queue; Redis, Celery, and Kafka are deferred.
-4. OpenAI is the initial generation and embedding provider behind portable interfaces. Hybrid reciprocal-rank fusion is used before adding a dedicated reranker.
-5. Alpha Vantage is the initial bring-your-own market-data adapter; FRED and SEC remain direct official sources.
-6. Railway hosts the web, API, and worker processes from one monorepo.
-7. Sentry and structured JSON logs provide initial observability; a full OpenTelemetry stack is deferred.
-8. DuckDB-Wasm, Terraform/Pulumi, microservices, autonomous multi-agent conversations, and additional AI providers are deferred until measured requirements justify them.
-
-Changing these decisions requires a new specification version or an approved ADR with benchmark evidence that the current default fails a requirement.
+Change rule: product-scope changes require a new specification version; implementation-stack changes require a new ADR with benchmark evidence that the current default fails a requirement.
 
 ---
 
@@ -1291,23 +1300,24 @@ The research papers above are useful design inputs, not independent guarantees o
 │   ├── calculation-engine/
 │   ├── retrieval-evals/
 │   └── ui/
-├── db/
+├── db/                      # created when the first migrations land
 │   ├── migrations/
 │   └── seeds/
 ├── evals/
 │   ├── datasets/
 │   ├── graders/
 │   └── reports/
-├── infra/
+├── infra/                   # created when infrastructure-as-code lands
 ├── docs/
 │   ├── architecture/
 │   ├── decisions/
 │   └── threat-model/
-├── docker-compose.yml
 ├── Makefile
 ├── PLAN.md
 ├── TASKS.md
 └── README.md
 ```
+
+`db/` and `infra/` are later-created directories; local development runs direct processes against hosted Supabase, so no `docker-compose.yml` exists.
 
 The first implementation commit should establish contracts, temporal semantics, and evaluation fixtures before building the conversational surface. These foundations are expensive to retrofit after data and user workflows accumulate.

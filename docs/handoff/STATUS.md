@@ -38,8 +38,10 @@ Last updated: 2026-07-12
 
 ## In progress
 
-- Spec v1.2 is being prepared: Embedding Atlas demoted to P1, lanes reduced
-  from 7 to 4, benchmark phasing (T0214a/T0214b), and pgvector/RLS mandates
+- Spec v1.2 is applied on PR #50: Embedding Atlas demoted to P1, lanes reduced
+  from 7 to 4, benchmark phasing (T0214a/T0214b), pgvector/RLS mandates, the
+  locked stack recorded in ADR-0002, and the feature directory made the sole
+  canonical source (root SPEC/PLAN/TASKS are pointer stubs)
 
 ## Not started
 

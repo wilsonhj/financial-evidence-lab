@@ -1,6 +1,6 @@
 # Financial Evidence Lab — Implementation Plan
 
-**Specification:** `spec.md` v1.1
+**Specification:** `spec.md` v1.2
 **Deployment:** Railway-hosted team SaaS with Supabase state
 **Initial vertical:** US-listed B2B SaaS
 **MVP model:** Revenue and gross profit
@@ -18,10 +18,10 @@ Each milestone ends with a deployable increment and an objective exit gate. Task
 | Platform | Team SaaS foundation | Supabase Auth/RLS, organizations, RBAC, Railway environments, GitHub Actions |
 | Data | SEC, XBRL, FRED, BYO market data | Immutable source store, parsers, normalized facts, corpus versions |
 | Retrieval | Observable hybrid RAG | Lexical/vector/fact/table search, fusion, reranking, traces |
-| Visualization | Coordinated analytical UI | Evidence reader, Search Observatory, Embedding Atlas |
+| Visualization | Coordinated analytical UI | Evidence reader, Search Observatory (Embedding Atlas deferred post-MVP) |
 | Extraction | Typed human-reviewed agents | KPI, guidance, driver extraction and deterministic validation |
 | Modeling | Revenue/gross-profit graph | Decimal calculation engine, scenarios, lineage, sensitivities |
-| Forecasting | Quarterly 1–8 quarter forecasts | Baselines, driver models, backtests, intervals, analogues |
+| Forecasting | Quarterly 1–8 quarter forecasts | Baselines, driver models, backtests, intervals (analogues deferred post-MVP) |
 | Trust | Evaluation, security, audit | Release gates, cost limits, threat controls, reproducible exports |
 
 ## 3. Milestones
@@ -48,14 +48,13 @@ Exit gate:
 - Temporal-cutoff tests achieve 100% validity.
 - Market-data contract rejects missing corporate-action adjustments.
 
-### M2 — Observable hybrid retrieval and Atlas
+### M2 — Observable hybrid retrieval
 
-Deliver finance-aware chunks, lexical/vector/fact/table indexes, query planning, reciprocal-rank fusion, reranking, Search Observatory, structured claim/citation states, citation verification, and the Embedding Atlas.
+Deliver finance-aware chunks, lexical/vector/fact/table indexes, query planning, reciprocal-rank fusion, reranking, Search Observatory, structured claim/citation states, and citation verification. The Embedding Atlas is deferred post-MVP.
 
 Exit gate:
 
-- Retrieval and citation gates in `spec.md` Section 19.6 pass.
-- The Atlas meets the reference-client frame-rate target and has an accessible table fallback.
+- Retrieval and citation gates in `spec.md` Section 19.6 pass on the 50–100-question smoke benchmark (`spec.md` Section 19.5).
 - A saved query replays immutable inputs and retrieval trace.
 
 ### M3 — Agentic extraction
@@ -81,24 +80,18 @@ Exit gate:
 
 ### M5 — Forecast Lab and MVP release
 
-Deliver seasonal-naive and driver baselines, rolling-origin backtests, 1–8 quarter horizons, 50/80/95% intervals, historical analogues, forecast comparison, complete audit graph, research briefs, evidence manifests, and production readiness.
+Deliver seasonal-naive and driver baselines, rolling-origin backtests, 1–8 quarter horizons, 50/80/95% intervals, forecast comparison, complete audit graph, research briefs, evidence manifests, and production readiness. Historical analogue retrieval is deferred post-MVP.
 
 Exit gate:
 
-- All Section 19.6 release gates pass.
+- The frozen, dual-adjudicated >= 300-question benchmark (`spec.md` Section 19.5) is complete, and all Section 19.6 release gates pass on it.
 - Advanced models beat the seasonal-naive baseline or remain non-default.
 - Security, accessibility, load, restore, cost, and end-to-end tests pass.
 - The complete definition of done in `spec.md` Section 26 passes.
 
 ## 4. Recorded architecture decisions
 
-1. Next.js App Router + TypeScript frontend and FastAPI + Python modular backend.
-2. Supabase Postgres/pgvector, Auth, RLS, and Storage.
-3. PostgreSQL `FOR UPDATE SKIP LOCKED` jobs; no Redis/Celery/Kafka in the MVP.
-4. OpenAI generation and embeddings behind provider interfaces; no dedicated reranker initially.
-5. Alpha Vantage as the first market-data adapter; direct SEC and FRED integrations.
-6. Railway for web/API/worker deployment and GitHub Actions for CI gates.
-7. Sentry plus structured JSON logs; DuckDB-Wasm and Terraform/Pulumi deferred.
+The locked MVP stack, its revisit triggers, and the change rule are recorded in `docs/decisions/ADR-0002-mvp-stack.md` (Status: Accepted). This plan does not restate them.
 
 The embedding projection method remains an implementation detail selected by benchmark quality and performance, not a product-scope decision.
 
@@ -115,7 +108,7 @@ The embedding projection method remains an implementation detail selected by ben
 ```text
 Platform/contracts
   -> temporal corpus
-  -> retrieval + Atlas
+  -> retrieval
   -> extraction
   -> model graph
   -> forecasting
