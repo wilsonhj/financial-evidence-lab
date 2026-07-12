@@ -41,11 +41,16 @@ SQL
 echo "==> Dumping database"
 pg_dump --format=custom --file "$DUMP_FILE"
 
-echo "==> Dropping and recreating public schema"
-psql --set ON_ERROR_STOP=1 --quiet \
-  --command "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+echo "==> Dropping and recreating database ${PGDATABASE}"
+# Restore must target a genuinely empty database, not just a fresh public
+# schema — migrations may create other schemas or extensions whose leftovers
+# would mask missing restore behavior.
+psql --dbname postgres --set ON_ERROR_STOP=1 --quiet \
+  --command "DROP DATABASE \"${PGDATABASE}\" WITH (FORCE);"
+psql --dbname postgres --set ON_ERROR_STOP=1 --quiet \
+  --command "CREATE DATABASE \"${PGDATABASE}\";"
 
-echo "==> Restoring dump"
+echo "==> Restoring dump into the fresh database"
 pg_restore --exit-on-error --dbname "$PGDATABASE" "$DUMP_FILE"
 
 echo "==> Verifying marker survived restore"
