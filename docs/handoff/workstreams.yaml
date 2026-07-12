@@ -45,12 +45,12 @@ defaults:
 packages:
   # M0 — platform foundations. M0-INFRA-CI gates every other pending M0 package
   # (M0-PLATFORM inherits it through M0-CONTRACTS).
-  - id: M0-SCAFFOLD
+  - id: M0-SCAFFOLD # merged via PR #50 (integration/m0 @ 1ec35dc)
     tasks: [T0001]
     depends_on: []
     team: platform
-    branch: claude/repo-analysis-g0fvjy # implemented on PR #50 (a45b999 + e2966a2)
-    status: review # awaiting integration merge
+    branch: claude/repo-analysis-g0fvjy # PR #50
+    status: merged
     allowed_paths:
       - apps/**
       - workers/**
@@ -76,6 +76,7 @@ packages:
     depends_on: [M0-SCAFFOLD]
     team: platform
     branch: agent/m0-infra-ci
+    status: ready
     allowed_paths: [infra/**, db/**, .github/workflows/**]
   - id: M0-CONTRACTS
     tasks: [T0003]

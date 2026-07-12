@@ -4,7 +4,7 @@ Tasks are ordered by dependency. A task is complete only when its code, tests, t
 
 ## M0 — Platform and contracts
 
-- [ ] `T0001` Scaffold the monorepo, formatting, typing, unit tests, security scanning, and CI cache.
+- [x] `T0001` Scaffold the monorepo, formatting, typing, unit tests, security scanning, and CI cache.
 - [ ] `T0002` Configure direct local Next.js/FastAPI/worker processes with mocked providers and hosted-Supabase environment placeholders; Docker is not required.
 - [ ] `T0003` Define OpenAPI and JSON-schema versioning rules and generate the TypeScript client.
 - [ ] `T0004` Implement Supabase Auth login, organizations, membership, and owner/editor/reviewer/viewer roles (`FR-WRK-001`–`004`).
