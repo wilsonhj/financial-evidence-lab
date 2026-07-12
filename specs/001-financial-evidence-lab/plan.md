@@ -1,6 +1,6 @@
 # Financial Evidence Lab — Implementation Plan
 
-**Specification:** `SPEC.md` v1.1
+**Specification:** `spec.md` v1.1
 **Deployment:** Railway-hosted team SaaS with Supabase state
 **Initial vertical:** US-listed B2B SaaS
 **MVP model:** Revenue and gross profit
@@ -9,7 +9,7 @@
 
 Build a pnpm/Python monorepo with a Next.js web process, FastAPI modular-monolith API, and one Python worker. Use Supabase for Postgres/pgvector, Auth, RLS, and Storage; Railway for runtime deployment; OpenAI for initial generation/embeddings; and Alpha Vantage for the first market-data adapter. Establish temporal semantics, immutable evidence, typed contracts, deterministic calculations, and evaluation fixtures before adding generative workflows.
 
-Each milestone ends with a deployable increment and an objective exit gate. Tasks are defined in `TASKS.md`; requirement identifiers refer to `SPEC.md`.
+Each milestone ends with a deployable increment and an objective exit gate. Tasks are defined in `tasks.md`; requirement identifiers refer to `spec.md`.
 
 ## 2. Workstreams
 
@@ -54,7 +54,7 @@ Deliver finance-aware chunks, lexical/vector/fact/table indexes, query planning,
 
 Exit gate:
 
-- Retrieval and citation gates in `SPEC.md` Section 19.6 pass.
+- Retrieval and citation gates in `spec.md` Section 19.6 pass.
 - The Atlas meets the reference-client frame-rate target and has an accessible table fallback.
 - A saved query replays immutable inputs and retrieval trace.
 
@@ -88,7 +88,7 @@ Exit gate:
 - All Section 19.6 release gates pass.
 - Advanced models beat the seasonal-naive baseline or remain non-default.
 - Security, accessibility, load, restore, cost, and end-to-end tests pass.
-- The complete definition of done in `SPEC.md` Section 26 passes.
+- The complete definition of done in `spec.md` Section 26 passes.
 
 ## 4. Recorded architecture decisions
 

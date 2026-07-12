@@ -87,5 +87,5 @@ Tasks are ordered by dependency. A task is complete only when its code, tests, t
 - [ ] `T0509` Build complete source-to-export audit traversal.
 - [ ] `T0510` Export Markdown/PDF briefs, CSV/XLSX tables, JSON evidence bundles, and workspace manifests.
 - [ ] `T0511` Execute accessibility, security, load, restore, provider-failure, and browser suites.
-- [ ] `T0512` Verify every `SPEC.md` Section 19.6 gate and Section 26 definition-of-done item.
+- [ ] `T0512` Verify every `spec.md` Section 19.6 gate and Section 26 definition-of-done item.
 - [ ] `T0513` Produce the immutable MVP release artifact and signed evaluation report.

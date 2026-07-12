@@ -7,6 +7,8 @@ Implementation specification for a highly visual, evidence-first financial resea
 - [`SPEC.md`](./SPEC.md) — product, UX, architecture, data, API, evaluation, security, and delivery specification.
 - [`PLAN.md`](./PLAN.md) — implementation sequence, architecture workstreams, and milestone gates.
 - [`TASKS.md`](./TASKS.md) — dependency-ordered, testable implementation backlog mapped to the specification.
+- [`.specify/`](./.specify/) — GitHub Spec Kit configuration, constitution, scripts, and templates.
+- [`specs/001-financial-evidence-lab/`](./specs/001-financial-evidence-lab/) — Spec Kit feature artifacts used by `$speckit-implement`.
 
 ## Product thesis
 
@@ -24,4 +26,4 @@ Financial analysis should not force users to choose between conversational AI, d
 
 ## Status
 
-Specification clarified with team SaaS, B2B SaaS, revenue/gross-profit modeling, Embedding Atlas, and bring-your-own market data as the locked MVP defaults. No production code has been implemented yet.
+Specification clarified with team SaaS, B2B SaaS, revenue/gross-profit modeling, Embedding Atlas, Supabase, OpenAI, Alpha Vantage, Railway, and a PostgreSQL job queue as the locked MVP defaults. GitHub Spec Kit 0.12.11 is initialized in Codex skills mode. No production code has been implemented yet.
