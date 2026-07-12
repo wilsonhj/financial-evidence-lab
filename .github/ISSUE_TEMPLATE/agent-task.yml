@@ -1,0 +1,56 @@
+name: Agent work package
+description: A bounded implementation assignment for Codex, Claude Code, or another agent
+title: "[PACKAGE-ID] "
+labels: ["agent-task"]
+body:
+  - type: input
+    id: package
+    attributes:
+      label: Work package ID
+    validations:
+      required: true
+  - type: input
+    id: tasks
+    attributes:
+      label: Spec Kit task IDs
+      placeholder: T0001
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Required outcome and acceptance criteria
+    validations:
+      required: true
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies and frozen contract versions
+    validations:
+      required: true
+  - type: textarea
+    id: paths
+    attributes:
+      label: Allowed and forbidden paths
+    validations:
+      required: true
+  - type: textarea
+    id: tests
+    attributes:
+      label: Required checks and evidence
+    validations:
+      required: true
+  - type: dropdown
+    id: credentials
+    attributes:
+      label: Credentials needed?
+      options: ["No — use mocks", "Yes — integration lead must provision"]
+    validations:
+      required: true
+  - type: checkboxes
+    id: contract
+    attributes:
+      label: Agent contract
+      options:
+        - label: I will use one branch/worktree, stay within allowed paths, push checkpoints, and never include secrets.
+          required: true
