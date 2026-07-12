@@ -9,10 +9,9 @@ Last updated: 2026-07-12
 - Parallel handoff merged: `369777f` via PR #2
 - Active implementation integration branch: `integration/m0`
 - Milestone gate issues: #3–#8
-- Work-package issues: #9–#49 — **STALE**: these were generated from the
-  original 41-package queue and are pending re-sync to the restructured
-  package set in `workstreams.yaml`. Do not dispatch from their bodies until
-  the re-sync lands.
+- Work-package issues: #51–#68, one per pending package, mapped by the
+  `issue:` field in `workstreams.yaml`. Legacy issues #9–#49 are closed
+  (#9 completed via PR #50; #10–#49 superseded by the queue restructure).
 
 ## Active gate
 
@@ -36,11 +35,12 @@ Last updated: 2026-07-12
   gate (format-check, lint, typecheck, tests, full-scope audits), toolchain at
   ESLint 10 / TypeScript 6.0 / Vitest 4 / httpx2
 
-## Ready
+## In review
 
-- `M0-INFRA-CI` / T0009 on `agent/m0-infra-ci` — GitHub Actions gates,
-  db/ migration skeleton, Railway service configuration, backup-restore
-  smoke test (mock-first: CI Postgres container, no hosted credentials)
+- `M0-INFRA-CI` / T0009 (#51) implemented on PR #69: GitHub Actions gates
+  (JS, Python, and Postgres-17 database jobs), db/ migration skeleton,
+  Railway service configuration, backup-restore smoke test verified against
+  a real local Postgres
 
 ## Not started
 
@@ -52,10 +52,9 @@ None for mock-first M0 work. Hosted integration credentials will be requested on
 
 ## Next actions
 
-1. Re-sync GitHub issues #9–#49 to the consolidated 19-package queue (in
-   progress).
-2. Implement and merge `M0-INFRA-CI` (in progress), then dispatch
-   `M0-CONTRACTS`.
+1. Review and merge PR #69 (`M0-INFRA-CI`), confirming its first GitHub
+   Actions run is green.
+2. Dispatch `M0-CONTRACTS` (#52), which is CI-gated once PR #69 merges.
 3. Keep at most four packages active concurrently.
 4. Update this file and `workstreams.yaml` after every integration merge.
 

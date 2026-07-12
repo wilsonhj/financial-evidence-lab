@@ -19,9 +19,9 @@ defaults:
 
 # Queue restructure (architecture audit, 2026-07): 41 packages consolidated to 19
 # milestone-scoped packages (18 pending once the completed M0-SCAFFOLD merges).
-# GitHub issues #9-#49 are STALE and pending re-sync to this package set; do not
-# dispatch from issue bodies until re-sync. Deferred post-MVP and removed from the
-# queue: T0211, T0212, T0213 (Embedding Atlas) and T0506 (analogue retrieval).
+# Issues re-synced 2026-07-12: each package's `issue:` field points at its
+# GitHub issue (#51-#68); legacy issues #9-#49 are closed. Deferred post-MVP and
+# removed from the queue: T0211-T0213 (Embedding Atlas) and T0506 (analogues).
 # T0214 is split: T0214a (50-100-question smoke benchmark, M2) and T0214b (frozen
 # 300-question adjudicated benchmark, M5 release). T0215 keeps the retrieval and
 # performance suite without Atlas testing.
@@ -46,6 +46,7 @@ packages:
   # M0 — platform foundations. M0-INFRA-CI gates every other pending M0 package
   # (M0-PLATFORM inherits it through M0-CONTRACTS).
   - id: M0-SCAFFOLD # merged via PR #50 (integration/m0 @ 1ec35dc)
+    issue: 9
     tasks: [T0001]
     depends_on: []
     team: platform
@@ -72,19 +73,22 @@ packages:
       - .node-version
       - Makefile
   - id: M0-INFRA-CI
+    issue: 51
     tasks: [T0009]
     depends_on: [M0-SCAFFOLD]
     team: platform
-    branch: agent/m0-infra-ci
-    status: ready
+    branch: agent/m0-infra-ci # implemented on PR #69 from claude/repo-analysis-g0fvjy
+    status: review
     allowed_paths: [infra/**, db/**, .github/workflows/**]
   - id: M0-CONTRACTS
+    issue: 52
     tasks: [T0003]
     depends_on: [M0-INFRA-CI]
     team: contracts
     branch: agent/m0-contracts
     allowed_paths: [packages/contracts/**, docs/handoff/CONTRACTS.md]
   - id: M0-PLATFORM # local env, auth, workspace, observability, cost, providers
+    issue: 53
     tasks: [T0002, T0004, T0005, T0006, T0007, T0008, T0010]
     depends_on: [M0-CONTRACTS]
     team: platform
@@ -101,6 +105,7 @@ packages:
 
   # M1 — corpus ingestion and evidence browsing.
   - id: M1-INGESTION # SEC raw + parse, corpus jobs, FRED, market data
+    issue: 54
     tasks: [T0101, T0102, T0103, T0104, T0105, T0106, T0107, T0108, T0109]
     depends_on: [M0-PLATFORM]
     team: data
@@ -110,12 +115,14 @@ packages:
       - workers/tests/**
       - apps/api/**
   - id: M1-EVIDENCE-UI
+    issue: 55
     tasks: [T0110]
     depends_on: [M0-PLATFORM]
     team: experience
     branch: agent/m1-evidence-ui
     allowed_paths: [apps/web/**, packages/ui/**]
   - id: M1-CORPUS-QA
+    issue: 56
     tasks: [T0111, T0112]
     depends_on: [M1-INGESTION]
     team: trust
@@ -124,12 +131,14 @@ packages:
 
   # M2 — retrieval, claims verification, observatory.
   - id: M2-RETRIEVAL-BACKEND # indexes + retrieval trace (trace schema owner)
+    issue: 57
     tasks: [T0201, T0202, T0203, T0204, T0205, T0206]
     depends_on: [M1-CORPUS-QA]
     team: retrieval
     branch: agent/m2-retrieval-backend
     allowed_paths: [packages/retrieval/**, apps/api/**]
   - id: M2-CLAIMS-VERIFICATION # claims pipeline + smoke benchmark + retrieval/perf suite (no Atlas)
+    issue: 58
     tasks: [T0207, T0208, T0209, T0214a, T0215]
     depends_on: [M2-RETRIEVAL-BACKEND]
     team: retrieval
@@ -140,6 +149,7 @@ packages:
       - apps/api/**
       - evals/**
   - id: M2-OBSERVATORY-UI # consumes the retrieval trace schema
+    issue: 59
     tasks: [T0210]
     depends_on: [M2-RETRIEVAL-BACKEND]
     team: experience
@@ -148,6 +158,7 @@ packages:
 
   # M3 — extraction.
   - id: M3-EXTRACTION-CORE # ontology, agent runtime, normalization
+    issue: 60
     tasks: [T0301, T0302, T0303, T0304, T0305]
     depends_on: [M2-CLAIMS-VERIFICATION]
     team: extraction
@@ -157,12 +168,14 @@ packages:
       - workers/src/fel_workers/extraction/**
       - workers/tests/**
   - id: M3-REVIEW
+    issue: 61
     tasks: [T0308, T0309]
     depends_on: [M3-EXTRACTION-CORE]
     team: experience
     branch: agent/m3-review
     allowed_paths: [apps/web/**, apps/api/**]
   - id: M3-CONFIDENCE-GATE # confidence scoring + extraction quality gate
+    issue: 62
     tasks: [T0306, T0307, T0310]
     depends_on: [M3-REVIEW] # M3-EXTRACTION-CORE inherited via M3-REVIEW
     team: trust
@@ -174,18 +187,21 @@ packages:
 
   # M4 — modeling.
   - id: M4-MODEL-CALC # model graph + calculation engine + perf hardening
+    issue: 63
     tasks: [T0401, T0402, T0403, T0409, T0410]
     depends_on: [M3-EXTRACTION-CORE]
     team: modeling
     branch: agent/m4-model-calc
     allowed_paths: [packages/calculation-engine/**]
   - id: M4-FACT-SCENARIOS # gated on confidence controls so approved extractions cannot seed model nodes before monetary auto-approve rules exist
+    issue: 64
     tasks: [T0404, T0405]
     depends_on: [M4-MODEL-CALC, M3-CONFIDENCE-GATE]
     team: modeling
     branch: agent/m4-fact-scenarios
     allowed_paths: [packages/calculation-engine/**, apps/api/**]
   - id: M4-MODEL-UI # driver, analytics, and lineage UI
+    issue: 65
     tasks: [T0406, T0407, T0408]
     depends_on: [M4-FACT-SCENARIOS]
     team: experience
@@ -194,6 +210,7 @@ packages:
 
   # M5 — forecasting, audit, release.
   - id: M5-FORECASTING # baseline + driver forecasts + forecast UI
+    issue: 66
     tasks: [T0501, T0502, T0503, T0507]
     depends_on: [M4-FACT-SCENARIOS]
     team: forecasting
@@ -204,6 +221,7 @@ packages:
       - apps/web/**
       - packages/ui/**
   - id: M5-BACKTEST
+    issue: 67
     tasks: [T0504, T0505, T0508]
     depends_on: [M5-FORECASTING]
     team: forecasting
@@ -213,6 +231,7 @@ packages:
       - workers/tests/**
       - evals/**
   - id: M5-AUDIT-RELEASE # audit/export + release evals incl. frozen 300-question benchmark
+    issue: 68
     # Fact/scenario dependency is inherited via M5-BACKTEST -> M5-FORECASTING ->
     # M4-FACT-SCENARIOS; the former lineage-UI edge was removed by the audit.
     tasks: [T0509, T0510, T0511, T0512, T0513, T0214b]
