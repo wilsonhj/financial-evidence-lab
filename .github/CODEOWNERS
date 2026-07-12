@@ -1,0 +1,9 @@
+# The repository owner is the integration lead until organization teams exist.
+* @wilsonhj
+/.github/ @wilsonhj
+/.specify/ @wilsonhj
+/specs/ @wilsonhj
+/packages/contracts/ @wilsonhj
+/db/migrations/ @wilsonhj
+/docs/decisions/ @wilsonhj
+/docs/handoff/ @wilsonhj
