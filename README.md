@@ -4,13 +4,12 @@ Implementation specification for a highly visual, evidence-first financial resea
 
 ## Documents
 
-- [`SPEC.md`](./SPEC.md) — product, UX, architecture, data, API, evaluation, security, and delivery specification.
-- [`PLAN.md`](./PLAN.md) — implementation sequence, architecture workstreams, and milestone gates.
-- [`TASKS.md`](./TASKS.md) — dependency-ordered, testable implementation backlog mapped to the specification.
+- [`specs/001-financial-evidence-lab/`](./specs/001-financial-evidence-lab/) — **canonical** `spec.md`, `plan.md`, and `tasks.md` (the Spec Kit feature directory).
+- [`SPEC.md`](./SPEC.md), [`PLAN.md`](./PLAN.md), [`TASKS.md`](./TASKS.md) — root pointer stubs to the canonical documents above.
+- [`docs/decisions/`](./docs/decisions/) — ADRs, including [`ADR-0002-mvp-stack.md`](./docs/decisions/ADR-0002-mvp-stack.md), the single source of truth for the locked MVP stack.
 - [`AGENTS.md`](./AGENTS.md) — operating contract for internal and external coding agents.
 - [`docs/handoff/`](./docs/handoff/) — resumable Claude Code/Fable orchestration state and work queue.
 - [`.specify/`](./.specify/) — GitHub Spec Kit configuration, constitution, scripts, and templates.
-- [`specs/001-financial-evidence-lab/`](./specs/001-financial-evidence-lab/) — Spec Kit feature artifacts used by `$speckit-implement`.
 
 ## Product thesis
 
@@ -28,4 +27,4 @@ Financial analysis should not force users to choose between conversational AI, d
 
 ## Status
 
-Specification clarified with team SaaS, B2B SaaS, revenue/gross-profit modeling, Embedding Atlas, Supabase, OpenAI, Alpha Vantage, Railway, and a PostgreSQL job queue as the locked MVP defaults. GitHub Spec Kit 0.12.11 is initialized in Codex skills mode. No production code has been implemented yet.
+Specification v1.2 (2026-07-12) restructures the documents around a single source of truth: `specs/001-financial-evidence-lab/` is canonical and the root files are pointer stubs. The Embedding Atlas is deferred to P1 (post-MVP), and the locked MVP stack — Next.js 16/React 19, FastAPI, Supabase, PostgreSQL jobs, OpenAI, Alpha Vantage, Railway — is recorded in [`ADR-0002-mvp-stack.md`](./docs/decisions/ADR-0002-mvp-stack.md). GitHub Spec Kit 0.12.11 is initialized in Codex skills mode. The monorepo scaffold was implemented on PR #50.

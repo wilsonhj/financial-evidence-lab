@@ -30,7 +30,7 @@ Tasks are ordered by dependency. A task is complete only when its code, tests, t
 - [ ] `T0111` Create temporal-cutoff, parser golden-file, and idempotency test suites.
 - [ ] `T0112` Ingest the first 20 benchmark issuers and record corpus-quality metrics.
 
-## M2 — Observable hybrid retrieval and Atlas
+## M2 — Observable hybrid retrieval
 
 - [ ] `T0201` Implement finance-aware passage, table-row, and fact chunking with stable provenance.
 - [ ] `T0202` Build PostgreSQL lexical and pgvector dense indexes (`FR-RAG-001`).
@@ -42,11 +42,11 @@ Tasks are ordered by dependency. A task is complete only when its code, tests, t
 - [ ] `T0208` Implement citation entailment and numeric-consistency verification.
 - [ ] `T0209` Implement abstention and qualified contradiction responses (`FR-RAG-006`).
 - [ ] `T0210` Build the Search Observatory with lane toggles, trace timeline, evidence feedback, and replay.
-- [ ] `T0211` Generate and version passage/fact/company projections for the Embedding Atlas.
-- [ ] `T0212` Build Atlas pan/zoom/filter/lasso/query-neighbor interactions (`UX-ATL-001`–`004`).
-- [ ] `T0213` Add keyboard-accessible table and exact-distance fallback (`UX-ATL-005`).
-- [ ] `T0214` Complete at least 300 adjudicated benchmark questions and automate Section 19.6 gates.
-- [ ] `T0215` Run the reference-corpus retrieval and Atlas performance suite.
+- [ ] ~~`T0211` Generate and version passage/fact/company projections for the Embedding Atlas.~~ — deferred (post-MVP) with the Embedding Atlas.
+- [ ] ~~`T0212` Build Atlas pan/zoom/filter/lasso/query-neighbor interactions (`UX-ATL-001`–`004`).~~ — deferred (post-MVP) with the Embedding Atlas.
+- [ ] ~~`T0213` Add keyboard-accessible table and exact-distance fallback (`UX-ATL-005`).~~ — deferred (post-MVP) with the Embedding Atlas.
+- [ ] `T0214a` Build the 50–100-question smoke benchmark and automate the Section 19.6 gates against it for the M2 exit (`spec.md` Section 19.5).
+- [ ] `T0215` Run the reference-corpus retrieval performance suite (Atlas performance testing deferred post-MVP).
 
 ## M3 — Agentic extraction
 
@@ -81,11 +81,12 @@ Tasks are ordered by dependency. A task is complete only when its code, tests, t
 - [ ] `T0503` Implement analyst driver forecasts for revenue, ARR where disclosed, and gross profit.
 - [ ] `T0504` Implement rolling-origin backtests for one-to-eight-quarter horizons.
 - [ ] `T0505` Produce 50%, 80%, and 95% intervals and calibration metrics.
-- [ ] `T0506` Implement point-in-time historical analogue retrieval.
+- [ ] ~~`T0506` Implement point-in-time historical analogue retrieval.~~ — deferred (post-MVP) with the analogue forecast lane.
 - [ ] `T0507` Build Forecast Lab comparison, error, contribution, analogue, and uncertainty views.
 - [ ] `T0508` Keep advanced models non-default unless they beat the seasonal-naive median-MAE gate.
 - [ ] `T0509` Build complete source-to-export audit traversal.
 - [ ] `T0510` Export Markdown/PDF briefs, CSV/XLSX tables, JSON evidence bundles, and workspace manifests.
 - [ ] `T0511` Execute accessibility, security, load, restore, provider-failure, and browser suites.
+- [ ] `T0214b` Complete the frozen, dual-adjudicated benchmark of at least 300 questions and automate the Section 19.6 gates against it (`spec.md` Section 19.5).
 - [ ] `T0512` Verify every `spec.md` Section 19.6 gate and Section 26 definition-of-done item.
 - [ ] `T0513` Produce the immutable MVP release artifact and signed evaluation report.

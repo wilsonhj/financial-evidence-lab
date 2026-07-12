@@ -27,4 +27,4 @@
 
 ## Notes
 
-The canonical root artifacts are mirrored into this feature directory for Spec Kit compatibility.
+As of specification v1.2 (2026-07-12), this feature directory holds the sole canonical `spec.md`, `plan.md`, and `tasks.md`. Root `SPEC.md`, `PLAN.md`, and `TASKS.md` are pointer stubs; nothing is mirrored. The locked MVP stack is recorded in `docs/decisions/ADR-0002-mvp-stack.md`.

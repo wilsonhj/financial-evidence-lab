@@ -9,7 +9,10 @@ Last updated: 2026-07-12
 - Parallel handoff merged: `369777f` via PR #2
 - Active implementation integration branch: `integration/m0`
 - Milestone gate issues: #3–#8
-- Work-package issues: #9–#49
+- Work-package issues: #9–#49 — **STALE**: these were generated from the
+  original 41-package queue and are pending re-sync to the restructured
+  package set in `workstreams.yaml`. Do not dispatch from their bodies until
+  the re-sync lands.
 
 ## Active gate
 
@@ -21,15 +24,31 @@ Last updated: 2026-07-12
 - GitHub read/write verification for `wilsonhj`
 - Spec Kit initialization and history reconciliation through PR #1
 - Claude Code/Fable handoff protocol, machine-readable queue, templates, and ownership rules
-- Six milestone gates and 41 work-package issues covering all 70 tasks
+- Architecture audit and queue restructure: 41 work packages consolidated to
+  19 milestone-scoped packages (18 pending once the scaffold merges), with
+  Embedding Atlas (T0211–T0213) and analogue retrieval (T0506) deferred
+  post-MVP, and T0214 split into T0214a (M2 smoke benchmark) and T0214b
+  (M5 frozen 300-question adjudicated benchmark)
 
-## Ready
+## In review
 
-- #9 `M0-SCAFFOLD` / T0001 on `agent/m0-scaffold`, targeting `integration/m0`
+- PR #50 (branch `claude/repo-analysis-g0fvjy`, base `integration/m0`) carries:
+  the `M0-SCAFFOLD` / T0001 implementation (`a45b999`), the security-gate
+  review fix (`e2966a2`), toolchain upgrades to ESLint 10 / TypeScript 6.0 /
+  httpx2 (`f133cf8`), the 41→19 queue restructure (`8811278`), spec v1.2 with
+  ADR-0002 (`5e49e99`), and the second-round review fixes (audit scope, base
+  branch, format gate, health contract)
+
+## In progress
+
+- Spec v1.2 is applied on PR #50: Embedding Atlas demoted to P1, lanes reduced
+  from 7 to 4, benchmark phasing (T0214a/T0214b), pgvector/RLS mandates, the
+  locked stack recorded in ADR-0002, and the feature directory made the sole
+  canonical source (root SPEC/PLAN/TASKS are pointer stubs)
 
 ## Not started
 
-All T0001–T0513 implementation tasks.
+All implementation tasks after T0001.
 
 ## Blockers
 
@@ -37,10 +56,11 @@ None for mock-first M0 work. Hosted integration credentials will be requested on
 
 ## Next actions
 
-1. Assign and implement #9 `M0-SCAFFOLD`.
-2. After #9 merges, dispatch #10 `M0-CONTRACTS` and the other dependency-ready M0 packages.
-3. Keep at most four M0 packages active concurrently.
-4. Update this file and `workstreams.yaml` after every integration merge.
+1. Merge PR #50 (`M0-SCAFFOLD`) into `integration/m0`.
+2. Re-sync GitHub issues #9–#49 to the consolidated 19-package queue.
+3. Dispatch `M0-INFRA-CI`, then the dependency-ready M0 packages.
+4. Keep at most four packages active concurrently.
+5. Update this file and `workstreams.yaml` after every integration merge.
 
 ## Known tooling caveat
 
