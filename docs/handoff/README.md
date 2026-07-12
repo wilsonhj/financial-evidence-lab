@@ -32,7 +32,7 @@ A package is ready only when:
 - any credential requirement has been explicitly fulfilled; and
 - an issue and isolated branch/worktree exist.
 
-Cap concurrency at four packages through M0 and six afterward. Prefer PRs below roughly 600 changed lines and split work that cannot be reviewed independently.
+Cap concurrency at four packages at all times. Prefer PRs below roughly 600 changed lines and split work that cannot be reviewed independently.
 
 ## Emergency resume
 
