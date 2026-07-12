@@ -52,11 +52,13 @@ None for mock-first M0 work. Hosted integration credentials will be requested on
 
 ## Next actions
 
-1. Review and merge PR #69 (`M0-INFRA-CI`), confirming its first GitHub
-   Actions run is green.
+1. Review and merge PR #69 (`M0-INFRA-CI`); its GitHub Actions run is green.
 2. Dispatch `M0-CONTRACTS` (#52), which is CI-gated once PR #69 merges.
-3. Keep at most four packages active concurrently.
-4. Update this file and `workstreams.yaml` after every integration merge.
+3. External agent: execute `docs/handoff/EXTERNAL_AGENT_BRIEF.md` — three
+   zero-dependency preparation items (benchmark seed, SEC fixture manifest,
+   ontology research) that run in parallel with the main line.
+4. Keep at most four packages active concurrently.
+5. Update this file and `workstreams.yaml` after every integration merge.
 
 ## Known tooling caveat
 

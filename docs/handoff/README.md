@@ -10,7 +10,7 @@ This directory is the restart point for all implementation agents. Fable must be
 - The next gate is `G0`: merge the scaffold, then freeze contract conventions.
 - Provider credentials are intentionally unavailable. M0 must use mocks.
 
-Read `STATUS.md` for live state and `workstreams.yaml` for the authoritative dependency graph.
+Read `STATUS.md` for live state and `workstreams.yaml` for the authoritative dependency graph. External agents doing parallel preparation work start from `EXTERNAL_AGENT_BRIEF.md`.
 
 ## Source of truth
 
