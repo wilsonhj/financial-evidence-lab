@@ -1,0 +1,69 @@
+version: 1
+repository: wilsonhj/financial-evidence-lab
+integration_lead: wilsonhj
+canonical_tasks: specs/001-financial-evidence-lab/tasks.md
+status_values: [blocked, ready, active, review, merged]
+shared_paths:
+  - .github/**
+  - .specify/**
+  - specs/**
+  - packages/contracts/**
+  - db/migrations/**
+  - docs/decisions/**
+  - docs/handoff/workstreams.yaml
+defaults:
+  status: blocked
+  credentials: mock-only
+  base_branch: main
+  required_evidence: [tests, telemetry-if-applicable, documentation, acceptance-notes]
+
+# The issue field is populated after GitHub issue creation. Only the integration
+# lead changes status to merged. Allowed paths are refined in each issue after
+# M0 establishes the final package layout.
+packages:
+  - {id: M0-SCAFFOLD, tasks: [T0001], depends_on: [], team: platform, branch: agent/m0-scaffold, status: ready, allowed_paths: [apps/**, workers/**, packages/**, evals/**, root-configs]}
+  - {id: M0-CONTRACTS, tasks: [T0003], depends_on: [M0-SCAFFOLD], team: contracts, branch: agent/m0-contracts, allowed_paths: [packages/contracts/**, docs/handoff/CONTRACTS.md]}
+  - {id: M0-LOCAL, tasks: [T0002], depends_on: [M0-SCAFFOLD], team: platform, branch: agent/m0-local, allowed_paths: [apps/**, workers/**, docs/development/**]}
+  - {id: M0-AUTH, tasks: [T0004, T0005], depends_on: [M0-CONTRACTS], team: security, branch: agent/m0-auth, allowed_paths: [apps/api/**, apps/web/**, db/**, tests/security/**]}
+  - {id: M0-WORKSPACE, tasks: [T0006], depends_on: [M0-CONTRACTS], team: api, branch: agent/m0-workspace, allowed_paths: [apps/api/**, apps/web/**, tests/contracts/**]}
+  - {id: M0-OBS-COST, tasks: [T0007, T0008], depends_on: [M0-CONTRACTS], team: trust, branch: agent/m0-observability-cost, allowed_paths: [apps/**, workers/**, packages/observability/**, tests/**]}
+  - {id: M0-INFRA, tasks: [T0009], depends_on: [M0-SCAFFOLD], team: platform, branch: agent/m0-infra, allowed_paths: [infra/**, db/**, .github/workflows/**]}
+  - {id: M0-PROVIDERS, tasks: [T0010], depends_on: [M0-CONTRACTS], team: ai-data, branch: agent/m0-providers, allowed_paths: [packages/providers/**, tests/contracts/**]}
+
+  - {id: M1-SEC-RAW, tasks: [T0101, T0102], depends_on: [M0-AUTH, M0-WORKSPACE, M0-PROVIDERS], team: data, branch: agent/m1-sec-raw, allowed_paths: [workers/ingestion/**, tests/fixtures/sec/**]}
+  - {id: M1-SEC-PARSE, tasks: [T0103, T0104], depends_on: [M1-SEC-RAW], team: data, branch: agent/m1-sec-parse, allowed_paths: [workers/ingestion/**, tests/fixtures/sec/**]}
+  - {id: M1-CORPUS-JOBS, tasks: [T0105, T0106], depends_on: [M1-SEC-RAW, M0-OBS-COST], team: data, branch: agent/m1-corpus-jobs, allowed_paths: [workers/ingestion/**, apps/api/**, tests/ingestion/**]}
+  - {id: M1-FRED, tasks: [T0107], depends_on: [M0-PROVIDERS], team: data, branch: agent/m1-fred, allowed_paths: [workers/ingestion/**, tests/fixtures/fred/**]}
+  - {id: M1-MARKET, tasks: [T0108, T0109], depends_on: [M0-PROVIDERS], team: data, branch: agent/m1-market, allowed_paths: [workers/ingestion/**, tests/fixtures/market/**]}
+  - {id: M1-EVIDENCE-UI, tasks: [T0110], depends_on: [M0-CONTRACTS], team: experience, branch: agent/m1-evidence-ui, allowed_paths: [apps/web/**, packages/ui/**, tests/fixtures/ui/**]}
+  - {id: M1-CORPUS-QA, tasks: [T0111, T0112], depends_on: [M1-SEC-PARSE, M1-CORPUS-JOBS, M1-FRED, M1-MARKET], team: trust, branch: agent/m1-corpus-qa, allowed_paths: [evals/**, tests/ingestion/**]}
+
+  - {id: M2-INDEXES, tasks: [T0201, T0202, T0203], depends_on: [M1-CORPUS-QA], team: retrieval, branch: agent/m2-indexes, allowed_paths: [workers/retrieval/**, packages/retrieval/**, tests/retrieval/**]}
+  - {id: M2-RETRIEVAL-TRACE, tasks: [T0204, T0205, T0206], depends_on: [M2-INDEXES], team: retrieval, branch: agent/m2-retrieval-trace, allowed_paths: [workers/retrieval/**, packages/retrieval/**, tests/retrieval/**]}
+  - {id: M2-CLAIMS, tasks: [T0207, T0208, T0209], depends_on: [M2-RETRIEVAL-TRACE], team: retrieval, branch: agent/m2-claims, allowed_paths: [workers/retrieval/**, apps/api/**, tests/retrieval/**]}
+  - {id: M2-OBSERVATORY, tasks: [T0210], depends_on: [M0-CONTRACTS], team: experience, branch: agent/m2-observatory, allowed_paths: [apps/web/**, packages/ui/**, tests/fixtures/ui/**]}
+  - {id: M2-PROJECTION, tasks: [T0211], depends_on: [M2-INDEXES], team: retrieval, branch: agent/m2-projection, allowed_paths: [workers/retrieval/**, packages/retrieval/**]}
+  - {id: M2-ATLAS, tasks: [T0212, T0213], depends_on: [M0-CONTRACTS], team: experience, branch: agent/m2-atlas, allowed_paths: [apps/web/**, packages/ui/**, tests/fixtures/ui/**]}
+  - {id: M2-RAG-EVALS, tasks: [T0214, T0215], depends_on: [M2-CLAIMS, M2-PROJECTION, M2-OBSERVATORY, M2-ATLAS], team: trust, branch: agent/m2-rag-evals, allowed_paths: [evals/**, tests/performance/**]}
+
+  - {id: M3-ONTOLOGY, tasks: [T0301], depends_on: [M2-CLAIMS], team: extraction, branch: agent/m3-ontology, allowed_paths: [packages/ontology/**, tests/fixtures/extraction/**]}
+  - {id: M3-AGENT-RUNTIME, tasks: [T0302, T0303], depends_on: [M3-ONTOLOGY, M0-PROVIDERS], team: extraction, branch: agent/m3-agent-runtime, allowed_paths: [workers/extraction/**, tests/extraction/**]}
+  - {id: M3-NORMALIZE, tasks: [T0304, T0305], depends_on: [M3-ONTOLOGY], team: extraction, branch: agent/m3-normalize, allowed_paths: [workers/extraction/**, packages/ontology/**, tests/extraction/**]}
+  - {id: M3-CONFIDENCE, tasks: [T0306, T0307], depends_on: [M3-AGENT-RUNTIME, M3-NORMALIZE], team: trust, branch: agent/m3-confidence, allowed_paths: [workers/extraction/**, evals/**, tests/extraction/**]}
+  - {id: M3-REVIEW, tasks: [T0308, T0309], depends_on: [M3-NORMALIZE, M0-AUTH], team: experience, branch: agent/m3-review, allowed_paths: [apps/web/**, apps/api/**, tests/extraction/**]}
+  - {id: M3-GATE, tasks: [T0310], depends_on: [M3-CONFIDENCE, M3-REVIEW], team: trust, branch: agent/m3-gate, allowed_paths: [evals/**, tests/extraction/**]}
+
+  - {id: M4-MODEL-GRAPH, tasks: [T0401, T0402], depends_on: [M3-ONTOLOGY], team: modeling, branch: agent/m4-model-graph, allowed_paths: [packages/calculation-engine/**, tests/modeling/**]}
+  - {id: M4-CALC-ENGINE, tasks: [T0403, T0409, T0410], depends_on: [M4-MODEL-GRAPH], team: modeling, branch: agent/m4-calc-engine, allowed_paths: [packages/calculation-engine/**, tests/modeling/**, tests/performance/**]}
+  - {id: M4-FACT-SCENARIOS, tasks: [T0404, T0405], depends_on: [M4-MODEL-GRAPH, M3-GATE], team: modeling, branch: agent/m4-fact-scenarios, allowed_paths: [packages/calculation-engine/**, apps/api/**, tests/modeling/**]}
+  - {id: M4-DRIVER-UI, tasks: [T0406], depends_on: [M4-MODEL-GRAPH, M0-CONTRACTS], team: experience, branch: agent/m4-driver-ui, allowed_paths: [apps/web/**, packages/ui/**]}
+  - {id: M4-ANALYTICS-UI, tasks: [T0407], depends_on: [M4-MODEL-GRAPH, M0-CONTRACTS], team: experience, branch: agent/m4-analytics-ui, allowed_paths: [apps/web/**, packages/ui/**]}
+  - {id: M4-LINEAGE-UI, tasks: [T0408], depends_on: [M4-FACT-SCENARIOS, M4-DRIVER-UI], team: experience, branch: agent/m4-lineage-ui, allowed_paths: [apps/web/**, packages/ui/**]}
+
+  - {id: M5-FORECAST-BASELINE, tasks: [T0501, T0502], depends_on: [M4-CALC-ENGINE], team: forecasting, branch: agent/m5-forecast-baseline, allowed_paths: [workers/forecasting/**, tests/forecasting/**]}
+  - {id: M5-DRIVER-FORECAST, tasks: [T0503], depends_on: [M5-FORECAST-BASELINE, M4-FACT-SCENARIOS], team: forecasting, branch: agent/m5-driver-forecast, allowed_paths: [workers/forecasting/**, tests/forecasting/**]}
+  - {id: M5-BACKTEST, tasks: [T0504, T0505, T0508], depends_on: [M5-FORECAST-BASELINE, M5-DRIVER-FORECAST], team: forecasting, branch: agent/m5-backtest, allowed_paths: [workers/forecasting/**, evals/**, tests/forecasting/**]}
+  - {id: M5-ANALOGUES, tasks: [T0506], depends_on: [M2-RAG-EVALS, M5-FORECAST-BASELINE], team: forecasting, branch: agent/m5-analogues, allowed_paths: [workers/forecasting/**, workers/retrieval/**, tests/forecasting/**]}
+  - {id: M5-FORECAST-UI, tasks: [T0507], depends_on: [M5-FORECAST-BASELINE, M0-CONTRACTS], team: experience, branch: agent/m5-forecast-ui, allowed_paths: [apps/web/**, packages/ui/**]}
+  - {id: M5-AUDIT-EXPORT, tasks: [T0509, T0510], depends_on: [M4-LINEAGE-UI, M5-BACKTEST], team: trust, branch: agent/m5-audit-export, allowed_paths: [apps/api/**, packages/export/**, tests/export/**]}
+  - {id: M5-RELEASE, tasks: [T0511, T0512, T0513], depends_on: [M5-BACKTEST, M5-ANALOGUES, M5-FORECAST-UI, M5-AUDIT-EXPORT], team: trust, branch: agent/m5-release, allowed_paths: [evals/**, tests/**, docs/release/**]}
