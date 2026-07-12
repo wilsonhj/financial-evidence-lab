@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "as_of": "2026-07-13",
+  "source": "https://www.sec.gov/files/company_tickers_exchange.json",
+  "selection": "US-listed B2B SaaS benchmark cohort used by external preparation work and downstream evaluation fixtures.",
+  "issuers": [
+    {"ticker": "CRM", "cik": "0001108524", "name": "Salesforce, Inc."},
+    {"ticker": "NOW", "cik": "0001373715", "name": "ServiceNow, Inc."},
+    {"ticker": "WDAY", "cik": "0001327811", "name": "Workday, Inc."},
+    {"ticker": "TEAM", "cik": "0001650372", "name": "Atlassian Corporation"},
+    {"ticker": "HUBS", "cik": "0001404655", "name": "HubSpot, Inc."},
+    {"ticker": "ZS", "cik": "0001713683", "name": "Zscaler, Inc."},
+    {"ticker": "OKTA", "cik": "0001660134", "name": "Okta, Inc."},
+    {"ticker": "DDOG", "cik": "0001561550", "name": "Datadog, Inc."},
+    {"ticker": "MDB", "cik": "0001441816", "name": "MongoDB, Inc."},
+    {"ticker": "SNOW", "cik": "0001640147", "name": "Snowflake Inc."},
+    {"ticker": "TWLO", "cik": "0001447669", "name": "Twilio Inc."},
+    {"ticker": "ZM", "cik": "0001585521", "name": "Zoom Communications, Inc."},
+    {"ticker": "DOCU", "cik": "0001261333", "name": "DocuSign, Inc."},
+    {"ticker": "PD", "cik": "0001568100", "name": "PagerDuty, Inc."},
+    {"ticker": "ESTC", "cik": "0001707753", "name": "Elastic N.V."},
+    {"ticker": "FIVN", "cik": "0001288847", "name": "Five9, Inc."},
+    {"ticker": "APPF", "cik": "0001433195", "name": "AppFolio, Inc."},
+    {"ticker": "PCTY", "cik": "0001591698", "name": "Paylocity Holding Corporation"},
+    {"ticker": "PAYC", "cik": "0001590955", "name": "Paycom Software, Inc."},
+    {"ticker": "BILL", "cik": "0001786352", "name": "BILL Holdings, Inc."}
+  ]
+}
