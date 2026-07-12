@@ -39,6 +39,6 @@ test-py: ## Run Python unit tests
 security: ## Run static + dependency security scans
 	$(PY)/bandit -q -r apps workers evals -c pyproject.toml
 	$(PY)/pip-audit -r requirements-dev.txt
-	pnpm audit --prod || true
+	pnpm audit --prod
 
 ci: lint typecheck test security ## Run the full local quality gate
