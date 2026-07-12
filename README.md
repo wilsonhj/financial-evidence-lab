@@ -7,6 +7,8 @@ Implementation specification for a highly visual, evidence-first financial resea
 - [`SPEC.md`](./SPEC.md) — product, UX, architecture, data, API, evaluation, security, and delivery specification.
 - [`PLAN.md`](./PLAN.md) — implementation sequence, architecture workstreams, and milestone gates.
 - [`TASKS.md`](./TASKS.md) — dependency-ordered, testable implementation backlog mapped to the specification.
+- [`AGENTS.md`](./AGENTS.md) — operating contract for internal and external coding agents.
+- [`docs/handoff/`](./docs/handoff/) — resumable Claude Code/Fable orchestration state and work queue.
 - [`.specify/`](./.specify/) — GitHub Spec Kit configuration, constitution, scripts, and templates.
 - [`specs/001-financial-evidence-lab/`](./specs/001-financial-evidence-lab/) — Spec Kit feature artifacts used by `$speckit-implement`.
 
