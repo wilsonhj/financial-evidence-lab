@@ -63,15 +63,18 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
-    env:
-      PGHOST: localhost
-      PGPORT: "5432"
-      PGUSER: fel
-      PGPASSWORD: fel-ci-only
-      PGDATABASE: fel_ci
     steps:
       - uses: actions/checkout@v4
-      - name: Install PostgreSQL client
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+      # Run the smoke test inside the service container so the client tools
+      # (psql/pg_dump/pg_restore) always match the server version exactly —
+      # the runner's postgresql-client lags the postgres:17 image, and
+      # pg_dump refuses to dump a newer server.
       - name: Apply migrations and run backup-restore smoke test
-        run: bash infra/scripts/backup_restore_smoke.sh
+        run: |
+          docker cp infra/scripts/backup_restore_smoke.sh ${{ job.services.postgres.id }}:/tmp/smoke.sh
+          docker cp db/migrations ${{ job.services.postgres.id }}:/tmp/migrations
+          docker exec \
+            -e PGHOST=localhost -e PGPORT=5432 -e PGUSER=fel \
+            -e PGPASSWORD=fel-ci-only -e PGDATABASE=fel_ci \
+            -e MIGRATIONS_DIR=/tmp/migrations \
+            ${{ job.services.postgres.id }} bash /tmp/smoke.sh

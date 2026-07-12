@@ -6,9 +6,13 @@
 # marker row, takes a pg_dump, wipes the schema, restores the dump, and
 # verifies the marker survived. Requires only a disposable database — no
 # hosted credentials.
+#
+# MIGRATIONS_DIR overrides the migrations location; CI copies this script
+# into the postgres service container (so pg_dump matches the server
+# version) and points MIGRATIONS_DIR at the copied directory.
 set -euo pipefail
 
-MIGRATIONS_DIR="$(dirname "$0")/../../db/migrations"
+MIGRATIONS_DIR="${MIGRATIONS_DIR:-$(dirname "$0")/../../db/migrations}"
 DUMP_FILE="$(mktemp -t fel-smoke-XXXXXX.dump)"
 trap 'rm -f "$DUMP_FILE"' EXIT
 
