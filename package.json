@@ -1,0 +1,23 @@
+{
+  "name": "financial-evidence-lab",
+  "private": true,
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "format": "prettier --write \"{apps,packages}/**/*.{ts,tsx,js,jsx,json,css}\"",
+    "format:check": "prettier --check \"{apps,packages}/**/*.{ts,tsx,js,jsx,json,css}\"",
+    "lint": "eslint .",
+    "typecheck": "tsc -b",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.13.0",
+    "eslint": "^9.13.0",
+    "prettier": "^3.3.3",
+    "typescript": "^5.6.3",
+    "typescript-eslint": "^8.11.0",
+    "vitest": "^2.1.4"
+  }
+}

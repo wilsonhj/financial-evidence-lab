@@ -1,0 +1,18 @@
+[project]
+name = "fel-api"
+version = "0.0.0"
+description = "Financial Evidence Lab API (FastAPI modular monolith)"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.115",
+  "uvicorn[standard]>=0.32",
+  "pydantic>=2.9",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]
