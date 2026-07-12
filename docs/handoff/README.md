@@ -5,9 +5,9 @@ This directory is the restart point for all implementation agents. Fable must be
 ## Current state
 
 - Specification (v1.2) and architecture (ADR-0002) are approved.
-- Spec Kit setup PR #1 was squash-merged to `main` as `41ef824`.
-- The monorepo scaffold (T0001) is implemented on PR #50, in review.
-- The next gate is `G0`: merge the scaffold, then freeze contract conventions.
+- The monorepo scaffold (T0001, PR #50) and CI gates (T0009, PR #69) are
+  merged to `integration/m0`; every push and PR is CI-gated.
+- The `G0` remainder is the contract freeze: `M0-CONTRACTS` (#52) is ready.
 - Provider credentials are intentionally unavailable. M0 must use mocks.
 
 Read `STATUS.md` for live state and `workstreams.yaml` for the authoritative dependency graph. External agents doing parallel preparation work start from `EXTERNAL_AGENT_BRIEF.md`.

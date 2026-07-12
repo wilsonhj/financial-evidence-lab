@@ -34,13 +34,17 @@ Last updated: 2026-07-12
   addressed): `M0-SCAFFOLD` / T0001 is complete — monorepo scaffold, `make ci`
   gate (format-check, lint, typecheck, tests, full-scope audits), toolchain at
   ESLint 10 / TypeScript 6.0 / Vitest 4 / httpx2
+- **PR #69 merged to `integration/m0` at `222e17e`** (external review round
+  addressed): `M0-INFRA-CI` / T0009 is complete — four-job GitHub Actions
+  gate (gitleaks, JS, Python, Postgres backup-restore smoke into a fresh
+  database), db/ migration conventions, Railway api+worker config-as-code,
+  and the `python -m fel_workers` heartbeat entrypoint; all checks green
 
-## In review
+## Ready
 
-- `M0-INFRA-CI` / T0009 (#51) implemented on PR #69: GitHub Actions gates
-  (JS, Python, and Postgres-17 database jobs), db/ migration skeleton,
-  Railway service configuration, backup-restore smoke test verified against
-  a real local Postgres
+- `M0-CONTRACTS` / T0003 (#52) on `agent/m0-contracts` — OpenAPI and
+  JSON-schema versioning rules plus the generated TypeScript client; the
+  ADR-0001 contract freeze anchors on this package's merge
 
 ## Not started
 
@@ -52,13 +56,13 @@ None for mock-first M0 work. Hosted integration credentials will be requested on
 
 ## Next actions
 
-1. Review and merge PR #69 (`M0-INFRA-CI`); its GitHub Actions run is green.
-2. Dispatch `M0-CONTRACTS` (#52), which is CI-gated once PR #69 merges.
-3. External agent: execute `docs/handoff/EXTERNAL_AGENT_BRIEF.md` — three
+1. Dispatch `M0-CONTRACTS` (#52) — now CI-gated; contract freeze (ADR-0001)
+   takes effect on its merge.
+2. External agent: execute `docs/handoff/EXTERNAL_AGENT_BRIEF.md` — three
    zero-dependency preparation items (benchmark seed, SEC fixture manifest,
    ontology research) that run in parallel with the main line.
-4. Keep at most four packages active concurrently.
-5. Update this file and `workstreams.yaml` after every integration merge.
+3. Keep at most four packages active concurrently.
+4. Update this file and `workstreams.yaml` after every integration merge.
 
 ## Known tooling caveat
 

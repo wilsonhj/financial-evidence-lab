@@ -12,7 +12,7 @@ Tasks are ordered by dependency. A task is complete only when its code, tests, t
 - [ ] `T0006` Create workspace APIs with entity, currency, fiscal calendar, scenario, and as-of cutoff.
 - [ ] `T0007` Establish immutable audit events, request IDs, traces, metrics, and structured logs.
 - [ ] `T0008` Implement usage metering, estimates, soft warnings, and hard-stop cost ceilings.
-- [ ] `T0009` Add Railway service configuration, Supabase SQL migrations, GitHub Actions gates, and backup-restore tests.
+- [x] `T0009` Add Railway service configuration, Supabase SQL migrations, GitHub Actions gates, and backup-restore tests.
 - [ ] `T0010` Publish provider interfaces plus mock implementations for OpenAI, Supabase Storage, Alpha Vantage, SEC, and FRED; request credentials only when integration tests require them.
 
 ## M1 — Point-in-time evidence corpus

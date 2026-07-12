@@ -72,13 +72,13 @@ packages:
       - .gitignore
       - .node-version
       - Makefile
-  - id: M0-INFRA-CI
+  - id: M0-INFRA-CI # merged via PR #69 (integration/m0 @ 222e17e)
     issue: 51
     tasks: [T0009]
     depends_on: [M0-SCAFFOLD]
     team: platform
     branch: agent/m0-infra-ci # implemented on PR #69 from claude/repo-analysis-g0fvjy
-    status: review
+    status: merged
     allowed_paths: [infra/**, db/**, .github/workflows/**]
   - id: M0-CONTRACTS
     issue: 52
@@ -86,6 +86,7 @@ packages:
     depends_on: [M0-INFRA-CI]
     team: contracts
     branch: agent/m0-contracts
+    status: ready
     allowed_paths: [packages/contracts/**, docs/handoff/CONTRACTS.md]
   - id: M0-PLATFORM # local env, auth, workspace, observability, cost, providers
     issue: 53
