@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "integration/**"]
+  pull_request:
+    branches: [main, "integration/**"]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  javascript:
+    name: JS/TS — format, lint, typecheck, test, audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run format:check
+      - run: pnpm run lint
+      - run: pnpm run typecheck
+      - run: pnpm run test
+      - run: pnpm audit
+
+  python:
+    name: Python — format, lint, typecheck, test, security
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version-file: .python-version
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - run: pip install -r requirements-dev.txt
+      - run: black --check apps workers evals
+      - run: ruff check apps workers evals
+      - run: mypy apps/api/app workers/src evals/graders
+      - run: pytest
+      - run: bandit -q -r apps workers evals -c pyproject.toml
+      - run: pip-audit -r requirements-dev.txt
+
+  database:
+    name: DB — migration and backup-restore smoke
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: fel
+          POSTGRES_PASSWORD: fel-ci-only
+          POSTGRES_DB: fel_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U fel -d fel_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: localhost
+      PGPORT: "5432"
+      PGUSER: fel
+      PGPASSWORD: fel-ci-only
+      PGDATABASE: fel_ci
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PostgreSQL client
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+      - name: Apply migrations and run backup-restore smoke test
+        run: bash infra/scripts/backup_restore_smoke.sh
