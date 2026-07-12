@@ -2,7 +2,7 @@
 
 **Audience:** the external agent currently reviewing PR #69 (and any other
 Git-capable agent joining the project).
-**Issued:** 2026-07-12 by the integration flow.
+**Issued:** 2026-07-13 by the integration flow.
 **Read first:** `AGENTS.md`, `CLAUDE.md`, `docs/handoff/README.md`,
 `docs/handoff/STATUS.md`, `docs/handoff/workstreams.yaml`.
 
@@ -31,21 +31,22 @@ parallel with each other.
 4. Open a draft PR early; fill in `.github/PULL_REQUEST_TEMPLATE.md`; push
    bounded checkpoints; keep each PR under ~600 changed lines where feasible
    (data files are exempt but keep individual files small — see item 2).
-5. CI (`.github/workflows/ci.yml`, once PR #69 merges) must stay green. None
-   of these items should touch code, so only `format:check` is likely to
-   apply — run `make ci` locally anyway before pushing.
+5. CI (`.github/workflows/ci.yml`, once PR #69 merges) must stay green.
+   It runs the complete JavaScript, Python, security, and database suite even
+   for data-only changes. Run `make ci` locally before pushing; also run the
+   item-specific JSON/JSONL validation required below.
 6. Do not mark Spec Kit tasks complete and do not edit `workstreams.yaml` or
    `STATUS.md`; the integration lead links your merged outputs into the
    queue.
 
 ## Issuer cohort (use for all three items)
 
-Pick 20 US-listed B2B SaaS issuers with at least 8 years of filing history
-where possible. Suggested starting set (adjust with rationale if a name lacks
-history or fits poorly): CRM, NOW, WDAY, TEAM, HUBS, ZS, OKTA, DDOG, MDB,
-SNOW, TWLO, ZM, DOCU, PD, ESTC, FIVN, APPF, PCTY, PAYC, BILL. Record the
-final cohort with CIKs in your first PR; the same cohort must be used
-consistently across items.
+All three items MUST consume the canonical 20-issuer cohort in
+`evals/datasets/issuer-cohort.json`. Agents may read but must not modify that
+file. If an issuer lacks sufficient history or fits poorly, record the gap in
+the item's README and continue with the canonical cohort; propose any cohort
+change on the PR for an integration-lead decision. Never substitute an issuer
+independently.
 
 ---
 
@@ -72,10 +73,17 @@ One JSON object per line in `questions.jsonl`:
   "issuer": {"ticker": "MDB", "cik": "0001441816"},
   "question": "As of 2023-06-01, what full-year revenue guidance had management most recently issued?",
   "as_of": "2023-06-01T00:00:00Z",
-  "expected_answer": "…",
+  "expected_answer": {
+    "kind": "numeric",
+    "value": "…",
+    "unit": "USD",
+    "scale": "millions",
+    "period": "FY2023"
+  },
   "evidence": [
     {"accession": "0001441816-23-000123", "form": "10-Q", "section": "MD&A", "quote": "…"}
   ],
+  "documents_reviewed": ["0001441816-23-000123"],
   "answerable": true,
   "difficulty": "medium",
   "author_notes": "Trap: revised guidance was issued after the cutoff.",
@@ -83,16 +91,21 @@ One JSON object per line in `questions.jsonl`:
 }
 ```
 
-Rules: every `expected_answer` must be verifiable from the cited public
-filing (include the exact quote); `as_of` is mandatory; for
-insufficient-evidence cases set `"answerable": false` and explain why in
-`author_notes`; numeric answers carry value, unit, scale, and period.
+Rules: every answerable `expected_answer` must be verifiable from the cited
+public filing and include the exact quote. Use
+`{"kind":"numeric","value":"…","unit":"…","scale":"…","period":"…"}` for
+numeric answers and `{"kind":"text","text":"…"}` for narrative answers.
+`as_of` is mandatory. For insufficient-evidence cases set
+`"answerable": false`, `"expected_answer": null`, explain why in
+`author_notes`, and list every filing checked in `documents_reviewed`;
+`evidence` may be empty because absence is the expected result.
 `adjudication.status` stays `draft` — human adjudication happens later
 (T0214a/T0214b).
 
 **Acceptance:** JSONL parses line-by-line; ≥60 questions; ≥5 per category;
-every question cites at least one accession number; README documents cohort,
-category counts, and known gaps.
+every answerable question cites at least one accession and exact quote; every
+unanswerable question lists at least one reviewed accession; README documents
+the canonical cohort, category counts, and known gaps.
 
 ---
 
