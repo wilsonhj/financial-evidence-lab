@@ -32,9 +32,12 @@ Last updated: 2026-07-12
 
 ## In review
 
-- `M0-SCAFFOLD` / T0001 implemented on PR #50 (branch
-  `claude/repo-analysis-g0fvjy`, commits `a45b999` + `e2966a2`), awaiting
-  integration merge
+- PR #50 (branch `claude/repo-analysis-g0fvjy`, base `integration/m0`) carries:
+  the `M0-SCAFFOLD` / T0001 implementation (`a45b999`), the security-gate
+  review fix (`e2966a2`), toolchain upgrades to ESLint 10 / TypeScript 6.0 /
+  httpx2 (`f133cf8`), the 41→19 queue restructure (`8811278`), spec v1.2 with
+  ADR-0002 (`5e49e99`), and the second-round review fixes (audit scope, base
+  branch, format gate, health contract)
 
 ## In progress
 

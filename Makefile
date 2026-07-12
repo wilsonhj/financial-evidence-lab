@@ -1,7 +1,7 @@
 .DEFAULT_GOAL := help
 PY := .venv/bin
 
-.PHONY: help install install-js install-py format lint typecheck test test-js test-py security ci
+.PHONY: help install install-js install-py format format-check lint typecheck test test-js test-py security ci
 
 help: ## List available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -19,6 +19,10 @@ install-py: ## Create .venv and install the Python toolchain
 format: ## Auto-format all sources
 	pnpm run format
 	$(PY)/black apps workers evals
+
+format-check: ## Verify formatting without writing
+	pnpm run format:check
+	$(PY)/black --check apps workers evals
 
 lint: ## Lint all sources
 	pnpm run lint
@@ -39,6 +43,6 @@ test-py: ## Run Python unit tests
 security: ## Run static + dependency security scans
 	$(PY)/bandit -q -r apps workers evals -c pyproject.toml
 	$(PY)/pip-audit -r requirements-dev.txt
-	pnpm audit --prod
+	pnpm audit
 
-ci: lint typecheck test security ## Run the full local quality gate
+ci: format-check lint typecheck test security ## Run the full local quality gate

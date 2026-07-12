@@ -1292,9 +1292,11 @@ The research papers above are useful design inputs, not independent guarantees o
 │   ├── web/                 # Next.js/React application
 │   └── api/                 # FastAPI application
 ├── workers/
-│   ├── ingestion/
-│   ├── extraction/
-│   └── forecasting/
+│   ├── src/fel_workers/
+│   │   ├── ingestion/
+│   │   ├── extraction/
+│   │   └── forecasting/
+│   └── tests/
 ├── packages/
 │   ├── contracts/           # OpenAPI/JSON schemas/generated clients
 │   ├── calculation-engine/

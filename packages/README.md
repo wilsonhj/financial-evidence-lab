@@ -6,8 +6,8 @@ in by the work package that owns it; the scaffold only fixes the layout.
 | Package | Owner package | Language |
 |---|---|---|
 | `contracts/` | `M0-CONTRACTS` (T0003) | OpenAPI / JSON Schema / generated TS client |
-| `calculation-engine/` | `M4-*` (T0403) | Python (decimal calculation engine) |
-| `retrieval-evals/` | `M2-RAG-EVALS` (T0214) | Python |
+| `calculation-engine/` | `M4-MODEL-CALC` (T0403) | Python (decimal calculation engine) |
+| `retrieval-evals/` | `M2-CLAIMS-VERIFICATION` (T0214a, T0215) | Python |
 | `ui/` | experience packages (M1–M5) | TypeScript / React |
 
 `packages/contracts/` is intentionally absent here: it is created by

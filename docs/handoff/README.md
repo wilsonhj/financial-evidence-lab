@@ -4,10 +4,10 @@ This directory is the restart point for all implementation agents. Fable must be
 
 ## Current state
 
-- Specification and architecture are approved.
+- Specification (v1.2) and architecture (ADR-0002) are approved.
 - Spec Kit setup PR #1 was squash-merged to `main` as `41ef824`.
-- No application code has been implemented.
-- The next gate is `G0`: repository scaffold followed by frozen contract conventions.
+- The monorepo scaffold (T0001) is implemented on PR #50, in review.
+- The next gate is `G0`: merge the scaffold, then freeze contract conventions.
 - Provider credentials are intentionally unavailable. M0 must use mocks.
 
 Read `STATUS.md` for live state and `workstreams.yaml` for the authoritative dependency graph.

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
+from app import __version__
 from app.main import app
 
 client = TestClient(app)
@@ -15,3 +16,4 @@ def test_health_returns_ok() -> None:
     body = response.json()
     assert body["status"] == "ok"
     assert body["service"] == "fel-api"
+    assert body["version"] == __version__

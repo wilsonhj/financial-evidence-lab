@@ -14,7 +14,7 @@ shared_paths:
 defaults:
   status: blocked
   credentials: mock-only
-  base_branch: main
+  base_branch: integration/m0 # active integration trunk; reset to main after it merges
   required_evidence: [tests, telemetry-if-applicable, documentation, acceptance-notes]
 
 # Queue restructure (architecture audit, 2026-07): 41 packages consolidated to 19
@@ -37,6 +37,11 @@ defaults:
 #
 # Only the integration lead changes status to merged. Dependency edges are
 # minimal: transitively implied dependencies are not repeated.
+#
+# Packages in different milestones may declare overlapping allowed_paths (e.g.
+# apps/api/**). The dispatch rule in docs/handoff/README.md forbids scheduling
+# two packages with overlapping paths concurrently: overlap is resolved by
+# time, not ownership.
 packages:
   # M0 — platform foundations. M0-INFRA-CI gates every other pending M0 package
   # (M0-PLATFORM inherits it through M0-CONTRACTS).
@@ -173,9 +178,9 @@ packages:
     team: modeling
     branch: agent/m4-model-calc
     allowed_paths: [packages/calculation-engine/**]
-  - id: M4-FACT-SCENARIOS # depends on the review package, not the gate package
+  - id: M4-FACT-SCENARIOS # gated on confidence controls so approved extractions cannot seed model nodes before monetary auto-approve rules exist
     tasks: [T0404, T0405]
-    depends_on: [M4-MODEL-CALC, M3-REVIEW]
+    depends_on: [M4-MODEL-CALC, M3-CONFIDENCE-GATE]
     team: modeling
     branch: agent/m4-fact-scenarios
     allowed_paths: [packages/calculation-engine/**, apps/api/**]
