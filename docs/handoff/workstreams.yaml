@@ -111,7 +111,6 @@ packages:
       - .editorconfig
       - .gitignore
       - .node-version
-  - .python-version
       - Makefile
   - id: M0-INFRA-CI # merged via PR #69 (integration/m0 @ 222e17e)
     issue: 51
