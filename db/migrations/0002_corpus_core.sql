@@ -11,6 +11,23 @@
 -- append-only from the application's point of view.
 --
 -- Additive-only migration; follows the conventions of 0001_platform_core.sql.
+--
+-- Provenance invariants:
+-- * documents.content_hash ALWAYS matches the bytes every published version
+--   of that document was parsed from. A re-fetch of a recorded accession
+--   with DIFFERENT bytes never updates the row and never creates a version;
+--   it fails closed into ingestion_quarantine with reason code
+--   DIVERGENT_ACCESSION_CONTENT (supersede-in-place was rejected: the raw
+--   store is immutable evidence).
+-- * document_versions.canonical_text_key points at the immutably stored
+--   canonical text rendering (content-addressed, text/sha256/<hex>) that
+--   section/span character offsets and span text hashes were computed
+--   against, so citations re-verify against exactly that text forever.
+-- * ingestion_runs rows are claimed up front with status 'running' inside
+--   the job transaction (INSERT .. ON CONFLICT DO NOTHING), which
+--   serializes concurrent identical jobs on the job_key primary key; the
+--   status is always terminal (succeeded/quarantined) once the transaction
+--   commits, so a committed 'running' row is unreachable in practice.
 
 -- Immutable source metadata (spec 11.1 `documents`, temporal fields per
 -- spec 10.3). One row per discovered source object; raw bytes live in the
@@ -45,6 +62,9 @@ CREATE TABLE document_versions (
     normalizer_version text NOT NULL,
     status text NOT NULL DEFAULT 'parsed'
         CHECK (status IN ('parsed', 'quarantined')),
+    -- Immutable content-addressed key of the canonical parsed text this
+    -- version's span offsets/text hashes reference (see header invariants).
+    canonical_text_key text NOT NULL,
     created_at timestamptz NOT NULL DEFAULT now(),
     UNIQUE (document_id, parser_version, normalizer_version)
 );
@@ -163,22 +183,28 @@ CREATE TABLE ingestion_quarantine (
 CREATE INDEX ingestion_quarantine_accession_idx ON ingestion_quarantine (accession);
 
 -- Idempotent versioned-job ledger (spec 12.4): the job key is derived from
--- (source hash, parser version, normalizer version); re-running an identical
--- job returns the recorded result and performs no writes.
+-- (entity, accession, source hash, parser version, normalizer version);
+-- re-running an identical job returns the recorded result and performs no
+-- writes. 'running' exists only transiently inside the claiming
+-- transaction (see header invariants); terminal states are
+-- succeeded/quarantined.
 CREATE TABLE ingestion_runs (
     job_key text PRIMARY KEY,
     source_hash text NOT NULL,
     parser_version text NOT NULL,
     normalizer_version text NOT NULL,
-    status text NOT NULL CHECK (status IN ('succeeded', 'quarantined')),
+    status text NOT NULL CHECK (status IN ('running', 'succeeded', 'quarantined')),
     document_id uuid,
     document_version_id uuid,
     result jsonb NOT NULL DEFAULT '{}'::jsonb,
     created_at timestamptz NOT NULL DEFAULT now()
 );
 
--- API request paths read the shared corpus; only workers (service role,
--- bypasses grants below because it owns the schema) may write it.
+-- API request paths read the shared corpus evidence tables; only workers
+-- (service role, bypasses grants below because it owns the schema) may
+-- write it. ingestion_quarantine and ingestion_runs are operational
+-- internals no API endpoint reads — deliberately NOT granted (least
+-- privilege).
 GRANT SELECT ON documents, document_versions, sections, source_spans,
-    tables_meta, financial_facts, corpus_versions, corpus_version_documents,
-    ingestion_quarantine, ingestion_runs TO fel_app;
+    tables_meta, financial_facts, corpus_versions, corpus_version_documents
+    TO fel_app;
