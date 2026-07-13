@@ -5,15 +5,15 @@ Tasks are ordered by dependency. A task is complete only when its code, tests, t
 ## M0 — Platform and contracts
 
 - [x] `T0001` Scaffold the monorepo, formatting, typing, unit tests, security scanning, and CI cache.
-- [ ] `T0002` Configure direct local Next.js/FastAPI/worker processes with mocked providers and hosted-Supabase environment placeholders; Docker is not required.
+- [x] `T0002` Configure direct local Next.js/FastAPI/worker processes with mocked providers and hosted-Supabase environment placeholders; Docker is not required.
 - [x] `T0003` Define OpenAPI and JSON-schema versioning rules and generate the TypeScript client.
-- [ ] `T0004` Implement Supabase Auth login, organizations, membership, and owner/editor/reviewer/viewer roles (`FR-WRK-001`–`004`).
-- [ ] `T0005` Enforce and test row-level tenant isolation, including negative cross-tenant tests.
-- [ ] `T0006` Create workspace APIs with entity, currency, fiscal calendar, scenario, and as-of cutoff.
-- [ ] `T0007` Establish immutable audit events, request IDs, traces, metrics, and structured logs.
-- [ ] `T0008` Implement usage metering, estimates, soft warnings, and hard-stop cost ceilings.
+- [x] `T0004` Implement Supabase Auth login, organizations, membership, and owner/editor/reviewer/viewer roles (`FR-WRK-001`–`004`).
+- [x] `T0005` Enforce and test row-level tenant isolation, including negative cross-tenant tests.
+- [x] `T0006` Create workspace APIs with entity, currency, fiscal calendar, scenario, and as-of cutoff.
+- [x] `T0007` Establish immutable audit events, request IDs, traces, metrics, and structured logs.
+- [x] `T0008` Implement usage metering, estimates, soft warnings, and hard-stop cost ceilings.
 - [x] `T0009` Add Railway service configuration, Supabase SQL migrations, GitHub Actions gates, and backup-restore tests.
-- [ ] `T0010` Publish provider interfaces plus mock implementations for OpenAI, Supabase Storage, Alpha Vantage, SEC, and FRED; request credentials only when integration tests require them.
+- [x] `T0010` Publish provider interfaces plus mock implementations for OpenAI, Supabase Storage, Alpha Vantage, SEC, and FRED; request credentials only when integration tests require them.
 
 ## M1 — Point-in-time evidence corpus
 

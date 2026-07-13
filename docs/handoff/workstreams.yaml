@@ -14,7 +14,7 @@ shared_paths:
 defaults:
   status: blocked
   credentials: mock-only
-  base_branch: integration/m0 # active integration trunk; reset to main after it merges
+  base_branch: main # M0 trunk merged to main 2026-07-13; M1+ packages base here
   required_evidence: [tests, telemetry-if-applicable, documentation, acceptance-notes]
 
 # Queue restructure (architecture audit, 2026-07): 41 packages consolidated to 19
@@ -88,13 +88,13 @@ packages:
     branch: agent/m0-contracts # implemented on PR #77 from claude/repo-analysis-g0fvjy
     status: merged
     allowed_paths: [packages/contracts/**, docs/handoff/CONTRACTS.md]
-  - id: M0-PLATFORM # local env, auth, workspace, observability, cost, providers
+  - id: M0-PLATFORM # merged via PR #78 (integration/m0 @ 9213962); M0 complete
     issue: 53
     tasks: [T0002, T0004, T0005, T0006, T0007, T0008, T0010]
     depends_on: [M0-CONTRACTS]
     team: platform
-    branch: agent/m0-platform
-    status: ready
+    branch: agent/m0-platform # implemented on PR #78 from claude/repo-analysis-g0fvjy
+    status: merged
     allowed_paths:
       - apps/api/**
       - apps/web/**
@@ -112,6 +112,7 @@ packages:
     depends_on: [M0-PLATFORM]
     team: data
     branch: agent/m1-ingestion
+    status: ready
     allowed_paths:
       - workers/src/fel_workers/ingestion/**
       - workers/tests/**
@@ -122,6 +123,7 @@ packages:
     depends_on: [M0-PLATFORM]
     team: experience
     branch: agent/m1-evidence-ui
+    status: ready
     allowed_paths: [apps/web/**, packages/ui/**]
   - id: M1-CORPUS-QA
     issue: 56
