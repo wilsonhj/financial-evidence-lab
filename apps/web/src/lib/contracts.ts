@@ -15,6 +15,11 @@ export type SourceSpan = components["schemas"]["SourceSpan"];
  * part of the OpenAPI surface yet, so no generated TS type exists; this alias
  * is kept honest by apps/web/src/lib/fixtures/fixture.test.ts, which validates
  * every fixture fact against the canonical JSON Schema with ajv.
+ *
+ * TODO(contract-change): replace this hand-mirrored type with a generated one
+ * once the financial-fact schema joins the OpenAPI surface in
+ * packages/contracts (frozen for PR #79; needs a `contract-change` issue and
+ * an accepted ADR). Deliberately NOT fixed here.
  */
 export interface NormalizedFinancialFact {
   entity_id: string;

@@ -27,8 +27,27 @@ import type {
 
 export const ENTITY_ID = "11111111-1111-4111-8111-111111111111";
 
+/**
+ * `documents.id` (DocumentMeta.id) and `document_versions.id` are DIFFERENT
+ * UUID namespaces (integration-lead ruling, PR #79): sections and spans hang
+ * off the parsed VERSION, while the reader routes and DocumentMeta use the
+ * DOCUMENT id. The fixture keeps them deliberately distinct (…0001 vs …1001)
+ * so any code that conflates them fails loudly instead of being masked.
+ */
 export const DOC_10Q_ID = "aaaaaaaa-0000-4000-8000-000000000001";
+export const DOC_10Q_VERSION_ID = "aaaaaaaa-0000-4000-8000-000000001001";
 export const DOC_10QA_ID = "aaaaaaaa-0000-4000-8000-000000000002";
+export const DOC_10QA_VERSION_ID = "aaaaaaaa-0000-4000-8000-000000001002";
+
+/**
+ * Document -> ACTIVE parsed version. Resolving a document to its active
+ * version is the EvidenceSource's job (never the UI's); the fixture models
+ * that resolution explicitly.
+ */
+export const fixtureActiveVersionIdByDocumentId: Readonly<Record<string, string>> = {
+  [DOC_10Q_ID]: DOC_10Q_VERSION_ID,
+  [DOC_10QA_ID]: DOC_10QA_VERSION_ID,
+};
 
 export const fixtureDocuments: DocumentMeta[] = [
   {
@@ -75,7 +94,7 @@ const SEC_A_STATEMENTS = "bbbbbbbb-0000-4000-8000-00000000b003";
 export const fixtureSections: SectionRecord[] = [
   {
     id: SEC_PART1,
-    document_version_id: DOC_10Q_ID,
+    document_version_id: DOC_10Q_VERSION_ID,
     order: 1,
     level: 1,
     title: "Part I — Financial Information",
@@ -84,7 +103,7 @@ export const fixtureSections: SectionRecord[] = [
   },
   {
     id: SEC_ITEM1,
-    document_version_id: DOC_10Q_ID,
+    document_version_id: DOC_10Q_VERSION_ID,
     parent_id: SEC_PART1,
     order: 2,
     level: 2,
@@ -94,7 +113,7 @@ export const fixtureSections: SectionRecord[] = [
   },
   {
     id: SEC_STATEMENTS,
-    document_version_id: DOC_10Q_ID,
+    document_version_id: DOC_10Q_VERSION_ID,
     parent_id: SEC_ITEM1,
     order: 3,
     level: 3,
@@ -104,7 +123,7 @@ export const fixtureSections: SectionRecord[] = [
   },
   {
     id: SEC_NOTES,
-    document_version_id: DOC_10Q_ID,
+    document_version_id: DOC_10Q_VERSION_ID,
     parent_id: SEC_ITEM1,
     order: 4,
     level: 3,
@@ -114,7 +133,7 @@ export const fixtureSections: SectionRecord[] = [
   },
   {
     id: SEC_MDA,
-    document_version_id: DOC_10Q_ID,
+    document_version_id: DOC_10Q_VERSION_ID,
     parent_id: SEC_PART1,
     order: 5,
     level: 2,
@@ -124,7 +143,7 @@ export const fixtureSections: SectionRecord[] = [
   },
   {
     id: SEC_CONTROLS,
-    document_version_id: DOC_10Q_ID,
+    document_version_id: DOC_10Q_VERSION_ID,
     parent_id: SEC_PART1,
     order: 6,
     level: 2,
@@ -134,7 +153,7 @@ export const fixtureSections: SectionRecord[] = [
   },
   {
     id: SEC_A_EXPLANATORY,
-    document_version_id: DOC_10QA_ID,
+    document_version_id: DOC_10QA_VERSION_ID,
     order: 1,
     level: 1,
     title: "Explanatory Note",
@@ -143,7 +162,7 @@ export const fixtureSections: SectionRecord[] = [
   },
   {
     id: SEC_A_ITEM1,
-    document_version_id: DOC_10QA_ID,
+    document_version_id: DOC_10QA_VERSION_ID,
     order: 2,
     level: 2,
     title: "Item 1. Financial Statements (as restated)",
@@ -152,7 +171,7 @@ export const fixtureSections: SectionRecord[] = [
   },
   {
     id: SEC_A_STATEMENTS,
-    document_version_id: DOC_10QA_ID,
+    document_version_id: DOC_10QA_VERSION_ID,
     parent_id: SEC_A_ITEM1,
     order: 3,
     level: 3,
@@ -174,7 +193,7 @@ export const fixtureSpans: SourceSpanRecord[] = [
   {
     id: SPAN_REVENUE_STMT,
     span: {
-      document_version_id: DOC_10Q_ID,
+      document_version_id: DOC_10Q_VERSION_ID,
       section_id: SEC_STATEMENTS,
       page: 4,
       start_char: 73,
@@ -185,7 +204,7 @@ export const fixtureSpans: SourceSpanRecord[] = [
   {
     id: SPAN_NET_INCOME_STMT,
     span: {
-      document_version_id: DOC_10Q_ID,
+      document_version_id: DOC_10Q_VERSION_ID,
       section_id: SEC_STATEMENTS,
       page: 4,
       start_char: 238,
@@ -196,7 +215,7 @@ export const fixtureSpans: SourceSpanRecord[] = [
   {
     id: SPAN_SEGMENT_REVENUE,
     span: {
-      document_version_id: DOC_10Q_ID,
+      document_version_id: DOC_10Q_VERSION_ID,
       section_id: SEC_NOTES,
       page: 9,
       start_char: 32,
@@ -207,7 +226,7 @@ export const fixtureSpans: SourceSpanRecord[] = [
   {
     id: SPAN_REVENUE_MDA,
     span: {
-      document_version_id: DOC_10Q_ID,
+      document_version_id: DOC_10Q_VERSION_ID,
       section_id: SEC_MDA,
       page: 18,
       start_char: 0,
@@ -218,7 +237,7 @@ export const fixtureSpans: SourceSpanRecord[] = [
   {
     id: SPAN_EPS_MDA,
     span: {
-      document_version_id: DOC_10Q_ID,
+      document_version_id: DOC_10Q_VERSION_ID,
       section_id: SEC_MDA,
       page: 18,
       start_char: 138,
@@ -229,7 +248,7 @@ export const fixtureSpans: SourceSpanRecord[] = [
   {
     id: SPAN_REVENUE_RESTATED,
     span: {
-      document_version_id: DOC_10QA_ID,
+      document_version_id: DOC_10QA_VERSION_ID,
       section_id: SEC_A_STATEMENTS,
       page: 3,
       start_char: 73,
@@ -240,7 +259,7 @@ export const fixtureSpans: SourceSpanRecord[] = [
   {
     id: SPAN_NET_INCOME_RESTATED,
     span: {
-      document_version_id: DOC_10QA_ID,
+      document_version_id: DOC_10QA_VERSION_ID,
       section_id: SEC_A_STATEMENTS,
       page: 3,
       start_char: 116,
