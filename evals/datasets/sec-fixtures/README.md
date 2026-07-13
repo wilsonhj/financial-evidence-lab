@@ -26,11 +26,19 @@ returned. No entry is hand-authored or recalled from memory.
   | `unusual_scale_markers` | 52 |
   | `ixbrl_continuation` | 45 |
   | `ixbrl_dimensional_facts` | 43 |
-  | `multi_currency` | 17 |
   | `legacy_html_no_ixbrl` | 14 |
   | `pre_2018_formatting` | 14 |
   | `amended_filing` | 10 |
+  | `multi_currency` | 2 |
 
+- **`multi_currency`:** only 2 entries (both ESTC: FX-0018, FX-0019)
+  carry a genuine non-USD signal — each has an `iso4217:EUR` unit measure
+  in its fetched bytes. The detection rule is strict: literal `€`/`£`/`¥`
+  or a non-USD `iso4217:` unit ref in the primary-document bytes. English
+  prose that merely mentions foreign currency, with only `iso4217:USD`
+  refs, does **not** qualify. An earlier population tagged 17 entries;
+  a byte-level recount removed 15 false positives that had no non-USD
+  currency signal (BILL, DOCU, FIVN, HUBS, MDB, PD, ZM, ZS).
 - **Amendments:** 10 entries across 7 issuers (BILL, CRM, NOW, PAYC,
   PCTY, PD, TWLO). BILL contributes 4 (a same-day 10-K/A + three 10-Q/A
   re-files).
