@@ -1,110 +1,138 @@
-# Benchmark seed questions (EXT-1, issue #71) — CHECKPOINT: BLOCKED
+# Benchmark seed questions (EXT-1, issue #71)
 
-**Status: blocked — no `questions.jsonl` is committed yet.** This checkpoint
-documents why, per the repository blocked-work protocol (`AGENTS.md`,
-`CLAUDE.md`). Nothing in this directory is a deliverable yet.
+**Status: delivered.** `questions.jsonl` contains 65 candidate benchmark
+questions, each grounded in SEC EDGAR filings fetched during authoring. SEC
+EDGAR egress is now enabled for the authoring session (the earlier checkpoint
+was blocked purely by a session egress restriction that has since been
+lifted); every accession, value, unit, period, and verbatim quote in the
+dataset was copied from bytes fetched this session through a shared,
+rate-limited SEC fetch helper (global <= 2 req/s, compliant `User-Agent`
+with contact info).
 
-## Why there is no data in this checkpoint
+## Deliverable summary
 
-EXT-1 carries an absolute integrity rule: every accession number, quote,
-value, unit, and period in `questions.jsonl` must be copied from SEC EDGAR
-content actually fetched during the authoring session. In this session all
-outbound web egress is blocked by organization policy, so **zero** filings
-could be fetched and therefore **zero** questions could be verified.
-Authoring questions from model memory would violate the integrity rule, so
-none were authored.
+- **Questions:** 65 (target 60-100).
+- **Distinct issuers:** 16 of the canonical 20-issuer cohort.
+- **Categories:** all ten represented, each with >= 5 questions.
+- **Integrity:** every answerable question carries >= 1 evidence entry whose
+  `quote` is present **byte-for-byte** in the fetched filing document; every
+  unanswerable (`insufficient_evidence`) question sets
+  `expected_answer: null`, leaves `evidence` empty, and lists the real
+  accession(s) actually reviewed in `documents_reviewed`.
 
-## Failing commands and outputs
+### Category counts
 
-All commands used the SEC-compliant header
-`User-Agent: financial-evidence-lab research (sordidsunday@icloud.com)`.
+| category | count |
+|---|---|
+| exact_fact_lookup | 12 |
+| guidance_extraction | 8 |
+| revenue_driver_extraction | 7 |
+| filing_section_retrieval | 6 |
+| table_reasoning | 6 |
+| insufficient_evidence | 6 |
+| contradiction_detection | 5 |
+| multi_period_comparison | 5 |
+| temporal_cutoff_trap | 5 |
+| restatement_handling | 5 |
+| **total** | **65** |
 
-1. `curl https://data.sec.gov/submissions/CIK0001441816.json`
-   → `curl: (56) CONNECT tunnel failed, response 403` (egress proxy refused
-   the CONNECT; per the environment's proxy documentation this means the
-   destination host is not on the session's egress allowlist and must be
-   reported, not worked around).
-2. `curl https://www.sec.gov/` and `curl https://efts.sec.gov/`
-   → same `CONNECT tunnel failed, response 403`.
-3. WebFetch tool on `https://data.sec.gov/submissions/CIK0001441816.json`,
-   `https://www.sec.gov/cgi-bin/browse-edgar?...`,
-   `https://www.sec.gov/files/company_tickers.json`,
-   `https://efts.sec.gov/LATEST/search-index?...`,
-   `https://www.sec.gov/Archives/edgar/data/1441816/`
-   → `HTTP 403 Forbidden` for every URL.
-4. WebFetch tool on a neutral control URL (`https://example.com/`)
-   → `HTTP 403 Forbidden`, confirming the block is session-wide egress
-   policy, not SEC rate limiting or User-Agent rejection.
-5. The proxy's documented diagnostic endpoint
-   (`$HTTPS_PROXY/__agentproxy/status`) was denied by the session's
-   permission policy, so per-host allowlist state could not be inspected
-   further; the proxy README's guidance for CONNECT 403 applies.
+### Issuer coverage (16 of 20)
 
-## Attempted remedies
+Covered: MDB, CRM, NOW, DDOG, ZS, SNOW, OKTA, TWLO, HUBS, DOCU, ZM, TEAM,
+BILL, PD, ESTC, WDAY.
 
-- Retried across all three SEC hosts (`www.sec.gov`, `data.sec.gov`,
-  `efts.sec.gov`) and multiple endpoint styles (submissions JSON, Archives
-  directory listing, full-text search, browse-edgar) — all 403.
-- Tried both permitted access paths named in the work order (curl through
-  the configured proxy with the CA bundle, and the WebFetch tool) — both
-  blocked.
-- Did **not** attempt mirrors or third-party copies of EDGAR content: the
-  proxy policy explicitly forbids routing around egress denials, and
-  non-canonical sources could not satisfy the quote/accession verification
-  requirement anyway.
+Not yet covered (4): FIVN, APPF, PCTY, PAYC — see Known gaps.
 
-## Required decision / credential
+## Methodology
 
-One of:
+- **Source of truth:** SEC EDGAR only. Filing accessions are taken from each
+  issuer's `https://data.sec.gov/submissions/CIK{10-digit}.json`; documents
+  are resolved through the Archives filing index
+  (`.../Archives/edgar/data/{cik}/{accession-nodash}/index.json`) and the
+  primary exhibit is fetched directly.
+- **Primary documents:** most questions are grounded in earnings press
+  releases furnished as **Exhibit 99.1** to Form 8-K (Item 2.02). These
+  releases contain revenue, segment/product drivers, guidance ranges,
+  customer metrics, and margin data in quotable narrative form. Restatement
+  questions are grounded in BILL Holdings' Form 10-K/A (FY2022) and Form
+  10-Q/A (Q1 FY2023).
+- **Verbatim-quote rule:** because EDGAR HTML wraps figures in tags and
+  encodes spaces as `&#160;`, quotes were selected as contiguous, tag-free
+  spans of the raw document bytes. An automated build step re-fetches each
+  cited document and asserts every `quote` is a byte-exact substring before
+  the JSONL is emitted; any quote that fails is trimmed or dropped. Numbers
+  drawn from financial-statement tables (e.g., Snowflake's income statement)
+  are quoted as the exact cell tokens that appear in the fetched bytes.
+- **Trap construction (grounded, not synthetic):**
+  - *temporal_cutoff_trap* — `as_of` is set to a date **before** a
+    subsequently issued guidance revision, so the correct answer is the
+    earlier, then-current guidance. Both the then-current filing and the
+    later revising filing are listed in `documents_reviewed`. Examples: MDB
+    and CRM full-year guidance raised in the following quarter; NOW Q1 2026
+    subscription guidance superseded by actuals; HubSpot FY2026 guidance
+    raised.
+  - *contradiction_detection* — two filings (or, for Snowflake, a single
+    sentence stating current vs previous guidance) report different figures
+    for the same metric/period; the expected answer reconciles them by
+    timing (a raise, or guidance-vs-actual) rather than flagging a genuine
+    error.
+  - *restatement_handling* — BILL's FY2022 10-K/A discloses a genuine
+    retrospective recast from early adoption of ASU 2021-08 (increasing
+    acquired deferred revenue and goodwill for the Invoice2go acquisition;
+    goodwill recast from $2,354,812K to $2,363,090K). A companion question
+    tests the distinction that BILL's Q1 FY2023 10-Q/A amended internal
+    controls **without** restating the financial statements.
+- **Typed answers:** numeric answers use
+  `{"kind":"numeric","value","unit","scale","period"}` (ranges are expressed
+  as `"low-high"` in `value`, e.g. `"2.92-2.96"`); narrative answers use
+  `{"kind":"text","text"}`; unanswerable questions use `null`.
+- **Adjudication:** every record has `adjudication.status = "draft"` with an
+  empty `reviewers` list. Human adjudication happens later (T0214a/T0214b).
 
-- Add `www.sec.gov`, `data.sec.gov`, and `efts.sec.gov` to this session
-  environment's egress allowlist (no credentials needed — these are public,
-  unauthenticated endpoints), or
-- Re-dispatch EXT-1 to an environment with outbound HTTPS access to SEC
-  EDGAR.
+## Validation
 
-## Exact next action
+Run from the repository root:
 
-Re-run EXT-1 in an environment where
-`curl -H "User-Agent: financial-evidence-lab research (<contact email>)"
-https://data.sec.gov/submissions/CIK0001441816.json` succeeds. The planned
-methodology below is ready to execute unchanged.
-
-## Planned methodology (ready to execute once unblocked)
-
-- **Source of truth:** SEC EDGAR only — submissions JSON for filing
-  indexes, Archives filing-index pages to confirm each accession, and
-  press-release exhibits (EX-99.1) / R*.htm financial-statement exhibits
-  for verbatim quotes. Rate-limited to ≤2 requests/second with a compliant
-  User-Agent.
-- **Issuers:** only the canonical 20-issuer cohort in
-  `evals/datasets/issuer-cohort.json` (read-only), targeting ≥12 distinct
-  issuers.
-- **Volume and coverage:** 60–100 questions, ≥5 in each of the ten
-  categories from `docs/handoff/EXTERNAL_AGENT_BRIEF.md` §EXT-1: exact
-  fact lookup, filing-section retrieval, multi-period comparison, table
-  reasoning, guidance extraction, revenue-driver extraction, contradiction
-  detection, temporal cutoff traps, restatement handling,
-  insufficient-evidence cases.
-- **Schema:** one JSON object per line in `questions.jsonl`, exactly as
-  specified in the brief — typed `expected_answer`
-  (`{"kind":"numeric","value":…,"unit":…,"scale":…,"period":…}` or
-  `{"kind":"text","text":…}`), mandatory `as_of`, `evidence` entries with
-  accession + form + section + exact quote for every answerable question,
-  `expected_answer: null` plus non-empty `documents_reviewed` for
-  unanswerable ones, `adjudication.status: "draft"`.
-- **Verification loop per question:** (1) accession taken from the
-  issuer's submissions JSON, (2) independently confirmed by fetching the
-  Archives filing-index page, (3) quote extracted verbatim from the fetched
-  exhibit, (4) re-verified with a second targeted fetch of the same
-  document before inclusion. Any question failing any step is dropped, not
-  approximated.
-- **Validation before push:** line-by-line `json.loads`; assert ≥60 lines,
-  ≥5 per category, every answerable line has ≥1 evidence entry with
-  accession + quote, every unanswerable line has non-empty
-  `documents_reviewed` and null `expected_answer`.
+```
+python3 - <<'PY'
+import json, collections
+REQUIRED = {"exact_fact_lookup","filing_section_retrieval","multi_period_comparison",
+ "table_reasoning","guidance_extraction","revenue_driver_extraction","contradiction_detection",
+ "temporal_cutoff_trap","restatement_handling","insufficient_evidence"}
+cat = collections.Counter(); n = 0
+for line in open("evals/datasets/benchmark-seed/questions.jsonl"):
+    line = line.strip()
+    if not line: continue
+    r = json.loads(line); n += 1
+    cat[r["category"]] += 1
+    assert r["as_of"].endswith("Z"), r["id"]
+    if r["answerable"]:
+        assert r["expected_answer"] is not None, r["id"]
+        assert any(e.get("accession") and e.get("quote") for e in r["evidence"]), r["id"]
+    else:
+        assert r["expected_answer"] is None, r["id"]
+        assert len(r["documents_reviewed"]) >= 1, r["id"]
+assert n >= 60, n
+for c in REQUIRED: assert cat[c] >= 5, (c, cat[c])
+print("OK", n, "questions;", "categories:", dict(cat))
+PY
+```
 
 ## Known gaps
 
-All of the deliverable, for the reason above. No cohort gaps can be
-assessed until filings are reachable.
+- **Four cohort issuers uncovered:** FIVN, APPF, PCTY, PAYC. Their filings
+  are reachable, but 16 issuers already exceed the >= 12 coverage target;
+  these four are the natural next additions if the set is expanded toward
+  100 questions.
+- **Restatement concentration:** all five `restatement_handling` questions
+  are grounded in BILL Holdings' FY2022 10-K/A and Q1 FY2023 10-Q/A, the
+  clearest genuine recast/amendment in the cohort during the reviewed
+  window. Broadening this category to additional issuers (e.g., via
+  XBRL `companyconcept` prior-period recasts) is a good follow-up.
+- **Answer scaling conventions:** guidance ranges are encoded as
+  `"low-high"` strings in the numeric `value` field. If T0214a/T0214b prefer
+  discrete `low`/`high` numeric fields, a small schema migration will be
+  needed; the underlying quotes already capture both endpoints verbatim.
+- **iXBRL structural traps:** these questions target disclosed values and
+  narrative; parser-stress structural fixtures (nested/rotated tables,
+  iXBRL continuations) are the province of EXT-2, not this dataset.
