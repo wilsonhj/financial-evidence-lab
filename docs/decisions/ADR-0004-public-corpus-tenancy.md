@@ -1,16 +1,24 @@
 # ADR-0004: Public corpus tables carry no org_id and no RLS
 
-Status: Proposed (drafted for integration-lead acceptance; occasioned by PR #80 / issue #54)
+Status: Accepted
 Date: 2026-07-13
+Occasioned by: PR #80 / issue #54
 
 ## Decision
 
-The evidence-corpus tables introduced by `db/migrations/0002_corpus_core.sql`
-(`documents`, `document_versions`, `sections`, `source_spans`, `tables_meta`,
-`financial_facts`, `corpus_versions`, `corpus_version_documents`,
-`ingestion_quarantine`, `ingestion_runs`) intentionally carry **no `org_id`
-column and no row-level security**, unlike the tenant-scoped tables of
-migration 0001.
+The **public-evidence** corpus tables introduced by
+`db/migrations/0002_corpus_core.sql` — `documents`, `document_versions`,
+`sections`, `source_spans`, `tables_meta`, `financial_facts`,
+`corpus_versions`, `corpus_version_documents` — intentionally carry **no
+`org_id` column and no row-level security**, unlike the tenant-scoped tables
+of migration 0001.
+
+The two **operational** tables in the same migration —
+`ingestion_quarantine` (malformed-source diagnostics) and `ingestion_runs`
+(job ledger) — are **explicitly excluded from this exemption**. They hold
+pipeline diagnostics and operational metadata, not public SEC/FRED evidence,
+and their access design is a separate open finding (see "Operational tables"
+below), not disposed of by this ADR.
 
 Tenant isolation in this system applies to *analysis objects* — workspaces,
 claims, extractions — never to public source evidence. The corpus is public,
@@ -21,15 +29,32 @@ migration risk while protecting nothing.
 Access control is enforced at two other layers instead:
 
 1. **Write path**: only ingestion workers, running under the service role,
-   write corpus rows. The API role `fel_app` holds `SELECT` only on all
-   corpus tables (single `GRANT SELECT` in 0002; no INSERT/UPDATE/DELETE
-   grant exists), making the corpus append-only from the application's point
-   of view.
+   write corpus rows. The API role `fel_app` holds `SELECT` only (no
+   INSERT/UPDATE/DELETE grant exists), making the corpus append-only from
+   the application's point of view.
 2. **Read path**: the corpus API routes (`apps/api/app/corpus.py`) require
    an authenticated tenant context (`get_tenant_context`) and execute under
    `SET LOCAL ROLE fel_app`. Anonymous requests receive 401; authenticated
    non-members receive 403 — public data, but not an unauthenticated
    endpoint.
+
+## Operational tables (excluded; open P1)
+
+The 0002 migration as reviewed grants `fel_app` `SELECT` on
+`ingestion_quarantine` and `ingestion_runs` alongside the evidence tables.
+That grant is **not** covered by this ADR: quarantine rows and the job
+ledger are operational diagnostics whose tenant readability is a recorded
+open P1 (issue #54, integration-lead record of 2026-07-13, preserved — not
+disposed — by the subsequent authorization). Before PR #80 merges, that
+finding must be resolved on its branch by either
+
+- removing the two tables from the `fel_app` grant (operator/service-role
+  access only), or
+- documenting and testing a separate least-privilege design (e.g. RLS or a
+  filtered view) with its own review.
+
+Whichever resolution lands, these tables follow the analysis-object rule,
+not the public-corpus rule.
 
 ## Boundaries of this decision
 

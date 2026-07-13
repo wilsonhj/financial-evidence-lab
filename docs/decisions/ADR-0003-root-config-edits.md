@@ -1,7 +1,8 @@
 # ADR-0003: Mechanical root-config edits ride with the owning package
 
-Status: Proposed (drafted for integration-lead acceptance; occasioned by PR #79 / issue #55)
+Status: Accepted
 Date: 2026-07-13
+Occasioned by: PR #79 / issue #55
 
 ## Decision
 
@@ -29,13 +30,24 @@ layout changes — remain full shared-path changes requiring a
 
 ## Shared-path list reconciliation
 
-`AGENTS.md` lists "root package/lock/config files" as integration-lead-owned
-shared paths; `docs/handoff/workstreams.yaml` `shared_paths` omits them. The
-two lists are reconciled as follows: **AGENTS.md governs.** Root
-package/lock/config files are shared paths; this ADR is the standing,
-narrowly-scoped authorization for the mechanical subset defined above.
-`workstreams.yaml` `shared_paths` remains the machine-readable list of paths
-that are shared *and* have no standing authorization.
+`AGENTS.md` listed "root package/lock/config files" and
+`docs/handoff/STATUS.md` as integration-lead-owned shared paths while
+`docs/handoff/workstreams.yaml` `shared_paths` omitted them, leaving the
+machine-readable list that agents and orchestration consume inconsistent
+with the operating contract. The reconciliation is machine-readable, not
+prose: `workstreams.yaml` `shared_paths` now enumerates the root
+package/lock/config files (`package.json`, `pnpm-lock.yaml`,
+`pnpm-workspace.yaml`, `tsconfig.json`, `tsconfig.base.json`,
+`eslint.config.mjs`, `.prettierrc.json`, `Makefile`) and
+`docs/handoff/STATUS.md` explicitly, and this ADR's standing exception is
+encoded separately under a `shared_path_exceptions` key naming this ADR,
+the files it applies to, and the rule
+(`mechanical-consequence-of-in-scope-change-only`). Automated dispatch and
+review treat every `shared_paths` entry as shared; the exception is judged
+per-hunk at review time against the four conditions above. The two
+authorities now state the same rule; if they ever diverge again,
+`workstreams.yaml` is the machine-readable authority and the divergence is
+a defect to fix, not to interpret.
 
 ## Context
 
