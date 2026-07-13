@@ -54,13 +54,29 @@ All implementation tasks after T0001 and T0009.
 
 None for mock-first M0 work. Hosted integration credentials will be requested only by labeled integration issues.
 
+## External preparation status (EXT-1/2/3)
+
+All three external preparation packages are **blocked on environment network
+policy**: this session's egress gateway 403-denies CONNECT to `www.sec.gov`,
+`data.sec.gov`, and `efts.sec.gov` (verified at the proxy level; only package
+registries are exempt). Each agent delivered a blocked-work checkpoint with a
+complete ready-to-execute methodology and zero fabricated data:
+
+- EXT-1 benchmark seed — draft PR #74 (`agent/ext-benchmark-seed`), Refs #71
+- EXT-3 ontology survey — draft PR #75 (`agent/ext-ontology-research`), Refs #73
+- EXT-2 SEC fixtures — draft PR #76 (`agent/ext-sec-fixtures`), Refs #72
+
+Unblock by either allowlisting the three SEC hosts in the environment network
+settings, or executing the committed methodologies from a network-enabled
+agent environment on the same branches/PRs.
+
 ## Next actions
 
 1. Dispatch `M0-CONTRACTS` (#52) — now CI-gated; contract freeze (ADR-0001)
-   takes effect on its merge.
-2. External agent: execute `docs/handoff/EXTERNAL_AGENT_BRIEF.md` — three
-   zero-dependency preparation items (benchmark seed, SEC fixture manifest,
-   ontology research) that run in parallel with the main line.
+   takes effect on its merge. Requires no external data; unaffected by the
+   egress block.
+2. Decide the EXT unblock path: allowlist the three SEC hosts, or hand
+   execution of PRs #74-#76 to a network-enabled agent environment.
 3. Keep at most four packages active concurrently.
 4. Update this file and `workstreams.yaml` after every integration merge.
 
