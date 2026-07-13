@@ -6,6 +6,7 @@ status_values: [blocked, ready, active, review, merged]
 shared_paths:
   - .github/**
   - .specify/**
+  - .agents/**
   - specs/**
   - packages/contracts/**
   - db/migrations/**
@@ -26,6 +27,7 @@ shared_paths:
   - .editorconfig
   - .gitignore
   - .node-version
+  - .python-version
   - pyproject.toml
   - requirements-dev.txt
   - Makefile
@@ -109,6 +111,7 @@ packages:
       - .editorconfig
       - .gitignore
       - .node-version
+  - .python-version
       - Makefile
   - id: M0-INFRA-CI # merged via PR #69 (integration/m0 @ 222e17e)
     issue: 51
