@@ -1,3 +1,9 @@
 packages:
   - "apps/*"
   - "packages/*"
+
+# Security override (M1-EVIDENCE-UI): next@16.2.10 pins postcss 8.4.31, which
+# is affected by GHSA-qx2v-qp2m-jg93; force the patched line so `pnpm audit`
+# in `make ci` stays green.
+overrides:
+  postcss: "^8.5.10"
