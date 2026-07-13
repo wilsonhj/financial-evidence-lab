@@ -1,0 +1,51 @@
+{
+  "Meta Data": {
+    "1. Information": "Daily Time Series with Splits and Dividend Events (SYNTHETIC FIXTURE)",
+    "2. Symbol": "SYNX",
+    "3. Last Refreshed": "2026-07-10",
+    "4. Output Size": "Full size",
+    "5. Time Zone": "US/Eastern"
+  },
+  "Time Series (Daily)": {
+    "2026-07-10": {
+      "1. open": "101.10",
+      "2. high": "103.50",
+      "3. low": "100.80",
+      "4. close": "102.75",
+      "5. adjusted close": "102.75",
+      "6. volume": "1250000",
+      "7. dividend amount": "0.0000",
+      "8. split coefficient": "1.0"
+    },
+    "2026-07-09": {
+      "1. open": "99.90",
+      "2. high": "101.60",
+      "3. low": "99.10",
+      "4. close": "101.20",
+      "5. adjusted close": "100.95",
+      "6. volume": "980000",
+      "7. dividend amount": "0.2500",
+      "8. split coefficient": "1.0"
+    },
+    "2026-07-08": {
+      "1. open": "49.80",
+      "2. high": "50.90",
+      "3. low": "49.20",
+      "4. close": "50.40",
+      "5. adjusted close": "100.55",
+      "6. volume": "2100000",
+      "7. dividend amount": "0.0000",
+      "8. split coefficient": "2.0"
+    },
+    "2026-06-30": {
+      "1. open": "48.10",
+      "2. high": "49.30",
+      "3. low": "47.90",
+      "4. close": "48.75",
+      "5. adjusted close": "97.25",
+      "6. volume": "1500000",
+      "7. dividend amount": "0.0000",
+      "8. split coefficient": "1.0"
+    }
+  }
+}

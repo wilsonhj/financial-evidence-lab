@@ -1,0 +1,22 @@
+{
+  "_note": "SYNTHETIC recorded-style submissions payload for LiveSecClient/discovery unit tests. CIK 9999999 and every filing here are fabricated; this is not real EDGAR data.",
+  "cik": "9999999",
+  "name": "Synthetic Example Corporation",
+  "tickers": ["SYNX"],
+  "filings": {
+    "recent": {
+      "accessionNumber": [
+        "0009999999-26-000010",
+        "0009999999-26-000007",
+        "0009999999-25-000042"
+      ],
+      "form": ["10-Q", "8-K", "10-K"],
+      "filingDate": ["2026-05-05", "2026-04-14", "2025-02-20"],
+      "primaryDocument": [
+        "synx-20260331.htm",
+        "synx-8k-20260414.htm",
+        "synx-20241231.htm"
+      ]
+    }
+  }
+}

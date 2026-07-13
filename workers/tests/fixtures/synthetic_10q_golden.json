@@ -1,0 +1,309 @@
+{
+  "_note": "Golden expectations for the SYNTHETIC fixture synthetic_10q.html; regenerate only on an intentional parser-version bump.",
+  "parser_version": "fel-parser/1.0.0",
+  "content_hash": "a1844ad2f2753143955d9926f9e9f7b9321f3b0c73f0f0cfe04d601ceb750a46",
+  "text_length": 834,
+  "sections": [
+    {
+      "id": "4d6a91d1-c6d0-5802-9e52-4f4fd6abf787",
+      "parent_id": null,
+      "heading": "(document)",
+      "heading_path": [
+        "(document)"
+      ],
+      "order": 0,
+      "start_char": 0,
+      "end_char": 62
+    },
+    {
+      "id": "70f9bfca-588d-523b-b2ad-7d6c1bd30bbe",
+      "parent_id": "4d6a91d1-c6d0-5802-9e52-4f4fd6abf787",
+      "heading": "Synthetic Example Corporation",
+      "heading_path": [
+        "(document)",
+        "Synthetic Example Corporation"
+      ],
+      "order": 1,
+      "start_char": 62,
+      "end_char": 197
+    },
+    {
+      "id": "8d5f23b8-5a32-5b62-9d3f-875b44be70d7",
+      "parent_id": "70f9bfca-588d-523b-b2ad-7d6c1bd30bbe",
+      "heading": "Part I. Financial Information",
+      "heading_path": [
+        "(document)",
+        "Synthetic Example Corporation",
+        "Part I. Financial Information"
+      ],
+      "order": 2,
+      "start_char": 197,
+      "end_char": 227
+    },
+    {
+      "id": "602ec46d-be80-52c2-86a8-75a27319580b",
+      "parent_id": "8d5f23b8-5a32-5b62-9d3f-875b44be70d7",
+      "heading": "Item 1. Financial Statements",
+      "heading_path": [
+        "(document)",
+        "Synthetic Example Corporation",
+        "Part I. Financial Information",
+        "Item 1. Financial Statements"
+      ],
+      "order": 3,
+      "start_char": 227,
+      "end_char": 523
+    },
+    {
+      "id": "72456e33-127c-5d4f-81fd-a056bbfaa90a",
+      "parent_id": "8d5f23b8-5a32-5b62-9d3f-875b44be70d7",
+      "heading": "Item 2. Management’s Discussion and Analysis",
+      "heading_path": [
+        "(document)",
+        "Synthetic Example Corporation",
+        "Part I. Financial Information",
+        "Item 2. Management’s Discussion and Analysis"
+      ],
+      "order": 4,
+      "start_char": 523,
+      "end_char": 742
+    },
+    {
+      "id": "a8e606fc-2c44-5271-9a61-5dd57e78f5c9",
+      "parent_id": "70f9bfca-588d-523b-b2ad-7d6c1bd30bbe",
+      "heading": "Part II. Other Information",
+      "heading_path": [
+        "(document)",
+        "Synthetic Example Corporation",
+        "Part II. Other Information"
+      ],
+      "order": 5,
+      "start_char": 742,
+      "end_char": 834
+    }
+  ],
+  "spans": [
+    {
+      "id": "a5f574af-71ff-5d36-b340-552efa96639a",
+      "section_id": "70f9bfca-588d-523b-b2ad-7d6c1bd30bbe",
+      "start_char": 92,
+      "end_char": 196,
+      "text_hash": "sha256:c76a4b88becfb2a01ba8bb10a093c0f2bebc19daa2ae519048e6fcef27a8f6f9"
+    },
+    {
+      "id": "be398bf4-41ab-5f21-ac12-bb58f906bb11",
+      "section_id": "602ec46d-be80-52c2-86a8-75a27319580b",
+      "start_char": 256,
+      "end_char": 341,
+      "text_hash": "sha256:997e95fa945ef0b00c0f2a01bdc62af279ba49590ec42bd0672e5dcfa702e782"
+    },
+    {
+      "id": "ef91a6f0-5708-583f-9093-53ff72b1c4a0",
+      "section_id": "602ec46d-be80-52c2-86a8-75a27319580b",
+      "start_char": 342,
+      "end_char": 420,
+      "text_hash": "sha256:bebefdf151954c19084f405552fbe0be1e957e6c047e7636fadfa7f1b5b7ab2b"
+    },
+    {
+      "id": "b7c8b4f3-1856-58b4-95d4-e0d4b2871e75",
+      "section_id": "72456e33-127c-5d4f-81fd-a056bbfaa90a",
+      "start_char": 568,
+      "end_char": 623,
+      "text_hash": "sha256:87fecfa0d53107cb417f325946b9b03b703680503d8ab84b4892053decaadbae"
+    },
+    {
+      "id": "6aa05df5-0573-50a8-aa66-bf179ce2f957",
+      "section_id": "72456e33-127c-5d4f-81fd-a056bbfaa90a",
+      "start_char": 624,
+      "end_char": 665,
+      "text_hash": "sha256:d138da7dd58c54427274c496e2cdc0c658ec7aab07d49eabf3781edfd12ccff4"
+    },
+    {
+      "id": "1592bb3b-7261-5043-9f32-5aa5a4e78e5f",
+      "section_id": "72456e33-127c-5d4f-81fd-a056bbfaa90a",
+      "start_char": 666,
+      "end_char": 741,
+      "text_hash": "sha256:58be2797407c76bfa0b60d847379a15a9b7e2c102dc5348c34fe620f75df65e8"
+    },
+    {
+      "id": "3d5630e6-71b6-5384-bcbc-03f58638b204",
+      "section_id": "a8e606fc-2c44-5271-9a61-5dd57e78f5c9",
+      "start_char": 769,
+      "end_char": 833,
+      "text_hash": "sha256:2a7f19895f76ffacf54366f43696e620da1e08117cc69b9ddd23b78f439e281a"
+    },
+    {
+      "id": "abeb6a09-aa32-544e-a6e7-a8dc6c352956",
+      "section_id": "602ec46d-be80-52c2-86a8-75a27319580b",
+      "start_char": 286,
+      "end_char": 291,
+      "text_hash": "sha256:586ff1275cf938241879a607a1b7596c447129b19dfa2ea1f491919d5c3bba64"
+    },
+    {
+      "id": "1734fc87-1dd0-5cc0-b8e4-79016019189e",
+      "section_id": "602ec46d-be80-52c2-86a8-75a27319580b",
+      "start_char": 369,
+      "end_char": 372,
+      "text_hash": "sha256:83151157c10d85af7c84657c71c3e3603d955160f0526fce672481da83a2e090"
+    },
+    {
+      "id": "f32bf7f7-fe8c-5193-9dd5-4845d1579e9a",
+      "section_id": "72456e33-127c-5d4f-81fd-a056bbfaa90a",
+      "start_char": 588,
+      "end_char": 593,
+      "text_hash": "sha256:5eb8d749d92ec65e20c98a4c4ece68ba20d281854c4ae0bd5caddf9982cb855f"
+    },
+    {
+      "id": "9fdfdbd9-7cc6-5457-b191-12a7db94f83a",
+      "section_id": "72456e33-127c-5d4f-81fd-a056bbfaa90a",
+      "start_char": 653,
+      "end_char": 656,
+      "text_hash": "sha256:99ee50221221864d50c60baea6f14d8ac2e235cc6e78be6088cd40cc97fca394"
+    },
+    {
+      "id": "bda74618-c38e-569b-abc7-4aa73cc9cb0f",
+      "section_id": "72456e33-127c-5d4f-81fd-a056bbfaa90a",
+      "start_char": 703,
+      "end_char": 708,
+      "text_hash": "sha256:586ff1275cf938241879a607a1b7596c447129b19dfa2ea1f491919d5c3bba64"
+    },
+    {
+      "id": "043d386f-65ae-5aaa-b502-97e99a773215",
+      "section_id": "a8e606fc-2c44-5271-9a61-5dd57e78f5c9",
+      "start_char": 816,
+      "end_char": 823,
+      "text_hash": "sha256:62b34b96dc887685cab014c37917549fbe2c6dfc287e6c4c29484a11d14b60b2"
+    }
+  ],
+  "tables": [
+    {
+      "id": "4971727d-0439-5aeb-9b4c-14f030dcb22f",
+      "section_id": "602ec46d-be80-52c2-86a8-75a27319580b",
+      "order": 0,
+      "caption": "Condensed results (synthetic)",
+      "headers": [
+        "Metric",
+        "Q1 2026",
+        "Q1 2025"
+      ],
+      "rows": [
+        [
+          "Revenue ($M)",
+          "1,250",
+          "1,100"
+        ],
+        [
+          "Net income ($M)",
+          "210",
+          "180"
+        ]
+      ]
+    }
+  ],
+  "facts": [
+    {
+      "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+      "context_ref": "d2026q1",
+      "unit_ref": "usd",
+      "scale": 6,
+      "decimals": "-6",
+      "sign": null,
+      "raw_text": "1,250",
+      "span_id": "abeb6a09-aa32-544e-a6e7-a8dc6c352956",
+      "section_id": "602ec46d-be80-52c2-86a8-75a27319580b",
+      "start_char": 286,
+      "end_char": 291
+    },
+    {
+      "concept": "us-gaap:RestructuringCharges",
+      "context_ref": "d2026q1",
+      "unit_ref": "usd",
+      "scale": 3,
+      "decimals": "-3",
+      "sign": "-",
+      "raw_text": "450",
+      "span_id": "1734fc87-1dd0-5cc0-b8e4-79016019189e",
+      "section_id": "602ec46d-be80-52c2-86a8-75a27319580b",
+      "start_char": 369,
+      "end_char": 372
+    },
+    {
+      "concept": "us-gaap:Assets",
+      "context_ref": "i20260331",
+      "unit_ref": "usd",
+      "scale": 6,
+      "decimals": "-6",
+      "sign": null,
+      "raw_text": "8,400",
+      "span_id": "f32bf7f7-fe8c-5193-9dd5-4845d1579e9a",
+      "section_id": "72456e33-127c-5d4f-81fd-a056bbfaa90a",
+      "start_char": 588,
+      "end_char": 593
+    },
+    {
+      "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+      "context_ref": "d2026q1Widgets",
+      "unit_ref": "usd",
+      "scale": 6,
+      "decimals": "-6",
+      "sign": null,
+      "raw_text": "700",
+      "span_id": "9fdfdbd9-7cc6-5457-b191-12a7db94f83a",
+      "section_id": "72456e33-127c-5d4f-81fd-a056bbfaa90a",
+      "start_char": 653,
+      "end_char": 656
+    },
+    {
+      "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+      "context_ref": "d2026q1",
+      "unit_ref": "usd",
+      "scale": 6,
+      "decimals": "-6",
+      "sign": null,
+      "raw_text": "1,250",
+      "span_id": "bda74618-c38e-569b-abc7-4aa73cc9cb0f",
+      "section_id": "72456e33-127c-5d4f-81fd-a056bbfaa90a",
+      "start_char": 703,
+      "end_char": 708
+    },
+    {
+      "concept": "us-gaap:WeightedAverageNumberOfSharesOutstandingBasic",
+      "context_ref": "d2026q1",
+      "unit_ref": "shares",
+      "scale": 3,
+      "decimals": "0",
+      "sign": null,
+      "raw_text": "120,000",
+      "span_id": "043d386f-65ae-5aaa-b502-97e99a773215",
+      "section_id": "a8e606fc-2c44-5271-9a61-5dd57e78f5c9",
+      "start_char": 816,
+      "end_char": 823
+    }
+  ],
+  "contexts": {
+    "d2026q1": {
+      "instant": null,
+      "start": "2026-01-01",
+      "end": "2026-03-31",
+      "dimensions": {}
+    },
+    "d2026q1Widgets": {
+      "instant": null,
+      "start": "2026-01-01",
+      "end": "2026-03-31",
+      "dimensions": {
+        "us-gaap:StatementBusinessSegmentsAxis": "syn:WidgetSegmentMember"
+      }
+    },
+    "i20260331": {
+      "instant": "2026-03-31",
+      "start": null,
+      "end": null,
+      "dimensions": {}
+    }
+  },
+  "units": {
+    "shares": "xbrli:shares",
+    "usd": "iso4217:USD"
+  }
+}
