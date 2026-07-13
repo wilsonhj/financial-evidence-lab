@@ -10,16 +10,44 @@ exactly as it was published at that instant — never today's revisions
 from __future__ import annotations
 
 import os
+import time
+from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 
 import httpx
 
 from fel_providers.interfaces import FredClient
+from fel_workers.http import HttpRequestError, ThrottledRetryingClient
 
 FRED_BASE_URL = "https://api.stlouisfed.org"
 _MISSING_VALUE = "."
+
+# No-lookahead policy (spec 10.3): ALFRED realtime windows are DATE
+# granular, so pinning the window to as_of's own calendar date would
+# include revisions published later that same day — lookahead. We therefore
+# use the day BEFORE the UTC cutoff date; see vintage_cutoff_date().
+NO_LOOKAHEAD_LAG_DAYS = 1
+
+
+def vintage_cutoff_date(as_of: datetime) -> date:
+    """UTC-normalized, fail-closed ALFRED realtime date for an ``as_of``.
+
+    ``as_of`` is normalized to UTC first (a wall-clock date in as_of's own
+    timezone would shift the vintage day across timezones), then the policy
+    date is ``as_of_utc.date() - NO_LOOKAHEAD_LAG_DAYS``: the latest whole
+    UTC day guaranteed to be fully elapsed at the cutoff. For an exact
+    midnight (end-of-day-exclusive) cutoff this is precisely the last
+    complete day; for an intraday cutoff it deliberately DROPS any vintage
+    published earlier the same day. That conservative data loss is
+    accepted — NO LOOKAHEAD EVER is the invariant, and a date-granular API
+    cannot split a day.
+    """
+    if as_of.tzinfo is None:
+        raise FredIngestionError("as_of cutoff must be timezone-aware")
+    as_of_utc = as_of.astimezone(UTC)
+    return as_of_utc.date() - timedelta(days=NO_LOOKAHEAD_LAG_DAYS)
 
 
 class FredIngestionError(Exception):
@@ -58,9 +86,12 @@ def ingest_fred_vintage(
 class LiveFredClient:
     """FredClient over the ALFRED real-time API. Env (live): FEL_FRED_API_KEY.
 
-    ``realtime_start``/``realtime_end`` are pinned to the ``as_of`` date so
-    the response is the vintage visible at the cutoff, not the latest
-    revision. Tests inject an ``httpx.MockTransport``; never live in CI.
+    ``realtime_start``/``realtime_end`` are pinned to the fail-closed
+    :func:`vintage_cutoff_date` (UTC-normalized, one day before the cutoff
+    date) so the response can never include a revision published after —
+    or later on the same day as — the ``as_of`` instant. Requests go
+    through the shared throttled/retrying HTTP helper. Tests inject an
+    ``httpx.MockTransport``; never live in CI.
     """
 
     def __init__(
@@ -70,13 +101,24 @@ class LiveFredClient:
         transport: httpx.BaseTransport | None = None,
         base_url: str = FRED_BASE_URL,
         timeout_seconds: float = 30.0,
+        min_interval_seconds: float = 0.5,
+        max_retries: int = 3,
+        sleep: Callable[[float], None] = time.sleep,
+        monotonic: Callable[[], float] = time.monotonic,
     ) -> None:
         key = api_key or os.environ.get("FEL_FRED_API_KEY")
         if not key:
             raise FredIngestionError("FEL_FRED_API_KEY is not configured")
         self._api_key = key
         self._base_url = base_url
-        self._client = httpx.Client(transport=transport, timeout=timeout_seconds)
+        self._client = ThrottledRetryingClient(
+            transport=transport,
+            timeout_seconds=timeout_seconds,
+            min_interval_seconds=min_interval_seconds,
+            max_retries=max_retries,
+            sleep=sleep,
+            monotonic=monotonic,
+        )
 
     def close(self) -> None:
         self._client.close()
@@ -86,22 +128,22 @@ class LiveFredClient:
             raise FredIngestionError(
                 f"as_of cutoff for series {series_id!r} must be timezone-aware"
             )
-        vintage_date = as_of.date().isoformat()
-        response = self._client.get(
-            f"{self._base_url}/fred/series/observations",
-            params={
-                "series_id": series_id,
-                "api_key": self._api_key,
-                "file_type": "json",
-                "realtime_start": vintage_date,
-                "realtime_end": vintage_date,
-            },
-        )
-        if response.status_code >= 400:
-            raise FredIngestionError(
-                f"FRED observations request for {series_id!r} failed with "
-                f"status {response.status_code}"
+        vintage_date = vintage_cutoff_date(as_of).isoformat()
+        try:
+            response = self._client.get(
+                f"{self._base_url}/fred/series/observations",
+                params={
+                    "series_id": series_id,
+                    "api_key": self._api_key,
+                    "file_type": "json",
+                    "realtime_start": vintage_date,
+                    "realtime_end": vintage_date,
+                },
             )
+        except HttpRequestError as exc:
+            raise FredIngestionError(
+                f"FRED observations request for {series_id!r} failed: {exc}"
+            ) from exc
         payload = response.json()
         raw_observations = payload.get("observations") if isinstance(payload, dict) else None
         if not isinstance(raw_observations, list):

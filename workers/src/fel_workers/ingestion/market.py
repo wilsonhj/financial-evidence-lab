@@ -11,13 +11,15 @@ FOR-005 forbids silently substituting unadjusted prices. Tests inject an
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
-from datetime import date
+import time
+from collections.abc import Callable
+from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
 
 import httpx
 
 from fel_providers.interfaces import MarketBar, MarketDataProvider
+from fel_workers.http import HttpRequestError, ThrottledRetryingClient
 
 ALPHAVANTAGE_BASE_URL = "https://www.alphavantage.co"
 _SERIES_KEY = "Time Series (Daily)"
@@ -25,6 +27,11 @@ _FIELD_ADJUSTED_CLOSE = "5. adjusted close"
 _FIELD_VOLUME = "6. volume"
 _FIELD_DIVIDEND = "7. dividend amount"
 _FIELD_SPLIT = "8. split coefficient"
+
+# Alpha Vantage's compact output covers the latest ~100 trading days; when
+# the requested window starts within this many calendar days of today the
+# cheaper compact payload suffices, otherwise fetch full history.
+COMPACT_WINDOW_DAYS = 100
 
 
 class MarketDataError(Exception):
@@ -35,19 +42,19 @@ class FeatureAssemblyError(Exception):
     """FOR-005: forecast features cannot be assembled from deficient bars."""
 
 
-@dataclass(frozen=True)
-class ForecastFeatureRow:
-    """One validated daily feature row (decimal prices end-to-end)."""
-
-    day: date
-    adjusted_close: Decimal
-    volume: int
-    dividend: Decimal
-    split_factor: Decimal
+# A validated forecast feature row IS a validated market bar — the previous
+# hand-copied mirror dataclass drifted for no benefit, so the frozen
+# contract dataclass is reused directly (decimal prices end-to-end).
+ForecastFeatureRow = MarketBar
 
 
 class AlphaVantageMarketDataProvider:
-    """MarketDataProvider over Alpha Vantage daily adjusted series."""
+    """MarketDataProvider over Alpha Vantage daily adjusted series.
+
+    Requests go through the shared throttled/retrying HTTP helper;
+    ``transport``/``sleep``/``monotonic``/``today`` are injectable for
+    deterministic tests.
+    """
 
     def __init__(
         self,
@@ -56,33 +63,50 @@ class AlphaVantageMarketDataProvider:
         transport: httpx.BaseTransport | None = None,
         base_url: str = ALPHAVANTAGE_BASE_URL,
         timeout_seconds: float = 30.0,
+        min_interval_seconds: float = 0.5,
+        max_retries: int = 3,
+        sleep: Callable[[float], None] = time.sleep,
+        monotonic: Callable[[], float] = time.monotonic,
+        today: Callable[[], date] = date.today,
     ) -> None:
         key = api_key or os.environ.get("FEL_ALPHAVANTAGE_API_KEY")
         if not key:
             raise MarketDataError("FEL_ALPHAVANTAGE_API_KEY is not configured")
         self._api_key = key
         self._base_url = base_url
-        self._client = httpx.Client(transport=transport, timeout=timeout_seconds)
+        self._today = today
+        self._client = ThrottledRetryingClient(
+            transport=transport,
+            timeout_seconds=timeout_seconds,
+            min_interval_seconds=min_interval_seconds,
+            max_retries=max_retries,
+            sleep=sleep,
+            monotonic=monotonic,
+        )
 
     def close(self) -> None:
         self._client.close()
 
+    def _outputsize(self, start: date) -> str:
+        """compact when the window is within the last ~100 calendar days."""
+        if start >= self._today() - timedelta(days=COMPACT_WINDOW_DAYS):
+            return "compact"
+        return "full"
+
     def daily_adjusted(self, ticker: str, *, start: date, end: date) -> list[MarketBar]:
-        response = self._client.get(
-            f"{self._base_url}/query",
-            params={
-                "function": "TIME_SERIES_DAILY_ADJUSTED",
-                "symbol": ticker,
-                "outputsize": "full",
-                "datatype": "json",
-                "apikey": self._api_key,
-            },
-        )
-        if response.status_code >= 400:
-            raise MarketDataError(
-                f"Alpha Vantage request for {ticker!r} failed with status "
-                f"{response.status_code}"
+        try:
+            response = self._client.get(
+                f"{self._base_url}/query",
+                params={
+                    "function": "TIME_SERIES_DAILY_ADJUSTED",
+                    "symbol": ticker,
+                    "outputsize": self._outputsize(start),
+                    "datatype": "json",
+                    "apikey": self._api_key,
+                },
             )
+        except HttpRequestError as exc:
+            raise MarketDataError(f"Alpha Vantage request for {ticker!r} failed: {exc}") from exc
         payload = response.json()
         if not isinstance(payload, dict):
             raise MarketDataError(f"Alpha Vantage returned a non-object payload for {ticker!r}")
@@ -178,14 +202,6 @@ def assemble_forecast_features(
                 "is missing or non-positive"
             )
         seen.add(bar.day)
-        rows.append(
-            ForecastFeatureRow(
-                day=bar.day,
-                adjusted_close=bar.adjusted_close,
-                volume=bar.volume,
-                dividend=bar.dividend,
-                split_factor=bar.split_factor,
-            )
-        )
+        rows.append(bar)
     rows.sort(key=lambda row: row.day)
     return rows

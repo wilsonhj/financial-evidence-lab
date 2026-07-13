@@ -16,6 +16,7 @@ from fel_providers.mocks import MockMarketDataProvider
 from fel_workers.ingestion.market import (
     AlphaVantageMarketDataProvider,
     FeatureAssemblyError,
+    ForecastFeatureRow,
     MarketDataError,
     assemble_forecast_features,
 )
@@ -73,6 +74,46 @@ def test_missing_series_fails_closed() -> None:
 
     with pytest.raises(MarketDataError, match="fail closed"):
         _provider(handler).daily_adjusted("SYNX", start=START, end=END)
+
+
+def _seen_provider(seen: list[httpx.Request], today: date) -> AlphaVantageMarketDataProvider:
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, content=fixture_bytes("alpha_vantage_daily_adjusted.json"))
+
+    return AlphaVantageMarketDataProvider(
+        "test-key-not-a-secret",
+        transport=httpx.MockTransport(handler),
+        today=lambda: today,
+    )
+
+
+def test_outputsize_compact_for_recent_window() -> None:
+    """Finding 19: a window starting within the last ~100 days only needs
+    the cheaper compact payload."""
+    seen: list[httpx.Request] = []
+    provider = _seen_provider(seen, today=date(2026, 7, 31))
+    provider.daily_adjusted("SYNX", start=date(2026, 7, 1), end=date(2026, 7, 31))
+    assert dict(seen[0].url.params)["outputsize"] == "compact"
+
+
+def test_outputsize_full_for_deep_history_window() -> None:
+    """Finding 19: a window reaching back past the compact horizon must
+    request the full history."""
+    seen: list[httpx.Request] = []
+    provider = _seen_provider(seen, today=date(2026, 7, 31))
+    provider.daily_adjusted("SYNX", start=date(2025, 1, 1), end=date(2026, 7, 31))
+    assert dict(seen[0].url.params)["outputsize"] == "full"
+
+
+def test_forecast_feature_row_is_the_market_bar_contract() -> None:
+    """Finding 18: the hand-copied ForecastFeatureRow mirror is gone; the
+    frozen contract dataclass is reused directly."""
+    assert ForecastFeatureRow is MarketBar
+    rows = assemble_forecast_features(
+        MockMarketDataProvider(), "SYNX", start=date(2026, 7, 6), end=date(2026, 7, 10)
+    )
+    assert all(isinstance(row, MarketBar) for row in rows)
 
 
 def test_api_key_is_required(monkeypatch: pytest.MonkeyPatch) -> None:
