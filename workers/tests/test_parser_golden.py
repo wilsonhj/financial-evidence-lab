@@ -90,6 +90,7 @@ def test_matches_golden_tables_and_facts(parsed, golden) -> None:
             "scale": f.scale,
             "decimals": f.decimals,
             "sign": f.sign,
+            "format": f.format,
             "raw_text": f.raw_text,
             "span_id": f.span_id,
             "section_id": f.section_id,
@@ -161,3 +162,93 @@ def test_empty_document_is_a_parse_error() -> None:
     with pytest.raises(ParseError) as excinfo:
         parse_filing(b"<html><body></body></html>")
     assert excinfo.value.reason_code == "EMPTY_DOCUMENT"
+
+
+_NESTED_HEADER = b"""
+<div style="display:none"><ix:header><ix:resources>
+<xbrli:context id="c1">
+  <xbrli:entity><xbrli:identifier scheme="cik">1</xbrli:identifier></xbrli:entity>
+  <xbrli:period><xbrli:instant>2026-03-31</xbrli:instant></xbrli:period>
+</xbrli:context>
+<xbrli:unit id="usd"><xbrli:measure>iso4217:USD</xbrli:measure></xbrli:unit>
+</ix:resources></ix:header></div>
+"""
+
+
+def test_nested_table_keeps_outer_table_rows() -> None:
+    """Finding 8: an inner <table> must not drop the outer table — both are
+    emitted, and the outer table's own rows survive intact."""
+    raw = (
+        b"<html><body><h1>T</h1><table><caption>outer</caption>"
+        b"<tr><th>K</th><th>V</th></tr>"
+        b"<tr><td>before</td><td><table><caption>inner</caption>"
+        b"<tr><th>IK</th></tr><tr><td>iv</td></tr></table></td></tr>"
+        b"<tr><td>after</td><td>1</td></tr>"
+        b"</table></body></html>"
+    )
+    parsed = parse_filing(raw)
+    assert [t.caption for t in parsed.tables] == ["outer", "inner"]
+    outer, inner = parsed.tables
+    assert outer.headers == ("K", "V")
+    assert [row[0] for row in outer.rows] == ["before", "after"]
+    assert outer.rows[-1] == ("after", "1")
+    assert inner.headers == ("IK",)
+    assert inner.rows == (("iv",),)
+
+
+def test_nested_inline_fact_keeps_outer_fact() -> None:
+    """Finding 8: an ix:nonFraction nested inside another must not drop the
+    outer fact — both are captured, outer first in document order."""
+    raw = (
+        b"<html><body>" + _NESTED_HEADER + b"<h1>T</h1><p>Total "
+        b'<ix:nonFraction name="us-gaap:Assets" contextRef="c1" unitRef="usd">'
+        b'8,400<ix:nonFraction name="us-gaap:Cash" contextRef="c1" unitRef="usd">'
+        b"100</ix:nonFraction></ix:nonFraction> million.</p></body></html>"
+    )
+    parsed = parse_filing(raw)
+    assert [f.concept for f in parsed.facts] == ["us-gaap:Assets", "us-gaap:Cash"]
+    outer, inner = parsed.facts
+    assert "8,400" in outer.raw_text and "100" in outer.raw_text
+    assert inner.raw_text == "100"
+    assert outer.start_char <= inner.start_char and inner.end_char <= outer.end_char
+
+
+def test_self_closing_nil_fact_does_not_quarantine() -> None:
+    """Finding 8: a self-closing / xsi:nil fact is skipped with a diagnostic
+    instead of failing the whole filing."""
+    raw = (
+        b"<html><body>" + _NESTED_HEADER + b"<h1>T</h1><p>Nil: "
+        b'<ix:nonFraction name="us-gaap:Goodwill" contextRef="c1" unitRef="usd"'
+        b' xsi:nil="true"/> and real '
+        b'<ix:nonFraction name="us-gaap:Assets" contextRef="c1" unitRef="usd">'
+        b"5</ix:nonFraction>.</p></body></html>"
+    )
+    parsed = parse_filing(raw)
+    assert [f.concept for f in parsed.facts] == ["us-gaap:Assets"]
+    assert any("nil" in d and "us-gaap:Goodwill" in d for d in parsed.diagnostics)
+
+
+def test_content_empty_fact_is_skipped_not_fatal() -> None:
+    """Finding 8: an explicitly empty (open/close, no text) fact is skipped
+    with a diagnostic — there is no value to store, but the filing stands."""
+    raw = (
+        b"<html><body>" + _NESTED_HEADER + b"<h1>T</h1><p>Empty "
+        b'<ix:nonFraction name="us-gaap:Goodwill" contextRef="c1" unitRef="usd">'
+        b"</ix:nonFraction> and real "
+        b'<ix:nonFraction name="us-gaap:Assets" contextRef="c1" unitRef="usd">'
+        b"5</ix:nonFraction>.</p></body></html>"
+    )
+    parsed = parse_filing(raw)
+    assert [f.concept for f in parsed.facts] == ["us-gaap:Assets"]
+    assert any("empty" in d and "us-gaap:Goodwill" in d for d in parsed.diagnostics)
+
+
+def test_content_hash_uses_repository_wide_format(parsed) -> None:
+    """Finding 16: the parser reports the single 'sha256:<hex>' format and
+    accepts a pre-computed hash so bytes are hashed exactly once."""
+    raw = fixture_bytes("synthetic_10q.html")
+    expected = "sha256:" + hashlib.sha256(raw).hexdigest()
+    assert parsed.content_hash == expected
+    precomputed = parse_filing(raw, content_hash=expected)
+    assert precomputed.content_hash == expected
+    assert precomputed == parse_filing(raw)

@@ -42,7 +42,9 @@ ENTITY = "00000000-0000-0000-0000-000000000001"
 VERSION = "11111111-1111-1111-1111-111111111111"
 
 
-def _fact(raw_text: str, *, scale: int = 0, sign: str | None = None) -> InlineFact:
+def _fact(
+    raw_text: str, *, scale: int = 0, sign: str | None = None, format: str | None = None
+) -> InlineFact:
     return InlineFact(
         concept="us-gaap:Revenues",
         context_ref="c1",
@@ -50,6 +52,7 @@ def _fact(raw_text: str, *, scale: int = 0, sign: str | None = None) -> InlineFa
         scale=scale,
         decimals=None,
         sign=sign,
+        format=format,
         raw_text=raw_text,
         span_id="span-1",
         section_id="sec-1",
@@ -112,6 +115,65 @@ def test_unparseable_and_empty_values_fail_closed() -> None:
     with pytest.raises(NormalizationError) as excinfo:
         parse_fact_value(_fact("  "))
     assert excinfo.value.reason_code == "EMPTY_FACT_VALUE"
+
+
+def test_format_num_dot_decimal_transform() -> None:
+    """Finding 6: explicit ixt:num-dot-decimal — ',' thousands, '.' decimal."""
+    assert parse_fact_value(_fact("1,234.56", format="ixt:num-dot-decimal")) == Decimal("1234.56")
+
+
+def test_format_num_comma_decimal_transform() -> None:
+    """Finding 6: ixt:num-comma-decimal — '1.234,56' is 1234.56, not 1.234."""
+    assert parse_fact_value(_fact("1.234,56", format="ixt:num-comma-decimal")) == Decimal("1234.56")
+    assert parse_fact_value(_fact("1.234,56", format="ixt:num-comma-decimal", scale=3)) == Decimal(
+        "1234560"
+    )
+
+
+def test_format_fixed_zero_transform() -> None:
+    """Finding 6: ixt:fixed-zero is zero regardless of the display text."""
+    assert parse_fact_value(_fact("anything", format="ixt:fixed-zero")) == Decimal(0)
+
+
+def test_format_fixed_empty_rejects_instead_of_zeroing() -> None:
+    """Finding 6: fixed-empty declares NO numeric value; storing 0 would
+    fabricate a number, so it fails closed."""
+    with pytest.raises(NormalizationError) as excinfo:
+        parse_fact_value(_fact("", format="ixt:fixed-empty"))
+    assert excinfo.value.reason_code == "EMPTY_FACT_VALUE"
+
+
+def test_parenthesized_negative_values() -> None:
+    """Finding 6: '(1,234)' renders a negative value in filings."""
+    assert parse_fact_value(_fact("(1,234)")) == Decimal("-1234")
+    assert parse_fact_value(_fact("(1,234)", scale=3)) == Decimal("-1234000")
+    assert parse_fact_value(_fact("(1.234,56)", format="ixt:num-comma-decimal")) == Decimal(
+        "-1234.56"
+    )
+
+
+def test_dash_is_zero() -> None:
+    """Finding 6: a lone dash glyph (any common variant) means zero."""
+    for dash in ("-", "–", "—", "−"):
+        assert parse_fact_value(_fact(dash)) == Decimal(0)
+
+
+def test_unknown_format_fails_closed() -> None:
+    """Finding 6: an unregistered iXBRL transform must never be guessed."""
+    with pytest.raises(NormalizationError) as excinfo:
+        parse_fact_value(_fact("1,250", format="ixt:num-unit-decimal"))
+    assert excinfo.value.reason_code == "UNKNOWN_FORMAT"
+    assert "num-unit-decimal" in excinfo.value.diagnostic
+
+
+@pytest.mark.parametrize("literal", ["NaN", "sNaN", "Infinity", "-Infinity"])
+def test_nonfinite_decimals_fail_closed(literal: str) -> None:
+    """Finding 7: NaN/sNaN/Infinity/-Infinity parse as valid Decimals but can
+    never be stored; they must raise NormalizationError, not corrupt data or
+    crash on scaleb."""
+    with pytest.raises(NormalizationError) as excinfo:
+        parse_fact_value(_fact(literal, scale=3))
+    assert excinfo.value.reason_code == "NONFINITE_FACT_VALUE"
 
 
 def test_decimal_str_never_uses_exponent_or_float() -> None:
@@ -225,7 +287,7 @@ def test_context_without_period_fails_closed() -> None:
             entity_id=ENTITY,
             document_version_id=VERSION,
         )
-    assert excinfo.value.reason_code == "INVALID_PERIOD"
+    assert excinfo.value.reason_code == "INVALID_PERIOD_STRUCTURE"
 
 
 def test_to_contract_matches_financial_fact_v1() -> None:

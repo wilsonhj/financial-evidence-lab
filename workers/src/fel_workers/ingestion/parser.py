@@ -7,12 +7,22 @@ Stdlib-only (``html.parser``); no new root dependency. Produces:
 - a section hierarchy (heading path + document order) from h1-h6 headings;
 - stable source spans (contract source-span/v1): deterministic UUIDv5 ids,
   character offsets into the canonical text, and a sha256 text hash;
-- extracted tables (caption, header row, body rows); and
-- raw inline-XBRL facts with their contexts (period + dimensions) and units.
+- extracted tables (caption, header row, body rows) with nested-table
+  support — both the outer and inner tables are emitted, outer rows intact;
+- raw inline-XBRL facts (nesting supported via a fact stack) with their
+  contexts (period + dimensions) and units. Nil or content-empty facts
+  (e.g. self-closing ``<ix:nonFraction xsi:nil="true"/>``) never fail the
+  filing: they are skipped and recorded as per-fact diagnostics on the
+  :class:`ParsedDocument` (explicit-nil representation was rejected because
+  downstream fact values are NOT NULL decimal strings by contract).
 
 Malformed sources raise :class:`ParseError` carrying a stable reason code
 and an actionable diagnostic; the pipeline turns that into a quarantine row
 (T0106, FR-ING-007).
+
+Content hashes use the repository-wide ``sha256:<hex>`` format everywhere
+(same format the DB CHECK constraints expect); the pipeline hashes the raw
+bytes once and passes the hash through.
 """
 
 from __future__ import annotations
@@ -25,6 +35,24 @@ from datetime import date
 from html.parser import HTMLParser
 from types import MappingProxyType
 
+from fel_workers.ingestion.errors import ParseError, ReasonCode
+
+__all__ = [
+    "PARSER_VERSION",
+    "ID_NAMESPACE",
+    "ROOT_HEADING",
+    "ParseError",
+    "Section",
+    "SourceSpan",
+    "ExtractedTable",
+    "XbrlContext",
+    "InlineFact",
+    "ParsedDocument",
+    "parse_filing",
+    "sha256_hex",
+    "text_hash",
+]
+
 PARSER_VERSION = "fel-parser/1.0.0"
 
 ID_NAMESPACE = uuid.uuid5(uuid.NAMESPACE_URL, "https://financial-evidence-lab.dev/ingestion")
@@ -32,15 +60,6 @@ ID_NAMESPACE = uuid.uuid5(uuid.NAMESPACE_URL, "https://financial-evidence-lab.de
 _HEADING_LEVELS = {"h1": 1, "h2": 2, "h3": 3, "h4": 4, "h5": 5, "h6": 6}
 _BLOCK_TAGS = frozenset({"p", "div", "li", "tr", "table", "caption", *_HEADING_LEVELS})
 ROOT_HEADING = "(document)"
-
-
-class ParseError(Exception):
-    """Malformed source; ``reason_code`` is stable, ``diagnostic`` actionable."""
-
-    def __init__(self, reason_code: str, diagnostic: str) -> None:
-        super().__init__(diagnostic)
-        self.reason_code = reason_code
-        self.diagnostic = diagnostic
 
 
 def sha256_hex(data: bytes) -> str:
@@ -104,6 +123,9 @@ class InlineFact:
     scale: int
     decimals: str | None
     sign: str | None
+    format: str | None
+    """iXBRL transformation registry format (e.g. ``ixt:num-comma-decimal``);
+    None means the plain default numeric rendering."""
     raw_text: str
     span_id: str
     section_id: str
@@ -114,6 +136,7 @@ class InlineFact:
 @dataclass(frozen=True)
 class ParsedDocument:
     content_hash: str
+    """``sha256:<hex>`` of the raw source bytes (repository-wide format)."""
     parser_version: str
     text: str
     sections: tuple[Section, ...]
@@ -122,6 +145,8 @@ class ParsedDocument:
     contexts: Mapping[str, XbrlContext]
     units: Mapping[str, str]
     facts: tuple[InlineFact, ...]
+    diagnostics: tuple[str, ...] = ()
+    """Per-fact non-fatal diagnostics (e.g. skipped nil/empty facts)."""
 
 
 @dataclass
@@ -176,9 +201,14 @@ class _FilingHTMLParser(HTMLParser):
         self._section_stack: list[int] = [0]
         self.paragraph_ranges: list[tuple[int, int, int]] = []  # (section, start, end)
         self.tables: list[_TableState] = []
-        self._table: _TableState | None = None
+        # Nested-table support: a stack so an inner <table> never drops the
+        # outer one (finding: nested tables lost the outer table's rows).
+        self._table_stack: list[_TableState] = []
+        self._table_count = 0
         self.raw_facts: list[_RawFactState] = []
-        self._fact_state: tuple[dict[str, str | None], int] | None = None
+        # Nested ix:nonFraction support: a stack so an inner fact never
+        # drops the outer fact.
+        self._fact_stack: list[tuple[dict[str, str | None], int]] = []
         self._heading_start: int | None = None
         self._heading_level = 0
         self._block_start: int | None = None
@@ -234,28 +264,38 @@ class _FilingHTMLParser(HTMLParser):
         elif tag == "p":
             self._block_start = self._pos
         elif tag == "table":
-            self._table = _TableState(order=len(self.tables), section_index=self._section_stack[-1])
-        elif self._table is not None and tag == "caption":
-            self._table.in_caption = True
-            self._table.cell_parts = []
-        elif self._table is not None and tag == "tr":
-            self._table.current_row = []
-            self._table.current_row_is_header = True
-        elif self._table is not None and tag in ("td", "th"):
-            self._table.cell_parts = []
+            self._table_stack.append(
+                _TableState(order=self._table_count, section_index=self._section_stack[-1])
+            )
+            self._table_count += 1
+        elif self._table_stack and tag == "caption":
+            table = self._table_stack[-1]
+            table.in_caption = True
+            table.cell_parts = []
+        elif self._table_stack and tag == "tr":
+            table = self._table_stack[-1]
+            table.current_row = []
+            table.current_row_is_header = True
+        elif self._table_stack and tag in ("td", "th"):
+            table = self._table_stack[-1]
+            table.cell_parts = []
             if tag == "td":
-                self._table.current_row_is_header = False
+                table.current_row_is_header = False
         elif tag == "ix:nonfraction":
-            self._fact_state = (
-                {
-                    "name": attr_map.get("name"),
-                    "contextref": attr_map.get("contextref"),
-                    "unitref": attr_map.get("unitref"),
-                    "scale": attr_map.get("scale"),
-                    "decimals": attr_map.get("decimals"),
-                    "sign": attr_map.get("sign"),
-                },
-                self._pos,
+            self._fact_stack.append(
+                (
+                    {
+                        "name": attr_map.get("name"),
+                        "contextref": attr_map.get("contextref"),
+                        "unitref": attr_map.get("unitref"),
+                        "scale": attr_map.get("scale"),
+                        "decimals": attr_map.get("decimals"),
+                        "sign": attr_map.get("sign"),
+                        "format": attr_map.get("format"),
+                        "nil": attr_map.get("xsi:nil"),
+                    },
+                    self._pos,
+                )
             )
 
     def handle_endtag(self, tag: str) -> None:
@@ -272,27 +312,31 @@ class _FilingHTMLParser(HTMLParser):
             if end > self._block_start:
                 self.paragraph_ranges.append((self._section_stack[-1], self._block_start, end))
             self._block_start = None
-        elif self._table is not None and tag == "caption":
-            self._table.caption = "".join(self._table.cell_parts or []).strip() or None
-            self._table.cell_parts = None
-            self._table.in_caption = False
-        elif self._table is not None and tag in ("td", "th"):
-            if self._table.current_row is not None:
-                self._table.current_row.append("".join(self._table.cell_parts or []).strip())
-            self._table.cell_parts = None
-        elif self._table is not None and tag == "tr":
-            row = self._table.current_row
+        elif self._table_stack and tag == "caption":
+            table = self._table_stack[-1]
+            table.caption = "".join(table.cell_parts or []).strip() or None
+            table.cell_parts = None
+            table.in_caption = False
+        elif self._table_stack and tag in ("td", "th"):
+            table = self._table_stack[-1]
+            if table.current_row is not None:
+                table.current_row.append("".join(table.cell_parts or []).strip())
+            table.cell_parts = None
+        elif self._table_stack and tag == "tr":
+            table = self._table_stack[-1]
+            row = table.current_row
             if row is not None:
-                if self._table.current_row_is_header and not self._table.headers:
-                    self._table.headers = row
+                if table.current_row_is_header and not table.headers:
+                    table.headers = row
                 else:
-                    self._table.rows.append(row)
-            self._table.current_row = None
-        elif self._table is not None and tag == "table":
-            self.tables.append(self._table)
-            self._table = None
-        elif tag == "ix:nonfraction" and self._fact_state is not None:
-            attr_map, start = self._fact_state
+                    table.rows.append(row)
+            table.current_row = None
+        elif self._table_stack and tag == "table":
+            # Pop the innermost table; the outer table (if any) resumes with
+            # its rows intact.
+            self.tables.append(self._table_stack.pop())
+        elif tag == "ix:nonfraction" and self._fact_stack:
+            attr_map, start = self._fact_stack.pop()
             self.raw_facts.append(
                 _RawFactState(
                     attrs=attr_map,
@@ -301,7 +345,6 @@ class _FilingHTMLParser(HTMLParser):
                     section_index=self._section_stack[-1],
                 )
             )
-            self._fact_state = None
         if tag in _BLOCK_TAGS:
             self._newline()
 
@@ -310,12 +353,13 @@ class _FilingHTMLParser(HTMLParser):
             if self._capture_kind is not None:
                 self._capture_parts.append(data)
             return
-        if self._table is not None and self._table.cell_parts is not None:
+        if self._table_stack and self._table_stack[-1].cell_parts is not None:
+            cell_parts = self._table_stack[-1].cell_parts
             normalized = " ".join(data.split())
             if normalized:
-                if self._table.cell_parts and not self._table.cell_parts[-1].endswith(" "):
-                    self._table.cell_parts.append(" ")
-                self._table.cell_parts.append(normalized)
+                if cell_parts and not cell_parts[-1].endswith(" "):
+                    cell_parts.append(" ")
+                cell_parts.append(normalized)
         self._append_data(data)
 
     # -- headings / sections -------------------------------------------------------
@@ -371,7 +415,7 @@ class _FilingHTMLParser(HTMLParser):
                 self._context_period[kind] = date.fromisoformat(captured)
             except ValueError as exc:
                 raise ParseError(
-                    "INVALID_PERIOD",
+                    ReasonCode.INVALID_PERIOD_DATE,
                     f"context '{self._context_id}' has unparseable {kind} "
                     f"value {captured!r}; expected an ISO date",
                 ) from exc
@@ -408,7 +452,9 @@ def _trim_range(text: str, start: int, end: int) -> tuple[int, int]:
     return start, end
 
 
-def parse_filing(raw: bytes, *, id_seed: str | None = None) -> ParsedDocument:
+def parse_filing(
+    raw: bytes, *, id_seed: str | None = None, content_hash: str | None = None
+) -> ParsedDocument:
     """Parse filing bytes into hierarchy, spans, tables, and raw iXBRL facts.
 
     ``id_seed`` scopes the deterministic UUIDv5 identifiers; the pipeline
@@ -416,14 +462,19 @@ def parse_filing(raw: bytes, *, id_seed: str | None = None) -> ParsedDocument:
     version while staying byte-for-byte stable across identical reruns. The
     default seed (content hash + parser version) keeps standalone parses
     reproducible.
+
+    ``content_hash`` (``sha256:<hex>``) lets the caller pass the hash it
+    already computed so the bytes are hashed exactly once end-to-end; when
+    omitted the parser computes it.
     """
-    content_hash = sha256_hex(raw)
+    if content_hash is None:
+        content_hash = "sha256:" + sha256_hex(raw)
     seed = id_seed if id_seed is not None else f"{content_hash}|{PARSER_VERSION}"
     try:
         html = raw.decode("utf-8")
     except UnicodeDecodeError as exc:
         raise ParseError(
-            "ENCODING_ERROR",
+            ReasonCode.ENCODING_ERROR,
             f"source is not valid UTF-8 (byte offset {exc.start}); "
             "re-fetch the document or register the correct encoding",
         ) from exc
@@ -435,7 +486,7 @@ def parse_filing(raw: bytes, *, id_seed: str | None = None) -> ParsedDocument:
     text = parser.canonical_text
     if not text.strip():
         raise ParseError(
-            "EMPTY_DOCUMENT",
+            ReasonCode.EMPTY_DOCUMENT,
             "no textual content found after parsing; the source is likely "
             "truncated or not an HTML filing",
         )
@@ -481,29 +532,42 @@ def parse_filing(raw: bytes, *, id_seed: str | None = None) -> ParsedDocument:
     span_by_range = {(span.start_char, span.end_char): span.id for span in spans}
 
     facts: list[InlineFact] = []
-    for raw_fact in parser.raw_facts:
+    diagnostics: list[str] = []
+    # Stable document order regardless of nesting (inner facts close first).
+    ordered_raw_facts = sorted(parser.raw_facts, key=lambda f: (f.start, -f.end))
+    for raw_fact in ordered_raw_facts:
         attrs = raw_fact.attrs
         section_index = raw_fact.section_index
         start, end = _trim_range(text, raw_fact.start, raw_fact.end)
         concept = attrs.get("name")
+        is_nil = (attrs.get("nil") or "").strip().lower() in ("true", "1")
+        if is_nil or end <= start:
+            # A nil or content-empty fact (commonly a self-closing element)
+            # must not quarantine the filing: skip it and record a per-fact
+            # diagnostic instead (see module docstring for the rationale).
+            diagnostics.append(
+                f"skipped {'nil' if is_nil else 'empty'} inline fact "
+                f"'{concept or '(unnamed)'}' at chars {start}-{end}"
+            )
+            continue
         context_ref = attrs.get("contextref")
         unit_ref = attrs.get("unitref")
         if not concept or not context_ref or not unit_ref:
             raise ParseError(
-                "INCOMPLETE_FACT",
+                ReasonCode.INCOMPLETE_FACT,
                 f"inline fact at chars {start}-{end} is missing one of "
                 "name/contextRef/unitRef; the iXBRL markup is malformed",
             )
         if context_ref not in parser.contexts:
             raise ParseError(
-                "UNKNOWN_CONTEXT",
+                ReasonCode.UNKNOWN_CONTEXT,
                 f"inline fact '{concept}' references undefined context "
                 f"'{context_ref}'; the ix:header resources are missing or "
                 "truncated",
             )
         if unit_ref not in parser.units:
             raise ParseError(
-                "UNKNOWN_UNIT",
+                ReasonCode.UNKNOWN_UNIT,
                 f"inline fact '{concept}' references undefined unit "
                 f"'{unit_ref}'; the ix:header resources are missing or "
                 "truncated",
@@ -513,7 +577,7 @@ def parse_filing(raw: bytes, *, id_seed: str | None = None) -> ParsedDocument:
             scale = int(scale_text) if scale_text else 0
         except ValueError as exc:
             raise ParseError(
-                "INVALID_SCALE",
+                ReasonCode.INVALID_SCALE,
                 f"inline fact '{concept}' has non-integer scale {scale_text!r}",
             ) from exc
         if (start, end) not in span_by_range:
@@ -538,6 +602,7 @@ def parse_filing(raw: bytes, *, id_seed: str | None = None) -> ParsedDocument:
                 scale=scale,
                 decimals=attrs.get("decimals"),
                 sign=attrs.get("sign"),
+                format=attrs.get("format"),
                 raw_text=text[start:end],
                 span_id=span_by_range[(start, end)],
                 section_id=section_ids[section_index],
@@ -547,7 +612,8 @@ def parse_filing(raw: bytes, *, id_seed: str | None = None) -> ParsedDocument:
         )
 
     tables: list[ExtractedTable] = []
-    for table in parser.tables:
+    # Stable document order regardless of nesting (inner tables close first).
+    for table in sorted(parser.tables, key=lambda t: t.order):
         table_id = str(uuid.uuid5(ID_NAMESPACE, f"{seed}|table|{table.order}"))
         tables.append(
             ExtractedTable(
@@ -570,4 +636,5 @@ def parse_filing(raw: bytes, *, id_seed: str | None = None) -> ParsedDocument:
         contexts=MappingProxyType(dict(parser.contexts)),
         units=MappingProxyType(dict(parser.units)),
         facts=tuple(facts),
+        diagnostics=tuple(diagnostics),
     )

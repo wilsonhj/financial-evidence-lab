@@ -4,7 +4,13 @@ Turns raw inline-XBRL occurrences into financial-fact/v1-shaped records:
 
 - decimal string values (never binary floats), with the display scale
   applied so the stored value is the full unscaled amount (output scale 0);
-- sign attributes and locale formatting (thousands separators) resolved;
+- iXBRL transformation-registry formats resolved through a CLOSED registry
+  (``_FORMAT_TRANSFORMS``): num-dot-decimal, num-comma-decimal, fixed-zero,
+  fixed-empty (registry policy: reject, never silently zero), with
+  parenthesized-negative and dash-as-zero handling; an UNKNOWN format fails
+  closed with ``UNKNOWN_FORMAT`` — never a silent guess;
+- non-finite decimals (NaN/sNaN/Infinity) rejected fail-closed;
+- sign attributes resolved;
 - units mapped from XBRL measures (iso4217:USD -> USD);
 - instant/duration periods and explicit dimensions from the fact context;
 - duplicate detection within a filing (identical fact key + value collapses
@@ -16,13 +22,26 @@ Turns raw inline-XBRL occurrences into financial-fact/v1-shaped records:
 from __future__ import annotations
 
 import uuid
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal, InvalidOperation
 from types import MappingProxyType
 
+from fel_workers.ingestion.errors import NormalizationError, ReasonCode
 from fel_workers.ingestion.parser import ID_NAMESPACE, InlineFact, ParsedDocument
+
+__all__ = [
+    "NORMALIZER_VERSION",
+    "NormalizationError",
+    "PriorFact",
+    "NormalizedFact",
+    "decimal_str",
+    "map_unit",
+    "parse_fact_value",
+    "fact_key",
+    "normalize_facts",
+]
 
 NORMALIZER_VERSION = "fel-xbrl/1.0.0"
 
@@ -36,15 +55,6 @@ _UNIT_MEASURES = {
     "xbrli:pure": "pure",
     "pure": "pure",
 }
-
-
-class NormalizationError(Exception):
-    """Fact cannot be normalized; carries a stable code and diagnostic."""
-
-    def __init__(self, reason_code: str, diagnostic: str) -> None:
-        super().__init__(diagnostic)
-        self.reason_code = reason_code
-        self.diagnostic = diagnostic
 
 
 @dataclass(frozen=True)
@@ -118,25 +128,128 @@ def map_unit(measure: str) -> str:
     return _UNIT_MEASURES.get(measure.lower(), measure)
 
 
-def parse_fact_value(fact: InlineFact) -> Decimal:
-    """Resolve display text + sign + scale into the unscaled decimal value."""
-    cleaned = fact.raw_text.replace(",", "").replace(" ", "").strip()
+class _ValueRejected(Exception):
+    """Internal: a transform rejects the value with a stable reason code."""
+
+    def __init__(self, reason_code: ReasonCode, detail: str) -> None:
+        super().__init__(detail)
+        self.reason_code = reason_code
+        self.detail = detail
+
+
+# Dash glyphs commonly used for "zero / not applicable" in filings.
+_DASH_TEXTS = frozenset({"-", "‐", "–", "—", "−"})
+
+
+def _numeric(text: str, *, thousands: str, decimal_sep: str) -> Decimal:
+    """Shared numeric transform body with dash-as-zero handling."""
+    if text in _DASH_TEXTS:
+        return Decimal(0)
+    cleaned = text.replace(" ", "").replace(" ", "").replace(thousands, "")
+    if decimal_sep != ".":
+        cleaned = cleaned.replace(decimal_sep, ".")
     if not cleaned:
-        raise NormalizationError(
-            "EMPTY_FACT_VALUE",
-            f"fact '{fact.concept}' at chars {fact.start_char}-{fact.end_char} "
-            "has no numeric text",
-        )
+        raise _ValueRejected(ReasonCode.EMPTY_FACT_VALUE, "has no numeric text")
+    return Decimal(cleaned)  # InvalidOperation propagates to the caller
+
+
+def _num_dot_decimal(text: str) -> Decimal:
+    """ixt:num-dot-decimal — ',' thousands, '.' decimal (e.g. '1,234.56')."""
+    return _numeric(text, thousands=",", decimal_sep=".")
+
+
+def _num_comma_decimal(text: str) -> Decimal:
+    """ixt:num-comma-decimal — '.' thousands, ',' decimal (e.g. '1.234,56')."""
+    return _numeric(text, thousands=".", decimal_sep=",")
+
+
+def _fixed_zero(text: str) -> Decimal:
+    """ixt:fixed-zero — the value is zero regardless of the display text."""
+    return Decimal(0)
+
+
+def _fixed_empty(text: str) -> Decimal:
+    """ixt:fixed-empty — REGISTRY POLICY: reject, never silently zero.
+
+    fixed-empty declares "this element carries no numeric value"; storing 0
+    would fabricate a number, so it fails closed into quarantine.
+    """
+    raise _ValueRejected(
+        ReasonCode.EMPTY_FACT_VALUE,
+        "uses ixt:fixed-empty (declares no numeric value); registry policy " "is reject, not zero",
+    )
+
+
+# CLOSED transform registry, keyed by the format's local name (namespace
+# prefix stripped, lowercased). Formats outside the registry — including
+# ixt:num-unit-decimal, deliberately unregistered — fail closed with
+# UNKNOWN_FORMAT; a transform must be added here before such filings ingest.
+_FORMAT_TRANSFORMS: dict[str, Callable[[str], Decimal]] = {
+    "num-dot-decimal": _num_dot_decimal,
+    "numdotdecimal": _num_dot_decimal,
+    "num-comma-decimal": _num_comma_decimal,
+    "numcommadecimal": _num_comma_decimal,
+    "fixed-zero": _fixed_zero,
+    "fixedzero": _fixed_zero,
+    "fixed-empty": _fixed_empty,
+    "fixedempty": _fixed_empty,
+    "zerodash": lambda text: Decimal(0),
+    "numdash": lambda text: Decimal(0),
+}
+
+
+def parse_fact_value(fact: InlineFact) -> Decimal:
+    """Resolve display text + format + sign + scale into the unscaled value.
+
+    The fact's iXBRL ``format`` attribute selects a transform from the
+    closed registry; a fact without a format gets the plain num-dot-decimal
+    rendering. Parenthesized values ('(1,234)') are negative; a lone dash is
+    zero; non-finite decimals (NaN/sNaN/Infinity) are rejected fail-closed
+    so they can never reach the database CHECK constraint.
+    """
+    transform: Callable[[str], Decimal] = _num_dot_decimal
+    if fact.format is not None:
+        local = fact.format.rsplit(":", 1)[-1].strip().lower()
+        registered = _FORMAT_TRANSFORMS.get(local)
+        if registered is None:
+            raise NormalizationError(
+                ReasonCode.UNKNOWN_FORMAT,
+                f"fact '{fact.concept}' uses unregistered iXBRL format "
+                f"{fact.format!r}; add a transform to the registry before "
+                "ingesting (fail closed — a guessed locale corrupts "
+                "magnitudes silently)",
+            )
+        transform = registered
+    text = fact.raw_text.strip()
+    negative = False
+    if len(text) >= 2 and text.startswith("(") and text.endswith(")"):
+        negative = True
+        text = text[1:-1].strip()
     try:
-        magnitude = Decimal(cleaned)
+        magnitude = transform(text)
+        if not magnitude.is_finite():
+            raise NormalizationError(
+                ReasonCode.NONFINITE_FACT_VALUE,
+                f"fact '{fact.concept}' has non-finite value "
+                f"{fact.raw_text!r}; NaN/Infinity are never storable",
+            )
+        if negative:
+            magnitude = -magnitude
+        if fact.sign == "-":
+            magnitude = -magnitude
+        # scaleb stays inside the try: exotic operands signal
+        # InvalidOperation and must fail closed, not crash the run.
+        return magnitude.scaleb(fact.scale)
+    except _ValueRejected as exc:
+        raise NormalizationError(
+            exc.reason_code,
+            f"fact '{fact.concept}' at chars {fact.start_char}-" f"{fact.end_char} {exc.detail}",
+        ) from exc
     except InvalidOperation as exc:
         raise NormalizationError(
-            "UNPARSEABLE_FACT_VALUE",
+            ReasonCode.UNPARSEABLE_FACT_VALUE,
             f"fact '{fact.concept}' has unparseable value {fact.raw_text!r}",
         ) from exc
-    if fact.sign == "-":
-        magnitude = -magnitude
-    return magnitude.scaleb(fact.scale)
 
 
 def fact_key(
@@ -190,7 +303,7 @@ def normalize_facts(
             period_start, period_end = context.start, context.end
         else:
             raise NormalizationError(
-                "INVALID_PERIOD",
+                ReasonCode.INVALID_PERIOD_STRUCTURE,
                 f"context '{context.id}' for fact '{fact.concept}' has "
                 "neither an instant nor a complete start/end duration",
             )
@@ -209,7 +322,7 @@ def normalize_facts(
         if existing is not None:
             if existing.value != value_text:
                 raise NormalizationError(
-                    "INCONSISTENT_DUPLICATE",
+                    ReasonCode.INCONSISTENT_DUPLICATE,
                     f"fact '{fact.concept}' ({key}) appears twice with "
                     f"conflicting values {existing.value} (span "
                     f"{existing.source_span_id}) and {value_text} (span "
