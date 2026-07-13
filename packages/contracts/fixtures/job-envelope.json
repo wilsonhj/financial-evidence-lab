@@ -1,0 +1,12 @@
+{
+  "id": "d4e5f6a7-8b9c-4d1e-9f2a-3b4c5d6e7f8a",
+  "kind": "sec_submissions_sync",
+  "queue": "ingestion",
+  "priority": 5,
+  "status": "queued",
+  "attempts": 0,
+  "max_attempts": 5,
+  "idempotency_key": "sec-sync-0001441816-2026-07",
+  "payload": { "cik": "0001441816" },
+  "created_at": "2026-07-13T00:00:00Z"
+}

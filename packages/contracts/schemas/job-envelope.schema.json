@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.fel.dev/schemas/job-envelope/v1",
+  "x-fel-version": "1.0.0",
+  "title": "JobEnvelope",
+  "description": "Durable job contract for the PostgreSQL SKIP LOCKED queue. Terminal states: succeeded, failed, cancelled.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "kind",
+    "queue",
+    "priority",
+    "status",
+    "attempts",
+    "max_attempts",
+    "created_at"
+  ],
+  "properties": {
+    "id": { "type": "string", "format": "uuid" },
+    "kind": { "type": "string", "minLength": 1 },
+    "queue": { "type": "string", "minLength": 1 },
+    "priority": { "type": "integer", "minimum": 0, "maximum": 9 },
+    "status": { "enum": ["queued", "claimed", "running", "succeeded", "failed", "cancelled"] },
+    "attempts": { "type": "integer", "minimum": 0 },
+    "max_attempts": { "type": "integer", "minimum": 1 },
+    "idempotency_key": { "type": "string", "minLength": 8, "maxLength": 128 },
+    "payload": { "type": "object" },
+    "heartbeat_at": { "type": "string", "format": "date-time" },
+    "created_at": { "type": "string", "format": "date-time" },
+    "finished_at": { "type": "string", "format": "date-time" }
+  }
+}
