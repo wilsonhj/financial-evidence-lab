@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.fel.dev/schemas/tenant-context/v1",
+  "x-fel-version": "1.0.0",
+  "title": "TenantContext",
+  "description": "Authenticated caller context; RLS policies key off org_id set per request via SET LOCAL.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["org_id", "user_id", "role"],
+  "properties": {
+    "org_id": { "type": "string", "format": "uuid" },
+    "user_id": { "type": "string", "format": "uuid" },
+    "role": { "enum": ["owner", "editor", "reviewer", "viewer"] }
+  }
+}

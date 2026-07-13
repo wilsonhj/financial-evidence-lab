@@ -1,0 +1,540 @@
+openapi: 3.1.0
+info:
+  title: Financial Evidence Lab API
+  version: 0.1.0
+  description: >-
+    Frozen v1 contract surface (ADR-0001). This file seeds the M0 freeze:
+    conventions (error envelope, idempotency, optimistic concurrency,
+    run-ID pattern), identity/workspace resources, evidence reads, and
+    ingestion jobs. Retrieval, extraction, modeling, and forecasting paths
+    are added by their owning packages as minor versions under the rules in
+    VERSIONING.md.
+servers:
+  - url: /
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      summary: Liveness probe
+      responses:
+        "200":
+          description: Service is alive.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+  /v1/workspaces:
+    post:
+      operationId: createWorkspace
+      summary: Create a workspace
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WorkspaceCreate"
+      responses:
+        "201":
+          description: Workspace created.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Workspace"
+        default:
+          $ref: "#/components/responses/Error"
+    get:
+      operationId: listWorkspaces
+      summary: List workspaces visible to the caller
+      responses:
+        "200":
+          description: Workspaces.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Workspace"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/workspaces/{workspaceId}:
+    parameters:
+      - $ref: "#/components/parameters/WorkspaceId"
+    get:
+      operationId: getWorkspace
+      summary: Fetch a workspace
+      responses:
+        "200":
+          description: The workspace.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Workspace"
+        default:
+          $ref: "#/components/responses/Error"
+    patch:
+      operationId: updateWorkspace
+      summary: Update a workspace (optimistic concurrency)
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WorkspaceUpdate"
+      responses:
+        "200":
+          description: Updated workspace.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Workspace"
+        "412":
+          description: ETag precondition failed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/entities:
+    get:
+      operationId: searchEntities
+      summary: Search issuers/entities
+      parameters:
+        - name: query
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        "200":
+          description: Matching entities.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Entity"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/entities/{entityId}:
+    parameters:
+      - $ref: "#/components/parameters/EntityId"
+    get:
+      operationId: getEntity
+      summary: Fetch an entity
+      responses:
+        "200":
+          description: The entity.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Entity"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/entities/{entityId}/documents:
+    parameters:
+      - $ref: "#/components/parameters/EntityId"
+    get:
+      operationId: listEntityDocuments
+      summary: List an entity's documents (point-in-time filtered)
+      parameters:
+        - name: as_of
+          in: query
+          required: false
+          description: >-
+            Cutoff timestamp; only documents publicly available at or before
+            this instant are returned. Enforced server-side.
+          schema:
+            type: string
+            format: date-time
+      responses:
+        "200":
+          description: Documents.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DocumentMeta"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/documents/{documentId}:
+    parameters:
+      - name: documentId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      operationId: getDocument
+      summary: Fetch document metadata
+      responses:
+        "200":
+          description: Document metadata.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocumentMeta"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/source-spans/{sourceSpanId}:
+    parameters:
+      - name: sourceSpanId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      operationId: getSourceSpan
+      summary: Fetch a stable source span
+      responses:
+        "200":
+          description: The source span.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SourceSpan"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/ingestion/jobs:
+    post:
+      operationId: createIngestionJob
+      summary: Enqueue an ingestion job (long-running; returns a run ID)
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IngestionJobCreate"
+      responses:
+        "202":
+          description: Job accepted; poll the job resource.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobEnvelope"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/ingestion/jobs/{jobId}:
+    parameters:
+      - name: jobId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      operationId: getIngestionJob
+      summary: Fetch job state
+      responses:
+        "200":
+          description: The job envelope.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobEnvelope"
+        default:
+          $ref: "#/components/responses/Error"
+components:
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: >-
+        Client-chosen key; retries with the same key return the original
+        result and never duplicate work.
+      schema:
+        type: string
+        minLength: 8
+        maxLength: 128
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: ETag of the version being updated.
+      schema:
+        type: string
+    WorkspaceId:
+      name: workspaceId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    EntityId:
+      name: entityId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  headers:
+    ETag:
+      description: Version tag for optimistic concurrency.
+      schema:
+        type: string
+  responses:
+    Error:
+      description: Error envelope (all non-2xx responses use this shape).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+  schemas:
+    Health:
+      type: object
+      required: [status, service, version]
+      properties:
+        status:
+          type: string
+          const: ok
+        service:
+          type: string
+        version:
+          type: string
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, request_id]
+          properties:
+            code:
+              type: string
+              description: Stable machine-readable code, e.g. TEMPORAL_SCOPE_VIOLATION.
+            message:
+              type: string
+            details:
+              type: object
+              additionalProperties: true
+            request_id:
+              type: string
+    TenantContext:
+      type: object
+      description: Authenticated caller context; RLS policies key off org_id.
+      required: [org_id, user_id, role]
+      properties:
+        org_id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        role:
+          type: string
+          enum: [owner, editor, reviewer, viewer]
+    WorkspaceCreate:
+      type: object
+      required: [name, entity_id, base_currency, fiscal_calendar, as_of]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        entity_id:
+          type: string
+          format: uuid
+        base_currency:
+          type: string
+          description: ISO 4217 code.
+          pattern: "^[A-Z]{3}$"
+        fiscal_calendar:
+          type: string
+          description: Fiscal calendar identifier (e.g. FY-JAN31).
+        as_of:
+          type: string
+          format: date-time
+          description: Point-in-time cutoff; queries may not see evidence published after this instant.
+    WorkspaceUpdate:
+      type: object
+      minProperties: 1
+      properties:
+        name:
+          type: string
+          minLength: 1
+        as_of:
+          type: string
+          format: date-time
+        active_scenario_id:
+          type: string
+          format: uuid
+    Workspace:
+      allOf:
+        - $ref: "#/components/schemas/WorkspaceCreate"
+        - type: object
+          required: [id, org_id, version, created_at]
+          properties:
+            id:
+              type: string
+              format: uuid
+            org_id:
+              type: string
+              format: uuid
+            active_scenario_id:
+              type: string
+              format: uuid
+            version:
+              type: integer
+              minimum: 1
+            created_at:
+              type: string
+              format: date-time
+    Entity:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        ticker:
+          type: string
+        cik:
+          type: string
+          pattern: "^[0-9]{10}$"
+        lei:
+          type: string
+        parent_id:
+          type: string
+          format: uuid
+    DocumentMeta:
+      type: object
+      description: Immutable source metadata with the spec 10.3 temporal fields.
+      required: [id, entity_id, accession, source_url, content_hash, published_at, ingested_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        entity_id:
+          type: string
+          format: uuid
+        form:
+          type: string
+        accession:
+          type: string
+        source_url:
+          type: string
+          format: uri
+        content_hash:
+          type: string
+          description: sha256 of raw bytes, prefixed "sha256:".
+          pattern: "^sha256:[0-9a-f]{64}$"
+        published_at:
+          type: string
+          format: date-time
+        filed_at:
+          type: string
+          format: date-time
+        period_start:
+          type: string
+          format: date
+        period_end:
+          type: string
+          format: date
+        ingested_at:
+          type: string
+          format: date-time
+        valid_from:
+          type: string
+          format: date-time
+        valid_to:
+          type: string
+          format: date-time
+    SourceSpan:
+      type: object
+      required: [document_version_id, section_id, start_char, end_char, text_hash]
+      properties:
+        document_version_id:
+          type: string
+          format: uuid
+        section_id:
+          type: string
+          format: uuid
+        page:
+          type: integer
+          minimum: 1
+        start_char:
+          type: integer
+          minimum: 0
+        end_char:
+          type: integer
+          minimum: 0
+        text_hash:
+          type: string
+          pattern: "^sha256:[0-9a-f]{64}$"
+    IngestionJobCreate:
+      type: object
+      required: [kind, payload]
+      properties:
+        kind:
+          type: string
+          description: Job kind, e.g. sec_submissions_sync.
+        payload:
+          type: object
+          additionalProperties: true
+        queue:
+          type: string
+          default: default
+        priority:
+          type: integer
+          minimum: 0
+          maximum: 9
+          default: 5
+    JobEnvelope:
+      type: object
+      description: >-
+        Durable job contract (PostgreSQL SKIP LOCKED queue). Terminal states
+        are exactly succeeded, failed, cancelled.
+      required: [id, kind, queue, priority, status, attempts, max_attempts, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+        queue:
+          type: string
+        priority:
+          type: integer
+        status:
+          type: string
+          enum: [queued, claimed, running, succeeded, failed, cancelled]
+        attempts:
+          type: integer
+          minimum: 0
+        max_attempts:
+          type: integer
+          minimum: 1
+        idempotency_key:
+          type: string
+        heartbeat_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        finished_at:
+          type: string
+          format: date-time
+        error:
+          $ref: "#/components/schemas/Error"

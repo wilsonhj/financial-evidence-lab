@@ -9,6 +9,8 @@ export default tseslint.config(
       "**/node_modules/**",
       "**/coverage/**",
       ".venv/**",
+      ".claude/**",
+      "packages/contracts/src/generated/**",
     ],
   },
   js.configs.recommended,
