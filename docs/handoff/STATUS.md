@@ -39,12 +39,18 @@ Last updated: 2026-07-12
   gate (gitleaks, JS, Python, Postgres backup-restore smoke into a fresh
   database), db/ migration conventions, Railway api+worker config-as-code,
   and the `python -m fel_workers` heartbeat entrypoint; all checks green
+- **PR #77 merged to `integration/m0` at `8d92cb1`**: `M0-CONTRACTS` /
+  T0003 is complete and the ADR-0001 contract freeze is in effect —
+  OpenAPI 3.1 v0.1.0, seven versioned JSON Schemas with fixtures and
+  contract tests, drift-gated generated TypeScript client, frozen
+  versioning rules (packages/contracts, VERSIONING.md, CONTRACTS.md)
 
 ## Ready
 
-- `M0-CONTRACTS` / T0003 (#52) on `agent/m0-contracts` — OpenAPI and
-  JSON-schema versioning rules plus the generated TypeScript client; the
-  ADR-0001 contract freeze anchors on this package's merge
+- `M0-PLATFORM` / T0002+T0004-T0008+T0010 (#53) on `agent/m0-platform` —
+  the final M0 package: local processes, Supabase Auth/RLS (mock-first),
+  workspace APIs with as-of cutoff, audit/observability, cost ceilings,
+  and provider interfaces + mocks
 
 ## Not started
 
@@ -72,9 +78,9 @@ agent environment on the same branches/PRs.
 
 ## Next actions
 
-1. Dispatch `M0-CONTRACTS` (#52) — now CI-gated; contract freeze (ADR-0001)
-   takes effect on its merge. Requires no external data; unaffected by the
-   egress block.
+1. Implement and merge `M0-PLATFORM` (#53) — the final M0 package; then
+   evaluate the M0 exit gate, merge integration/m0 into main, and reset the
+   queue's base branch to main.
 2. Decide the EXT unblock path: allowlist the three SEC hosts, or hand
    execution of PRs #74-#76 to a network-enabled agent environment.
 3. Keep at most four packages active concurrently.

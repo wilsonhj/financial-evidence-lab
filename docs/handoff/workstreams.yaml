@@ -80,13 +80,13 @@ packages:
     branch: agent/m0-infra-ci # implemented on PR #69 from claude/repo-analysis-g0fvjy
     status: merged
     allowed_paths: [infra/**, db/**, .github/workflows/**]
-  - id: M0-CONTRACTS
+  - id: M0-CONTRACTS # merged via PR #77 (integration/m0 @ 8d92cb1); freeze in effect
     issue: 52
     tasks: [T0003]
     depends_on: [M0-INFRA-CI]
     team: contracts
-    branch: agent/m0-contracts
-    status: ready
+    branch: agent/m0-contracts # implemented on PR #77 from claude/repo-analysis-g0fvjy
+    status: merged
     allowed_paths: [packages/contracts/**, docs/handoff/CONTRACTS.md]
   - id: M0-PLATFORM # local env, auth, workspace, observability, cost, providers
     issue: 53
@@ -94,6 +94,7 @@ packages:
     depends_on: [M0-CONTRACTS]
     team: platform
     branch: agent/m0-platform
+    status: ready
     allowed_paths:
       - apps/api/**
       - apps/web/**
