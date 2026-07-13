@@ -72,10 +72,20 @@ def test_cross_tenant_reads_are_empty(
     assert owner_view.json()["name"] == "tenant test"
 
 
-def test_viewer_cannot_mutate(client: TestClient, org_fixture: tuple[str, str]) -> None:
+def test_viewer_cannot_mutate(
+    client: TestClient, org_fixture: tuple[str, str], db_url: str
+) -> None:
+    import psycopg
+
     org_id, _ = org_fixture
     workspace_id = _create(client, org_fixture)
-    viewer = _headers(org_id, str(uuid.uuid4()), role="viewer")
+    viewer_user = str(uuid.uuid4())
+    with psycopg.connect(db_url) as conn:
+        conn.execute(
+            "INSERT INTO memberships (org_id, user_id, role) VALUES (%s, %s, 'viewer')",
+            (org_id, viewer_user),
+        )
+    viewer = _headers(org_id, viewer_user, role="viewer")
     denied = client.patch(
         f"/v1/workspaces/{workspace_id}",
         headers={**viewer, "If-Match": '"1"'},
@@ -83,3 +93,53 @@ def test_viewer_cannot_mutate(client: TestClient, org_fixture: tuple[str, str]) 
     )
     assert denied.status_code == 403
     assert denied.json()["error"]["code"] == "FORBIDDEN"
+
+
+def test_forged_org_or_nonmember_rejected(client: TestClient, org_fixture: tuple[str, str]) -> None:
+    """P0 regression: claims are candidates, membership is canonical."""
+    org_id, _ = org_fixture
+    # Non-member user forging a real org id.
+    nonmember = client.get("/v1/workspaces", headers=_headers(org_id, str(uuid.uuid4())))
+    assert nonmember.status_code == 403
+    assert nonmember.json()["error"]["code"] == "NOT_A_MEMBER"
+    # Entirely fabricated org id.
+    forged_org = client.get(
+        "/v1/workspaces", headers=_headers(str(uuid.uuid4()), str(uuid.uuid4()))
+    )
+    assert forged_org.status_code == 403
+
+
+def test_forged_role_claim_is_overridden_by_stored_role(
+    client: TestClient, org_fixture: tuple[str, str], db_url: str
+) -> None:
+    """A viewer presenting an owner token still gets viewer permissions."""
+    import psycopg
+
+    org_id, _ = org_fixture
+    viewer_user = str(uuid.uuid4())
+    with psycopg.connect(db_url) as conn:
+        conn.execute(
+            "INSERT INTO memberships (org_id, user_id, role) VALUES (%s, %s, 'viewer')",
+            (org_id, viewer_user),
+        )
+    workspace_id = _create(client, org_fixture)
+    forged_owner = _headers(org_id, viewer_user, role="owner")
+    denied = client.patch(
+        f"/v1/workspaces/{workspace_id}",
+        headers={**forged_owner, "If-Match": '"1"'},
+        json={"name": "escalated"},
+    )
+    assert denied.status_code == 403
+    assert denied.json()["error"]["code"] == "FORBIDDEN"
+    create_denied = client.post(
+        "/v1/workspaces",
+        headers={**forged_owner, "Idempotency-Key": f"forge-{uuid.uuid4()}"},
+        json={
+            "name": "x",
+            "entity_id": str(uuid.uuid4()),
+            "base_currency": "USD",
+            "fiscal_calendar": "FY-JAN31",
+            "as_of": "2026-07-01T00:00:00Z",
+        },
+    )
+    assert create_denied.status_code == 403

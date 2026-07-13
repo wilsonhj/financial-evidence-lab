@@ -61,6 +61,11 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> JSONRe
     return _envelope(request, exc.status_code, "HTTP_ERROR", str(exc.detail), None)
 
 
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    return _envelope(request, 500, "INTERNAL", "Unexpected server error.", None)
+
+
 @app.exception_handler(RequestValidationError)
 async def validation_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
     return _envelope(request, 422, "VALIDATION_ERROR", "Request failed validation.", exc.errors())

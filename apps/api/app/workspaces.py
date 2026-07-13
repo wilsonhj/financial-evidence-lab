@@ -9,7 +9,7 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Header, Request, Response
 from psycopg import sql
-from pydantic import BaseModel, Field
+from pydantic import AwareDatetime, BaseModel, Field
 
 from app.auth import TenantContext
 from app.db import tenant_connection
@@ -25,12 +25,12 @@ class WorkspaceCreate(BaseModel):
     entity_id: uuid.UUID
     base_currency: str = Field(pattern="^[A-Z]{3}$")
     fiscal_calendar: str
-    as_of: str  # RFC3339; validated by Postgres timestamptz on insert
+    as_of: AwareDatetime
 
 
 class WorkspaceUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1)
-    as_of: str | None = None
+    as_of: AwareDatetime | None = None
     active_scenario_id: uuid.UUID | None = None
 
 
@@ -69,7 +69,9 @@ def create_workspace(
         ).fetchone()
         if replay:
             response.status_code = replay["response_status"]
-            return dict(replay["response_body"])
+            replayed = dict(replay["response_body"])
+            response.headers["ETag"] = f'"{replayed["version"]}"'
+            return replayed
         workspace_id = uuid.uuid4()
         row = conn.execute(
             """

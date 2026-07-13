@@ -68,15 +68,20 @@ CREATE TABLE jobs (
         CHECK (status IN ('queued', 'claimed', 'running', 'succeeded', 'failed', 'cancelled')),
     attempts integer NOT NULL DEFAULT 0 CHECK (attempts >= 0),
     max_attempts integer NOT NULL DEFAULT 5 CHECK (max_attempts >= 1),
-    idempotency_key text UNIQUE,
+    idempotency_key text,
     payload jsonb NOT NULL DEFAULT '{}'::jsonb,
     org_id uuid,
+    lease uuid,
     heartbeat_at timestamptz,
     created_at timestamptz NOT NULL DEFAULT now(),
     finished_at timestamptz,
     error jsonb
 );
 CREATE INDEX jobs_claim_idx ON jobs (queue, priority, created_at) WHERE status = 'queued';
+-- Idempotency is tenant- and kind-scoped, never global; NULL org_id (platform
+-- jobs) still deduplicates thanks to NULLS NOT DISTINCT.
+CREATE UNIQUE INDEX jobs_idempotency_uniq ON jobs (org_id, kind, idempotency_key)
+    NULLS NOT DISTINCT WHERE idempotency_key IS NOT NULL;
 
 -- Idempotency-Key replay store for mutating API endpoints.
 CREATE TABLE idempotency_keys (

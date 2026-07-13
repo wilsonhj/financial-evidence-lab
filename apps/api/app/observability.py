@@ -49,7 +49,14 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         request_id = request.headers.get("X-Request-ID") or f"req-{uuid.uuid4().hex[:12]}"
         request.state.request_id = request_id
         started = time.perf_counter()
-        response = await call_next(request)
+        try:
+            response = await call_next(request)
+        except Exception:
+            log.exception(
+                "request failed",
+                extra={"request_id": request_id, "path": request.url.path},
+            )
+            raise
         duration_ms = round((time.perf_counter() - started) * 1000, 2)
         response.headers["X-Request-ID"] = request_id
         log.info(
