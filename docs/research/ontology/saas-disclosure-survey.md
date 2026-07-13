@@ -583,7 +583,7 @@ Probes run per issuer (HTTP 200 = tagged, 404 = not under that concept):
 | DOCU | ✔ | 404 | ✔ | ✔ | 404 | 404 | ASC 606 current/noncurrent only |
 | PD | ✔ | ✔ | ✔ | ✔ | 404 | 404 | pure ASC 606 |
 | ESTC | ✔ | ✔ | ✔ | ✔ | 404 | 404 | pure ASC 606 |
-| FIVN | ✔ | 404 | ✔ | 404 | ✔ | 404 | CWCL-current + legacy DR-current |
+| FIVN | ✔ | 404 | ✔ | ✔ | ✔ | 404 | ASC 606 C/NC + legacy DR-current |
 | APPF | ✔ | 404 | ✔ | 404 | ✔ | ✔ | CWCL-current + legacy DR split |
 | PCTY | ✔ | ✔ | ✔ | 404 | 404 | 404 | CWCL aggregate + CWCL-current |
 | PAYC | ✔ | ✔ | 404 | 404 | ✔ | ✔ | CWCL aggregate + legacy DR split |
@@ -597,9 +597,14 @@ Probes run per issuer (HTTP 200 = tagged, 404 = not under that concept):
   - *Deferred revenue / contract liabilities* — tagged for **all 20**, but the
     ingester MUST branch on convention: prefer ASC 606
     `ContractWithCustomerLiability*`; fall back to legacy `DeferredRevenue*`.
-    Nine issuers expose only one family (e.g. ZM/DOCU/SNOW: ASC 606 C/NC only;
-    PAYC: aggregate CWCL + legacy DR). A single-tag ingester will miss balances
-    for ~half the cohort.
+    Nine issuers expose only one concept family — CWCL-only (TEAM, ZS, SNOW,
+    ZM, DOCU, PD, ESTC, PCTY, BILL; e.g. ZM/DOCU/SNOW: ASC 606 C/NC only). The
+    other eleven expose both ASC 606 `ContractWithCustomerLiability*` and legacy
+    `DeferredRevenue*` concepts (e.g. PAYC: aggregate CWCL + legacy DR split —
+    HTTP 200 on `ContractWithCustomerLiability`, `DeferredRevenueCurrent`, and
+    `DeferredRevenueNoncurrent`, 404 on both CWCL-C/NC; FIVN: ASC 606 C/NC +
+    legacy DR-current — HTTP 200 on CWCL-C/NC and `DeferredRevenueCurrent`).
+    A single-tag ingester will miss balances for ~half the cohort.
   - *Subscription/product & services revenue and cost lines* — tagged as
     income-statement members (subscription gross margin is then a derived ratio,
     not itself a fact).
