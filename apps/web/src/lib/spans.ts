@@ -12,23 +12,23 @@ export interface SectionSegment {
   spanIds: string[];
 }
 
-/** Clamp a span to the section bounds; returns null when nothing overlaps. */
-function clampToSection(
-  start: number,
-  end: number,
-  length: number,
-): { start: number; end: number } | null {
-  const s = Math.max(0, Math.min(start, length));
-  const e = Math.max(0, Math.min(end, length));
-  if (e <= s) return null;
-  return { start: s, end: e };
+/** Offsets are valid only when 0 <= start < end <= length (fail-closed). */
+function offsetsValid(start: number, end: number, length: number): boolean {
+  return (
+    Number.isInteger(start) && Number.isInteger(end) && start >= 0 && end > start && end <= length
+  );
 }
 
 /**
  * Maps section-relative span offsets onto the section text, producing an
  * ordered, gap-free list of segments covering the whole content. Handles
- * overlapping and adjacent spans and clamps out-of-range offsets rather than
- * throwing, so a bad span can never corrupt document rendering.
+ * overlapping and adjacent spans.
+ *
+ * Fail-closed: spans with out-of-range or empty offsets are SKIPPED, never
+ * clamped into plausible-looking highlights. Callers are expected to have
+ * already excluded and flagged invalid spans via
+ * `verifySpanIntegrity` (see citation-integrity.ts); the skip here is a
+ * defensive second line, not an error channel.
  */
 export function segmentSection(
   content: string,
@@ -38,8 +38,9 @@ export function segmentSection(
   const relevant: { id: string; start: number; end: number }[] = [];
   for (const record of spans) {
     if (record.span.section_id !== sectionId) continue;
-    const clamped = clampToSection(record.span.start_char, record.span.end_char, content.length);
-    if (clamped) relevant.push({ id: record.id, ...clamped });
+    const { start_char: start, end_char: end } = record.span;
+    if (!offsetsValid(start, end, content.length)) continue;
+    relevant.push({ id: record.id, start, end });
   }
 
   const boundaries = new Set<number>([0, content.length]);
@@ -62,13 +63,40 @@ export function segmentSection(
   return segments;
 }
 
-/** Extracts the exact raw source text a span cites from its section content. */
-export function extractSpanText(section: SectionRecord, record: SourceSpanRecord): string {
-  const clamped = clampToSection(
-    record.span.start_char,
-    record.span.end_char,
-    section.content.length,
-  );
-  if (!clamped) return "";
-  return section.content.slice(clamped.start, clamped.end);
+/**
+ * Extracts the exact raw source text a span cites from its section content,
+ * or null when the offsets are invalid for that content. Callers must treat
+ * null as "citation cannot be trusted" — there is no clamped best-effort
+ * substring.
+ */
+export function extractSpanText(section: SectionRecord, record: SourceSpanRecord): string | null {
+  const { start_char: start, end_char: end } = record.span;
+  if (!offsetsValid(start, end, section.content.length)) return null;
+  return section.content.slice(start, end);
+}
+
+/**
+ * Resolves a click (or keyboard activation) on a multi-span segment:
+ *
+ * - if the currently selected span covers this segment, the click DESELECTS
+ *   it (toggle-off) regardless of which covering span is selected;
+ * - otherwise the NARROWEST covering span (minimum end-start; id as the
+ *   deterministic tie-break) is selected, so nested spans stay reachable.
+ */
+export function resolveSegmentSelection(
+  segmentSpanIds: readonly string[],
+  selectedSpanId: string | null,
+  spanLengthById: ReadonlyMap<string, number>,
+): string | null {
+  if (selectedSpanId !== null && segmentSpanIds.includes(selectedSpanId)) return null;
+  let best: string | null = null;
+  let bestLength = Infinity;
+  for (const id of segmentSpanIds) {
+    const length = spanLengthById.get(id) ?? Infinity;
+    if (length < bestLength || (length === bestLength && best !== null && id < best)) {
+      best = id;
+      bestLength = length;
+    }
+  }
+  return best ?? segmentSpanIds[0] ?? null;
 }
