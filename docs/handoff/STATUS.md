@@ -1,6 +1,6 @@
 # Implementation status
 
-Last updated: 2026-07-12
+Last updated: 2026-07-13
 
 ## Repository
 
@@ -66,20 +66,38 @@ Next gate: M1 — point-in-time evidence corpus.
   append-only audit, cost ceilings, provider interfaces + deterministic
   mocks, lease-fenced SKIP LOCKED job queue. **M0 is complete.**
 
-## Ready
+## In review (draft PRs open, CI green)
 
-- `M1-INGESTION` / T0101–T0109 (#54) on `agent/m1-ingestion` — SEC
-  raw/parse, corpus jobs, FRED, market data (mock-first; live SEC fetches
-  additionally need the egress allowlist)
-- `M1-EVIDENCE-UI` / T0110 (#55) on `agent/m1-evidence-ui` — evidence
-  reader; introduces the Next.js runtime in apps/web
+Both M1 packages were dispatched concurrently on 2026-07-13 (disjoint
+allowed paths) and delivered draft PRs the same day; CI is green on both
+head SHAs. Awaiting integration-lead review and merge decision:
 
-Dispatch rule reminder: their allowed paths are disjoint
-(workers+apps/api vs apps/web+packages/ui), so both may run concurrently.
+- `M1-INGESTION` / T0101–T0109 (#54) — **draft PR #80**
+  (`agent/m1-ingestion` @ `a813cfb`): full mock-first ingestion vertical
+  (LiveSecClient behind MockTransport, immutable content-addressed raw
+  store, stdlib HTML/iXBRL parser with stable UUIDv5 spans, financial-fact
+  normalization with duplicate/restatement handling, idempotent versioned
+  jobs with atomic corpus publication, quarantine, vintage-aware FRED,
+  Alpha Vantage adapter, FOR-005 fail-closed feature assembly, read-only
+  corpus API with as_of filtering). 68 new tests (95 Python total).
+  Flagged pre-authorized deviation: additive-only
+  `db/migrations/0002_corpus_core.sql` (public corpus tables, no
+  org_id/RLS by documented design, `fel_app` SELECT-only).
+- `M1-EVIDENCE-UI` / T0110 (#55) — **draft PR #79**
+  (`agent/m1-evidence-ui` @ `cdcffbe`): Next.js 16 App Router runtime,
+  evidence reader at `/reader/[documentId]` (keyboard-navigable outline,
+  non-color-only span highlights, fact panel, scale-aware string-decimal
+  duplicate-conflict detection, amendment/restatement banners, client-side
+  notes) against a synthetic fixture via the typed `EvidenceSource`
+  interface. 52 JS tests; `pnpm --filter @fel/web build` exit 0. Flagged
+  pre-authorized deviations: root `tsconfig.json` (apps/web out of the
+  composite graph), `pnpm-workspace.yaml` postcss `^8.5.10` override
+  (CVE'd transitive pin from next 16), mechanical lockfile.
 
 ## Not started
 
-All implementation tasks after M0 and T0110/T0101–T0109.
+All implementation tasks after M1 (M1-CORPUS-QA becomes ready when
+M1-INGESTION merges).
 
 ## Blockers
 
@@ -103,14 +121,17 @@ agent environment on the same branches/PRs.
 
 ## Next actions
 
-1. Dispatch M1: `M1-INGESTION` (#54) and `M1-EVIDENCE-UI` (#55) may run
-   concurrently (disjoint paths). Live SEC ingestion inside M1-INGESTION
-   additionally needs the SEC egress allowlist (or a network-enabled
-   environment); parser/fixture work proceeds mock-first regardless.
-2. Decide the EXT unblock path: allowlist the three SEC hosts, or hand
-   execution of PRs #74-#76 to a network-enabled agent environment.
-3. Keep at most four packages active concurrently.
-4. Update this file and `workstreams.yaml` after every integration merge.
+1. Review and merge draft PRs #80 (M1-INGESTION) and #79 (M1-EVIDENCE-UI);
+   the 0002 migration deviation on #80 needs integration-lead sign-off.
+2. After #80 merges: mark M1-CORPUS-QA (#56) ready and dispatch it; swap
+   the web reader's `evidenceSource` binding to `HttpEvidenceSource` once
+   the ingestion API is deployed (noted in #79's handoff).
+3. Decide the EXT unblock path: allowlist the three SEC hosts in the cloud
+   environment's network settings (new session required), or hand
+   execution of PRs #74-#76 to a network-enabled agent environment. The
+   same decision gates live-credential integration runs for M1-INGESTION.
+4. Keep at most four packages active concurrently.
+5. Update this file and `workstreams.yaml` after every integration merge.
 
 ## Known tooling caveat
 
