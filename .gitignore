@@ -12,6 +12,7 @@ dist/
 build/
 coverage/
 *.log
+*.tsbuildinfo
 
 # Python
 __pycache__/
@@ -34,3 +35,6 @@ Thumbs.db
 .cache/
 tmp/
 *.tmp
+
+# Claude Code session state and agent worktrees (live checkouts - never commit)
+.claude/

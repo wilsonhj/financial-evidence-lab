@@ -1,4 +1,4 @@
-version: 1
+version: 2
 repository: wilsonhj/financial-evidence-lab
 integration_lead: wilsonhj
 canonical_tasks: specs/001-financial-evidence-lab/tasks.md
@@ -14,56 +14,236 @@ shared_paths:
 defaults:
   status: blocked
   credentials: mock-only
-  base_branch: main
+  base_branch: main # M0 trunk merged to main 2026-07-13; M1+ packages base here
   required_evidence: [tests, telemetry-if-applicable, documentation, acceptance-notes]
 
-# The issue field is populated after GitHub issue creation. Only the integration
-# lead changes status to merged. Allowed paths are refined in each issue after
-# M0 establishes the final package layout.
+# Queue restructure (architecture audit, 2026-07): 41 packages consolidated to 19
+# milestone-scoped packages (18 pending once the completed M0-SCAFFOLD merges).
+# Issues re-synced 2026-07-12: each package's `issue:` field points at its
+# GitHub issue (#51-#68); legacy issues #9-#49 are closed. Deferred post-MVP and
+# removed from the queue: T0211-T0213 (Embedding Atlas) and T0506 (analogues).
+# T0214 is split: T0214a (50-100-question smoke benchmark, M2) and T0214b (frozen
+# 300-question adjudicated benchmark, M5 release). T0215 keeps the retrieval and
+# performance suite without Atlas testing.
+#
+# Path conventions (must match the scaffold layout kept by root pyproject.toml):
+# worker code lives under workers/src/fel_workers/<area>/** with tests in
+# workers/tests/**; API tests in apps/api/tests/** (inside apps/api/**); eval
+# tests in evals/tests/** (inside evals/**). There is no root tests/** tree and
+# no workers/retrieval — retrieval code lives in packages/retrieval/** and
+# apps/api/**. Package directories are limited to: contracts, providers,
+# observability, ontology, retrieval, calculation-engine, retrieval-evals,
+# export, ui.
+#
+# Only the integration lead changes status to merged. Dependency edges are
+# minimal: transitively implied dependencies are not repeated.
+#
+# Packages in different milestones may declare overlapping allowed_paths (e.g.
+# apps/api/**). The dispatch rule in docs/handoff/README.md forbids scheduling
+# two packages with overlapping paths concurrently: overlap is resolved by
+# time, not ownership.
 packages:
-  - {id: M0-SCAFFOLD, tasks: [T0001], depends_on: [], team: platform, branch: agent/m0-scaffold, status: ready, allowed_paths: [apps/**, workers/**, packages/**, evals/**, root-configs]}
-  - {id: M0-CONTRACTS, tasks: [T0003], depends_on: [M0-SCAFFOLD], team: contracts, branch: agent/m0-contracts, allowed_paths: [packages/contracts/**, docs/handoff/CONTRACTS.md]}
-  - {id: M0-LOCAL, tasks: [T0002], depends_on: [M0-SCAFFOLD], team: platform, branch: agent/m0-local, allowed_paths: [apps/**, workers/**, docs/development/**]}
-  - {id: M0-AUTH, tasks: [T0004, T0005], depends_on: [M0-CONTRACTS], team: security, branch: agent/m0-auth, allowed_paths: [apps/api/**, apps/web/**, db/**, tests/security/**]}
-  - {id: M0-WORKSPACE, tasks: [T0006], depends_on: [M0-CONTRACTS], team: api, branch: agent/m0-workspace, allowed_paths: [apps/api/**, apps/web/**, tests/contracts/**]}
-  - {id: M0-OBS-COST, tasks: [T0007, T0008], depends_on: [M0-CONTRACTS], team: trust, branch: agent/m0-observability-cost, allowed_paths: [apps/**, workers/**, packages/observability/**, tests/**]}
-  - {id: M0-INFRA, tasks: [T0009], depends_on: [M0-SCAFFOLD], team: platform, branch: agent/m0-infra, allowed_paths: [infra/**, db/**, .github/workflows/**]}
-  - {id: M0-PROVIDERS, tasks: [T0010], depends_on: [M0-CONTRACTS], team: ai-data, branch: agent/m0-providers, allowed_paths: [packages/providers/**, tests/contracts/**]}
+  # M0 — platform foundations. M0-INFRA-CI gates every other pending M0 package
+  # (M0-PLATFORM inherits it through M0-CONTRACTS).
+  - id: M0-SCAFFOLD # merged via PR #50 (integration/m0 @ 1ec35dc)
+    issue: 9
+    tasks: [T0001]
+    depends_on: []
+    team: platform
+    branch: claude/repo-analysis-g0fvjy # PR #50
+    status: merged
+    allowed_paths:
+      - apps/**
+      - workers/**
+      - packages/**
+      - evals/**
+      - pyproject.toml
+      - requirements-dev.txt
+      - package.json
+      - pnpm-workspace.yaml
+      - pnpm-lock.yaml
+      - tsconfig.json
+      - tsconfig.base.json
+      - vitest.config.ts
+      - eslint.config.mjs
+      - .prettierrc.json
+      - .prettierignore
+      - .editorconfig
+      - .gitignore
+      - .node-version
+      - Makefile
+  - id: M0-INFRA-CI # merged via PR #69 (integration/m0 @ 222e17e)
+    issue: 51
+    tasks: [T0009]
+    depends_on: [M0-SCAFFOLD]
+    team: platform
+    branch: agent/m0-infra-ci # implemented on PR #69 from claude/repo-analysis-g0fvjy
+    status: merged
+    allowed_paths: [infra/**, db/**, .github/workflows/**]
+  - id: M0-CONTRACTS # merged via PR #77 (integration/m0 @ 8d92cb1); freeze in effect
+    issue: 52
+    tasks: [T0003]
+    depends_on: [M0-INFRA-CI]
+    team: contracts
+    branch: agent/m0-contracts # implemented on PR #77 from claude/repo-analysis-g0fvjy
+    status: merged
+    allowed_paths: [packages/contracts/**, docs/handoff/CONTRACTS.md]
+  - id: M0-PLATFORM # merged via PR #78 (integration/m0 @ 9213962); M0 complete
+    issue: 53
+    tasks: [T0002, T0004, T0005, T0006, T0007, T0008, T0010]
+    depends_on: [M0-CONTRACTS]
+    team: platform
+    branch: agent/m0-platform # implemented on PR #78 from claude/repo-analysis-g0fvjy
+    status: merged
+    allowed_paths:
+      - apps/api/**
+      - apps/web/**
+      - workers/src/fel_workers/**
+      - workers/tests/**
+      - packages/providers/**
+      - packages/observability/**
+      - db/**
+      - docs/development/**
 
-  - {id: M1-SEC-RAW, tasks: [T0101, T0102], depends_on: [M0-AUTH, M0-WORKSPACE, M0-PROVIDERS], team: data, branch: agent/m1-sec-raw, allowed_paths: [workers/ingestion/**, tests/fixtures/sec/**]}
-  - {id: M1-SEC-PARSE, tasks: [T0103, T0104], depends_on: [M1-SEC-RAW], team: data, branch: agent/m1-sec-parse, allowed_paths: [workers/ingestion/**, tests/fixtures/sec/**]}
-  - {id: M1-CORPUS-JOBS, tasks: [T0105, T0106], depends_on: [M1-SEC-RAW, M0-OBS-COST], team: data, branch: agent/m1-corpus-jobs, allowed_paths: [workers/ingestion/**, apps/api/**, tests/ingestion/**]}
-  - {id: M1-FRED, tasks: [T0107], depends_on: [M0-PROVIDERS], team: data, branch: agent/m1-fred, allowed_paths: [workers/ingestion/**, tests/fixtures/fred/**]}
-  - {id: M1-MARKET, tasks: [T0108, T0109], depends_on: [M0-PROVIDERS], team: data, branch: agent/m1-market, allowed_paths: [workers/ingestion/**, tests/fixtures/market/**]}
-  - {id: M1-EVIDENCE-UI, tasks: [T0110], depends_on: [M0-CONTRACTS], team: experience, branch: agent/m1-evidence-ui, allowed_paths: [apps/web/**, packages/ui/**, tests/fixtures/ui/**]}
-  - {id: M1-CORPUS-QA, tasks: [T0111, T0112], depends_on: [M1-SEC-PARSE, M1-CORPUS-JOBS, M1-FRED, M1-MARKET], team: trust, branch: agent/m1-corpus-qa, allowed_paths: [evals/**, tests/ingestion/**]}
+  # M1 — corpus ingestion and evidence browsing.
+  - id: M1-INGESTION # SEC raw + parse, corpus jobs, FRED, market data
+    issue: 54
+    tasks: [T0101, T0102, T0103, T0104, T0105, T0106, T0107, T0108, T0109]
+    depends_on: [M0-PLATFORM]
+    team: data
+    branch: agent/m1-ingestion
+    status: ready
+    allowed_paths:
+      - workers/src/fel_workers/ingestion/**
+      - workers/tests/**
+      - apps/api/**
+  - id: M1-EVIDENCE-UI
+    issue: 55
+    tasks: [T0110]
+    depends_on: [M0-PLATFORM]
+    team: experience
+    branch: agent/m1-evidence-ui
+    status: ready
+    allowed_paths: [apps/web/**, packages/ui/**]
+  - id: M1-CORPUS-QA
+    issue: 56
+    tasks: [T0111, T0112]
+    depends_on: [M1-INGESTION]
+    team: trust
+    branch: agent/m1-corpus-qa
+    allowed_paths: [evals/**, workers/tests/**]
 
-  - {id: M2-INDEXES, tasks: [T0201, T0202, T0203], depends_on: [M1-CORPUS-QA], team: retrieval, branch: agent/m2-indexes, allowed_paths: [workers/retrieval/**, packages/retrieval/**, tests/retrieval/**]}
-  - {id: M2-RETRIEVAL-TRACE, tasks: [T0204, T0205, T0206], depends_on: [M2-INDEXES], team: retrieval, branch: agent/m2-retrieval-trace, allowed_paths: [workers/retrieval/**, packages/retrieval/**, tests/retrieval/**]}
-  - {id: M2-CLAIMS, tasks: [T0207, T0208, T0209], depends_on: [M2-RETRIEVAL-TRACE], team: retrieval, branch: agent/m2-claims, allowed_paths: [workers/retrieval/**, apps/api/**, tests/retrieval/**]}
-  - {id: M2-OBSERVATORY, tasks: [T0210], depends_on: [M0-CONTRACTS], team: experience, branch: agent/m2-observatory, allowed_paths: [apps/web/**, packages/ui/**, tests/fixtures/ui/**]}
-  - {id: M2-PROJECTION, tasks: [T0211], depends_on: [M2-INDEXES], team: retrieval, branch: agent/m2-projection, allowed_paths: [workers/retrieval/**, packages/retrieval/**]}
-  - {id: M2-ATLAS, tasks: [T0212, T0213], depends_on: [M0-CONTRACTS], team: experience, branch: agent/m2-atlas, allowed_paths: [apps/web/**, packages/ui/**, tests/fixtures/ui/**]}
-  - {id: M2-RAG-EVALS, tasks: [T0214, T0215], depends_on: [M2-CLAIMS, M2-PROJECTION, M2-OBSERVATORY, M2-ATLAS], team: trust, branch: agent/m2-rag-evals, allowed_paths: [evals/**, tests/performance/**]}
+  # M2 — retrieval, claims verification, observatory.
+  - id: M2-RETRIEVAL-BACKEND # indexes + retrieval trace (trace schema owner)
+    issue: 57
+    tasks: [T0201, T0202, T0203, T0204, T0205, T0206]
+    depends_on: [M1-CORPUS-QA]
+    team: retrieval
+    branch: agent/m2-retrieval-backend
+    allowed_paths: [packages/retrieval/**, apps/api/**]
+  - id: M2-CLAIMS-VERIFICATION # claims pipeline + smoke benchmark + retrieval/perf suite (no Atlas)
+    issue: 58
+    tasks: [T0207, T0208, T0209, T0214a, T0215]
+    depends_on: [M2-RETRIEVAL-BACKEND]
+    team: retrieval
+    branch: agent/m2-claims-verification
+    allowed_paths:
+      - packages/retrieval/**
+      - packages/retrieval-evals/**
+      - apps/api/**
+      - evals/**
+  - id: M2-OBSERVATORY-UI # consumes the retrieval trace schema
+    issue: 59
+    tasks: [T0210]
+    depends_on: [M2-RETRIEVAL-BACKEND]
+    team: experience
+    branch: agent/m2-observatory-ui
+    allowed_paths: [apps/web/**, packages/ui/**]
 
-  - {id: M3-ONTOLOGY, tasks: [T0301], depends_on: [M2-CLAIMS], team: extraction, branch: agent/m3-ontology, allowed_paths: [packages/ontology/**, tests/fixtures/extraction/**]}
-  - {id: M3-AGENT-RUNTIME, tasks: [T0302, T0303], depends_on: [M3-ONTOLOGY, M0-PROVIDERS], team: extraction, branch: agent/m3-agent-runtime, allowed_paths: [workers/extraction/**, tests/extraction/**]}
-  - {id: M3-NORMALIZE, tasks: [T0304, T0305], depends_on: [M3-ONTOLOGY], team: extraction, branch: agent/m3-normalize, allowed_paths: [workers/extraction/**, packages/ontology/**, tests/extraction/**]}
-  - {id: M3-CONFIDENCE, tasks: [T0306, T0307], depends_on: [M3-AGENT-RUNTIME, M3-NORMALIZE], team: trust, branch: agent/m3-confidence, allowed_paths: [workers/extraction/**, evals/**, tests/extraction/**]}
-  - {id: M3-REVIEW, tasks: [T0308, T0309], depends_on: [M3-NORMALIZE, M0-AUTH], team: experience, branch: agent/m3-review, allowed_paths: [apps/web/**, apps/api/**, tests/extraction/**]}
-  - {id: M3-GATE, tasks: [T0310], depends_on: [M3-CONFIDENCE, M3-REVIEW], team: trust, branch: agent/m3-gate, allowed_paths: [evals/**, tests/extraction/**]}
+  # M3 — extraction.
+  - id: M3-EXTRACTION-CORE # ontology, agent runtime, normalization
+    issue: 60
+    tasks: [T0301, T0302, T0303, T0304, T0305]
+    depends_on: [M2-CLAIMS-VERIFICATION]
+    team: extraction
+    branch: agent/m3-extraction-core
+    allowed_paths:
+      - packages/ontology/**
+      - workers/src/fel_workers/extraction/**
+      - workers/tests/**
+  - id: M3-REVIEW
+    issue: 61
+    tasks: [T0308, T0309]
+    depends_on: [M3-EXTRACTION-CORE]
+    team: experience
+    branch: agent/m3-review
+    allowed_paths: [apps/web/**, apps/api/**]
+  - id: M3-CONFIDENCE-GATE # confidence scoring + extraction quality gate
+    issue: 62
+    tasks: [T0306, T0307, T0310]
+    depends_on: [M3-REVIEW] # M3-EXTRACTION-CORE inherited via M3-REVIEW
+    team: trust
+    branch: agent/m3-confidence-gate
+    allowed_paths:
+      - workers/src/fel_workers/extraction/**
+      - workers/tests/**
+      - evals/**
 
-  - {id: M4-MODEL-GRAPH, tasks: [T0401, T0402], depends_on: [M3-ONTOLOGY], team: modeling, branch: agent/m4-model-graph, allowed_paths: [packages/calculation-engine/**, tests/modeling/**]}
-  - {id: M4-CALC-ENGINE, tasks: [T0403, T0409, T0410], depends_on: [M4-MODEL-GRAPH], team: modeling, branch: agent/m4-calc-engine, allowed_paths: [packages/calculation-engine/**, tests/modeling/**, tests/performance/**]}
-  - {id: M4-FACT-SCENARIOS, tasks: [T0404, T0405], depends_on: [M4-MODEL-GRAPH, M3-GATE], team: modeling, branch: agent/m4-fact-scenarios, allowed_paths: [packages/calculation-engine/**, apps/api/**, tests/modeling/**]}
-  - {id: M4-DRIVER-UI, tasks: [T0406], depends_on: [M4-MODEL-GRAPH, M0-CONTRACTS], team: experience, branch: agent/m4-driver-ui, allowed_paths: [apps/web/**, packages/ui/**]}
-  - {id: M4-ANALYTICS-UI, tasks: [T0407], depends_on: [M4-MODEL-GRAPH, M0-CONTRACTS], team: experience, branch: agent/m4-analytics-ui, allowed_paths: [apps/web/**, packages/ui/**]}
-  - {id: M4-LINEAGE-UI, tasks: [T0408], depends_on: [M4-FACT-SCENARIOS, M4-DRIVER-UI], team: experience, branch: agent/m4-lineage-ui, allowed_paths: [apps/web/**, packages/ui/**]}
+  # M4 — modeling.
+  - id: M4-MODEL-CALC # model graph + calculation engine + perf hardening
+    issue: 63
+    tasks: [T0401, T0402, T0403, T0409, T0410]
+    depends_on: [M3-EXTRACTION-CORE]
+    team: modeling
+    branch: agent/m4-model-calc
+    allowed_paths: [packages/calculation-engine/**]
+  - id: M4-FACT-SCENARIOS # gated on confidence controls so approved extractions cannot seed model nodes before monetary auto-approve rules exist
+    issue: 64
+    tasks: [T0404, T0405]
+    depends_on: [M4-MODEL-CALC, M3-CONFIDENCE-GATE]
+    team: modeling
+    branch: agent/m4-fact-scenarios
+    allowed_paths: [packages/calculation-engine/**, apps/api/**]
+  - id: M4-MODEL-UI # driver, analytics, and lineage UI
+    issue: 65
+    tasks: [T0406, T0407, T0408]
+    depends_on: [M4-FACT-SCENARIOS]
+    team: experience
+    branch: agent/m4-model-ui
+    allowed_paths: [apps/web/**, packages/ui/**]
 
-  - {id: M5-FORECAST-BASELINE, tasks: [T0501, T0502], depends_on: [M4-CALC-ENGINE], team: forecasting, branch: agent/m5-forecast-baseline, allowed_paths: [workers/forecasting/**, tests/forecasting/**]}
-  - {id: M5-DRIVER-FORECAST, tasks: [T0503], depends_on: [M5-FORECAST-BASELINE, M4-FACT-SCENARIOS], team: forecasting, branch: agent/m5-driver-forecast, allowed_paths: [workers/forecasting/**, tests/forecasting/**]}
-  - {id: M5-BACKTEST, tasks: [T0504, T0505, T0508], depends_on: [M5-FORECAST-BASELINE, M5-DRIVER-FORECAST], team: forecasting, branch: agent/m5-backtest, allowed_paths: [workers/forecasting/**, evals/**, tests/forecasting/**]}
-  - {id: M5-ANALOGUES, tasks: [T0506], depends_on: [M2-RAG-EVALS, M5-FORECAST-BASELINE], team: forecasting, branch: agent/m5-analogues, allowed_paths: [workers/forecasting/**, workers/retrieval/**, tests/forecasting/**]}
-  - {id: M5-FORECAST-UI, tasks: [T0507], depends_on: [M5-FORECAST-BASELINE, M0-CONTRACTS], team: experience, branch: agent/m5-forecast-ui, allowed_paths: [apps/web/**, packages/ui/**]}
-  - {id: M5-AUDIT-EXPORT, tasks: [T0509, T0510], depends_on: [M4-LINEAGE-UI, M5-BACKTEST], team: trust, branch: agent/m5-audit-export, allowed_paths: [apps/api/**, packages/export/**, tests/export/**]}
-  - {id: M5-RELEASE, tasks: [T0511, T0512, T0513], depends_on: [M5-BACKTEST, M5-ANALOGUES, M5-FORECAST-UI, M5-AUDIT-EXPORT], team: trust, branch: agent/m5-release, allowed_paths: [evals/**, tests/**, docs/release/**]}
+  # M5 — forecasting, audit, release.
+  - id: M5-FORECASTING # baseline + driver forecasts + forecast UI
+    issue: 66
+    tasks: [T0501, T0502, T0503, T0507]
+    depends_on: [M4-FACT-SCENARIOS]
+    team: forecasting
+    branch: agent/m5-forecasting
+    allowed_paths:
+      - workers/src/fel_workers/forecasting/**
+      - workers/tests/**
+      - apps/web/**
+      - packages/ui/**
+  - id: M5-BACKTEST
+    issue: 67
+    tasks: [T0504, T0505, T0508]
+    depends_on: [M5-FORECASTING]
+    team: forecasting
+    branch: agent/m5-backtest
+    allowed_paths:
+      - workers/src/fel_workers/forecasting/**
+      - workers/tests/**
+      - evals/**
+  - id: M5-AUDIT-RELEASE # audit/export + release evals incl. frozen 300-question benchmark
+    issue: 68
+    # Fact/scenario dependency is inherited via M5-BACKTEST -> M5-FORECASTING ->
+    # M4-FACT-SCENARIOS; the former lineage-UI edge was removed by the audit.
+    tasks: [T0509, T0510, T0511, T0512, T0513, T0214b]
+    depends_on: [M5-BACKTEST]
+    team: trust
+    branch: agent/m5-audit-release
+    allowed_paths:
+      - apps/api/**
+      - packages/export/**
+      - evals/**
+      - docs/release/**

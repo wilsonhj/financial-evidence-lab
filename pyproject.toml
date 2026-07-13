@@ -1,0 +1,25 @@
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["apps/api", "workers/src", "evals", "packages/providers"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+# per-module overrides preferred; global escape hatch removed
+mypy_path = "apps/api:workers/src:evals:packages/providers"
+
+[tool.pytest.ini_options]
+pythonpath = ["apps/api", "workers/src", "evals", "packages/providers"]
+testpaths = ["apps/api/tests", "workers/tests", "evals/tests", "packages/providers/tests"]
+addopts = "-q --import-mode=importlib"
+
+[tool.bandit]
+exclude_dirs = ["tests", ".venv"]

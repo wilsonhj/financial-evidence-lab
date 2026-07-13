@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.fel.dev/schemas/citation/v1",
+  "x-fel-version": "1.0.0",
+  "title": "Citation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["claim_id", "source_span_id", "entailment"],
+  "properties": {
+    "claim_id": { "type": "string", "format": "uuid" },
+    "source_span_id": { "type": "string", "format": "uuid" },
+    "entailment": { "enum": ["entailed", "partial", "contradictory", "irrelevant"] }
+  }
+}

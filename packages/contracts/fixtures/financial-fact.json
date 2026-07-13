@@ -1,0 +1,13 @@
+{
+  "entity_id": "b2c4d6e8-1a3b-4c5d-8e9f-0a1b2c3d4e5f",
+  "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+  "label": "Revenue",
+  "value": "1250000000",
+  "unit": "USD",
+  "scale": 0,
+  "period": { "type": "duration", "start": "2026-01-01", "end": "2026-03-31" },
+  "dimensions": {},
+  "source_span_id": "3f9d2f5e-6b2a-4c1e-9f7d-2a8b4c6d8e0f",
+  "reported_or_derived": "reported",
+  "confidence": 1.0
+}

@@ -1,0 +1,19 @@
+[project]
+name = "fel-api"
+version = "0.0.0"
+description = "Financial Evidence Lab API (FastAPI modular monolith)"
+requires-python = ">=3.11"
+# Floors track requirements-dev.txt, which pip-audit gates in CI.
+dependencies = [
+  "fastapi>=0.121.0",
+  "uvicorn[standard]>=0.32",
+  "pydantic>=2.9.2",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]

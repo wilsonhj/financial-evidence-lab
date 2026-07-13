@@ -11,7 +11,7 @@ This repository is designed for parallel implementation by Codex, Claude Code, a
 5. `docs/handoff/README.md`
 6. `docs/handoff/workstreams.yaml`
 
-The feature-directory artifacts are the machine-consumed Spec Kit source. Root `SPEC.md`, `PLAN.md`, and `TASKS.md` are human-facing mirrors and must remain semantically aligned.
+The feature directory `specs/001-financial-evidence-lab/` holds the sole canonical `spec.md`, `plan.md`, and `tasks.md`. Root `SPEC.md`, `PLAN.md`, and `TASKS.md` are pointer stubs only — never edit or cite them as sources. The locked MVP stack lives in `docs/decisions/ADR-0002-mvp-stack.md`.
 
 ## Working rules
 

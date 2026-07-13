@@ -1,0 +1,18 @@
+{
+  "name": "@fel/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "generate": "openapi-typescript openapi/openapi.yaml -o src/generated/api.ts",
+    "check:generated": "openapi-typescript openapi/openapi.yaml -o /tmp/fel-contracts-check.ts && diff -q /tmp/fel-contracts-check.ts src/generated/api.ts",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.1",
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1",
+    "openapi-typescript": "^7.4.0"
+  }
+}

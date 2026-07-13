@@ -4,16 +4,16 @@ Tasks are ordered by dependency. A task is complete only when its code, tests, t
 
 ## M0 — Platform and contracts
 
-- [ ] `T0001` Scaffold the monorepo, formatting, typing, unit tests, security scanning, and CI cache.
-- [ ] `T0002` Configure direct local Next.js/FastAPI/worker processes with mocked providers and hosted-Supabase environment placeholders; Docker is not required.
-- [ ] `T0003` Define OpenAPI and JSON-schema versioning rules and generate the TypeScript client.
-- [ ] `T0004` Implement Supabase Auth login, organizations, membership, and owner/editor/reviewer/viewer roles (`FR-WRK-001`–`004`).
-- [ ] `T0005` Enforce and test row-level tenant isolation, including negative cross-tenant tests.
-- [ ] `T0006` Create workspace APIs with entity, currency, fiscal calendar, scenario, and as-of cutoff.
-- [ ] `T0007` Establish immutable audit events, request IDs, traces, metrics, and structured logs.
-- [ ] `T0008` Implement usage metering, estimates, soft warnings, and hard-stop cost ceilings.
-- [ ] `T0009` Add Railway service configuration, Supabase SQL migrations, GitHub Actions gates, and backup-restore tests.
-- [ ] `T0010` Publish provider interfaces plus mock implementations for OpenAI, Supabase Storage, Alpha Vantage, SEC, and FRED; request credentials only when integration tests require them.
+- [x] `T0001` Scaffold the monorepo, formatting, typing, unit tests, security scanning, and CI cache.
+- [x] `T0002` Configure direct local Next.js/FastAPI/worker processes with mocked providers and hosted-Supabase environment placeholders; Docker is not required.
+- [x] `T0003` Define OpenAPI and JSON-schema versioning rules and generate the TypeScript client.
+- [x] `T0004` Implement Supabase Auth login, organizations, membership, and owner/editor/reviewer/viewer roles (`FR-WRK-001`–`004`).
+- [x] `T0005` Enforce and test row-level tenant isolation, including negative cross-tenant tests.
+- [x] `T0006` Create workspace APIs with entity, currency, fiscal calendar, scenario, and as-of cutoff.
+- [x] `T0007` Establish immutable audit events, request IDs, traces, metrics, and structured logs.
+- [x] `T0008` Implement usage metering, estimates, soft warnings, and hard-stop cost ceilings.
+- [x] `T0009` Add Railway service configuration, Supabase SQL migrations, GitHub Actions gates, and backup-restore tests.
+- [x] `T0010` Publish provider interfaces plus mock implementations for OpenAI, Supabase Storage, Alpha Vantage, SEC, and FRED; request credentials only when integration tests require them.
 
 ## M1 — Point-in-time evidence corpus
 
@@ -30,7 +30,7 @@ Tasks are ordered by dependency. A task is complete only when its code, tests, t
 - [ ] `T0111` Create temporal-cutoff, parser golden-file, and idempotency test suites.
 - [ ] `T0112` Ingest the first 20 benchmark issuers and record corpus-quality metrics.
 
-## M2 — Observable hybrid retrieval and Atlas
+## M2 — Observable hybrid retrieval
 
 - [ ] `T0201` Implement finance-aware passage, table-row, and fact chunking with stable provenance.
 - [ ] `T0202` Build PostgreSQL lexical and pgvector dense indexes (`FR-RAG-001`).
@@ -42,11 +42,11 @@ Tasks are ordered by dependency. A task is complete only when its code, tests, t
 - [ ] `T0208` Implement citation entailment and numeric-consistency verification.
 - [ ] `T0209` Implement abstention and qualified contradiction responses (`FR-RAG-006`).
 - [ ] `T0210` Build the Search Observatory with lane toggles, trace timeline, evidence feedback, and replay.
-- [ ] `T0211` Generate and version passage/fact/company projections for the Embedding Atlas.
-- [ ] `T0212` Build Atlas pan/zoom/filter/lasso/query-neighbor interactions (`UX-ATL-001`–`004`).
-- [ ] `T0213` Add keyboard-accessible table and exact-distance fallback (`UX-ATL-005`).
-- [ ] `T0214` Complete at least 300 adjudicated benchmark questions and automate Section 19.6 gates.
-- [ ] `T0215` Run the reference-corpus retrieval and Atlas performance suite.
+- [ ] ~~`T0211` Generate and version passage/fact/company projections for the Embedding Atlas.~~ — deferred (post-MVP) with the Embedding Atlas.
+- [ ] ~~`T0212` Build Atlas pan/zoom/filter/lasso/query-neighbor interactions (`UX-ATL-001`–`004`).~~ — deferred (post-MVP) with the Embedding Atlas.
+- [ ] ~~`T0213` Add keyboard-accessible table and exact-distance fallback (`UX-ATL-005`).~~ — deferred (post-MVP) with the Embedding Atlas.
+- [ ] `T0214a` Build the 50–100-question smoke benchmark and automate the Section 19.6 gates against it for the M2 exit (`spec.md` Section 19.5).
+- [ ] `T0215` Run the reference-corpus retrieval performance suite (Atlas performance testing deferred post-MVP).
 
 ## M3 — Agentic extraction
 
@@ -81,11 +81,12 @@ Tasks are ordered by dependency. A task is complete only when its code, tests, t
 - [ ] `T0503` Implement analyst driver forecasts for revenue, ARR where disclosed, and gross profit.
 - [ ] `T0504` Implement rolling-origin backtests for one-to-eight-quarter horizons.
 - [ ] `T0505` Produce 50%, 80%, and 95% intervals and calibration metrics.
-- [ ] `T0506` Implement point-in-time historical analogue retrieval.
+- [ ] ~~`T0506` Implement point-in-time historical analogue retrieval.~~ — deferred (post-MVP) with the analogue forecast lane.
 - [ ] `T0507` Build Forecast Lab comparison, error, contribution, analogue, and uncertainty views.
 - [ ] `T0508` Keep advanced models non-default unless they beat the seasonal-naive median-MAE gate.
 - [ ] `T0509` Build complete source-to-export audit traversal.
 - [ ] `T0510` Export Markdown/PDF briefs, CSV/XLSX tables, JSON evidence bundles, and workspace manifests.
 - [ ] `T0511` Execute accessibility, security, load, restore, provider-failure, and browser suites.
+- [ ] `T0214b` Complete the frozen, dual-adjudicated benchmark of at least 300 questions and automate the Section 19.6 gates against it (`spec.md` Section 19.5).
 - [ ] `T0512` Verify every `spec.md` Section 19.6 gate and Section 26 definition-of-done item.
 - [ ] `T0513` Produce the immutable MVP release artifact and signed evaluation report.
