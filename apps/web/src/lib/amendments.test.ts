@@ -35,6 +35,78 @@ describe("linkAmendments", () => {
     const links = linkAmendments([earlier, ...fixtureDocuments]);
     expect(links).toEqual([{ originalId: DOC_10Q_ID, amendmentId: DOC_10QA_ID }]);
   });
+
+  // Regression (finding 4a): with two amendments, Amendment No. 2 must
+  // supersede Amendment No. 1 — amendments can supersede amendments — and the
+  // original's authoritative amendment is the LATEST one.
+  it("chains multiple amendments: the later amendment supersedes the earlier one", () => {
+    const secondAmendment: DocumentMeta = {
+      ...fixtureDocuments[1]!,
+      id: "aaaaaaaa-0000-4000-8000-000000000003",
+      accession: "0000111111-26-000260",
+      published_at: "2026-07-01T12:00:00Z",
+    };
+    const links = linkAmendments([...fixtureDocuments, secondAmendment]);
+    expect(links).toEqual([
+      { originalId: DOC_10Q_ID, amendmentId: DOC_10QA_ID },
+      { originalId: DOC_10QA_ID, amendmentId: secondAmendment.id },
+    ]);
+  });
+
+  // Regression (finding 4b): published_at used to be compared as a raw
+  // string. "2026-06-12T23:59:00+03:00" sorts AFTER "2026-06-12T21:30:00Z"
+  // lexicographically but is the EARLIER instant (20:59Z < 21:30Z).
+  it("orders publication by instant, not by raw timestamp string", () => {
+    const offsetAmendment: DocumentMeta = {
+      ...fixtureDocuments[1]!,
+      id: "aaaaaaaa-0000-4000-8000-000000000011",
+      accession: "0000111111-26-000201",
+      published_at: "2026-06-12T23:59:00+03:00", // 2026-06-12T20:59:00Z
+    };
+    const utcAmendment: DocumentMeta = {
+      ...fixtureDocuments[1]!,
+      id: "aaaaaaaa-0000-4000-8000-000000000012",
+      accession: "0000111111-26-000202",
+      published_at: "2026-06-12T21:30:00Z",
+    };
+    const links = linkAmendments([fixtureDocuments[0]!, offsetAmendment, utcAmendment]);
+    // The offset amendment is the earlier instant: it amends the original;
+    // the UTC amendment is later and supersedes the offset amendment.
+    expect(links).toEqual([
+      { originalId: DOC_10Q_ID, amendmentId: offsetAmendment.id },
+      { originalId: offsetAmendment.id, amendmentId: utcAmendment.id },
+    ]);
+    // A raw string comparison would also misreport the authoritative chain end.
+    expect(amendmentStatusFor(DOC_10Q_ID, links)).toEqual({
+      kind: "superseded",
+      byDocumentId: utcAmendment.id,
+    });
+  });
+
+  // Regression (finding 4c): undefined === undefined used to count as a
+  // period match, cross-linking period-less documents.
+  it("never links documents with missing period fields", () => {
+    const periodlessOriginal: DocumentMeta = {
+      ...fixtureDocuments[0]!,
+      id: "aaaaaaaa-0000-4000-8000-000000000021",
+      period_start: undefined,
+      period_end: undefined,
+    };
+    const periodlessAmendment: DocumentMeta = {
+      ...fixtureDocuments[1]!,
+      id: "aaaaaaaa-0000-4000-8000-000000000022",
+      period_start: undefined,
+      period_end: undefined,
+    };
+    expect(linkAmendments([periodlessOriginal, periodlessAmendment])).toEqual([]);
+
+    const partialPeriodAmendment: DocumentMeta = {
+      ...fixtureDocuments[1]!,
+      id: "aaaaaaaa-0000-4000-8000-000000000023",
+      period_end: undefined,
+    };
+    expect(linkAmendments([fixtureDocuments[0]!, partialPeriodAmendment])).toEqual([]);
+  });
 });
 
 describe("amendmentStatusFor", () => {
@@ -57,6 +129,30 @@ describe("amendmentStatusFor", () => {
   it("reports unlinked documents as originals", () => {
     expect(amendmentStatusFor("aaaaaaaa-0000-4000-8000-00000000cafe", links)).toEqual({
       kind: "original",
+    });
+  });
+
+  // Regression (finding 4a): the superseded banner must point at the LATEST
+  // amendment, and an earlier amendment reads as superseded itself.
+  it("follows the amendment chain to the authoritative (latest) amendment", () => {
+    const secondAmendment: DocumentMeta = {
+      ...fixtureDocuments[1]!,
+      id: "aaaaaaaa-0000-4000-8000-000000000003",
+      accession: "0000111111-26-000260",
+      published_at: "2026-07-01T12:00:00Z",
+    };
+    const chained = linkAmendments([...fixtureDocuments, secondAmendment]);
+    expect(amendmentStatusFor(DOC_10Q_ID, chained)).toEqual({
+      kind: "superseded",
+      byDocumentId: secondAmendment.id,
+    });
+    expect(amendmentStatusFor(DOC_10QA_ID, chained)).toEqual({
+      kind: "superseded",
+      byDocumentId: secondAmendment.id,
+    });
+    expect(amendmentStatusFor(secondAmendment.id, chained)).toEqual({
+      kind: "amendment",
+      amendsDocumentId: DOC_10QA_ID,
     });
   });
 });

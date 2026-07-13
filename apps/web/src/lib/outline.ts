@@ -6,42 +6,25 @@ export interface OutlineNode {
   title: string;
   /** Nesting depth for indentation and aria-level (1-based). */
   depth: number;
-  parentId?: string;
-  childIds: string[];
 }
 
 export interface OutlineModel {
   /** Document order, matching the rendered section order. */
   nodes: OutlineNode[];
-  byId: Map<string, OutlineNode>;
 }
 
 /**
  * Builds the outline navigation model from extracted sections. Sections are
  * sorted by their extraction order; depth comes from the section level so the
- * outline mirrors the filing hierarchy (Part > Item > Statement/Note).
+ * outline mirrors the filing hierarchy (Part > Item > Statement/Note). The
+ * model is a flat ordered list — navigation and rendering never needed the
+ * parent/child graph, so none is built.
  */
 export function buildOutline(sections: readonly SectionRecord[]): OutlineModel {
-  const ordered = [...sections].sort((a, b) => a.order - b.order);
-  const byId = new Map<string, OutlineNode>();
-  const nodes: OutlineNode[] = [];
-  for (const section of ordered) {
-    const node: OutlineNode = {
-      id: section.id,
-      title: section.title,
-      depth: section.level,
-      parentId: section.parent_id,
-      childIds: [],
-    };
-    byId.set(node.id, node);
-    nodes.push(node);
-  }
-  for (const node of nodes) {
-    if (node.parentId) {
-      byId.get(node.parentId)?.childIds.push(node.id);
-    }
-  }
-  return { nodes, byId };
+  const nodes = [...sections]
+    .sort((a, b) => a.order - b.order)
+    .map((section) => ({ id: section.id, title: section.title, depth: section.level }));
+  return { nodes };
 }
 
 /** Id of the outline entry after `currentId` in document order (wraps nothing). */

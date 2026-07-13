@@ -33,16 +33,17 @@ describe("buildOutline", () => {
     expect(model.nodes.map((node) => node.id)).toEqual(["a", "b", "c"]);
   });
 
-  it("exposes depth and parent/child relationships", () => {
+  it("exposes id, title, and depth for each node (the full production surface)", () => {
     const model = buildOutline([
       section("part", 1, 1),
       section("item", 2, 2, "part"),
       section("statement", 3, 3, "item"),
     ]);
-    expect(model.byId.get("part")?.depth).toBe(1);
-    expect(model.byId.get("part")?.childIds).toEqual(["item"]);
-    expect(model.byId.get("item")?.childIds).toEqual(["statement"]);
-    expect(model.byId.get("statement")?.parentId).toBe("item");
+    expect(model.nodes).toEqual([
+      { id: "part", title: "Section part", depth: 1 },
+      { id: "item", title: "Section item", depth: 2 },
+      { id: "statement", title: "Section statement", depth: 3 },
+    ]);
   });
 
   it("handles an empty section list", () => {
