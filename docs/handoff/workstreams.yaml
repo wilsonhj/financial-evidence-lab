@@ -112,7 +112,7 @@ packages:
     depends_on: [M0-PLATFORM]
     team: data
     branch: agent/m1-ingestion
-    status: ready
+    status: active # dispatched 2026-07-13
     allowed_paths:
       - workers/src/fel_workers/ingestion/**
       - workers/tests/**
@@ -123,7 +123,7 @@ packages:
     depends_on: [M0-PLATFORM]
     team: experience
     branch: agent/m1-evidence-ui
-    status: ready
+    status: active # dispatched 2026-07-13
     allowed_paths: [apps/web/**, packages/ui/**]
   - id: M1-CORPUS-QA
     issue: 56
