@@ -8,11 +8,13 @@ import type {
   FinancialFactRecord,
   SectionRecord,
   SourceSpanRecord,
-} from "@/lib/contracts";
-import { amendmentStatusFor, linkAmendments } from "@/lib/amendments";
-import { duplicateGroupIndex, groupDuplicateFacts } from "@/lib/facts";
-import { buildOutline } from "@/lib/outline";
-import { addNote, emptyNotesState, removeNote, type NoteAnchor } from "@/lib/notes";
+} from "../lib/contracts";
+import type { CitationIntegrityFailure } from "../lib/citation-integrity";
+import { amendmentStatusFor, linkAmendments } from "../lib/amendments";
+import { formatPeriodRange } from "../lib/document-display";
+import { duplicateGroupIndex, groupDuplicateFacts } from "../lib/facts";
+import { buildOutline } from "../lib/outline";
+import { addNote, emptyNotesState, removeNote, type NoteAnchor } from "../lib/notes";
 import { DocumentPane } from "./DocumentPane";
 import { FactPanel } from "./FactPanel";
 import { NotesPanel } from "./NotesPanel";
@@ -20,14 +22,24 @@ import { OutlineNav } from "./OutlineNav";
 
 export interface EvidenceReaderProps {
   documentId: string;
-  /** Every document version of the entity (for amendment linkage). */
+  /** Every document of the entity (for amendment linkage). */
   documents: DocumentMeta[];
-  /** Sections across all entity document versions. */
+  /** Sections across all entity documents (document-scoped fetches, merged). */
   sections: SectionRecord[];
-  /** Spans across all entity document versions. */
+  /** Integrity-verified spans across all entity documents. */
   spans: SourceSpanRecord[];
   /** All normalized facts of the entity. */
   facts: FinancialFactRecord[];
+  /**
+   * Provenance: section/span record id -> DocumentMeta.id, built by the data
+   * loader from its per-document fetches. The UI attributes evidence to
+   * documents ONLY through these maps — never by comparing
+   * `document_version_id` (a different UUID namespace) with DocumentMeta.id.
+   */
+  documentIdBySectionId: Record<string, string>;
+  documentIdBySpanId: Record<string, string>;
+  /** Spans excluded fail-closed by citation verification. */
+  integrityFailures: CitationIntegrityFailure[];
 }
 
 export function EvidenceReader({
@@ -36,14 +48,17 @@ export function EvidenceReader({
   sections,
   spans,
   facts,
+  documentIdBySectionId,
+  documentIdBySpanId,
+  integrityFailures,
 }: EvidenceReaderProps) {
   const document = documents.find((doc) => doc.id === documentId);
   const ownSections = useMemo(
     () =>
       sections
-        .filter((section) => section.document_version_id === documentId)
+        .filter((section) => documentIdBySectionId[section.id] === documentId)
         .sort((a, b) => a.order - b.order),
-    [sections, documentId],
+    [sections, documentIdBySectionId, documentId],
   );
   const outline = useMemo(() => buildOutline(ownSections), [ownSections]);
 
@@ -59,13 +74,18 @@ export function EvidenceReader({
 
   const duplicateIndex = useMemo(() => duplicateGroupIndex(groupDuplicateFacts(facts)), [facts]);
 
+  const integrityFailureBySpanId = useMemo(
+    () => new Map(integrityFailures.map((failure) => [failure.spanId, failure])),
+    [integrityFailures],
+  );
+  const ownIntegrityFailures = useMemo(
+    () => integrityFailures.filter((failure) => documentIdBySpanId[failure.spanId] === documentId),
+    [integrityFailures, documentIdBySpanId, documentId],
+  );
+
   const docFacts = useMemo(
-    () =>
-      facts.filter(
-        (record) =>
-          spansById.get(record.fact.source_span_id)?.span.document_version_id === documentId,
-      ),
-    [facts, spansById, documentId],
+    () => facts.filter((record) => documentIdBySpanId[record.fact.source_span_id] === documentId),
+    [facts, documentIdBySpanId, documentId],
   );
 
   const [activeSectionId, setActiveSectionId] = useState<string | null>(ownSections[0]?.id ?? null);
@@ -101,8 +121,7 @@ export function EvidenceReader({
           {document.form ?? "Filing"} — {document.accession}
         </h2>
         <p style={{ margin: 0, color: "var(--color-muted)", fontSize: "0.9rem" }}>
-          Period {document.period_start} to {document.period_end} · Published{" "}
-          {document.published_at.slice(0, 10)}
+          Period {formatPeriodRange(document)} · Published {document.published_at.slice(0, 10)}
         </p>
       </header>
 
@@ -127,6 +146,16 @@ export function EvidenceReader({
           .
         </aside>
       )}
+      {ownIntegrityFailures.length > 0 && (
+        <aside className="reader-banner citation-error" role="alert">
+          <span aria-hidden="true">&#9888;</span> <strong>Citation integrity error.</strong>{" "}
+          {ownIntegrityFailures.length === 1
+            ? "1 cited source span"
+            : `${ownIntegrityFailures.length} cited source spans`}{" "}
+          in this filing failed offset or hash verification and{" "}
+          {ownIntegrityFailures.length === 1 ? "is" : "are"} not highlighted or quoted.
+        </aside>
+      )}
 
       <div className="reader-layout">
         <OutlineNav model={outline} activeId={activeSectionId} onSelect={handleSelectSection} />
@@ -144,6 +173,8 @@ export function EvidenceReader({
             spansById={spansById}
             sectionsById={sectionsById}
             documentsById={documentsById}
+            documentIdBySpanId={documentIdBySpanId}
+            integrityFailureBySpanId={integrityFailureBySpanId}
             duplicateIndex={duplicateIndex}
             amendmentLinks={amendmentLinks}
             selectedSpanId={selectedSpanId}

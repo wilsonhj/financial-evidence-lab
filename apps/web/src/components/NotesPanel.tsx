@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-import type { NoteAnchor, NotesState } from "@/lib/notes";
+import type { NoteAnchor, NotesState } from "../lib/notes";
 
 export interface NotesPanelProps {
   notes: NotesState;

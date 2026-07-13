@@ -1,7 +1,8 @@
 import Link from "next/link";
 
-import { amendmentStatusFor, linkAmendments } from "@/lib/amendments";
-import { evidenceSource } from "@/lib/data";
+import { amendmentStatusFor, linkAmendments } from "../lib/amendments";
+import { evidenceSource } from "../lib/data";
+import { formatPeriodRange } from "../lib/document-display";
 
 export default async function DocumentListPage() {
   const documents = await evidenceSource.listDocuments();
@@ -33,9 +34,7 @@ export default async function DocumentListPage() {
                   <Link href={`/reader/${doc.id}`}>{doc.form ?? "Filing"}</Link>
                 </td>
                 <td>{doc.accession}</td>
-                <td>
-                  {doc.period_start} to {doc.period_end}
-                </td>
+                <td>{formatPeriodRange(doc)}</td>
                 <td>{doc.published_at.slice(0, 10)}</td>
                 <td>
                   {status.kind === "superseded" && (

@@ -2,8 +2,8 @@
 
 import { useEffect, useRef } from "react";
 
-import type { OutlineModel } from "@/lib/outline";
-import { firstOutlineId, lastOutlineId, nextOutlineId, previousOutlineId } from "@/lib/outline";
+import type { OutlineModel } from "../lib/outline";
+import { firstOutlineId, lastOutlineId, nextOutlineId, previousOutlineId } from "../lib/outline";
 
 export interface OutlineNavProps {
   model: OutlineModel;

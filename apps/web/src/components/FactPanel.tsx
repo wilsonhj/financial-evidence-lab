@@ -5,17 +5,27 @@ import type {
   FinancialFactRecord,
   SectionRecord,
   SourceSpanRecord,
-} from "@/lib/contracts";
-import type { AmendmentLink } from "@/lib/amendments";
-import type { DuplicateFactGroup } from "@/lib/facts";
-import { formatScaledValue, scaledDecimal } from "@/lib/facts";
-import { extractSpanText } from "@/lib/spans";
+} from "../lib/contracts";
+import type { AmendmentLink } from "../lib/amendments";
+import type { CitationIntegrityFailure } from "../lib/citation-integrity";
+import { describeIntegrityReason } from "../lib/citation-integrity";
+import type { DuplicateFactGroup } from "../lib/facts";
+import { formatScaledValue, scaledDecimal } from "../lib/facts";
+import { extractSpanText } from "../lib/spans";
 
 export interface FactPanelProps {
   facts: FinancialFactRecord[];
   spansById: Map<string, SourceSpanRecord>;
   sectionsById: Map<string, SectionRecord>;
   documentsById: Map<string, DocumentMeta>;
+  /**
+   * Provenance: span record id -> DocumentMeta.id. Facts are attributed to
+   * documents only through this map — `document_version_id` is a different
+   * UUID namespace and is never compared with DocumentMeta.id.
+   */
+  documentIdBySpanId: Record<string, string>;
+  /** Spans excluded fail-closed by citation verification. */
+  integrityFailureBySpanId: Map<string, CitationIntegrityFailure>;
   duplicateIndex: Map<string, DuplicateFactGroup>;
   amendmentLinks: AmendmentLink[];
   selectedSpanId: string | null;
@@ -29,13 +39,13 @@ function periodLabel(period: FinancialFactRecord["fact"]["period"]): string {
 
 function locate(
   record: FinancialFactRecord,
-  spansById: Map<string, SourceSpanRecord>,
-  sectionsById: Map<string, SectionRecord>,
-  documentsById: Map<string, DocumentMeta>,
+  ctx: FactPanelProps,
 ): { span?: SourceSpanRecord; section?: SectionRecord; document?: DocumentMeta } {
-  const span = spansById.get(record.fact.source_span_id);
-  const section = span ? sectionsById.get(span.span.section_id) : undefined;
-  const document = span ? documentsById.get(span.span.document_version_id) : undefined;
+  const spanId = record.fact.source_span_id;
+  const span = ctx.spansById.get(spanId);
+  const section = span ? ctx.sectionsById.get(span.span.section_id) : undefined;
+  const documentId = ctx.documentIdBySpanId[spanId];
+  const document = documentId ? ctx.documentsById.get(documentId) : undefined;
   return { span, section, document };
 }
 
@@ -46,7 +56,7 @@ function locate(
 function isRestatementGroup(group: DuplicateFactGroup, ctx: FactPanelProps): boolean {
   const valuesByDoc = new Map<string, Set<string>>();
   for (const record of group.records) {
-    const docId = ctx.spansById.get(record.fact.source_span_id)?.span.document_version_id;
+    const docId = ctx.documentIdBySpanId[record.fact.source_span_id];
     if (!docId) continue;
     const values = valuesByDoc.get(docId) ?? new Set<string>();
     values.add(scaledDecimal(record.fact.value, record.fact.scale));
@@ -90,12 +100,7 @@ function DuplicateComparison({ group, ctx }: { group: DuplicateFactGroup; ctx: F
         </thead>
         <tbody>
           {group.records.map((record) => {
-            const { section, document } = locate(
-              record,
-              ctx.spansById,
-              ctx.sectionsById,
-              ctx.documentsById,
-            );
+            const { section, document } = locate(record, ctx);
             return (
               <tr key={record.id}>
                 <td>{document?.form ?? "?"}</td>
@@ -114,18 +119,28 @@ function DuplicateComparison({ group, ctx }: { group: DuplicateFactGroup; ctx: F
 
 function FactCard({ record, ctx }: { record: FinancialFactRecord; ctx: FactPanelProps }) {
   const { fact } = record;
-  const { span, section } = locate(record, ctx.spansById, ctx.sectionsById, ctx.documentsById);
-  const rawText = span && section ? extractSpanText(section, span) : "";
+  const { span, section } = locate(record, ctx);
+  const integrityFailure = ctx.integrityFailureBySpanId.get(fact.source_span_id);
+  const rawText = !integrityFailure && span && section ? extractSpanText(section, span) : null;
   const group = ctx.duplicateIndex.get(record.id);
   const selected = ctx.selectedSpanId !== null && fact.source_span_id === ctx.selectedSpanId;
 
   return (
     <li className={`fact-card${selected ? " selected" : ""}`}>
       <h3>{fact.label ?? fact.concept}</h3>
-      {rawText && (
-        <blockquote className="fact-source" cite={fact.source_span_id}>
-          {rawText}
-        </blockquote>
+      {integrityFailure ? (
+        <p className="citation-error" role="alert">
+          <span aria-hidden="true">&#9888;</span> <strong>Citation integrity error:</strong>{" "}
+          {describeIntegrityReason(integrityFailure.reason)}. The cited source text could not be
+          verified and is not shown.
+        </p>
+      ) : (
+        rawText !== null &&
+        rawText !== "" && (
+          <blockquote className="fact-source" cite={fact.source_span_id}>
+            {rawText}
+          </blockquote>
+        )
       )}
       <dl>
         <dt>Concept</dt>
@@ -164,6 +179,8 @@ function FactCard({ record, ctx }: { record: FinancialFactRecord; ctx: FactPanel
 /**
  * Extracted-fact panel: raw source text, normalized value, unit, scale, and
  * dimensions per fact, plus duplicate comparison and restatement flags.
+ * Quotes render only for spans that passed fail-closed citation verification;
+ * a failed span surfaces an explicit integrity-error state instead.
  */
 export function FactPanel(props: FactPanelProps) {
   const visible = props.selectedSpanId
