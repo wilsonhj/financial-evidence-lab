@@ -12,20 +12,31 @@ shared_paths:
   - docs/decisions/**
   - docs/handoff/workstreams.yaml
   - docs/handoff/STATUS.md
-  # Root package/lock/config files (per AGENTS.md "Shared paths"):
+  # Root package/lock/config files (per AGENTS.md "Shared paths") — the
+  # complete root inventory from the M0 scaffold; keep in sync with it:
   - package.json
   - pnpm-lock.yaml
   - pnpm-workspace.yaml
   - tsconfig.json
   - tsconfig.base.json
+  - vitest.config.ts
   - eslint.config.mjs
   - .prettierrc.json
+  - .prettierignore
+  - .editorconfig
+  - .gitignore
+  - .node-version
+  - pyproject.toml
+  - requirements-dev.txt
   - Makefile
 # Standing exception (the ONLY one): mechanical root-config edits that are
 # forced by an in-scope change may ride with the owning package's PR under
 # the four conditions of docs/decisions/ADR-0003-root-config-edits.md.
-# All other shared_paths changes require a `contract-change` issue + ADR +
-# integration-lead review. Automated dispatch/review must treat every path
+# The exception deliberately covers only the JS workspace files listed in
+# applies_to; Python dependency files (pyproject.toml, requirements-dev.txt)
+# and everything else above have NO standing exception and always require
+# explicit per-dispatch integration-lead authorization or the full
+# contract-change process. Automated dispatch/review must treat every path
 # above as shared; the ADR-0003 exception is judged per-hunk at review time.
 shared_path_exceptions:
   - adr: docs/decisions/ADR-0003-root-config-edits.md
