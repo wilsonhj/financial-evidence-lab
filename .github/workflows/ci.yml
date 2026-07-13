@@ -45,6 +45,24 @@ jobs:
   python:
     name: Python — format, lint, typecheck, test, security
     runs-on: ubuntu-latest
+    # Postgres service so the RLS tenant-isolation, workspace, cost, and
+    # queue suites (TEST_DATABASE_URL-gated) always run in CI.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: fel
+          POSTGRES_PASSWORD: fel-ci-only
+          POSTGRES_DB: fel_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U fel -d fel_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql://fel:fel-ci-only@localhost:5432/fel_test
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -53,11 +71,17 @@ jobs:
           cache: pip
           cache-dependency-path: requirements-dev.txt
       - run: pip install -r requirements-dev.txt
-      - run: black --check apps workers evals
-      - run: ruff check apps workers evals
-      - run: mypy apps/api/app workers/src evals/graders
+      - name: Apply migrations
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+          for f in db/migrations/*.sql; do
+            PGPASSWORD=fel-ci-only psql --set ON_ERROR_STOP=1 -h localhost -U fel -d fel_test -f "$f"
+          done
+      - run: black --check apps workers evals packages/providers
+      - run: ruff check apps workers evals packages/providers
+      - run: mypy apps/api/app workers/src evals/graders packages/providers/fel_providers
       - run: pytest
-      - run: bandit -q -r apps workers evals -c pyproject.toml
+      - run: bandit -q -r apps workers evals packages/providers -c pyproject.toml
       - run: pip-audit -r requirements-dev.txt
 
   database:
