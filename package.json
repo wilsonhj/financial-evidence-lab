@@ -9,7 +9,7 @@
     "format": "prettier --write \"{apps,packages}/**/*.{ts,tsx,js,jsx,json,css}\"",
     "format:check": "prettier --check \"{apps,packages}/**/*.{ts,tsx,js,jsx,json,css}\"",
     "lint": "eslint .",
-    "typecheck": "tsc -b && pnpm --filter @fel/web typecheck",
+    "typecheck": "tsc -b && pnpm --filter @fel/web --fail-if-no-match run typecheck",
     "test": "vitest run"
   },
   "devDependencies": {

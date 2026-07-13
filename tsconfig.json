@@ -1,4 +1,9 @@
 {
+  // NOTE: bare `tsc -b` only builds the project references below — it does
+  // NOT cover apps/web. The web app opted out of composite project references
+  // (Next.js manages its own incremental typecheck), so it is typechecked via
+  // `pnpm --filter @fel/web --fail-if-no-match run typecheck`, chained in the
+  // root "typecheck" script. Run `pnpm run typecheck`, not bare `tsc -b`.
   "files": [],
   "references": [{ "path": "packages/contracts" }]
 }
