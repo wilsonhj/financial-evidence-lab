@@ -8,6 +8,7 @@ import uuid
 from datetime import UTC, datetime
 
 import psycopg
+import pytest
 from fastapi.testclient import TestClient
 
 from app.auth import make_mock_token
@@ -29,6 +30,7 @@ def _seed_corpus(db_url: str) -> dict[str, str]:
         "early_doc": str(uuid.uuid4()),
         "late_doc": str(uuid.uuid4()),
         "version_id": str(uuid.uuid4()),
+        "late_version_id": str(uuid.uuid4()),
         "section_id": str(uuid.uuid4()),
         "span_id": str(uuid.uuid4()),
     }
@@ -56,8 +58,15 @@ def _seed_corpus(db_url: str) -> dict[str, str]:
         )
         conn.execute(
             "INSERT INTO document_versions (id, document_id, parser_version,"
-            " normalizer_version) VALUES (%s, %s, 'p1', 'n1')",
+            " normalizer_version, canonical_text_key)"
+            " VALUES (%s, %s, 'p1', 'n1', 'text/sha256/aa')",
             (ids["version_id"], ids["early_doc"]),
+        )
+        conn.execute(
+            "INSERT INTO document_versions (id, document_id, parser_version,"
+            " normalizer_version, canonical_text_key)"
+            " VALUES (%s, %s, 'p1', 'n1', 'text/sha256/bb')",
+            (ids["late_version_id"], ids["late_doc"]),
         )
         conn.execute(
             "INSERT INTO sections (id, document_version_id, heading, heading_path,"
@@ -180,6 +189,76 @@ def test_corpus_reads_reject_non_members(
     )
     assert response.status_code == 403
     assert response.json()["error"]["code"] == "NOT_A_MEMBER"
+
+
+def test_quarantined_documents_are_invisible_via_corpus_reads(
+    client: TestClient, org_fixture: tuple[str, str], db_url: str
+) -> None:
+    """Finding 3: a document without a successfully parsed version (its every
+    ingestion attempt quarantined) must not appear in the listing and must
+    404 on the by-id endpoint; boundary-inclusive as_of stays intact."""
+    entity_id = str(uuid.uuid4())
+    parsed_doc, unparsed_doc, quarantined_doc = (str(uuid.uuid4()) for _ in range(3))
+    suffix = uuid.uuid4().hex[:8]
+    with psycopg.connect(db_url) as conn:
+        for doc_id, accession in (
+            (parsed_doc, f"acc-parsed-{suffix}"),
+            (unparsed_doc, f"acc-unparsed-{suffix}"),
+            (quarantined_doc, f"acc-quarantined-{suffix}"),
+        ):
+            conn.execute(
+                """
+                INSERT INTO documents (id, entity_id, accession, form, source_url,
+                    content_hash, storage_key, published_at)
+                VALUES (%s, %s, %s, '10-Q', 'https://example.invalid/q.htm',
+                        %s, 'raw/sha256/cc', '2026-05-05T16:30:00Z')
+                """,
+                (doc_id, entity_id, accession, TEXT_HASH),
+            )
+        conn.execute(
+            "INSERT INTO document_versions (id, document_id, parser_version,"
+            " normalizer_version, status, canonical_text_key)"
+            " VALUES (%s, %s, 'p1', 'n1', 'parsed', 'text/sha256/cc')",
+            (str(uuid.uuid4()), parsed_doc),
+        )
+        # quarantined_doc has only a quarantined version; unparsed_doc has none.
+        conn.execute(
+            "INSERT INTO document_versions (id, document_id, parser_version,"
+            " normalizer_version, status, canonical_text_key)"
+            " VALUES (%s, %s, 'p1', 'n1', 'quarantined', 'text/sha256/cc')",
+            (str(uuid.uuid4()), quarantined_doc),
+        )
+    headers = _headers(org_fixture)
+    listing = client.get(f"/v1/entities/{entity_id}/documents", headers=headers)
+    assert [doc["id"] for doc in listing.json()] == [parsed_doc]
+    # Boundary-inclusive as_of still serves the parsed document.
+    at_publication = client.get(
+        f"/v1/entities/{entity_id}/documents",
+        headers=headers,
+        params={"as_of": "2026-05-05T16:30:00Z"},
+    )
+    assert [doc["id"] for doc in at_publication.json()] == [parsed_doc]
+    assert client.get(f"/v1/documents/{parsed_doc}", headers=headers).status_code == 200
+    for invisible in (unparsed_doc, quarantined_doc):
+        response = client.get(f"/v1/documents/{invisible}", headers=headers)
+        assert response.status_code == 404
+        assert response.json()["error"]["code"] == "NOT_FOUND"
+
+
+def test_fel_app_has_no_select_grant_on_ingestion_internals(db_url: str) -> None:
+    """Finding 13 (ADR-0004): ingestion_quarantine and ingestion_runs are
+    operational internals — the fel_app API role must NOT hold SELECT on
+    them, while the corpus evidence tables stay readable."""
+    with psycopg.connect(db_url) as conn:
+        with conn.transaction():
+            conn.execute("SET LOCAL ROLE fel_app")
+            for evidence_table in ("documents", "document_versions", "financial_facts"):
+                conn.execute(f"SELECT 1 FROM {evidence_table} LIMIT 1")  # noqa: S608
+        for internal_table in ("ingestion_quarantine", "ingestion_runs"):
+            with pytest.raises(psycopg.errors.InsufficientPrivilege):
+                with conn.transaction():
+                    conn.execute("SET LOCAL ROLE fel_app")
+                    conn.execute(f"SELECT 1 FROM {internal_table} LIMIT 1")  # noqa: S608
 
 
 def test_timestamps_are_timezone_aware(

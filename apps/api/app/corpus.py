@@ -9,7 +9,12 @@ and resolves tenant membership: evidence reads are available only to
 authenticated members, and reads run as the non-privileged fel_app role,
 which holds SELECT-only grants on corpus tables. The as_of cutoff is
 enforced server-side per spec 10.3: only documents publicly available at or
-before the cutoff are returned.
+before the cutoff are returned (boundary-inclusive).
+
+Evidence gate: only documents with at least one successfully PARSED
+document version are served. A document whose every ingestion attempt was
+quarantined is operational state, not evidence — it is invisible to both
+the listing and the by-id endpoint until a parse succeeds.
 """
 
 from __future__ import annotations
@@ -27,12 +32,19 @@ from app.errors import api_error
 
 router = APIRouter(prefix="/v1", tags=["corpus"])
 
+# Evidence gate repeated verbatim in every document read below: at least
+# one successfully parsed version must exist (quarantined-only documents
+# are not evidence). Kept as literal SQL — no string composition — so the
+# statements stay static and auditable.
 _LIST_DOCUMENTS_SQL = """
     SELECT id, entity_id, form, accession, source_url, content_hash,
            published_at, filed_at, period_start, period_end, ingested_at,
            valid_from, valid_to
     FROM documents
-    WHERE entity_id = %s
+    WHERE entity_id = %s AND EXISTS (
+        SELECT 1 FROM document_versions dv
+        WHERE dv.document_id = documents.id AND dv.status = 'parsed'
+    )
     ORDER BY published_at, accession
 """
 
@@ -41,7 +53,10 @@ _LIST_DOCUMENTS_AS_OF_SQL = """
            published_at, filed_at, period_start, period_end, ingested_at,
            valid_from, valid_to
     FROM documents
-    WHERE entity_id = %s AND published_at <= %s
+    WHERE entity_id = %s AND published_at <= %s AND EXISTS (
+        SELECT 1 FROM document_versions dv
+        WHERE dv.document_id = documents.id AND dv.status = 'parsed'
+    )
     ORDER BY published_at, accession
 """
 
@@ -50,7 +65,10 @@ _GET_DOCUMENT_SQL = """
            published_at, filed_at, period_start, period_end, ingested_at,
            valid_from, valid_to
     FROM documents
-    WHERE id = %s
+    WHERE id = %s AND EXISTS (
+        SELECT 1 FROM document_versions dv
+        WHERE dv.document_id = documents.id AND dv.status = 'parsed'
+    )
 """
 
 
