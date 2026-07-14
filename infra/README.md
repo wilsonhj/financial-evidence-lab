@@ -10,7 +10,8 @@ infrastructure-as-code boundary (ADR-0002); Terraform/Pulumi are deferred.
   `worker.json` are functional today; the web service config lands with
   T0002 (M0-PLATFORM), which introduces the Next.js runtime and its
   build/start scripts — committing it earlier would reference scripts that
-  do not exist.
+  do not exist. Per-service start commands and the worker's environment
+  wiring are documented in `railway/README.md`.
 - `scripts/backup_restore_smoke.sh` — migration + backup-restore smoke test
   run by the CI `database` job against a disposable Postgres container.
 
