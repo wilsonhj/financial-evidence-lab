@@ -8,8 +8,13 @@ Two modes:
   job-queue consumer: claims queued jobs (FEL_DATABASE_URL) and dispatches
   SEC discovery/fetch work through :mod:`fel_workers.consumer`. Provider
   bindings default to the deterministic mocks; set ``FEL_SEC_LIVE=1`` to
-  bind the live EDGAR client (fair-access compliant). ``--max-iterations``
-  bounds the loop for tests/one-shot drains.
+  bind the live EDGAR client (fair-access compliant) — live mode REQUIRES
+  ``FEL_STORAGE_DIR`` and binds durable local-disk storage
+  (:class:`fel_workers.storage.LocalDirStorageProvider`), because pairing
+  live ingestion with in-memory mock storage would persist storage keys in
+  the database while the blobs die with the process, leaving citations
+  unresolvable. ``--max-iterations`` bounds the loop for tests/one-shot
+  drains.
 """
 
 from __future__ import annotations
@@ -20,8 +25,12 @@ import os
 import signal
 import time
 from types import FrameType
+from typing import TYPE_CHECKING
 
 import psycopg
+
+if TYPE_CHECKING:
+    from fel_providers.interfaces import SecClient, StorageProvider
 
 log = logging.getLogger("fel_workers")
 
@@ -63,11 +72,37 @@ def parse_run_args(argv: list[str]) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+def build_run_providers() -> tuple[SecClient, StorageProvider]:
+    """Bind (sec, storage) providers for run mode from the environment.
+
+    Mock mode (default): deterministic mocks, no durability required.
+    Live mode (``FEL_SEC_LIVE=1``): fails closed unless ``FEL_STORAGE_DIR``
+    is set — live ingestion with in-memory mock storage would record
+    storage_key/canonical_text_key rows whose blobs vanish with the process,
+    silently breaking citation resolution. Raises ``RuntimeError`` naming
+    both variables when the pairing is invalid.
+    """
+    from fel_providers.mocks import MockSecClient, MockStorageProvider
+    from fel_workers.ingestion.sec_client import LiveSecClient
+    from fel_workers.storage import LocalDirStorageProvider
+
+    if os.environ.get("FEL_SEC_LIVE") != "1":
+        return MockSecClient(), MockStorageProvider()
+    storage_dir = os.environ.get("FEL_STORAGE_DIR")
+    if not storage_dir:
+        raise RuntimeError(
+            "FEL_SEC_LIVE=1 requires FEL_STORAGE_DIR: live SEC ingestion must"
+            " write blobs to durable storage (LocalDirStorageProvider), not the"
+            " in-memory mock — otherwise persisted storage keys become"
+            " unresolvable when the process exits. Set FEL_STORAGE_DIR to a"
+            " writable directory or unset FEL_SEC_LIVE."
+        )
+    return LiveSecClient(), LocalDirStorageProvider(storage_dir)
+
+
 def run_main(argv: list[str]) -> int:
     """Run the job consumer against FEL_DATABASE_URL."""
-    from fel_providers.mocks import MockSecClient, MockStorageProvider
     from fel_workers.consumer import run_worker
-    from fel_workers.ingestion.sec_client import LiveSecClient
 
     _configure()
     args = parse_run_args(argv)
@@ -75,8 +110,11 @@ def run_main(argv: list[str]) -> int:
     if not database_url:
         log.error("FEL_DATABASE_URL is not configured")
         return 2
-    sec = LiveSecClient() if os.environ.get("FEL_SEC_LIVE") == "1" else MockSecClient()
-    storage = MockStorageProvider()
+    try:
+        sec, storage = build_run_providers()
+    except RuntimeError as exc:
+        log.error("%s", exc)
+        return 2
     with psycopg.connect(database_url, autocommit=True) as conn:
         completed = run_worker(
             conn,
