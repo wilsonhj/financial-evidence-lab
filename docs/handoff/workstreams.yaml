@@ -171,14 +171,15 @@ packages:
     depends_on: [M1-INGESTION]
     team: trust
     branch: agent/m1-corpus-qa
-    status: review # draft PR #86 (2e4e6a2); T0112 live run deferred to a SEC-egress session
+    status: merged # PR #86 squashed to main @ 1a96228 (2026-07-14); T0112 live artifact tracked on reopened #56
     allowed_paths: [evals/**, workers/tests/**]
   - id: M1-COMPANY-FACTS # FR-ING-001 companyfacts follow-up (issue #83; found by PR #80 review)
     issue: 83
-    tasks: [] # unallocated spec requirement; scoped in the issue
-    depends_on: [M1-CORPUS-QA] # serialized: workers/tests/** overlaps M1-CORPUS-QA
+    tasks: [] # unallocated spec requirement; scoped + ruled in the issue (stored-document approach)
+    depends_on: [M1-CORPUS-QA] # serialized: workers/tests/** overlapped M1-CORPUS-QA (now merged)
     team: data
     branch: agent/m1-company-facts
+    status: active # dispatched 2026-07-14 per issue #83 ruling
     allowed_paths:
       - workers/src/fel_workers/ingestion/**
       - workers/tests/**

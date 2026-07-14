@@ -27,7 +27,7 @@ Tasks are ordered by dependency. A task is complete only when its code, tests, t
 - [x] `T0108` Implement the Alpha Vantage BYO adapter with adjusted prices, volume, dividends, and splits (`FR-ING-008`).
 - [x] `T0109` Reject forecast features with missing required adjustments or timestamps (`FOR-005`).
 - [x] `T0110` Build the evidence reader with hierarchy, source highlights, fact metadata, duplicates, and amendments.
-- [ ] `T0111` Create temporal-cutoff, parser golden-file, and idempotency test suites.
+- [x] `T0111` Create temporal-cutoff, parser golden-file, and idempotency test suites.
 - [ ] `T0112` Ingest the first 20 benchmark issuers and record corpus-quality metrics.
 
 ## M2 — Observable hybrid retrieval
