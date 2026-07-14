@@ -1,0 +1,130 @@
+{
+  "cik": 9999999,
+  "entityName": "Synthetic Example Corp",
+  "fixtureNote": "SYNTHETIC LABELED FIXTURE - fictional issuer CIK 9999999; hand-written in the shape of the data.sec.gov /api/xbrl/companyfacts response; no real SEC data",
+  "facts": {
+    "dei": {
+      "EntityCommonStockSharesOutstanding": {
+        "label": "Entity Common Stock, Shares Outstanding",
+        "description": "Indicate number of shares outstanding of each of registrant's classes of common stock.",
+        "units": {
+          "shares": [
+            {
+              "end": "2026-03-31",
+              "val": 41000000,
+              "accn": "0009999999-26-000010",
+              "fy": 2026,
+              "fp": "Q1",
+              "form": "10-Q",
+              "filed": "2026-05-05",
+              "frame": "CY2026Q1I"
+            }
+          ]
+        }
+      },
+      "EntityRegistrantName": {
+        "label": "Entity Registrant Name",
+        "description": "The exact name of the entity filing the report.",
+        "units": {
+          "pure": [
+            {
+              "end": "2026-03-31",
+              "val": "Synthetic Example Corp",
+              "accn": "0009999999-26-000010",
+              "fy": 2026,
+              "fp": "Q1",
+              "form": "10-Q",
+              "filed": "2026-05-05"
+            }
+          ]
+        }
+      }
+    },
+    "us-gaap": {
+      "Assets": {
+        "label": "Assets",
+        "description": "Sum of the carrying amounts as of the balance sheet date of all assets.",
+        "units": {
+          "USD": [
+            {
+              "end": "2025-12-31",
+              "val": 5000000,
+              "accn": "0009999999-26-000003",
+              "fy": 2025,
+              "fp": "FY",
+              "form": "10-K",
+              "filed": "2026-02-15",
+              "frame": "CY2025Q4I"
+            },
+            {
+              "end": "2025-12-31",
+              "val": 5000250,
+              "accn": "0009999999-26-000010",
+              "fy": 2026,
+              "fp": "Q1",
+              "form": "10-Q",
+              "filed": "2026-05-05"
+            },
+            {
+              "end": "2026-03-31",
+              "val": 5250000.5,
+              "accn": "0009999999-26-000010",
+              "fy": 2026,
+              "fp": "Q1",
+              "form": "10-Q",
+              "filed": "2026-05-05",
+              "frame": "CY2026Q1I"
+            }
+          ]
+        }
+      },
+      "Revenues": {
+        "label": "Revenues",
+        "description": "Amount of revenue recognized from goods sold or services rendered.",
+        "units": {
+          "USD": [
+            {
+              "start": "2025-01-01",
+              "end": "2025-12-31",
+              "val": 12000000,
+              "accn": "0009999999-26-000003",
+              "fy": 2025,
+              "fp": "FY",
+              "form": "10-K",
+              "filed": "2026-02-15",
+              "frame": "CY2025"
+            },
+            {
+              "start": "2026-01-01",
+              "end": "2026-03-31",
+              "val": 3100000,
+              "accn": "0009999999-26-000010",
+              "fy": 2026,
+              "fp": "Q1",
+              "form": "10-Q",
+              "filed": "2026-05-05"
+            }
+          ]
+        }
+      },
+      "EarningsPerShareBasic": {
+        "label": "Earnings Per Share, Basic",
+        "description": "The amount of net income per each share of common stock.",
+        "units": {
+          "USD/shares": [
+            {
+              "start": "2026-01-01",
+              "end": "2026-03-31",
+              "val": 0.85,
+              "accn": "0009999999-26-000010",
+              "fy": 2026,
+              "fp": "Q1",
+              "form": "10-Q",
+              "filed": "2026-05-05"
+            }
+          ]
+        }
+      }
+    }
+  }
+}
