@@ -17,14 +17,22 @@ closed, including provenance checks) and exercised by
 
 Integration-lead ruling: the harness **always requires a dedicated
 database — never the production/shared one — in both synthetic and live
-mode**, enforced fail-closed in code (`ensure_dedicated_queue`). Before
-enqueuing anything, the harness refuses (exit 2) if the `jobs` table
-holds ANY pre-existing job or ANY of this run's expected fetch
-idempotency keys:
+mode**, enforced fail-closed in code by a two-half gate. The
+**empty-queue half** (`ensure_dedicated_queue`) needs no expected keys,
+so it runs immediately after connect (and the optional reset) and
+**BEFORE any SEC request** — a refused run burns zero fair-access
+budget: if the `jobs` table holds ANY pre-existing job, the harness
+refuses (exit 2) before enqueuing anything:
 
 > harness requires a dedicated database with an empty ingestion queue
-> (found N pre-existing jobs / M pre-existing fetch keys); use a fresh DB
-> or --reset-corpus on a disposable one
+> (found N pre-existing jobs); use a fresh DB or --reset-corpus on a
+> disposable one (reset clears corpus + jobs coherently)
+
+The **expected-key half** (`ensure_expected_keys_unclaimed`) runs after
+the submissions snapshot — this run's expected fetch idempotency keys do
+not exist before it — but still before anything is enqueued, as a race
+guard: a writer that inserted one of this run's expected keys between
+the two checks is refused the same way (exit 2).
 
 Why: the pipeline deduplicates fetch jobs per accession
 (`sec-fetch|<accession>`), so against a shared/used database, historical
@@ -40,15 +48,29 @@ whole-queue backlog check, the surplus reconciliation, and the
 Reruns against a used database are refused by the gate; rerun on a fresh
 dedicated DB or with `--reset-corpus` on a disposable one.
 
-### Exit codes
+### Exit codes (phase-aware — "work starts" at the first enqueue)
 
 | Code | Meaning |
 | --- | --- |
 | 0 | Run succeeded; report written (may still be non-acceptance). |
-| 1 | RUN FAILURE (report written where possible) or an SEC discovery/fetch failure outside a job. |
-| 2 | Configuration/gate refusal, one-line message, nothing written: dedicated-DB gate, destructive-reset gates, live SEC-identity gate, unreachable database/DSN, unreadable or malformed cohort file. |
+| 1 | RUN FAILURE — **any** failure after work starts: failed/pending/missing/surplus/stale jobs, an exhausted iteration budget, a mid-run harness invariant failure (e.g. corpus rows referencing blobs absent from this run's storage), or a database connection lost mid-run. The report is written where possible: the full `corpus-qa-report/v1` when accounting completed, otherwise a best-effort `corpus-qa-failure/v1` failure report (below) marked non-acceptance with the failure reason — the report is filesystem JSON, so it is written even when the database connection is dead. Also an SEC discovery/fetch failure during the pre-enqueue snapshot (run failure; nothing to report yet). |
+| 2 | Pre-work configuration/gate refusal, one-line message, nothing written: live SEC-identity and storage-dir gates, unreachable database/DSN, destructive-reset gates, both dedicated-DB gate halves, unreadable or malformed cohort file. Exit 2 never happens after work starts. |
 
 No anticipated path prints a raw traceback.
+
+### Failure reports (`corpus-qa-failure/v1`)
+
+A run that fails after work starts and cannot build the full report
+writes a best-effort failure report to the same `<label>.json` path. It
+carries its own schema, `"corpus-qa-failure/v1"`, so a partial failure
+report can never masquerade as a metrics report (`validate_report`
+rejects it by schema). Fields: the usual `mode`, `label`,
+`generated_at`, `provenance_note`, `run`, and `cohort` provenance;
+`acceptance` fixed to `{"accepted": false, "reasons": [<failure
+reason>]}`; and a `run_failure` object with `failure_reason` plus
+whatever was accounted before the failure (`jobs_completed` and the
+reconciled `jobs` summary when available, else `null`). It is built
+purely from in-memory state — no database access.
 
 ## Provenance modes and identity namespaces
 

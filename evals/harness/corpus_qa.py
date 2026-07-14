@@ -9,18 +9,31 @@ report under ``evals/reports/corpus-qa/``. Schema:
 
 DEDICATED DATABASE REQUIRED (both modes, integration-lead ruling): the
 harness NEVER runs against the production/shared database. Enforced
-fail-closed in code by :func:`ensure_dedicated_queue`: before enqueuing
-anything, the harness refuses (exit 2) if the jobs table holds ANY
-pre-existing job or ANY of this run's expected fetch idempotency keys.
-That gate is what makes every post-run accounting query correct: the
-queue started empty, so every job present afterwards belongs to this run.
+fail-closed in code by a two-half gate: :func:`ensure_dedicated_queue`
+(any pre-existing job) runs immediately after connect/reset and BEFORE
+any SEC request — a refused run burns zero fair-access budget — and
+:func:`ensure_expected_keys_unclaimed` (this run's expected fetch
+idempotency keys) runs after the submissions snapshot as a race guard,
+still before anything is enqueued. That gate is what makes every post-run
+accounting query correct: the queue started empty, so every job present
+afterwards belongs to this run.
 
-Exit codes: 0 = run succeeded (report written, may still be
-non-acceptance); 1 = run failure (report written where possible) or an
-SEC discovery/fetch failure; 2 = configuration/gate refusal (dedicated-DB
-gate, destructive-reset gates, live SEC-identity gate, unreachable
-database/DSN, unreadable or malformed cohort file) — refused before any
-work, no report written.
+Exit codes are PHASE-AWARE — "work starts" at the first enqueue:
+
+- 0 = run succeeded (report written, may still be non-acceptance).
+- 1 = ANY failure after work starts — failed/pending/missing/surplus/
+  stale jobs, an exhausted iteration budget, a mid-run harness invariant
+  failure (e.g. corpus rows referencing blobs absent from this run's
+  storage), or a database connection lost mid-run. The report is written
+  where possible: the full corpus-qa-report/v1 when accounting completed,
+  otherwise a best-effort corpus-qa-failure/v1 report (filesystem JSON —
+  it is written even when the database connection is dead) naming the
+  failure reason. Also an SEC discovery/fetch failure during the
+  pre-enqueue snapshot (run failure; nothing to report yet).
+- 2 = pre-work configuration/gate refusal — config gates (live
+  SEC-identity, storage-dir), unreachable database/DSN, destructive-reset
+  gates, both dedicated-DB gate halves, unreadable or malformed cohort
+  file. Refused before any work; nothing written.
 
 Synthetic mode (default; NO network) keys every database row by a
 NAMESPACED SYNTHETIC identity (:func:`synthetic_cik` /
@@ -113,6 +126,10 @@ from fel_workers.storage import LocalDirStorageProvider
 from harness.synthetic_sec import SyntheticCohortSecClient
 
 REPORT_SCHEMA = "corpus-qa-report/v1"
+# Best-effort report for a run that failed AFTER work started (its own
+# schema, so a partial failure report can never masquerade as a metrics
+# report — validate_report rejects it by schema).
+FAILURE_SCHEMA = "corpus-qa-failure/v1"
 REPORT_SCHEMA_VERSION = 1
 DEFAULT_COHORT_PATH = (
     pathlib.Path(__file__).resolve().parent.parent / "datasets" / "issuer-cohort.json"
@@ -390,16 +407,15 @@ def resolve_database_url(
     return url
 
 
-def ensure_dedicated_queue(
-    conn: psycopg.Connection[Any], expected_fetch_keys: Sequence[str] = ()
-) -> None:
-    """Fail-closed dedicated-database gate (BOTH modes; integration-lead
-    ruling): the harness always requires a dedicated database — never the
-    production/shared one.
+def ensure_dedicated_queue(conn: psycopg.Connection[Any]) -> None:
+    """Empty-queue half of the fail-closed dedicated-database gate (BOTH
+    modes; integration-lead ruling): the harness always requires a
+    dedicated database — never the production/shared one.
 
-    Runs BEFORE anything is enqueued: if the jobs table holds ANY
-    pre-existing job, or ANY of this run's expected fetch idempotency keys
-    already exist, the run is refused (:class:`HarnessError`, exit 2).
+    Needs no expected keys, so it runs immediately after connect (and the
+    optional reset) and BEFORE any SEC request or enqueue — a refused run
+    burns ZERO fair-access budget: if the jobs table holds ANY
+    pre-existing job, the run is refused (:class:`HarnessError`, exit 2).
     Without this gate, per-accession fetch-job dedupe would silently remap
     historical jobs (from a prior harness run or a production worker) into
     this run's accounting — false acceptance attesting to work this run
@@ -409,19 +425,43 @@ def ensure_dedicated_queue(
     belongs to this run.
     """
     preexisting_jobs = _count(conn, _PREEXISTING_JOBS_SQL, ())
-    preexisting_keys = 0
-    if expected_fetch_keys:
-        preexisting_keys = _count(
-            conn,
-            _PREEXISTING_FETCH_KEYS_SQL,
-            (JOB_KIND_SEC_FILING_FETCH, list(expected_fetch_keys)),
-        )
-    if preexisting_jobs or preexisting_keys:
+    if preexisting_jobs:
         raise HarnessError(
             "harness requires a dedicated database with an empty ingestion"
-            f" queue (found {preexisting_jobs} pre-existing jobs /"
-            f" {preexisting_keys} pre-existing fetch keys); use a fresh DB or"
-            " --reset-corpus on a disposable one"
+            f" queue (found {preexisting_jobs} pre-existing jobs); use a"
+            " fresh DB or --reset-corpus on a disposable one (reset clears"
+            " corpus + jobs coherently)"
+        )
+
+
+def ensure_expected_keys_unclaimed(
+    conn: psycopg.Connection[Any], expected_fetch_keys: Sequence[str]
+) -> None:
+    """Expected-key half of the dedicated-database gate: refuse the run
+    (:class:`HarnessError`, exit 2) if any of THIS run's expected fetch
+    idempotency keys already exist.
+
+    Runs after the submissions snapshot (the expected keys don't exist
+    before it) but still BEFORE anything is enqueued — a race guard for a
+    job that appeared between :func:`ensure_dedicated_queue` proving the
+    queue empty and this run enqueuing (another writer racing the
+    harness). Such a key would silently satisfy fetch-job dedupe and be
+    mis-attributed to this run's accounting.
+    """
+    if not expected_fetch_keys:
+        return
+    preexisting_keys = _count(
+        conn,
+        _PREEXISTING_FETCH_KEYS_SQL,
+        (JOB_KIND_SEC_FILING_FETCH, list(expected_fetch_keys)),
+    )
+    if preexisting_keys:
+        raise HarnessError(
+            "harness requires a dedicated database with an empty ingestion"
+            f" queue (found {preexisting_keys} pre-existing fetch keys for"
+            " this run's expected filings — another writer raced the"
+            " harness); use a fresh DB or --reset-corpus on a disposable one"
+            " (reset clears corpus + jobs coherently)"
         )
 
 
@@ -708,8 +748,10 @@ def _verify_spans(
             try:
                 text = storage.get(key).decode()
             except (KeyError, OSError) as exc:
-                # Defensive (the dedicated-DB gate should refuse such runs
-                # first): never a raw KeyError/FileNotFoundError.
+                # Never a raw KeyError/FileNotFoundError. Raised mid-run
+                # (after work started), so run_corpus_qa converts it into a
+                # RUN FAILURE: exit 1 with a best-effort failure report
+                # naming this reason — not an exit-2 refusal.
                 raise HarnessError(
                     "corpus rows reference blobs absent from this run's"
                     f" storage (missing {key!r}) — use a fresh database,"
@@ -1010,6 +1052,75 @@ def write_report(report: dict[str, Any], reports_dir: pathlib.Path) -> pathlib.P
     return path
 
 
+def build_failure_report(
+    cohort: Cohort,
+    issuers: Sequence[RunIssuer],
+    *,
+    mode: str,
+    label: str,
+    run_id: str,
+    failure_reason: str,
+    jobs_completed: int | None = None,
+    jobs: JobsSummary | None = None,
+    generated_at: datetime | None = None,
+) -> dict[str, Any]:
+    """Best-effort report for a run that failed AFTER work started
+    (mid-run :class:`HarnessError` or a lost database connection), marked
+    non-acceptance with the failure reason.
+
+    Carries its own schema (:data:`FAILURE_SCHEMA`) so a partial failure
+    report can never masquerade as a corpus-qa-report/v1 metrics report —
+    :func:`validate_report` rejects it by schema. Built purely from
+    in-memory state (no database access), including whatever was
+    accounted before the failure (``jobs_completed`` and the jobs summary
+    when the failure struck after reconciliation).
+    """
+    stamp = generated_at if generated_at is not None else datetime.now(UTC)
+    return {
+        "schema": FAILURE_SCHEMA,
+        "schema_version": REPORT_SCHEMA_VERSION,
+        "mode": mode,
+        "label": label,
+        "generated_at": stamp.isoformat(),
+        "provenance_note": SYNTHETIC_NOTE if mode == "synthetic" else LIVE_NOTE,
+        "run": {
+            "run_id": run_id,
+            "mode": mode,
+            "as_of": cohort.as_of,
+            "identity_namespace": (
+                SYNTHETIC_IDENTITY_NAMESPACE if mode == "synthetic" else LIVE_IDENTITY_NAMESPACE
+            ),
+            "expected_issuers": [issuer.ticker for issuer in issuers],
+        },
+        "acceptance": {"accepted": False, "reasons": [failure_reason]},
+        "run_failure": {
+            "failure_reason": failure_reason,
+            "jobs_completed": jobs_completed,
+            "jobs": jobs.as_report_field() if jobs is not None else None,
+        },
+        "cohort": {
+            "path": "evals/datasets/issuer-cohort.json",
+            "sha256": cohort.sha256,
+            "as_of": cohort.as_of,
+            "issuer_count": len(cohort.issuers),
+        },
+    }
+
+
+def write_failure_report(report: dict[str, Any], reports_dir: pathlib.Path) -> pathlib.Path | None:
+    """Write the failure report where possible. Best-effort by design:
+    the report is filesystem JSON, so it is written even when the database
+    connection is dead; only a filesystem refusal yields ``None`` (the
+    run still exits 1 with the reason on stderr)."""
+    try:
+        reports_dir.mkdir(parents=True, exist_ok=True)
+        path = reports_dir / f"{report['label']}.json"
+        path.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n")
+    except OSError:
+        return None
+    return path
+
+
 # ---------------------------------------------------------------------------
 # Orchestration.
 # ---------------------------------------------------------------------------
@@ -1018,10 +1129,14 @@ def write_report(report: dict[str, Any], reports_dir: pathlib.Path) -> pathlib.P
 @dataclass(frozen=True)
 class RunResult:
     """Outcome of one harness pass. ``failed`` means the run itself failed
-    (jobs failed/pending/missing, or the iteration budget was exhausted);
-    the report is still written, marked non-acceptance."""
+    (jobs failed/pending/missing, the iteration budget was exhausted, or a
+    mid-run error struck after work started); the report is still written
+    where possible, marked non-acceptance — a full corpus-qa-report/v1
+    when accounting completed, otherwise a best-effort
+    corpus-qa-failure/v1 report. ``path`` is None only when even the
+    failure report could not be written (filesystem refusal)."""
 
-    path: pathlib.Path
+    path: pathlib.Path | None
     report: dict[str, Any]
     failed: bool
     failure_reasons: tuple[str, ...]
@@ -1042,11 +1157,22 @@ def run_corpus_qa(
 ) -> RunResult:
     """Run one full harness pass and return the written report + outcome.
 
-    Fail-closed gates run BEFORE any connection or network access — mode
-    validation, the destructive-reset disposability check, and (live mode)
-    the FEL_SEC_USER_AGENT identity requirement — and the dedicated-DB
-    gate (:func:`ensure_dedicated_queue`) runs after connecting (and after
-    an optional reset) but BEFORE anything is enqueued.
+    PHASE-AWARE failure semantics — "work starts" at the first enqueue:
+
+    - Pre-work refusals raise :class:`HarnessError` (CLI exit 2, nothing
+      written): mode validation, the destructive-reset disposability
+      check, (live mode) the FEL_SEC_USER_AGENT identity requirement —
+      all before any connection or network access — then, after
+      connecting (and an optional reset), the empty-queue gate
+      (:func:`ensure_dedicated_queue`) BEFORE any SEC request, and the
+      expected-key race guard (:func:`ensure_expected_keys_unclaimed`)
+      after the snapshot but before anything is enqueued. A pre-work
+      ``psycopg.OperationalError`` propagates (CLI exit 2).
+    - ANY :class:`HarnessError` or ``psycopg.OperationalError`` AFTER
+      work starts is a RUN FAILURE, never a refusal: this returns a
+      ``failed`` :class:`RunResult` (CLI exit 1) carrying a best-effort
+      corpus-qa-failure/v1 report written where possible — the report is
+      filesystem JSON, so a dead database connection does not stop it.
     """
     if mode not in ("synthetic", "live"):
         raise HarnessError(f"unknown mode {mode!r}")
@@ -1084,48 +1210,86 @@ def run_corpus_qa(
     except (psycopg.OperationalError, psycopg.ProgrammingError) as exc:
         message = " ".join(str(exc).split())
         raise HarnessError(f"cannot connect to the target database: {message}") from exc
-    with connection as conn:
-        if reset:
-            reset_corpus(conn)
-        expected = {
-            issuer.db_cik: expected_filings(sec, issuer, effective_forms) for issuer in issuers
-        }
-        expected_accessions = [ref.accession for refs in expected.values() for ref in refs]
-        # Dedicated-database gate: refuse (exit 2) BEFORE enqueuing anything
-        # if any job — or any of this run's expected fetch keys — already
-        # exists. Every post-run accounting query below relies on the
-        # queue having been empty here.
-        ensure_dedicated_queue(
-            conn, [f"sec-fetch|{accession}" for accession in expected_accessions]
-        )
-        started_row = conn.execute("SELECT now()").fetchone()
-        run_started_at: datetime = started_row[0] if started_row is not None else datetime.now(UTC)
-        discovery_job_ids = enqueue_discovery(conn, issuers, run_id=run_id, forms=effective_forms)
-        jobs_completed = run_worker(
-            conn, storage, sec, queue_name=DEFAULT_QUEUE, max_iterations=max_iterations
-        )
-        jobs = collect_job_outcomes(
-            conn,
-            discovery_job_ids=discovery_job_ids,
-            expected_accessions=expected_accessions,
-            run_started_at=run_started_at,
-        )
-        failure_reasons = run_failure_reasons(jobs)
-        report = build_report(
-            conn,
-            storage,
+    work_started = False
+    jobs_completed: int | None = None
+    jobs: JobsSummary | None = None
+    try:
+        with connection as conn:
+            if reset:
+                reset_corpus(conn)
+            # Dedicated-database gate, empty-queue half: refuse (exit 2)
+            # BEFORE any SEC request — a refused run burns zero fair-access
+            # budget — and before anything is enqueued. Every post-run
+            # accounting query below relies on the queue having been empty
+            # here.
+            ensure_dedicated_queue(conn)
+            expected = {
+                issuer.db_cik: expected_filings(sec, issuer, effective_forms) for issuer in issuers
+            }
+            expected_accessions = [ref.accession for refs in expected.values() for ref in refs]
+            # Expected-key half (race guard): the keys exist only after the
+            # snapshot; refuse if another writer claimed any of them since
+            # the empty-queue gate.
+            ensure_expected_keys_unclaimed(
+                conn, [f"sec-fetch|{accession}" for accession in expected_accessions]
+            )
+            started_row = conn.execute("SELECT now()").fetchone()
+            run_started_at: datetime = (
+                started_row[0] if started_row is not None else datetime.now(UTC)
+            )
+            # Work starts here: from the first enqueue on, every failure is
+            # a RUN FAILURE (exit 1, best-effort report) — never exit 2.
+            work_started = True
+            discovery_job_ids = enqueue_discovery(
+                conn, issuers, run_id=run_id, forms=effective_forms
+            )
+            jobs_completed = run_worker(
+                conn, storage, sec, queue_name=DEFAULT_QUEUE, max_iterations=max_iterations
+            )
+            jobs = collect_job_outcomes(
+                conn,
+                discovery_job_ids=discovery_job_ids,
+                expected_accessions=expected_accessions,
+                run_started_at=run_started_at,
+            )
+            failure_reasons = run_failure_reasons(jobs)
+            report = build_report(
+                conn,
+                storage,
+                cohort,
+                issuers,
+                expected,
+                mode=mode,
+                label=label,
+                run_id=run_id,
+                jobs_completed=jobs_completed,
+                jobs=jobs,
+                failure_reasons=failure_reasons,
+                generated_at=generated_at,
+            )
+        path = write_report(report, reports_dir)
+    except (HarnessError, psycopg.OperationalError) as exc:
+        if not work_started:
+            # Pre-work refusal: nothing enqueued, nothing written (exit 2).
+            raise
+        reason = f"run failed after work started: {' '.join(str(exc).split())}"
+        failure_report = build_failure_report(
             cohort,
             issuers,
-            expected,
             mode=mode,
             label=label,
             run_id=run_id,
+            failure_reason=reason,
             jobs_completed=jobs_completed,
             jobs=jobs,
-            failure_reasons=failure_reasons,
             generated_at=generated_at,
         )
-    path = write_report(report, reports_dir)
+        return RunResult(
+            path=write_failure_report(failure_report, reports_dir),
+            report=failure_report,
+            failed=True,
+            failure_reasons=(reason,),
+        )
     return RunResult(
         path=path,
         report=report,
@@ -1200,10 +1364,14 @@ def main(argv: list[str] | None = None) -> int:
             max_iterations=args.max_iterations,
         )
     except HarnessError as exc:
+        # Pre-work refusals only: run_corpus_qa converts any HarnessError
+        # raised after work starts into a failed RunResult (exit 1 below).
         print(f"corpus-qa: {exc}", file=sys.stderr)  # noqa: T201 — operator-facing CLI
         return 2
     except psycopg.OperationalError as exc:
-        # Connection/DSN problems are configuration, not run failures.
+        # Connection/DSN problems BEFORE work starts are configuration, not
+        # run failures; a connection lost after work starts is converted to
+        # a failed RunResult inside run_corpus_qa (exit 1 below).
         message = " ".join(str(exc).split())
         print(f"corpus-qa: database connection failed: {message}", file=sys.stderr)  # noqa: T201
         return 2
@@ -1213,7 +1381,8 @@ def main(argv: list[str] | None = None) -> int:
         # reported through the written report instead.
         print(f"corpus-qa: RUN FAILURE: {exc}", file=sys.stderr)  # noqa: T201
         return 1
-    print(f"wrote {result.path}")  # noqa: T201 — operator-facing CLI
+    if result.path is not None:
+        print(f"wrote {result.path}")  # noqa: T201 — operator-facing CLI
     if result.failed:
         for reason in result.failure_reasons:
             print(f"corpus-qa: RUN FAILURE: {reason}", file=sys.stderr)  # noqa: T201

@@ -627,7 +627,11 @@ def test_preexisting_expected_fetch_key_is_refused_fail_closed(
     """Finding R2-1a: a pre-existing fetch job carrying one of THIS run's
     expected idempotency keys (a prior harness run or a production worker)
     would silently satisfy dedupe and be mis-attributed to this run — the
-    gate refuses it and reports the key collision explicitly."""
+    gate refuses it. Since round 3 the gate is split: the pre-seeded job
+    is caught by the empty-queue half BEFORE any submissions snapshot
+    (see test_live_gate_refusal_burns_zero_sec_requests); the key half
+    remains as a post-snapshot race guard (see
+    test_expected_key_race_guard_is_the_gates_second_half)."""
     accession = build_plan(_synthetic_ciks()[0], 0)[0].accession
     with psycopg.connect(qa_database_url, autocommit=True) as conn:
         queue.enqueue(
@@ -651,7 +655,7 @@ def test_preexisting_expected_fetch_key_is_refused_fail_closed(
     assert rc == 2
     err = capsys.readouterr().err
     assert "dedicated database" in err
-    assert "1 pre-existing fetch keys" in err
+    assert "1 pre-existing jobs" in err
     assert not (tmp_path / "stale-key.json").exists()
     with psycopg.connect(qa_database_url, autocommit=True) as conn:
         row = conn.execute("SELECT count(*) FROM jobs").fetchone()
@@ -916,6 +920,173 @@ def test_malformed_cohort_json_exits_2(
     assert rc == 2
     message = _assert_one_line_config_error(capsys)
     assert "not valid JSON" in message
+
+
+# ---------------------------------------------------------------------------
+# Round-3 finding 1: gate ordering — the empty-queue half of the
+# dedicated-DB gate refuses BEFORE any SEC request (zero fair-access
+# budget burned); the expected-key half stays as a post-snapshot race
+# guard.
+# ---------------------------------------------------------------------------
+
+
+def test_live_gate_refusal_burns_zero_sec_requests(
+    qa_database_url: str,
+    tmp_path: pathlib.Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Round-3 finding 1: a live-shaped run against a database with one
+    pre-existing job is refused (exit 2) by the empty-queue gate BEFORE
+    the expected-set snapshot — ZERO SEC requests are recorded."""
+    _seed_marker_job(qa_database_url)
+    requests: list[str] = []
+
+    class _CountingLiveClient:
+        def __init__(self, *, user_agent: str) -> None:
+            self.user_agent = user_agent
+
+        def submissions(self, cik: str) -> dict[str, object]:
+            requests.append(f"submissions|{cik}")
+            raise AssertionError("a refused run must never reach SEC")
+
+        def fetch_document(self, url: str) -> bytes:
+            requests.append(f"fetch|{url}")
+            raise AssertionError("a refused run must never reach SEC")
+
+    monkeypatch.setattr("fel_workers.ingestion.sec_client.LiveSecClient", _CountingLiveClient)
+    monkeypatch.setenv("FEL_SEC_USER_AGENT", "fel corpus-qa (ops@example.com)")
+    rc = main(
+        [
+            "--mode",
+            "live",
+            "--database-url",
+            qa_database_url,
+            "--storage-dir",
+            str(tmp_path / "blobs"),
+            "--reports-dir",
+            str(tmp_path),
+            "--label",
+            "live-not-dedicated",
+        ]
+    )
+    assert rc == 2
+    assert requests == [], "the refusal must record ZERO SEC requests"
+    err = capsys.readouterr().err
+    assert "dedicated database" in err
+    assert "1 pre-existing jobs" in err
+    assert not (tmp_path / "live-not-dedicated.json").exists()
+
+
+def test_expected_key_race_guard_is_the_gates_second_half(qa_database_url: str) -> None:
+    """Round-3 finding 1: the expected-key check remains after the
+    snapshot as a race guard — a writer that claimed one of this run's
+    expected fetch keys between the empty-queue gate and enqueue is still
+    refused fail-closed."""
+    accession = build_plan(_synthetic_ciks()[0], 0)[0].accession
+    key = f"sec-fetch|{accession}"
+    with psycopg.connect(qa_database_url, autocommit=True) as conn:
+        corpus_qa.ensure_expected_keys_unclaimed(conn, [key])  # empty queue: passes
+        queue.enqueue(
+            conn,
+            kind=JOB_KIND_SEC_FILING_FETCH,
+            payload={"accession": accession},
+            queue="ingestion",
+            idempotency_key=key,
+        )
+        with pytest.raises(HarnessError, match="pre-existing fetch keys"):
+            corpus_qa.ensure_expected_keys_unclaimed(conn, [key])
+
+
+# ---------------------------------------------------------------------------
+# Round-3 findings 2+3: phase-aware failure semantics — ANY failure after
+# work starts (the first enqueue) exits 1 with a best-effort failure
+# report, never an exit-2 config refusal.
+# ---------------------------------------------------------------------------
+
+
+def test_midrun_missing_blob_is_run_failure_not_refusal(
+    qa_database_url: str, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Round-3 finding 2 (reproduced scenario): run once, DELETE FROM
+    jobs, rerun with fresh storage. The rerun passes the gate (empty
+    queue), re-enqueues, then span verification raises HarnessError
+    MID-RUN because the corpus rows reference the first run's blobs. That
+    is a RUN FAILURE: exit 1 with a written non-acceptance failure report
+    naming the missing-blob reason — not exit 2."""
+    first = run_corpus_qa(
+        mode="synthetic",
+        database_url=qa_database_url,
+        reports_dir=tmp_path,
+        label="first-pass",
+    )
+    assert first.failed is False
+    with psycopg.connect(qa_database_url, autocommit=True) as conn:
+        conn.execute("DELETE FROM jobs")
+    monkeypatch.setenv("TEST_DATABASE_URL", qa_database_url)
+    rc = main(
+        [
+            "--mode",
+            "synthetic",
+            "--reports-dir",
+            str(tmp_path),
+            "--label",
+            "rerun-fresh-storage",
+        ]
+    )
+    assert rc == 1
+    report = json.loads((tmp_path / "rerun-fresh-storage.json").read_text())
+    assert report["schema"] == corpus_qa.FAILURE_SCHEMA
+    assert report["acceptance"]["accepted"] is False
+    reasons = " | ".join(report["acceptance"]["reasons"])
+    assert "absent from this run's storage" in reasons
+    assert report["run_failure"]["failure_reason"] in report["acceptance"]["reasons"]
+    # A failure report can never masquerade as a metrics report.
+    with pytest.raises(HarnessError, match="unexpected schema"):
+        validate_report(report)
+
+
+def test_connection_lost_after_enqueue_is_run_failure_with_report(
+    qa_database_url: str, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Round-3 finding 3: an OperationalError AFTER work starts (the
+    harness's backend terminated mid-run) is a RUN FAILURE — exit 1 with
+    a best-effort failure report written locally (the report is
+    filesystem JSON; a dead connection cannot stop it) — never exit 2."""
+
+    def _terminating_worker(
+        conn: psycopg.Connection[Any],
+        storage: object,
+        sec: object,
+        *,
+        queue_name: str,
+        max_iterations: int,
+    ) -> int:
+        with psycopg.connect(qa_database_url, autocommit=True) as admin:
+            admin.execute("SELECT pg_terminate_backend(%s)", (conn.info.backend_pid,))
+        return 0
+
+    monkeypatch.setattr(corpus_qa, "run_worker", _terminating_worker)
+    monkeypatch.setenv("TEST_DATABASE_URL", qa_database_url)
+    rc = main(
+        [
+            "--mode",
+            "synthetic",
+            "--reports-dir",
+            str(tmp_path),
+            "--label",
+            "conn-lost",
+        ]
+    )
+    assert rc == 1
+    report = json.loads((tmp_path / "conn-lost.json").read_text())
+    assert report["schema"] == corpus_qa.FAILURE_SCHEMA
+    assert report["acceptance"]["accepted"] is False
+    assert "run failed after work started" in report["acceptance"]["reasons"][0]
+    assert report["run_failure"]["failure_reason"] == report["acceptance"]["reasons"][0]
+    with psycopg.connect(qa_database_url, autocommit=True) as conn:
+        row = conn.execute("SELECT count(*) FROM jobs").fetchone()
+    assert row is not None and row[0] > 0, "work had started: discovery jobs were enqueued"
 
 
 # ---------------------------------------------------------------------------
