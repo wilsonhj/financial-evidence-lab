@@ -189,7 +189,7 @@ packages:
     depends_on: [M1-INGESTION]
     team: platform
     branch: agent/infra-worker-deploy
-    status: review # PR #85 (dc068d2) ready-for-review; two review rounds addressed
+    status: merged # PR #85 squashed to main @ f5d3d0a (2026-07-14); three review rounds, fixes verified at 609e458
     allowed_paths: [infra/**]
 
   # M2 — retrieval, claims verification, observatory.
