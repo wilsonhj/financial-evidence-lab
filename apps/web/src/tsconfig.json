@@ -1,0 +1,17 @@
+{
+  // The root vitest run transforms .tsx test files with the nearest tsconfig
+  // (vite 8 / rolldown resolution). Next.js requires "jsx": "preserve" in the
+  // package tsconfig (../tsconfig.json), but vite cannot parse preserved JSX,
+  // so this override compiles src files with the automatic runtime for tests.
+  // The explicit "include" is required: resolution only honors a tsconfig
+  // whose include actually matches the file, and the inherited patterns
+  // resolve relative to ../tsconfig.json, not this file.
+  // Next.js (`next build`), `tsc --noEmit`, and eslint all keep using
+  // ../tsconfig.json — this file only affects the test-time transform (and
+  // editors, for which it is behavior-identical).
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "jsx": "react-jsx"
+  },
+  "include": ["./**/*.ts", "./**/*.tsx"]
+}

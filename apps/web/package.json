@@ -4,6 +4,25 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "vitest run"
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "test": "vitest run",
+    "typecheck": "next typegen && tsc --noEmit"
+  },
+  "dependencies": {
+    "@fel/contracts": "workspace:*",
+    "next": "16.2.10",
+    "react": "19.2.7",
+    "react-dom": "19.2.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.1",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1",
+    "typescript": "~6.0.0",
+    "vitest": "^4.1.10"
   }
 }
