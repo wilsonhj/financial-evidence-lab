@@ -66,38 +66,41 @@ Next gate: M1 — point-in-time evidence corpus.
   append-only audit, cost ceilings, provider interfaces + deterministic
   mocks, lease-fenced SKIP LOCKED job queue. **M0 is complete.**
 
-## In review (draft PRs open, CI green)
+## In review
 
-Both M1 packages were dispatched concurrently on 2026-07-13 (disjoint
-allowed paths) and delivered draft PRs the same day; CI is green on both
-head SHAs. Awaiting integration-lead review and merge decision:
+- `M1-INGESTION` / T0101–T0109 (#54) — **PR #80** (`agent/m1-ingestion`,
+  ready-for-review): full mock-first ingestion vertical. Review round 1
+  (at `d12e57c`) fixed all 6 external findings plus the 20-finding
+  internal audit — entity/accession-scoped idempotency, divergent-bytes
+  quarantine, quarantined-doc invisibility, job consumer with e2e test,
+  canonical-text persistence, iXBRL transform registry, non-finite
+  rejection, stack-based nested parsing, FRED no-lookahead vintage,
+  race hardening, ADR-0004 grant removal (147 pytest). Round 2 in
+  flight for three re-review findings: continuous lease heartbeat +
+  reap_stale wiring, fail-closed live storage binding
+  (LocalDirStorageProvider + FEL_STORAGE_DIR), and the documented
+  visibility ruling (M1 reads gate on "successfully parsed";
+  corpus-version gating deferred to M2 retrieval).
 
-- `M1-INGESTION` / T0101–T0109 (#54) — **draft PR #80**
-  (`agent/m1-ingestion` @ `a813cfb`): full mock-first ingestion vertical
-  (LiveSecClient behind MockTransport, immutable content-addressed raw
-  store, stdlib HTML/iXBRL parser with stable UUIDv5 spans, financial-fact
-  normalization with duplicate/restatement handling, idempotent versioned
-  jobs with atomic corpus publication, quarantine, vintage-aware FRED,
-  Alpha Vantage adapter, FOR-005 fail-closed feature assembly, read-only
-  corpus API with as_of filtering). 68 new tests (95 Python total).
-  Flagged pre-authorized deviation: additive-only
-  `db/migrations/0002_corpus_core.sql` (public corpus tables, no
-  org_id/RLS by documented design, `fel_app` SELECT-only).
-- `M1-EVIDENCE-UI` / T0110 (#55) — **draft PR #79**
-  (`agent/m1-evidence-ui` @ `cdcffbe`): Next.js 16 App Router runtime,
-  evidence reader at `/reader/[documentId]` (keyboard-navigable outline,
-  non-color-only span highlights, fact panel, scale-aware string-decimal
-  duplicate-conflict detection, amendment/restatement banners, client-side
-  notes) against a synthetic fixture via the typed `EvidenceSource`
-  interface. 52 JS tests; `pnpm --filter @fel/web build` exit 0. Flagged
-  pre-authorized deviations: root `tsconfig.json` (apps/web out of the
-  composite graph), `pnpm-workspace.yaml` postcss `^8.5.10` override
-  (CVE'd transitive pin from next 16), mechanical lockfile.
+## Recently merged (M1)
+
+- **PR #79 merged to `main` at `932f367`** (2026-07-14): `M1-EVIDENCE-UI`
+  / T0110 complete — evidence reader on Next.js 16 (keyboard-navigable
+  outline, fail-closed citation-integrity verification with explicit
+  error states, scale-aware string-decimal duplicate comparison,
+  deterministic amendment linkage, document-scoped `EvidenceSource` with
+  distinct document/version IDs, `HttpEvidenceSource` with auth + as_of +
+  typed errors + capability gating). External re-review passed clean at
+  `d8bbe54`; 99 tests. Root-config hunks covered by ADR-0003 (PR #82,
+  merged at `a5ec237` with the machine-readable shared-path policy).
 
 ## Not started
 
 All implementation tasks after M1 (M1-CORPUS-QA becomes ready when
-M1-INGESTION merges).
+M1-INGESTION merges). Follow-up issues awaiting queue slots: #83
+(FR-ING-001 company-facts ingestion), #84 (Railway worker startCommand →
+consumer mode; infra paths), #81 (EXT-2b supplemental stress cohort;
+needs SEC egress session).
 
 ## Blockers
 
@@ -121,15 +124,19 @@ agent environment on the same branches/PRs.
 
 ## Next actions
 
-1. Review and merge draft PRs #80 (M1-INGESTION) and #79 (M1-EVIDENCE-UI);
-   the 0002 migration deviation on #80 needs integration-lead sign-off.
-2. After #80 merges: mark M1-CORPUS-QA (#56) ready and dispatch it; swap
-   the web reader's `evidenceSource` binding to `HttpEvidenceSource` once
-   the ingestion API is deployed (noted in #79's handoff).
-3. Decide the EXT unblock path: allowlist the three SEC hosts in the cloud
-   environment's network settings (new session required), or hand
-   execution of PRs #74-#76 to a network-enabled agent environment. The
-   same decision gates live-credential integration runs for M1-INGESTION.
+1. Land PR #80's round-2 fixes (lease heartbeat, live storage binding,
+   visibility ruling), verify, obtain clean re-review, merge.
+2. After #80 merges: mark M1-CORPUS-QA (#56) ready and dispatch it;
+   schedule #83 (company-facts) alongside it or early M2; wire #84
+   (Railway consumer startCommand) with the deploy milestone; swap the
+   web reader's `evidenceSource` binding to `HttpEvidenceSource` once
+   the ingestion API is deployed.
+3. EXT (egress-enabled session): PR #76 has two integration-lead
+   disposition comments to action (8th feature, excerpts, validator,
+   amendments, email, retarget to main); PRs #74/#75 execute per
+   `SESSION_BRIEF_SEC_EGRESS.md`; #81 (EXT-2b) runs after #76 closes
+   out. Stale trackers #71–#73 closed (2026-07-14); the PRs are the
+   live state. M0 gate issue #3 closed.
 4. Keep at most four packages active concurrently.
 5. Update this file and `workstreams.yaml` after every integration merge.
 

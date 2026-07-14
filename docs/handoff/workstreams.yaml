@@ -163,7 +163,7 @@ packages:
     depends_on: [M0-PLATFORM]
     team: experience
     branch: agent/m1-evidence-ui
-    status: review # draft PR #79 (cdcffbe), CI green 2026-07-13
+    status: merged # PR #79 squashed to main @ 932f367 (2026-07-14); review round fixed at d8bbe54
     allowed_paths: [apps/web/**, packages/ui/**]
   - id: M1-CORPUS-QA
     issue: 56
