@@ -15,6 +15,13 @@ Evidence gate: only documents with at least one successfully PARSED
 document version are served. A document whose every ingestion attempt was
 quarantined is operational state, not evidence — it is invisible to both
 the listing and the by-id endpoint until a parse succeeds.
+
+Visibility ruling (integration lead, M1): corpus-read visibility IS "a
+successfully parsed version exists". Publish state (corpus_versions /
+the single-active pointer) deliberately does NOT gate M1 reads — an
+UNPUBLISHED but parsed document is visible through these endpoints.
+Corpus-version pinning of reads arrives with M2's corpus-pinned
+retrieval; do not add publish gating here before then.
 """
 
 from __future__ import annotations
@@ -36,6 +43,10 @@ router = APIRouter(prefix="/v1", tags=["corpus"])
 # one successfully parsed version must exist (quarantined-only documents
 # are not evidence). Kept as literal SQL — no string composition — so the
 # statements stay static and auditable.
+#
+# The EXISTS clause is the WHOLE M1 visibility story (integration-lead
+# ruling): parsed => visible, regardless of corpus_versions/publish state.
+# Publish gating is an M2 concern (corpus-pinned retrieval), not an M1 one.
 _LIST_DOCUMENTS_SQL = """
     SELECT id, entity_id, form, accession, source_url, content_hash,
            published_at, filed_at, period_start, period_end, ingested_at,
