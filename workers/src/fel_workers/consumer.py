@@ -5,7 +5,10 @@ Closes the discovery -> fetch loop: discovery enqueues
 (``queue.claim_one``), fetches the filing through the injected ``SecClient``
 protocol, runs the idempotent ingestion pipeline, and completes/fails the
 job through the lease-fenced queue primitives — a worker whose claim was
-reaped can never write a terminal state. ``sec_discovery`` jobs are routed
+reaped can never write a terminal state. While a handler runs, a background
+:class:`LeaseHeartbeat` thread keeps the lease fresh (so long jobs are not
+reaped), and the loop itself periodically calls ``queue.reap_stale`` so jobs
+abandoned by crashed workers are requeued. ``sec_discovery`` jobs are routed
 to the discovery handler so the whole chain runs off one queue.
 
 All collaborators (connection, storage, SEC client, sleep) are injected;
@@ -17,6 +20,7 @@ entrypoint.
 from __future__ import annotations
 
 import logging
+import threading
 import time
 import uuid
 from collections.abc import Callable
@@ -39,6 +43,77 @@ from fel_workers.ingestion.sec_client import normalize_cik
 log = logging.getLogger("fel_workers.consumer")
 
 DEFAULT_QUEUE = "ingestion"
+
+# Beat well under queue.HEARTBEAT_STALE_SECONDS (60s) so a healthy worker's
+# claim is always fresh when a reaper looks at it.
+DEFAULT_HEARTBEAT_INTERVAL_SECONDS = 15.0
+
+
+class LeaseHeartbeat:
+    """Daemon thread that keeps a claimed job's lease fresh while the handler
+    runs, on its own DB connection (the worker connection is busy with the
+    handler's statements).
+
+    Beats every ``interval_seconds`` — well under the reaper threshold — and
+    latches ``lease_lost`` the moment :func:`queue.heartbeat` returns False:
+    the claim was reaped and possibly re-claimed, so the running handler's
+    result must be discarded (the new owner wins). A heartbeat *connection*
+    failure is not proof of loss; it is logged and beating stops, and the
+    fenced terminal write still decides ownership.
+    """
+
+    def __init__(
+        self,
+        connection_factory: Callable[[], psycopg.Connection[Any]],
+        job: queue.ClaimedJob,
+        *,
+        interval_seconds: float = DEFAULT_HEARTBEAT_INTERVAL_SECONDS,
+    ) -> None:
+        self._connection_factory = connection_factory
+        self._job = job
+        self._interval_seconds = interval_seconds
+        self._stop = threading.Event()
+        self._lease_lost = threading.Event()
+        self._thread = threading.Thread(
+            target=self._run, name=f"lease-heartbeat-{job.id}", daemon=True
+        )
+
+    @property
+    def lease_lost(self) -> bool:
+        return self._lease_lost.is_set()
+
+    def start(self) -> None:
+        self._thread.start()
+
+    def stop(self) -> None:
+        """Stop beating and wait for the thread to exit."""
+        self._stop.set()
+        self._thread.join()
+
+    def _run(self) -> None:
+        try:
+            with self._connection_factory() as conn:
+                while not self._stop.wait(self._interval_seconds):
+                    if not queue.heartbeat(conn, self._job):
+                        self._lease_lost.set()
+                        log.warning("lease lost mid-job %s (heartbeat fenced out)", self._job.id)
+                        return
+        except Exception:  # noqa: BLE001 — heartbeat must never kill the worker
+            log.exception("heartbeat connection failed for job %s", self._job.id)
+
+
+def _connection_factory_like(
+    conn: psycopg.Connection[Any],
+) -> Callable[[], psycopg.Connection[Any]]:
+    """Default heartbeat connection factory: clone the worker connection's
+    DSN (``conn.info.dsn`` omits the password, so it is re-supplied)."""
+    dsn = conn.info.dsn
+    password = conn.info.password or None
+
+    def factory() -> psycopg.Connection[Any]:
+        return psycopg.connect(dsn, password=password, autocommit=True)
+
+    return factory
 
 
 def entity_id_for_cik(cik: str) -> str:
@@ -89,6 +164,10 @@ def run_worker(
     idle_sleep_seconds: float = 1.0,
     sleep: Callable[[float], None] = time.sleep,
     should_continue: Callable[[], bool] = lambda: True,
+    heartbeat_interval_seconds: float = DEFAULT_HEARTBEAT_INTERVAL_SECONDS,
+    heartbeat_connection_factory: Callable[[], psycopg.Connection[Any]] | None = None,
+    reap_interval_iterations: int = 1,
+    stale_after_seconds: float = queue.HEARTBEAT_STALE_SECONDS,
 ) -> int:
     """Claim-and-dispatch loop; returns the number of jobs completed.
 
@@ -96,24 +175,42 @@ def run_worker(
     many claim attempts and stops early once the queue drains; without it,
     the loop runs until ``should_continue`` (e.g. a signal flag) turns
     false, sleeping ``idle_sleep_seconds`` when idle.
+
+    Lease contract (queue.py): while a handler runs, a :class:`LeaseHeartbeat`
+    daemon thread beats the claim every ``heartbeat_interval_seconds`` on its
+    own connection so long-running jobs are never mistaken for dead ones, and
+    every ``reap_interval_iterations`` claim attempts the loop calls
+    :func:`queue.reap_stale` (threshold ``stale_after_seconds``) so jobs whose
+    worker crashed are requeued instead of staying 'running' forever. If the
+    heartbeat reports the lease lost, the job is treated as lost: the handler
+    result is discarded and no terminal state is written — the new owner wins.
     """
     completed = 0
     iterations = 0
+    connection_factory = heartbeat_connection_factory or _connection_factory_like(conn)
     while should_continue() and (max_iterations is None or iterations < max_iterations):
         iterations += 1
+        if reap_interval_iterations > 0 and (iterations - 1) % reap_interval_iterations == 0:
+            reaped = queue.reap_stale(conn, stale_seconds=stale_after_seconds)
+            if reaped:
+                log.warning("reaped %d stale job(s) back to queued", reaped)
         job = queue.claim_one(conn, queue=queue_name)
         if job is None:
             if max_iterations is not None:
                 break
             sleep(idle_sleep_seconds)
             continue
-        if not queue.heartbeat(conn, job):
-            log.warning("lease lost before start; skipping job %s", job.id)
+        if job.kind not in (JOB_KIND_SEC_DISCOVERY, JOB_KIND_SEC_FILING_FETCH):
+            queue.fail(conn, job, f"unknown job kind {job.kind!r}")
             continue
+        heartbeat = LeaseHeartbeat(
+            connection_factory, job, interval_seconds=heartbeat_interval_seconds
+        )
+        heartbeat.start()
         try:
             if job.kind == JOB_KIND_SEC_DISCOVERY:
                 run_discovery_job(conn, sec, job.payload, job_queue=queue_name)
-            elif job.kind == JOB_KIND_SEC_FILING_FETCH:
+            else:
                 outcome = handle_sec_filing_fetch(conn, storage, sec, job.payload)
                 log.info(
                     "ingested %s -> %s (%s)",
@@ -121,15 +218,23 @@ def run_worker(
                     outcome.status,
                     outcome.reason_code or "ok",
                 )
-            else:
-                queue.fail(conn, job, f"unknown job kind {job.kind!r}")
-                continue
         except Exception as exc:  # noqa: BLE001 — job isolation boundary
+            heartbeat.stop()
+            if heartbeat.lease_lost:
+                log.warning("lease lost during job %s; failure not recorded", job.id)
+                continue
             log.exception("job %s failed", job.id)
             queue.fail(conn, job, str(exc))
             continue
-        # Fenced heartbeat + completion: if the lease was reaped while we
-        # worked, the terminal write is refused and the result discarded.
+        heartbeat.stop()
+        # Lost lease means another worker owns the job now; the fenced
+        # complete below would refuse the write anyway, but we skip it
+        # explicitly so the outcome is deliberate, not incidental.
+        if heartbeat.lease_lost:
+            log.warning("lease lost during job %s; result discarded", job.id)
+            continue
+        # Fenced completion: if the lease was reaped between the last
+        # heartbeat and now, the terminal write is refused and discarded.
         if queue.complete(conn, job):
             completed += 1
         else:
