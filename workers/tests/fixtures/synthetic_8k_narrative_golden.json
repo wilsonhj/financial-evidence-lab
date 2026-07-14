@@ -1,0 +1,140 @@
+{
+  "_note": "Golden expectations for the SYNTHETIC stress fixture synthetic_8k_narrative.html; regenerate ONLY on an intentional parser/normalizer version bump via workers/tests/fixtures/regen_parser_goldens.py (workflow in that module's docstring).",
+  "parser_version": "fel-parser/1.0.0",
+  "normalizer_version": "fel-xbrl/1.0.0",
+  "golden_entity_id": "00000000-0000-4000-8000-0000000000e1",
+  "golden_version_id": "00000000-0000-4000-8000-0000000000d1",
+  "content_hash": "sha256:3c7f26b26e8782d4fdd973735a628927c59f59296d458f565ac6befd3e57f4f7",
+  "text_length": 605,
+  "text_hash": "sha256:ec7b5e8d5c128b8d8e9a6c59da530d9258645fccb50dadc8f5ad248d52b50c69",
+  "sections": [
+    {
+      "id": "d02e57e2-140d-5eab-8422-0ec0f6d56a4e",
+      "parent_id": null,
+      "heading": "(document)",
+      "heading_path": [
+        "(document)"
+      ],
+      "order": 0,
+      "start_char": 0,
+      "end_char": 60
+    },
+    {
+      "id": "010340e8-f042-52ae-a1c0-f865b658678b",
+      "parent_id": "d02e57e2-140d-5eab-8422-0ec0f6d56a4e",
+      "heading": "Synthetic Stress Corporation",
+      "heading_path": [
+        "(document)",
+        "Synthetic Stress Corporation"
+      ],
+      "order": 1,
+      "start_char": 60,
+      "end_char": 184
+    },
+    {
+      "id": "9bf202f3-2059-523c-ad3b-2312a4eb877d",
+      "parent_id": "010340e8-f042-52ae-a1c0-f865b658678b",
+      "heading": "Item 2.02. Results of Operations",
+      "heading_path": [
+        "(document)",
+        "Synthetic Stress Corporation",
+        "Item 2.02. Results of Operations"
+      ],
+      "order": 2,
+      "start_char": 184,
+      "end_char": 217
+    },
+    {
+      "id": "afc5ca82-3611-5e33-8cd8-aa50b71bd763",
+      "parent_id": "9bf202f3-2059-523c-ad3b-2312a4eb877d",
+      "heading": "Preliminary, unaudited highlights",
+      "heading_path": [
+        "(document)",
+        "Synthetic Stress Corporation",
+        "Item 2.02. Results of Operations",
+        "Preliminary, unaudited highlights"
+      ],
+      "order": 3,
+      "start_char": 217,
+      "end_char": 418
+    },
+    {
+      "id": "c621da18-27a1-5f3c-bbed-d70be7d22e54",
+      "parent_id": "010340e8-f042-52ae-a1c0-f865b658678b",
+      "heading": "Item 9.01. Exhibits",
+      "heading_path": [
+        "(document)",
+        "Synthetic Stress Corporation",
+        "Item 9.01. Exhibits"
+      ],
+      "order": 4,
+      "start_char": 418,
+      "end_char": 605
+    }
+  ],
+  "spans": [
+    {
+      "id": "242eb1bd-d252-5109-98ad-725dd180dc17",
+      "section_id": "010340e8-f042-52ae-a1c0-f865b658678b",
+      "start_char": 89,
+      "end_char": 183,
+      "text_hash": "sha256:82cf8c77c2b385b3e485b8f171cd4c5077e648a75c79d7b953fc18a37db449fe"
+    },
+    {
+      "id": "7bf4fbcf-b707-5350-a774-7d58663d9d7a",
+      "section_id": "afc5ca82-3611-5e33-8cd8-aa50b71bd763",
+      "start_char": 251,
+      "end_char": 364,
+      "text_hash": "sha256:8a199e57989eeb6e7240cd9ca2c40e88e4f09bc1d8b2cd51aad1c9e570081390"
+    },
+    {
+      "id": "511fb50b-207b-5b2c-bb64-950de4a87fb8",
+      "section_id": "c621da18-27a1-5f3c-bbed-d70be7d22e54",
+      "start_char": 438,
+      "end_char": 496,
+      "text_hash": "sha256:06c680eeb0492864357594ff58d9084c9c8e4bfb07496ae80da593271b6eb973"
+    },
+    {
+      "id": "f55441e5-1bb8-53be-b580-73475e664278",
+      "section_id": "c621da18-27a1-5f3c-bbed-d70be7d22e54",
+      "start_char": 543,
+      "end_char": 604,
+      "text_hash": "sha256:89c363d69aa2cc4666fe112c6288fbdc71c798f6ed1299241175ac13d1fa31e2"
+    }
+  ],
+  "tables": [
+    {
+      "id": "e02cf889-c559-55ea-8513-9b37deab0bf9",
+      "section_id": "afc5ca82-3611-5e33-8cd8-aa50b71bd763",
+      "order": 0,
+      "caption": null,
+      "headers": [],
+      "rows": [
+        [
+          "Announcement date",
+          "June 30, 2027"
+        ],
+        [
+          "Webcast",
+          "July 8, 2027"
+        ]
+      ]
+    },
+    {
+      "id": "878c26f8-ccff-56fa-9a58-866f03707b61",
+      "section_id": "c621da18-27a1-5f3c-bbed-d70be7d22e54",
+      "order": 1,
+      "caption": "Exhibit index (synthetic)",
+      "headers": [
+        "Exhibit",
+        "Description"
+      ],
+      "rows": []
+    }
+  ],
+  "contexts": {},
+  "units": {},
+  "facts": [],
+  "normalized_facts": [],
+  "diagnostics": []
+}
