@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<!--
+  SYNTHETIC STRESS FIXTURE (T0111). A fabricated 10-Q-like document that
+  concentrates the parser and normalizer edge cases in one filing: nested
+  tables, parenthesized negatives, comma-decimal values with an explicit
+  iXBRL format attribute, dash-as-zero, fixed-zero, nil and content-empty
+  facts, multi-dimensional facts, sign attributes, pure/shares units, and
+  ix:continuation-style narrative content. "Synthetic Stress Corporation"
+  is a fictional issuer; every number, concept value, and sentence here is
+  invented and is NOT derived from any real company's filing.
+
+  Golden expectations live in synthetic_10q_stress_golden.json; regenerate
+  them ONLY on an intentional parser/normalizer version bump via:
+      .venv/bin/python workers/tests/fixtures/regen_parser_goldens.py
+-->
+<html>
+<head><title>Synthetic Stress Corporation - Form 10-Q (synthetic fixture)</title></head>
+<body>
+<div style="display:none">
+<ix:header>
+<ix:resources>
+<xbrli:context id="d2027q1">
+  <xbrli:entity><xbrli:identifier scheme="http://www.sec.gov/CIK">0009999998</xbrli:identifier></xbrli:entity>
+  <xbrli:period><xbrli:startDate>2027-01-01</xbrli:startDate><xbrli:endDate>2027-03-31</xbrli:endDate></xbrli:period>
+</xbrli:context>
+<xbrli:context id="i20270331">
+  <xbrli:entity><xbrli:identifier scheme="http://www.sec.gov/CIK">0009999998</xbrli:identifier></xbrli:entity>
+  <xbrli:period><xbrli:instant>2027-03-31</xbrli:instant></xbrli:period>
+</xbrli:context>
+<xbrli:context id="d2027q1Europe">
+  <xbrli:entity><xbrli:identifier scheme="http://www.sec.gov/CIK">0009999998</xbrli:identifier></xbrli:entity>
+  <xbrli:period><xbrli:startDate>2027-01-01</xbrli:startDate><xbrli:endDate>2027-03-31</xbrli:endDate></xbrli:period>
+  <xbrli:scenario><xbrldi:explicitMember dimension="srt:StatementGeographicalAxis">syn:EuropeMember</xbrldi:explicitMember></xbrli:scenario>
+</xbrli:context>
+<xbrli:context id="d2027q1EuropeCloud">
+  <xbrli:entity><xbrli:identifier scheme="http://www.sec.gov/CIK">0009999998</xbrli:identifier></xbrli:entity>
+  <xbrli:period><xbrli:startDate>2027-01-01</xbrli:startDate><xbrli:endDate>2027-03-31</xbrli:endDate></xbrli:period>
+  <xbrli:scenario>
+    <xbrldi:explicitMember dimension="srt:StatementGeographicalAxis">syn:EuropeMember</xbrldi:explicitMember>
+    <xbrldi:explicitMember dimension="srt:ProductOrServiceAxis">syn:CloudSubscriptionMember</xbrldi:explicitMember>
+  </xbrli:scenario>
+</xbrli:context>
+<xbrli:unit id="usd"><xbrli:measure>iso4217:USD</xbrli:measure></xbrli:unit>
+<xbrli:unit id="eur"><xbrli:measure>iso4217:EUR</xbrli:measure></xbrli:unit>
+<xbrli:unit id="shares"><xbrli:measure>xbrli:shares</xbrli:measure></xbrli:unit>
+<xbrli:unit id="pure"><xbrli:measure>xbrli:pure</xbrli:measure></xbrli:unit>
+</ix:resources>
+</ix:header>
+</div>
+<h1>Synthetic Stress Corporation</h1>
+<p>Quarterly report for the fiscal quarter ended March 31, 2027. This document is a synthetic stress-test fixture; every value is fabricated.</p>
+<h2>Part I. Financial Information</h2>
+<h3>Item 1. Financial Statements</h3>
+<p>Revenue for the quarter was $<ix:nonFraction name="us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax" contextRef="d2027q1" unitRef="usd" scale="6" decimals="-5" format="ixt:num-dot-decimal">1,234.5</ix:nonFraction> million, driven by cloud subscriptions.</p>
+<p>Restructuring charges of $<ix:nonFraction name="us-gaap:RestructuringCharges" contextRef="d2027q1" unitRef="usd" scale="3" decimals="-3" format="ixt:num-dot-decimal">(2,500)</ix:nonFraction> thousand were recorded in the period.</p>
+<p>Operating income (loss) was $<ix:nonFraction name="us-gaap:OperatingIncomeLoss" contextRef="d2027q1" unitRef="usd" scale="6" decimals="-6" sign="-">300</ix:nonFraction> million, reflecting the restructuring program.</p>
+<h4>Segment and geographic detail</h4>
+<p>European revenue, reported by the local statutory books, was &#8364;<ix:nonFraction name="us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax" contextRef="d2027q1Europe" unitRef="eur" scale="3" decimals="-2" format="ixt:num-comma-decimal">987.654,32</ix:nonFraction> thousand.</p>
+<p>European cloud-subscription revenue was $<ix:nonFraction name="us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax" contextRef="d2027q1EuropeCloud" unitRef="usd" scale="3" decimals="-3" format="ixt:num-dot-decimal">45,600</ix:nonFraction> thousand.</p>
+<p>Impairment of intangibles was $<ix:nonFraction name="us-gaap:ImpairmentOfIntangibleAssetsExcludingGoodwill" contextRef="d2027q1" unitRef="usd" scale="6" decimals="-6" format="ixt:num-dot-decimal">&#8211;</ix:nonFraction> million (a dash: no impairment this quarter).</p>
+<p>Legal settlement accruals were $<ix:nonFraction name="us-gaap:LossContingencyAccrualAtCarryingValue" contextRef="i20270331" unitRef="usd" scale="6" decimals="-6" format="ixt:fixed-zero">&#8212;</ix:nonFraction> million under the fixed-zero presentation rule.</p>
+<p>Goodwill impairment: <ix:nonFraction name="us-gaap:GoodwillImpairmentLoss" contextRef="d2027q1" unitRef="usd" scale="6" xsi:nil="true"/> (nil fact) and deferred charges <ix:nonFraction name="us-gaap:DeferredCostsCurrent" contextRef="i20270331" unitRef="usd" scale="6"></ix:nonFraction> (content-empty fact) are excluded from results.</p>
+<table>
+<caption>Condensed consolidated results (synthetic)</caption>
+<tr><th>Metric</th><th>Q1 2027</th><th>Q1 2026</th></tr>
+<tr><td>Revenue ($M)</td><td>1,234.5</td><td>1,180.0</td></tr>
+<tr><td>Detail</td><td><table>
+<caption>Inner detail (synthetic)</caption>
+<tr><th>Region</th><th>Amount</th></tr>
+<tr><td>Europe (&#8364;K)</td><td>987.654,32</td></tr>
+<tr><td>Rest of world ($K)</td><td>52,900</td></tr>
+</table></td><td>n/a</td></tr>
+<tr><td>Operating income ($M)</td><td>(300)</td><td>145</td></tr>
+</table>
+<h3>Item 2. Management&#8217;s Discussion and Analysis</h3>
+<p>Total assets were $<ix:nonFraction name="us-gaap:Assets" contextRef="i20270331" unitRef="usd" scale="6" decimals="-6" format="ixt:num-dot-decimal">9,850</ix:nonFraction> million as of March 31, 2027.</p>
+<p>As permitted, the discussion of liquidity beginning in this section
+<ix:continuation id="cont-liquidity-1">continues into the notes: the company&#8217;s revolving facility remains
+undrawn, and management believes existing resources are sufficient</ix:continuation>
+for at least the next twelve months.</p>
+<p>As discussed in Item 1, revenue of $<ix:nonFraction name="us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax" contextRef="d2027q1" unitRef="usd" scale="6" decimals="-5" format="ixt:num-dot-decimal">1,234.5</ix:nonFraction> million is presented again here for continuity.</p>
+<h2>Part II. Other Information</h2>
+<p>Weighted average basic shares outstanding were <ix:nonFraction name="us-gaap:WeightedAverageNumberOfSharesOutstandingBasic" contextRef="d2027q1" unitRef="shares" scale="3" decimals="0" format="ixt:num-dot-decimal">250,000</ix:nonFraction> thousand.</p>
+<p>The gross margin ratio was <ix:nonFraction name="syn:GrossMarginRatio" contextRef="d2027q1" unitRef="pure" scale="0" decimals="2" format="ixt:num-dot-decimal">0.85</ix:nonFraction> for the quarter.</p>
+</body>
+</html>

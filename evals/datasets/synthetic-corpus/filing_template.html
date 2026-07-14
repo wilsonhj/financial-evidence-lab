@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<!--
+  SYNTHETIC DOCUMENT generated for corpus-QA pipeline validation (T0112).
+  The CIK below keys a benchmark-cohort slot ONLY; no sentence, number, or
+  fact in this document is taken from, or represents, any real company's
+  filing. Every value is deterministically fabricated by
+  evals/harness/synthetic_sec.py from the CIK and accession number.
+-->
+<html>
+<head><title>Synthetic filing __ACCESSION__ (corpus-QA synthetic fixture)</title></head>
+<body>
+<div style="display:none">
+<ix:header>
+<ix:resources>
+<xbrli:context id="dPeriod">
+  <xbrli:entity><xbrli:identifier scheme="http://www.sec.gov/CIK">__CIK__</xbrli:identifier></xbrli:entity>
+  <xbrli:period><xbrli:startDate>__PERIOD_START__</xbrli:startDate><xbrli:endDate>__PERIOD_END__</xbrli:endDate></xbrli:period>
+</xbrli:context>
+<xbrli:context id="iInstant">
+  <xbrli:entity><xbrli:identifier scheme="http://www.sec.gov/CIK">__CIK__</xbrli:identifier></xbrli:entity>
+  <xbrli:period><xbrli:instant>__INSTANT__</xbrli:instant></xbrli:period>
+</xbrli:context>
+<xbrli:context id="dPeriodCloud">
+  <xbrli:entity><xbrli:identifier scheme="http://www.sec.gov/CIK">__CIK__</xbrli:identifier></xbrli:entity>
+  <xbrli:period><xbrli:startDate>__PERIOD_START__</xbrli:startDate><xbrli:endDate>__PERIOD_END__</xbrli:endDate></xbrli:period>
+  <xbrli:scenario><xbrldi:explicitMember dimension="srt:ProductOrServiceAxis">syn:CloudSubscriptionMember</xbrldi:explicitMember></xbrli:scenario>
+</xbrli:context>
+<xbrli:unit id="usd"><xbrli:measure>iso4217:USD</xbrli:measure></xbrli:unit>
+<xbrli:unit id="shares"><xbrli:measure>xbrli:shares</xbrli:measure></xbrli:unit>
+</ix:resources>
+</ix:header>
+</div>
+<h1>__ISSUER_LABEL__</h1>
+<p>SYNTHETIC __FORM__ covering __PERIOD_START__ through __PERIOD_END__. This
+document was fabricated by the corpus-QA harness; it contains no real
+company data.</p>
+<h2>Part I. Financial Information</h2>
+<h3>Item 1. Financial Statements</h3>
+<p>Revenue for the period was $<ix:nonFraction name="us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax" contextRef="dPeriod" unitRef="usd" scale="6" decimals="-6" format="ixt:num-dot-decimal">__REVENUE__</ix:nonFraction> million.</p>
+<p>Restructuring charges of $<ix:nonFraction name="us-gaap:RestructuringCharges" contextRef="dPeriod" unitRef="usd" scale="3" decimals="-3" format="ixt:num-dot-decimal">(__CHARGE__)</ix:nonFraction> thousand were recorded.</p>
+<p>Cloud subscription revenue was $<ix:nonFraction name="us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax" contextRef="dPeriodCloud" unitRef="usd" scale="6" decimals="-6" format="ixt:num-dot-decimal">__SEGMENT_REVENUE__</ix:nonFraction> million.</p>
+<table>
+<caption>Condensed results (synthetic)</caption>
+<tr><th>Metric</th><th>Current</th><th>Prior</th></tr>
+<tr><td>Revenue ($M)</td><td>__REVENUE__</td><td>n/a</td></tr>
+<tr><td>Restructuring ($K)</td><td>(__CHARGE__)</td><td>n/a</td></tr>
+</table>
+<h3>Item 2. Management&#8217;s Discussion and Analysis</h3>
+<p>Total assets were $<ix:nonFraction name="us-gaap:Assets" contextRef="iInstant" unitRef="usd" scale="6" decimals="-6" format="ixt:num-dot-decimal">__ASSETS__</ix:nonFraction> million as of __INSTANT__.</p>
+<p>As discussed in Item 1, revenue of $<ix:nonFraction name="us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax" contextRef="dPeriod" unitRef="usd" scale="6" decimals="-6" format="ixt:num-dot-decimal">__REVENUE__</ix:nonFraction> million is presented again here.</p>
+<h2>Part II. Other Information</h2>
+<p>Weighted average basic shares outstanding were <ix:nonFraction name="us-gaap:WeightedAverageNumberOfSharesOutstandingBasic" contextRef="dPeriod" unitRef="shares" scale="3" decimals="0" format="ixt:num-dot-decimal">__SHARES__</ix:nonFraction> thousand.</p>
+</body>
+</html>
