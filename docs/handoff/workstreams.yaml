@@ -171,7 +171,7 @@ packages:
     depends_on: [M1-INGESTION]
     team: trust
     branch: agent/m1-corpus-qa
-    status: active # dispatched 2026-07-14 (T0112 live 20-issuer run additionally needs SEC egress; harness ships mock-first)
+    status: review # draft PR #86 (2e4e6a2); T0112 live run deferred to a SEC-egress session
     allowed_paths: [evals/**, workers/tests/**]
   - id: M1-COMPANY-FACTS # FR-ING-001 companyfacts follow-up (issue #83; found by PR #80 review)
     issue: 83
@@ -189,7 +189,7 @@ packages:
     depends_on: [M1-INGESTION]
     team: platform
     branch: agent/infra-worker-deploy
-    status: active # dispatched 2026-07-14 (paths disjoint from M1-CORPUS-QA)
+    status: review # PR #85 (dc068d2) ready-for-review; two review rounds addressed
     allowed_paths: [infra/**]
 
   # M2 — retrieval, claims verification, observatory.
