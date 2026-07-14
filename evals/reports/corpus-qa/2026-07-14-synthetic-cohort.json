@@ -3,8 +3,42 @@
   "schema_version": 1,
   "mode": "synthetic",
   "label": "2026-07-14-synthetic-cohort",
-  "generated_at": "2026-07-14T00:42:31.910640+00:00",
-  "provenance_note": "SYNTHETIC RUN: the pipeline, queue, quarantine, and metrics paths are real, but every ingested byte was generated from committed synthetic templates (evals/datasets/synthetic-corpus/). Cohort tickers/CIKs key the benchmark slots only — NO metric in this report describes any real company's filings.",
+  "generated_at": "2026-07-14T02:32:31.553713+00:00",
+  "provenance_note": "SYNTHETIC RUN: the pipeline, queue, quarantine, and metrics paths are real, but every ingested byte was generated from committed synthetic templates (evals/datasets/synthetic-corpus/). Cohort tickers label the benchmark slots in this report ONLY — every database row is keyed by a namespaced synthetic identity, and NO metric in this report describes any real company's filings.",
+  "run": {
+    "run_id": "1d9223b6d9de4d79b6cec65d1ee73baf",
+    "mode": "synthetic",
+    "as_of": "2026-07-13",
+    "identity_namespace": "fel-corpus-qa-synthetic/v1",
+    "expected_issuers": [
+      "CRM",
+      "NOW",
+      "WDAY",
+      "TEAM",
+      "HUBS",
+      "ZS",
+      "OKTA",
+      "DDOG",
+      "MDB",
+      "SNOW",
+      "TWLO",
+      "ZM",
+      "DOCU",
+      "PD",
+      "ESTC",
+      "FIVN",
+      "APPF",
+      "PCTY",
+      "PAYC",
+      "BILL"
+    ]
+  },
+  "acceptance": {
+    "accepted": false,
+    "reasons": [
+      "synthetic run: T0112 acceptance requires the deferred LIVE cohort run (no SEC egress in this session); synthetic reports are never acceptance-grade"
+    ]
+  },
   "cohort": {
     "path": "evals/datasets/issuer-cohort.json",
     "sha256": "3fda084f60f4fd00225d36e0e6233ac03d0f2ff4420cad1b9d2ef95cf72e4b4c",
@@ -15,13 +49,25 @@
     "parser_version": "fel-parser/1.0.0",
     "normalizer_version": "fel-xbrl/1.0.0",
     "queue": "ingestion",
-    "jobs_completed": 70
+    "jobs_completed": 70,
+    "jobs": {
+      "discovery_expected": 20,
+      "fetch_expected": 50,
+      "terminal_counts": {
+        "succeeded": 70
+      },
+      "pending": 0,
+      "missing_fetch_jobs": [],
+      "backlog_after_run": 0,
+      "failures": []
+    }
   },
   "issuers": [
     {
       "ticker": "CRM",
       "cik": "0001108524",
-      "entity_id": "b6cd3126-8767-5418-a358-d5284dec29dd",
+      "entity_id": "fdf02b9e-78df-5551-bc4c-1449ea747dd0",
+      "expected_documents": 3,
       "documents_ingested": 3,
       "documents_parsed": 3,
       "documents_quarantined": 0,
@@ -38,7 +84,8 @@
     {
       "ticker": "NOW",
       "cik": "0001373715",
-      "entity_id": "847ed63a-6ea3-58ca-a045-2011695493c0",
+      "entity_id": "cf43e831-ad9e-5931-bfcb-254e4d81cf48",
+      "expected_documents": 2,
       "documents_ingested": 2,
       "documents_parsed": 2,
       "documents_quarantined": 0,
@@ -55,7 +102,8 @@
     {
       "ticker": "WDAY",
       "cik": "0001327811",
-      "entity_id": "172259d8-aa4b-5846-812d-5aed32d5917e",
+      "entity_id": "f600305d-6f0c-5462-9ff9-73d3bd28aed1",
+      "expected_documents": 2,
       "documents_ingested": 2,
       "documents_parsed": 2,
       "documents_quarantined": 0,
@@ -72,7 +120,8 @@
     {
       "ticker": "TEAM",
       "cik": "0001650372",
-      "entity_id": "0920f427-bd44-571a-a960-dc94a36e849f",
+      "entity_id": "cbfc092d-f8a5-5cc9-a07d-5c77c9f5da07",
+      "expected_documents": 3,
       "documents_ingested": 3,
       "documents_parsed": 2,
       "documents_quarantined": 1,
@@ -91,7 +140,8 @@
     {
       "ticker": "HUBS",
       "cik": "0001404655",
-      "entity_id": "4f9af608-9dc3-5905-9709-426a1fdb438a",
+      "entity_id": "592d0b9a-257e-5c1d-93a7-961521e22ded",
+      "expected_documents": 2,
       "documents_ingested": 2,
       "documents_parsed": 2,
       "documents_quarantined": 0,
@@ -108,7 +158,8 @@
     {
       "ticker": "ZS",
       "cik": "0001713683",
-      "entity_id": "71265c1e-f94e-57d8-8b74-2950517136bf",
+      "entity_id": "4ae07116-4507-50f1-b6d3-bd428cfac26e",
+      "expected_documents": 4,
       "documents_ingested": 4,
       "documents_parsed": 3,
       "documents_quarantined": 1,
@@ -127,7 +178,8 @@
     {
       "ticker": "OKTA",
       "cik": "0001660134",
-      "entity_id": "64be4795-3002-5d21-a81f-ee40926df61d",
+      "entity_id": "35453d0d-be14-5648-95c3-9b2efc6d6fcb",
+      "expected_documents": 2,
       "documents_ingested": 2,
       "documents_parsed": 2,
       "documents_quarantined": 0,
@@ -144,7 +196,8 @@
     {
       "ticker": "DDOG",
       "cik": "0001561550",
-      "entity_id": "5757c2fe-4e12-5666-b964-2ee544512fd0",
+      "entity_id": "46760c5f-906e-5735-8465-0bea830763d7",
+      "expected_documents": 2,
       "documents_ingested": 2,
       "documents_parsed": 2,
       "documents_quarantined": 0,
@@ -161,7 +214,8 @@
     {
       "ticker": "MDB",
       "cik": "0001441816",
-      "entity_id": "1d191f3b-465f-598e-b6ad-2b1ba245d9e3",
+      "entity_id": "8989ce31-0aa7-528f-8498-73b209c58604",
+      "expected_documents": 2,
       "documents_ingested": 2,
       "documents_parsed": 2,
       "documents_quarantined": 0,
@@ -178,7 +232,8 @@
     {
       "ticker": "SNOW",
       "cik": "0001640147",
-      "entity_id": "7ae373b4-edfc-566c-8168-ff82c67fed2a",
+      "entity_id": "c7561a14-c933-5561-9b81-afe8ea81b200",
+      "expected_documents": 2,
       "documents_ingested": 2,
       "documents_parsed": 2,
       "documents_quarantined": 0,
@@ -195,7 +250,8 @@
     {
       "ticker": "TWLO",
       "cik": "0001447669",
-      "entity_id": "b0001d27-f597-5e67-86c1-e8d0ed9f899e",
+      "entity_id": "f4dd1a86-9681-5326-899f-2a82202467a8",
+      "expected_documents": 4,
       "documents_ingested": 4,
       "documents_parsed": 3,
       "documents_quarantined": 1,
@@ -214,7 +270,8 @@
     {
       "ticker": "ZM",
       "cik": "0001585521",
-      "entity_id": "947d70ea-9ded-592e-855b-fc215fe80009",
+      "entity_id": "61bd043e-a55a-5a2a-a106-cd2000af378d",
+      "expected_documents": 2,
       "documents_ingested": 2,
       "documents_parsed": 2,
       "documents_quarantined": 0,
@@ -231,7 +288,8 @@
     {
       "ticker": "DOCU",
       "cik": "0001261333",
-      "entity_id": "b39a45bc-5c1f-54d2-ae9d-f5061f381042",
+      "entity_id": "843029eb-7a66-5807-9c32-efb72fca75b3",
+      "expected_documents": 3,
       "documents_ingested": 3,
       "documents_parsed": 2,
       "documents_quarantined": 1,
@@ -250,7 +308,8 @@
     {
       "ticker": "PD",
       "cik": "0001568100",
-      "entity_id": "381ea565-bdf6-5b7c-a9d4-f0e8acd5d997",
+      "entity_id": "86d015fa-4ea4-5ae0-a130-489ebc98bc2b",
+      "expected_documents": 2,
       "documents_ingested": 2,
       "documents_parsed": 2,
       "documents_quarantined": 0,
@@ -267,7 +326,8 @@
     {
       "ticker": "ESTC",
       "cik": "0001707753",
-      "entity_id": "04123235-b283-51ee-9040-0ebb8e2176ad",
+      "entity_id": "09b1be7b-7ba2-599c-9f23-7eb0d73fd79e",
+      "expected_documents": 2,
       "documents_ingested": 2,
       "documents_parsed": 2,
       "documents_quarantined": 0,
@@ -284,7 +344,8 @@
     {
       "ticker": "FIVN",
       "cik": "0001288847",
-      "entity_id": "0b2ee820-a14a-5fba-8519-c2294e90f419",
+      "entity_id": "8972715b-55ce-567e-bd05-75ba8684519b",
+      "expected_documents": 3,
       "documents_ingested": 3,
       "documents_parsed": 3,
       "documents_quarantined": 0,
@@ -301,7 +362,8 @@
     {
       "ticker": "APPF",
       "cik": "0001433195",
-      "entity_id": "f9c7179f-eb37-5020-a6d4-8debb9d401d0",
+      "entity_id": "098a71db-37e3-5ddb-b15a-53caebe0a468",
+      "expected_documents": 2,
       "documents_ingested": 2,
       "documents_parsed": 2,
       "documents_quarantined": 0,
@@ -318,7 +380,8 @@
     {
       "ticker": "PCTY",
       "cik": "0001591698",
-      "entity_id": "69b5457a-ca4b-5c15-b7ec-81eb94d499ab",
+      "entity_id": "54977db3-8472-5bd6-a3fd-b4beaf19b9c8",
+      "expected_documents": 3,
       "documents_ingested": 3,
       "documents_parsed": 2,
       "documents_quarantined": 1,
@@ -337,7 +400,8 @@
     {
       "ticker": "PAYC",
       "cik": "0001590955",
-      "entity_id": "1f7d7146-dcfa-5310-b36a-2f561d3bb9a1",
+      "entity_id": "1143afa8-eb81-5dd4-ab5d-9d16f12ea15b",
+      "expected_documents": 2,
       "documents_ingested": 2,
       "documents_parsed": 2,
       "documents_quarantined": 0,
@@ -354,7 +418,8 @@
     {
       "ticker": "BILL",
       "cik": "0001786352",
-      "entity_id": "10438c41-9761-5b93-9423-f3ef41f4ddb2",
+      "entity_id": "a7e6da8d-aaea-5b7e-b9cf-63e9ee8bd506",
+      "expected_documents": 3,
       "documents_ingested": 3,
       "documents_parsed": 2,
       "documents_quarantined": 1,
@@ -372,6 +437,7 @@
     }
   ],
   "totals": {
+    "expected_documents": 50,
     "documents_ingested": 50,
     "documents_parsed": 44,
     "documents_quarantined": 6,

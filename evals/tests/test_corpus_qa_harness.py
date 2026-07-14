@@ -1,6 +1,7 @@
 """T0112: corpus-QA harness tests — the synthetic cohort run end-to-end
-through the REAL pipeline, the report schema, and the committed acceptance
-artifact.
+through the REAL pipeline, the fail-closed destructive-reset and live-SEC
+identity gates, per-run provenance/metric scoping, the report schema, and
+the committed synthetic artifact.
 
 The synthetic plan (harness.synthetic_sec) is deterministic, so the
 expected corpus-quality metrics are known exactly:
@@ -13,20 +14,41 @@ expected corpus-quality metrics are known exactly:
 => 50 documents ingested, 44 parsed, 6 quarantined; one duplicated
 revenue presentation per parsed filing (44 duplicates); each amendment
 restates its Q1 revenue on the canonical + duplicate rows (8 restated).
+
+Synthetic runs key every database row by a namespaced synthetic identity
+(synthetic_cik / synthetic_entity_id) — never the real cohort CIKs — so
+synthetic and live runs can never collide in the same database.
 """
 
 from __future__ import annotations
 
+import copy
 import json
 import pathlib
+import uuid
+from typing import Any
 
+import psycopg
 import pytest
+from psycopg import conninfo
 
+from fel_providers.mocks import MockStorageProvider
+from fel_workers import queue
+from fel_workers.consumer import entity_id_for_cik, run_worker
+from fel_workers.ingestion.discovery import JOB_KIND_SEC_DISCOVERY
+from fel_workers.ingestion.sec_client import normalize_cik
+from harness import corpus_qa
 from harness.corpus_qa import (
+    ACCEPTANCE_DEFERRED_LIVE_REASON,
     DEFAULT_COHORT_PATH,
+    RATE_UNAVAILABLE,
     HarnessError,
+    ensure_disposable_reset_target,
     load_cohort,
+    main,
     run_corpus_qa,
+    synthetic_cik,
+    synthetic_entity_id,
     validate_report,
 )
 from harness.synthetic_sec import SyntheticCohortSecClient, build_plan, render_filing
@@ -40,6 +62,15 @@ EXPECTED_QUARANTINED = 6
 EXPECTED_DUPLICATES = 44
 EXPECTED_RESTATED = 8
 EXPECTED_QUARANTINE_DISTRIBUTION = {"UNKNOWN_CONTEXT": 3, "UNKNOWN_FORMAT": 3}
+EXPECTED_JOBS = 70  # 20 discovery + 50 fetch
+
+
+def _cohort_tickers() -> list[str]:
+    return [issuer["ticker"] for issuer in load_cohort(DEFAULT_COHORT_PATH).issuers]
+
+
+def _synthetic_ciks() -> list[str]:
+    return [synthetic_cik(ticker) for ticker in _cohort_tickers()]
 
 
 # ---------------------------------------------------------------------------
@@ -48,13 +79,11 @@ EXPECTED_QUARANTINE_DISTRIBUTION = {"UNKNOWN_CONTEXT": 3, "UNKNOWN_FORMAT": 3}
 
 
 def test_synthetic_client_is_deterministic_and_labeled() -> None:
-    cohort = load_cohort(DEFAULT_COHORT_PATH)
-    ciks = [issuer["cik"] for issuer in cohort.issuers]
+    ciks = _synthetic_ciks()
     first, second = SyntheticCohortSecClient(ciks), SyntheticCohortSecClient(ciks)
-    for cik in ciks:
+    for index, cik in enumerate(ciks):
         assert first.submissions(cik) == second.submissions(cik)
-        for index, filing in enumerate(build_plan(cik, ciks.index(cik))):
-            del index
+        for filing in build_plan(cik, index):
             rendered = render_filing(filing)
             assert rendered == render_filing(filing), "same inputs, same bytes"
             assert b"SYNTHETIC" in rendered, "every synthetic document is labeled"
@@ -62,9 +91,9 @@ def test_synthetic_client_is_deterministic_and_labeled() -> None:
 
 
 def test_synthetic_plan_matches_documented_expectations() -> None:
-    cohort = load_cohort(DEFAULT_COHORT_PATH)
-    assert len(cohort.issuers) == EXPECTED_ISSUERS
-    plans = [build_plan(issuer["cik"], index) for index, issuer in enumerate(cohort.issuers)]
+    ciks = _synthetic_ciks()
+    assert len(ciks) == EXPECTED_ISSUERS
+    plans = [build_plan(cik, index) for index, cik in enumerate(ciks)]
     total = sum(len(plan) for plan in plans)
     assert total == EXPECTED_DOCUMENTS
     accessions = [filing.accession for plan in plans for filing in plan]
@@ -75,60 +104,115 @@ def test_synthetic_plan_matches_documented_expectations() -> None:
         assert amendment.revenue_offset != 0, "amendments must change the revenue"
 
 
+def test_synthetic_identities_are_namespaced_and_disjoint_from_cohort() -> None:
+    """Finding 3a: synthetic DB identities can never collide with the real
+    cohort CIKs/entity ids (or with each other), and are deterministic."""
+    cohort = load_cohort(DEFAULT_COHORT_PATH)
+    syn_ciks = set()
+    for issuer in cohort.issuers:
+        syn = synthetic_cik(issuer["ticker"])
+        assert syn == synthetic_cik(issuer["ticker"]), "deterministic"
+        assert syn.isdigit() and len(syn) == 12
+        assert normalize_cik(syn) == syn, "already normalized (12 > 10 digits)"
+        assert normalize_cik(syn) != normalize_cik(issuer["cik"])
+        assert synthetic_entity_id(issuer["ticker"]) != entity_id_for_cik(issuer["cik"])
+        syn_ciks.add(syn)
+    assert len(syn_ciks) == len(cohort.issuers), "no synthetic collisions"
+
+
 # ---------------------------------------------------------------------------
 # End-to-end synthetic run through the real pipeline (DB-backed).
 # ---------------------------------------------------------------------------
 
 
 @pytest.fixture()
-def synthetic_report(qa_database_url: str, tmp_path: pathlib.Path) -> dict[str, object]:
-    path = run_corpus_qa(
+def synthetic_report(qa_database_url: str, tmp_path: pathlib.Path) -> dict[str, Any]:
+    result = run_corpus_qa(
         mode="synthetic",
         database_url=qa_database_url,
         reports_dir=tmp_path,
         label="test-synthetic",
     )
-    payload = json.loads(path.read_text())
+    assert result.failed is False, result.failure_reasons
+    payload = json.loads(result.path.read_text())
     assert isinstance(payload, dict)
     return payload
 
 
 def test_synthetic_run_records_expected_corpus_quality_metrics(
-    synthetic_report: dict[str, object],
+    synthetic_report: dict[str, Any],
 ) -> None:
     validate_report(synthetic_report)  # schema-valid by construction
     assert synthetic_report["mode"] == "synthetic"
     assert "SYNTHETIC" in str(synthetic_report["provenance_note"])
     issuers = synthetic_report["issuers"]
     totals = synthetic_report["totals"]
-    assert len(issuers) == EXPECTED_ISSUERS  # type: ignore[arg-type]
-    assert totals["documents_ingested"] == EXPECTED_DOCUMENTS  # type: ignore[index]
-    assert totals["documents_parsed"] == EXPECTED_PARSED  # type: ignore[index]
-    assert totals["documents_quarantined"] == EXPECTED_QUARANTINED  # type: ignore[index]
-    assert totals["facts_duplicate"] == EXPECTED_DUPLICATES  # type: ignore[index]
-    assert totals["facts_restated"] == EXPECTED_RESTATED  # type: ignore[index]
-    assert (
-        totals["quarantine_reason_distribution"]  # type: ignore[index]
-        == EXPECTED_QUARANTINE_DISTRIBUTION
-    )
-    assert totals["facts_total"] > 0  # type: ignore[index]
+    assert len(issuers) == EXPECTED_ISSUERS
+    assert totals["expected_documents"] == EXPECTED_DOCUMENTS
+    assert totals["documents_ingested"] == EXPECTED_DOCUMENTS
+    assert totals["documents_parsed"] == EXPECTED_PARSED
+    assert totals["documents_quarantined"] == EXPECTED_QUARANTINED
+    assert totals["facts_duplicate"] == EXPECTED_DUPLICATES
+    assert totals["facts_restated"] == EXPECTED_RESTATED
+    assert totals["quarantine_reason_distribution"] == EXPECTED_QUARANTINE_DISTRIBUTION
+    assert totals["facts_total"] > 0
 
 
-def test_synthetic_run_span_hashes_all_verify(synthetic_report: dict[str, object]) -> None:
+def test_synthetic_run_records_per_job_terminal_outcomes(
+    synthetic_report: dict[str, Any],
+) -> None:
+    """Finding 2a: the report carries queryable per-job terminal outcomes,
+    not just the consumer's completion count."""
+    jobs = synthetic_report["pipeline"]["jobs"]
+    assert jobs["discovery_expected"] == EXPECTED_ISSUERS
+    assert jobs["fetch_expected"] == EXPECTED_DOCUMENTS
+    assert jobs["terminal_counts"] == {"succeeded": EXPECTED_JOBS}
+    assert jobs["pending"] == 0
+    assert jobs["missing_fetch_jobs"] == []
+    assert jobs["backlog_after_run"] == 0
+    assert jobs["failures"] == []
+    assert synthetic_report["pipeline"]["jobs_completed"] == EXPECTED_JOBS
+
+
+def test_synthetic_run_is_never_acceptance_grade(synthetic_report: dict[str, Any]) -> None:
+    """Finding 4 (governance): a synthetic report never claims T0112
+    acceptance; the live-run deferral is stated explicitly."""
+    acceptance = synthetic_report["acceptance"]
+    assert acceptance["accepted"] is False
+    assert ACCEPTANCE_DEFERRED_LIVE_REASON in acceptance["reasons"]
+
+
+def test_synthetic_run_provenance_uses_namespaced_identities(
+    synthetic_report: dict[str, Any],
+) -> None:
+    """Finding 3a/3c: every issuer row is keyed by the synthetic entity id,
+    never the real cohort entity id, and run provenance is recorded."""
+    run = synthetic_report["run"]
+    assert run["mode"] == "synthetic"
+    assert run["identity_namespace"] == corpus_qa.SYNTHETIC_IDENTITY_NAMESPACE
+    assert run["as_of"] == synthetic_report["cohort"]["as_of"]
+    assert run["run_id"]
+    assert run["expected_issuers"] == _cohort_tickers()
+    for issuer in synthetic_report["issuers"]:
+        assert issuer["entity_id"] == synthetic_entity_id(issuer["ticker"])
+        assert issuer["entity_id"] != entity_id_for_cik(issuer["cik"])
+
+
+def test_synthetic_run_span_hashes_all_verify(synthetic_report: dict[str, Any]) -> None:
     """Citation integrity: 100% of persisted span hashes re-verify against
     the canonical text the pipeline stored — per issuer and in total."""
     totals = synthetic_report["totals"]
-    assert totals["spans_total"] > 0  # type: ignore[index]
-    assert totals["spans_verified"] == totals["spans_total"]  # type: ignore[index]
-    assert totals["span_hash_verification_rate"] == "1.000000"  # type: ignore[index]
-    for issuer in synthetic_report["issuers"]:  # type: ignore[union-attr]
+    assert totals["spans_total"] > 0
+    assert totals["spans_verified"] == totals["spans_total"]
+    assert totals["span_hash_verification_rate"] == "1.000000"
+    for issuer in synthetic_report["issuers"]:
         assert issuer["spans_verified"] == issuer["spans_total"]
         assert issuer["span_hash_verification_rate"] == "1.000000"
 
 
-def test_synthetic_run_per_issuer_shape(synthetic_report: dict[str, object]) -> None:
+def test_synthetic_run_per_issuer_shape(synthetic_report: dict[str, Any]) -> None:
     cohort = load_cohort(DEFAULT_COHORT_PATH)
-    by_cik = {issuer["cik"]: issuer for issuer in synthetic_report["issuers"]}  # type: ignore[union-attr]
+    by_cik = {issuer["cik"]: issuer for issuer in synthetic_report["issuers"]}
     for index, member in enumerate(cohort.issuers):
         metrics = by_cik[member["cik"]]
         assert metrics["ticker"] == member["ticker"]
@@ -137,6 +221,7 @@ def test_synthetic_run_per_issuer_shape(synthetic_report: dict[str, object]) -> 
         assert metrics["documents_parsed"] == expected_parsed, member
         assert metrics["documents_quarantined"] == expected_quarantined, member
         assert metrics["documents_ingested"] == expected_parsed + expected_quarantined
+        assert metrics["expected_documents"] == expected_parsed + expected_quarantined
         assert metrics["facts_duplicate"] == expected_parsed
         assert metrics["facts_restated"] == (2 if index % 5 == 0 else 0), member
         assert metrics["facts_total"] > 0
@@ -148,25 +233,32 @@ def test_rerun_is_idempotent_and_reproduces_identical_metrics(
     """T0111c meets T0112: replaying the whole cohort run on the same
     database is a corpus no-op — the recorded metrics are identical."""
     blobs = tmp_path / "blobs"  # durable across the two passes
-    first_path = run_corpus_qa(
+    first_result = run_corpus_qa(
         mode="synthetic",
         database_url=qa_database_url,
         reports_dir=tmp_path,
         label="run-one",
         storage_dir=blobs,
     )
-    second_path = run_corpus_qa(
+    second_result = run_corpus_qa(
         mode="synthetic",
         database_url=qa_database_url,
         reports_dir=tmp_path,
         label="run-two",
         storage_dir=blobs,
     )
-    first = json.loads(first_path.read_text())
-    second = json.loads(second_path.read_text())
+    assert first_result.failed is False and second_result.failed is False
+    first = json.loads(first_result.path.read_text())
+    second = json.loads(second_result.path.read_text())
     assert first["issuers"] == second["issuers"]
     assert first["totals"] == second["totals"]
     assert first["cohort"] == second["cohort"]
+    assert first["run"]["run_id"] != second["run"]["run_id"]
+    # The rerun re-executes discovery (run-scoped keys) while every fetch
+    # deduplicates onto the first run's succeeded jobs — the second run
+    # still accounts for all of its expected jobs as terminal-succeeded.
+    assert second["pipeline"]["jobs_completed"] == EXPECTED_ISSUERS
+    assert second["pipeline"]["jobs"]["terminal_counts"] == {"succeeded": EXPECTED_JOBS}
 
 
 def test_cohort_file_is_never_modified(qa_database_url: str, tmp_path: pathlib.Path) -> None:
@@ -181,7 +273,427 @@ def test_cohort_file_is_never_modified(qa_database_url: str, tmp_path: pathlib.P
 
 
 # ---------------------------------------------------------------------------
-# Report schema validation + the committed acceptance artifact.
+# Finding 1: the destructive reset fails closed.
+# ---------------------------------------------------------------------------
+
+
+def _seed_marker_job(database_url: str) -> str:
+    marker = str(uuid.uuid4())
+    with psycopg.connect(database_url, autocommit=True) as conn:
+        conn.execute("INSERT INTO jobs (id, kind, payload) VALUES (%s, 'marker', '{}')", (marker,))
+    return marker
+
+
+def _marker_job_exists(database_url: str, marker: str) -> bool:
+    with psycopg.connect(database_url, autocommit=True) as conn:
+        row = conn.execute("SELECT 1 FROM jobs WHERE id = %s", (marker,)).fetchone()
+    return row is not None
+
+
+def test_reset_never_falls_back_to_fel_database_url(
+    qa_database_url: str, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """With only FEL_DATABASE_URL configured, --reset-corpus is refused
+    (exit 2) before any connection — nothing is deleted."""
+    marker = _seed_marker_job(qa_database_url)
+    monkeypatch.delenv("TEST_DATABASE_URL", raising=False)
+    monkeypatch.setenv("FEL_DATABASE_URL", qa_database_url)
+    rc = main(
+        [
+            "--mode",
+            "synthetic",
+            "--reset-corpus",
+            "--i-know-this-destroys-data",
+            "--reports-dir",
+            str(tmp_path),
+            "--label",
+            "refused",
+        ]
+    )
+    assert rc == 2
+    assert not (tmp_path / "refused.json").exists()
+    assert _marker_job_exists(qa_database_url, marker), "no delete may have run"
+
+
+def test_reset_requires_explicit_destroy_confirmation(
+    qa_database_url: str, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    marker = _seed_marker_job(qa_database_url)
+    monkeypatch.setenv("TEST_DATABASE_URL", qa_database_url)
+    rc = main(
+        [
+            "--mode",
+            "synthetic",
+            "--reset-corpus",
+            "--reports-dir",
+            str(tmp_path),
+            "--label",
+            "refused",
+        ]
+    )
+    assert rc == 2
+    assert _marker_job_exists(qa_database_url, marker), "no delete may have run"
+
+
+def test_reset_refuses_non_test_database_name(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A database not named *_test is refused before any connection (the
+    URL below points nowhere; a connection attempt would fail differently)."""
+    monkeypatch.delenv("FEL_HARNESS_ALLOW_RESET", raising=False)
+    monkeypatch.delenv("TEST_DATABASE_URL", raising=False)
+    rc = main(
+        [
+            "--mode",
+            "synthetic",
+            "--reset-corpus",
+            "--i-know-this-destroys-data",
+            "--database-url",
+            "postgresql://fel@production.invalid:5432/fel_production",
+            "--reports-dir",
+            str(tmp_path),
+            "--label",
+            "refused",
+        ]
+    )
+    assert rc == 2
+    assert not (tmp_path / "refused.json").exists()
+
+
+def test_reset_disposability_override_is_explicit() -> None:
+    url = "postgresql://fel@localhost/fel_scratch"
+    with pytest.raises(HarnessError, match="_test"):
+        ensure_disposable_reset_target(url, {})
+    ensure_disposable_reset_target(url, {"FEL_HARNESS_ALLOW_RESET": "1"})
+    ensure_disposable_reset_target("postgresql://fel@localhost/fel_test", {})
+
+
+def test_reset_happy_path_on_disposable_test_database(
+    qa_database_url: str, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    marker = _seed_marker_job(qa_database_url)
+    monkeypatch.setenv("TEST_DATABASE_URL", qa_database_url)
+    dbname = conninfo.conninfo_to_dict(qa_database_url).get("dbname")
+    if not str(dbname or "").endswith("_test"):  # pragma: no cover — CI uses fel_test
+        monkeypatch.setenv("FEL_HARNESS_ALLOW_RESET", "1")
+    rc = main(
+        [
+            "--mode",
+            "synthetic",
+            "--reset-corpus",
+            "--i-know-this-destroys-data",
+            "--reports-dir",
+            str(tmp_path),
+            "--label",
+            "reset-ok",
+        ]
+    )
+    assert rc == 0
+    report = json.loads((tmp_path / "reset-ok.json").read_text())
+    validate_report(report)
+    assert report["totals"]["documents_ingested"] == EXPECTED_DOCUMENTS
+    assert not _marker_job_exists(qa_database_url, marker), "reset emptied the queue"
+
+
+# ---------------------------------------------------------------------------
+# Finding 2: success is proven per job; empty denominators are unavailable.
+# ---------------------------------------------------------------------------
+
+
+def test_exhausted_iteration_budget_is_a_run_failure(
+    qa_database_url: str, tmp_path: pathlib.Path
+) -> None:
+    """A run that returns with jobs still pending (iteration budget too
+    small to drain the queue) fails: nonzero exit, non-acceptance report."""
+    result = run_corpus_qa(
+        mode="synthetic",
+        database_url=qa_database_url,
+        reports_dir=tmp_path,
+        label="undrained",
+        max_iterations=3,
+    )
+    assert result.failed is True
+    assert any("budget" in reason or "queued" in reason for reason in result.failure_reasons)
+    report = result.report
+    assert report["acceptance"]["accepted"] is False
+    jobs = report["pipeline"]["jobs"]
+    assert jobs["backlog_after_run"] > 0
+    assert jobs["pending"] > 0 or jobs["missing_fetch_jobs"]
+
+
+def test_exhausted_iteration_budget_exits_nonzero(
+    qa_database_url: str, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("TEST_DATABASE_URL", qa_database_url)
+    rc = main(
+        [
+            "--mode",
+            "synthetic",
+            "--reports-dir",
+            str(tmp_path),
+            "--label",
+            "undrained-cli",
+            "--max-iterations",
+            "3",
+        ]
+    )
+    assert rc == 1
+    assert (tmp_path / "undrained-cli.json").exists(), "the failed run still writes its report"
+
+
+class _EmptySubmissionsClient:
+    """SecClient stub: every issuer exists but has zero filings."""
+
+    def submissions(self, cik: str) -> dict[str, object]:
+        return {
+            "cik": cik,
+            "filings": {
+                "recent": {
+                    "accessionNumber": [],
+                    "form": [],
+                    "filingDate": [],
+                    "primaryDocument": [],
+                }
+            },
+        }
+
+    def fetch_document(self, url: str) -> bytes:
+        raise AssertionError("a zero-filing run must never fetch a document")
+
+
+def test_zero_evidence_run_is_non_acceptance_with_unavailable_rates(
+    qa_database_url: str, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Finding 2b/2d: a drained-but-empty run is not a run failure, but it
+    is never acceptance-grade, and no rate fails open to '1'."""
+    monkeypatch.setattr(
+        corpus_qa, "SyntheticCohortSecClient", lambda ciks: _EmptySubmissionsClient()
+    )
+    result = run_corpus_qa(
+        mode="synthetic",
+        database_url=qa_database_url,
+        reports_dir=tmp_path,
+        label="zero-evidence",
+    )
+    assert result.failed is False, result.failure_reasons
+    report = result.report
+    assert report["acceptance"]["accepted"] is False
+    reasons = " | ".join(report["acceptance"]["reasons"])
+    assert "zero-evidence" in reasons
+    assert "without a successfully parsed document" in reasons
+    assert report["totals"]["spans_total"] == 0
+    assert report["totals"]["span_hash_verification_rate"] == RATE_UNAVAILABLE
+    for issuer in report["issuers"]:
+        assert issuer["span_hash_verification_rate"] == RATE_UNAVAILABLE
+
+
+class _FailingFetchClient:
+    """SecClient stub: discovery works, every document fetch fails."""
+
+    def __init__(self, inner: SyntheticCohortSecClient) -> None:
+        self._inner = inner
+
+    def submissions(self, cik: str) -> dict[str, object]:
+        return self._inner.submissions(cik)
+
+    def fetch_document(self, url: str) -> bytes:
+        raise RuntimeError("synthetic outage: fetch refused")
+
+
+def test_failed_fetch_jobs_are_a_run_failure_with_recorded_errors(
+    qa_database_url: str, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Finding 2a/2c: parked-failed jobs surface as a run failure with
+    their terminal status and error captured in the report."""
+    cohort_path = tmp_path / "one-issuer-cohort.json"
+    cohort_path.write_text(
+        json.dumps(
+            {
+                "as_of": "2026-07-14",
+                "issuers": [{"ticker": "SYN1", "cik": "0000000001", "name": "Synthetic One"}],
+            }
+        )
+    )
+    monkeypatch.setattr(
+        corpus_qa,
+        "SyntheticCohortSecClient",
+        lambda ciks: _FailingFetchClient(SyntheticCohortSecClient(ciks)),
+    )
+    result = run_corpus_qa(
+        mode="synthetic",
+        database_url=qa_database_url,
+        reports_dir=tmp_path,
+        label="fetch-outage",
+        cohort_path=cohort_path,
+        max_iterations=200,
+    )
+    assert result.failed is True
+    report = result.report
+    assert report["acceptance"]["accepted"] is False
+    jobs = report["pipeline"]["jobs"]
+    assert jobs["terminal_counts"].get("failed", 0) == 3  # 10-K, 10-Q, 10-Q/A
+    failures = jobs["failures"]
+    assert len(failures) == 3
+    for failure in failures:
+        assert failure["status"] == "failed"
+        assert "synthetic outage" in str(failure["error"])
+        assert failure["accession"]
+
+
+# ---------------------------------------------------------------------------
+# Finding 3: synthetic/live separation and per-run metric scoping.
+# ---------------------------------------------------------------------------
+
+
+def test_synthetic_then_live_shaped_run_share_nothing(
+    qa_database_url: str, tmp_path: pathlib.Path
+) -> None:
+    """A synthetic run followed by a live-shaped run (real-CIK keys) in the
+    SAME database: no discovery/fetch idempotency collision, disjoint
+    entity ids, and the live-shaped rows never enter synthetic metrics."""
+    synthetic_result = run_corpus_qa(
+        mode="synthetic",
+        database_url=qa_database_url,
+        reports_dir=tmp_path,
+        label="before-live",
+    )
+    assert synthetic_result.failed is False
+    cohort = load_cohort(DEFAULT_COHORT_PATH)
+    real_ciks = [normalize_cik(issuer["cik"]) for issuer in cohort.issuers]
+    live_shaped_sec = SyntheticCohortSecClient(real_ciks)
+    storage = MockStorageProvider()
+    with psycopg.connect(qa_database_url, autocommit=True) as conn:
+        for cik in real_ciks:
+            queue.enqueue(
+                conn,
+                kind=JOB_KIND_SEC_DISCOVERY,
+                payload={"cik": cik},
+                queue="ingestion",
+                idempotency_key=f"corpus-qa|live-shaped|discovery|{cik}",
+            )
+        run_worker(conn, storage, live_shaped_sec, queue_name="ingestion", max_iterations=10_000)
+        fetch_jobs = conn.execute(
+            "SELECT count(*) FROM jobs WHERE kind = 'sec_filing_fetch'"
+        ).fetchone()
+        entity_rows = conn.execute("SELECT DISTINCT entity_id::text FROM documents").fetchall()
+    # No fetch-job dedupe collision: both runs enqueued their full plans.
+    assert fetch_jobs is not None and fetch_jobs[0] == 2 * EXPECTED_DOCUMENTS
+    synthetic_ids = {synthetic_entity_id(issuer["ticker"]) for issuer in cohort.issuers}
+    live_ids = {entity_id_for_cik(cik) for cik in real_ciks}
+    assert synthetic_ids.isdisjoint(live_ids)
+    assert {row[0] for row in entity_rows} == synthetic_ids | live_ids
+
+
+def test_report_counts_only_this_runs_rows(qa_database_url: str, tmp_path: pathlib.Path) -> None:
+    """Finding 3b: metrics aggregate over exactly this run's accession set —
+    pre-existing rows under the same entity are excluded."""
+    cohort = load_cohort(DEFAULT_COHORT_PATH)
+    stray_entity = synthetic_entity_id(cohort.issuers[0]["ticker"])
+    with psycopg.connect(qa_database_url, autocommit=True) as conn:
+        conn.execute(
+            """
+            INSERT INTO documents
+                (id, entity_id, accession, source_url, content_hash, storage_key, published_at)
+            VALUES (%s, %s, %s, 'https://synthetic.invalid/stray',
+                    'sha256:' || repeat('0', 64), 'raw/stray', now())
+            """,
+            (str(uuid.uuid4()), stray_entity, "stray-prior-run-0001"),
+        )
+    result = run_corpus_qa(
+        mode="synthetic",
+        database_url=qa_database_url,
+        reports_dir=tmp_path,
+        label="scoped",
+    )
+    assert result.failed is False
+    report = result.report
+    issuer0 = report["issuers"][0]
+    assert issuer0["entity_id"] == stray_entity
+    # Issuer 0 (index 0) plans 10-K + 10-Q + 10-Q/A = 3; the stray row is
+    # not in this run's accession set and must not be counted.
+    assert issuer0["expected_documents"] == 3
+    assert issuer0["documents_ingested"] == 3
+    assert report["totals"]["documents_ingested"] == EXPECTED_DOCUMENTS
+
+
+# ---------------------------------------------------------------------------
+# Finding 5: live mode requires an explicit SEC identity, before network.
+# ---------------------------------------------------------------------------
+
+_UNROUTABLE_DB = "postgresql://fel@sec-identity.invalid:1/fel_test"
+
+
+@pytest.mark.parametrize("user_agent", [None, "", "   ", "missing contact marker"])
+def test_live_mode_requires_sec_user_agent_before_any_network(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, user_agent: str | None
+) -> None:
+    """Absent/blank/malformed FEL_SEC_USER_AGENT fails with HarnessError
+    BEFORE any network or database access (the URL points nowhere: reaching
+    it would raise OperationalError, not HarnessError)."""
+    if user_agent is None:
+        monkeypatch.delenv("FEL_SEC_USER_AGENT", raising=False)
+    else:
+        monkeypatch.setenv("FEL_SEC_USER_AGENT", user_agent)
+    with pytest.raises(HarnessError, match="FEL_SEC_USER_AGENT"):
+        run_corpus_qa(
+            mode="live",
+            database_url=_UNROUTABLE_DB,
+            reports_dir=tmp_path,
+            label="live-refused",
+            storage_dir=tmp_path / "blobs",
+        )
+
+
+def test_live_mode_missing_sec_user_agent_exits_2(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("FEL_SEC_USER_AGENT", raising=False)
+    rc = main(
+        [
+            "--mode",
+            "live",
+            "--database-url",
+            _UNROUTABLE_DB,
+            "--storage-dir",
+            str(tmp_path / "blobs"),
+            "--reports-dir",
+            str(tmp_path),
+            "--label",
+            "live-refused",
+        ]
+    )
+    assert rc == 2
+
+
+class _SentinelStop(Exception):
+    pass
+
+
+def test_live_mode_passes_configured_user_agent_to_live_client(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    captured: dict[str, str] = {}
+
+    class _RecordingClient:
+        def __init__(self, *, user_agent: str) -> None:
+            captured["user_agent"] = user_agent
+            raise _SentinelStop
+
+    monkeypatch.setenv("FEL_SEC_USER_AGENT", "fel corpus-qa (ops@example.com)")
+    monkeypatch.setattr("fel_workers.ingestion.sec_client.LiveSecClient", _RecordingClient)
+    with pytest.raises(_SentinelStop):
+        run_corpus_qa(
+            mode="live",
+            database_url=_UNROUTABLE_DB,
+            reports_dir=tmp_path,
+            label="live-ua",
+            storage_dir=tmp_path / "blobs",
+        )
+    assert captured["user_agent"] == "fel corpus-qa (ops@example.com)"
+
+
+# ---------------------------------------------------------------------------
+# Report schema validation + the committed synthetic artifact.
 # ---------------------------------------------------------------------------
 
 
@@ -197,9 +709,53 @@ def test_validate_report_fails_closed() -> None:
         validate_report(good)
 
 
+def _committed_synthetic_report() -> dict[str, Any]:
+    committed = sorted(REPORTS_DIR.glob("*-synthetic-*.json"))
+    assert committed, f"no committed synthetic corpus-qa report under {REPORTS_DIR}"
+    report = json.loads(committed[-1].read_text())
+    assert isinstance(report, dict)
+    return report
+
+
+def test_validate_report_rejects_mixed_or_ambiguous_provenance() -> None:
+    """Finding 3c: a report whose identities or mode markers disagree is
+    rejected — synthetic rows can never masquerade as live and vice versa."""
+    base = _committed_synthetic_report()
+    validate_report(base)
+
+    cohort_keyed = copy.deepcopy(base)
+    cohort_keyed["issuers"][0]["entity_id"] = entity_id_for_cik(cohort_keyed["issuers"][0]["cik"])
+    with pytest.raises(HarnessError, match="provenance"):
+        validate_report(cohort_keyed)
+
+    mode_mismatch = copy.deepcopy(base)
+    mode_mismatch["run"]["mode"] = "live"
+    with pytest.raises(HarnessError, match="[Mm]ixed provenance"):
+        validate_report(mode_mismatch)
+
+    accepted_synthetic = copy.deepcopy(base)
+    accepted_synthetic["acceptance"] = {"accepted": True, "reasons": []}
+    with pytest.raises(HarnessError, match="acceptance"):
+        validate_report(accepted_synthetic)
+
+
+def test_validate_report_rejects_fail_open_rates() -> None:
+    base = _committed_synthetic_report()
+    tampered = copy.deepcopy(base)
+    for issuer in tampered["issuers"]:
+        issuer["spans_total"] = 0
+        issuer["spans_verified"] = 0
+    tampered["totals"]["spans_total"] = 0
+    tampered["totals"]["spans_verified"] = 0
+    tampered["totals"]["span_hash_verification_rate"] = "1"
+    with pytest.raises(HarnessError, match="unavailable"):
+        validate_report(tampered)
+
+
 def test_committed_synthetic_report_is_schema_valid_and_labeled() -> None:
-    """The committed T0112 acceptance artifact must validate and must be
-    unambiguously labeled synthetic."""
+    """The committed synthetic report must validate, must be unambiguously
+    labeled synthetic, and must NOT claim T0112 acceptance (the acceptance
+    artifact is the deferred live run)."""
     committed = sorted(REPORTS_DIR.glob("*-synthetic-*.json"))
     assert committed, f"no committed synthetic corpus-qa report under {REPORTS_DIR}"
     for path in committed:
@@ -207,6 +763,8 @@ def test_committed_synthetic_report_is_schema_valid_and_labeled() -> None:
         validate_report(report)
         assert report["mode"] == "synthetic"
         assert "SYNTHETIC" in report["provenance_note"]
+        assert report["acceptance"]["accepted"] is False
+        assert ACCEPTANCE_DEFERRED_LIVE_REASON in report["acceptance"]["reasons"]
         assert report["cohort"]["issuer_count"] == EXPECTED_ISSUERS
         assert report["totals"]["span_hash_verification_rate"] == "1.000000"
         # The committed artifact pins the exact cohort file it measured.

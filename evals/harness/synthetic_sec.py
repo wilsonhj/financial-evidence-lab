@@ -3,10 +3,12 @@
 Serves a fabricated submissions index and fabricated filing bytes for every
 issuer in the benchmark cohort, generated from committed templates under
 ``evals/datasets/synthetic-corpus/``. Every value is derived
-deterministically from the issuer CIK + accession (same inputs -> same
+deterministically from the keying CIK + accession (same inputs -> same
 bytes, no randomness, no network), and every generated document carries a
-SYNTHETIC banner. The CIK is used ONLY to key the cohort slot; no content
-resembles or is derived from any real filing.
+SYNTHETIC banner. The harness keys this client with NAMESPACED SYNTHETIC
+CIKs (``harness.corpus_qa.synthetic_cik``) — never the real cohort CIKs —
+so no synthetic row or idempotency key can collide with a live run; no
+content resembles or is derived from any real filing.
 
 The synthetic plan deliberately includes corpus-quality events so the
 harness metrics exercise the real quarantine and linkage paths:
