@@ -66,23 +66,27 @@ Next gate: M1 — point-in-time evidence corpus.
   append-only audit, cost ceilings, provider interfaces + deterministic
   mocks, lease-fenced SKIP LOCKED job queue. **M0 is complete.**
 
-## In review
+## Active
 
-- `M1-INGESTION` / T0101–T0109 (#54) — **PR #80** (`agent/m1-ingestion`,
-  ready-for-review): full mock-first ingestion vertical. Review round 1
-  (at `d12e57c`) fixed all 6 external findings plus the 20-finding
-  internal audit — entity/accession-scoped idempotency, divergent-bytes
-  quarantine, quarantined-doc invisibility, job consumer with e2e test,
-  canonical-text persistence, iXBRL transform registry, non-finite
-  rejection, stack-based nested parsing, FRED no-lookahead vintage,
-  race hardening, ADR-0004 grant removal (147 pytest). Round 2 in
-  flight for three re-review findings: continuous lease heartbeat +
-  reap_stale wiring, fail-closed live storage binding
-  (LocalDirStorageProvider + FEL_STORAGE_DIR), and the documented
-  visibility ruling (M1 reads gate on "successfully parsed";
-  corpus-version gating deferred to M2 retrieval).
+- `M1-CORPUS-QA` / T0111–T0112 (#56) on `agent/m1-corpus-qa` —
+  dispatched 2026-07-14. T0111 is fully mock-first; T0112's live
+  20-issuer ingestion run additionally needs a SEC-egress session (the
+  harness and metrics recording ship regardless).
+- `INFRA-WORKER-DEPLOY` (#84) on `agent/infra-worker-deploy` —
+  dispatched 2026-07-14 (paths disjoint: infra/**). Railway worker
+  startCommand → `python -m fel_workers run` with documented env wiring.
 
 ## Recently merged (M1)
+
+- **PR #80 merged to `main` at `de9ee80`** (2026-07-14): `M1-INGESTION`
+  / T0101–T0109 complete — the full ingestion vertical incl. the
+  lease-honoring job consumer, divergent-bytes quarantine, iXBRL
+  transform registry, non-finite rejection, stack-based nested parsing,
+  entity/accession-scoped idempotency, canonical-text persistence, UTC
+  no-lookahead FRED vintages, parsed-gated corpus API (M1 visibility
+  ruling), and ADR-0004 grants. Two external review rounds addressed
+  (162 pytest at `169d524`); follow-ups tracked: #83 (company-facts),
+  #84 (Railway consumer startCommand).
 
 - **PR #79 merged to `main` at `932f367`** (2026-07-14): `M1-EVIDENCE-UI`
   / T0110 complete — evidence reader on Next.js 16 (keyboard-navigable

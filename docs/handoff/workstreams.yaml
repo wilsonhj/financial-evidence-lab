@@ -152,7 +152,7 @@ packages:
     depends_on: [M0-PLATFORM]
     team: data
     branch: agent/m1-ingestion
-    status: review # draft PR #80 (a813cfb), CI green 2026-07-13
+    status: merged # PR #80 squashed to main @ de9ee80 (2026-07-14); two review rounds fixed through 169d524
     allowed_paths:
       - workers/src/fel_workers/ingestion/**
       - workers/tests/**
@@ -171,7 +171,26 @@ packages:
     depends_on: [M1-INGESTION]
     team: trust
     branch: agent/m1-corpus-qa
+    status: active # dispatched 2026-07-14 (T0112 live 20-issuer run additionally needs SEC egress; harness ships mock-first)
     allowed_paths: [evals/**, workers/tests/**]
+  - id: M1-COMPANY-FACTS # FR-ING-001 companyfacts follow-up (issue #83; found by PR #80 review)
+    issue: 83
+    tasks: [] # unallocated spec requirement; scoped in the issue
+    depends_on: [M1-CORPUS-QA] # serialized: workers/tests/** overlaps M1-CORPUS-QA
+    team: data
+    branch: agent/m1-company-facts
+    allowed_paths:
+      - workers/src/fel_workers/ingestion/**
+      - workers/tests/**
+      - apps/api/**
+  - id: INFRA-WORKER-DEPLOY # Railway worker startCommand -> consumer mode (issue #84)
+    issue: 84
+    tasks: []
+    depends_on: [M1-INGESTION]
+    team: platform
+    branch: agent/infra-worker-deploy
+    status: active # dispatched 2026-07-14 (paths disjoint from M1-CORPUS-QA)
+    allowed_paths: [infra/**]
 
   # M2 — retrieval, claims verification, observatory.
   - id: M2-RETRIEVAL-BACKEND # indexes + retrieval trace (trace schema owner)

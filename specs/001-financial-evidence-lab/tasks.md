@@ -17,15 +17,15 @@ Tasks are ordered by dependency. A task is complete only when its code, tests, t
 
 ## M1 — Point-in-time evidence corpus
 
-- [ ] `T0101` Implement SEC entity and submission discovery with fair-access controls (`FR-ING-001`, `006`).
-- [ ] `T0102` Store immutable raw sources with hash, accession, URL, MIME type, and timestamps (`FR-ING-002`).
-- [ ] `T0103` Parse SEC HTML/iXBRL into document hierarchy, tables, facts, and stable source spans.
-- [ ] `T0104` Normalize XBRL decimals, units, scale, periods, dimensions, duplicates, and restatements.
-- [ ] `T0105` Implement idempotent, versioned jobs and atomic corpus publication (`FR-ING-003`–`005`).
-- [ ] `T0106` Quarantine malformed sources and expose actionable ingestion diagnostics (`FR-ING-007`).
-- [ ] `T0107` Implement vintage-aware FRED ingestion.
-- [ ] `T0108` Implement the Alpha Vantage BYO adapter with adjusted prices, volume, dividends, and splits (`FR-ING-008`).
-- [ ] `T0109` Reject forecast features with missing required adjustments or timestamps (`FOR-005`).
+- [x] `T0101` Implement SEC entity and submission discovery with fair-access controls (`FR-ING-001`, `006`).
+- [x] `T0102` Store immutable raw sources with hash, accession, URL, MIME type, and timestamps (`FR-ING-002`).
+- [x] `T0103` Parse SEC HTML/iXBRL into document hierarchy, tables, facts, and stable source spans.
+- [x] `T0104` Normalize XBRL decimals, units, scale, periods, dimensions, duplicates, and restatements.
+- [x] `T0105` Implement idempotent, versioned jobs and atomic corpus publication (`FR-ING-003`–`005`).
+- [x] `T0106` Quarantine malformed sources and expose actionable ingestion diagnostics (`FR-ING-007`).
+- [x] `T0107` Implement vintage-aware FRED ingestion.
+- [x] `T0108` Implement the Alpha Vantage BYO adapter with adjusted prices, volume, dividends, and splits (`FR-ING-008`).
+- [x] `T0109` Reject forecast features with missing required adjustments or timestamps (`FOR-005`).
 - [x] `T0110` Build the evidence reader with hierarchy, source highlights, fact metadata, duplicates, and amendments.
 - [ ] `T0111` Create temporal-cutoff, parser golden-file, and idempotency test suites.
 - [ ] `T0112` Ingest the first 20 benchmark issuers and record corpus-quality metrics.
