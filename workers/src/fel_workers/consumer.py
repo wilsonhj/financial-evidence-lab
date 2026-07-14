@@ -10,6 +10,9 @@ reaped can never write a terminal state. While a handler runs, a background
 reaped), and the loop itself periodically calls ``queue.reap_stale`` so jobs
 abandoned by crashed workers are requeued. ``sec_discovery`` jobs are routed
 to the discovery handler so the whole chain runs off one queue.
+``sec_company_facts`` jobs (issue #83) dispatch through a runtime
+``isinstance`` narrow onto the workers-local ``CompanyFactsSecClient``
+capability; a bound client without it fails the job like an unknown kind.
 
 All collaborators (connection, storage, SEC client, sleep) are injected;
 tests drive the loop with ``max_iterations`` against mocks and a real
@@ -22,7 +25,6 @@ from __future__ import annotations
 import logging
 import threading
 import time
-import uuid
 from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
@@ -31,14 +33,26 @@ import psycopg
 
 from fel_providers.interfaces import SecClient, StorageProvider
 from fel_workers import queue
+from fel_workers.ingestion.company_facts import (
+    JOB_KIND_SEC_COMPANY_FACTS,
+    CompanyFactsSecClient,
+    entity_id_for_cik,
+    handle_sec_company_facts,
+)
 from fel_workers.ingestion.discovery import (
     JOB_KIND_SEC_DISCOVERY,
     JOB_KIND_SEC_FILING_FETCH,
     run_discovery_job,
 )
-from fel_workers.ingestion.parser import ID_NAMESPACE
 from fel_workers.ingestion.pipeline import IngestionOutcome, ingest_filing
-from fel_workers.ingestion.sec_client import normalize_cik
+
+__all__ = [
+    "DEFAULT_QUEUE",
+    "LeaseHeartbeat",
+    "entity_id_for_cik",
+    "handle_sec_filing_fetch",
+    "run_worker",
+]
 
 log = logging.getLogger("fel_workers.consumer")
 
@@ -114,11 +128,6 @@ def _connection_factory_like(
         return psycopg.connect(dsn, password=password, autocommit=True)
 
     return factory
-
-
-def entity_id_for_cik(cik: str) -> str:
-    """Deterministic entity id for an SEC issuer (uuid5 over the CIK)."""
-    return str(uuid.uuid5(ID_NAMESPACE, f"entity|{normalize_cik(cik)}"))
 
 
 def handle_sec_filing_fetch(
@@ -200,9 +209,29 @@ def run_worker(
                 break
             sleep(idle_sleep_seconds)
             continue
-        if job.kind not in (JOB_KIND_SEC_DISCOVERY, JOB_KIND_SEC_FILING_FETCH):
+        if job.kind not in (
+            JOB_KIND_SEC_DISCOVERY,
+            JOB_KIND_SEC_FILING_FETCH,
+            JOB_KIND_SEC_COMPANY_FACTS,
+        ):
             queue.fail(conn, job, f"unknown job kind {job.kind!r}")
             continue
+        # Capability narrowing (issue #83): sec_company_facts needs the
+        # workers-local CompanyFactsSecClient capability on top of the frozen
+        # SecClient protocol; a bound client without it fails the job
+        # exactly like an unknown kind (mypy-strict-safe isinstance narrow).
+        company_facts_client: CompanyFactsSecClient | None = None
+        if job.kind == JOB_KIND_SEC_COMPANY_FACTS:
+            if isinstance(sec, CompanyFactsSecClient):
+                company_facts_client = sec
+            else:
+                queue.fail(
+                    conn,
+                    job,
+                    f"bound SecClient {type(sec).__name__} lacks the "
+                    f"company_facts capability required by job kind {job.kind!r}",
+                )
+                continue
         heartbeat = LeaseHeartbeat(
             connection_factory, job, interval_seconds=heartbeat_interval_seconds
         )
@@ -210,6 +239,16 @@ def run_worker(
         try:
             if job.kind == JOB_KIND_SEC_DISCOVERY:
                 run_discovery_job(conn, sec, job.payload, job_queue=queue_name)
+            elif job.kind == JOB_KIND_SEC_COMPANY_FACTS:
+                if company_facts_client is None:  # pragma: no cover — narrowed above
+                    raise RuntimeError("company_facts capability vanished mid-dispatch")
+                outcome = handle_sec_company_facts(conn, storage, company_facts_client, job.payload)
+                log.info(
+                    "ingested companyfacts cik=%s -> %s (%s)",
+                    job.payload.get("cik"),
+                    outcome.status,
+                    outcome.reason_code or "ok",
+                )
             else:
                 outcome = handle_sec_filing_fetch(conn, storage, sec, job.payload)
                 log.info(
