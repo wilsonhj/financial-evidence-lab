@@ -150,14 +150,18 @@ def fail(conn: psycopg.Connection, job: ClaimedJob, message: str) -> bool:
     return bool(cur.rowcount)
 
 
-def reap_stale(conn: psycopg.Connection) -> int:
-    """Requeue running jobs whose worker stopped heartbeating."""
+def reap_stale(conn: psycopg.Connection, *, stale_seconds: float = HEARTBEAT_STALE_SECONDS) -> int:
+    """Requeue running jobs whose worker stopped heartbeating.
+
+    ``stale_seconds`` defaults to the contract threshold; tests inject a
+    shorter one to exercise reaping without real minute-long waits.
+    """
     cur = conn.execute(
         """
         UPDATE jobs SET status = 'queued', lease = NULL
         WHERE status = 'running'
           AND heartbeat_at < now() - make_interval(secs => %s)
         """,
-        (HEARTBEAT_STALE_SECONDS,),
+        (stale_seconds,),
     )
     return cur.rowcount or 0

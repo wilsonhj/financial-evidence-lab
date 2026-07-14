@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<!--
+  SYNTHETIC FIXTURE. This is a fabricated 10-Q-like document authored for
+  parser golden tests. "Synthetic Example Corporation" is a fictional
+  issuer; every number, concept value, and sentence here is invented and is
+  NOT derived from any real company's filing.
+-->
+<html>
+<head><title>Synthetic Example Corporation - Form 10-Q (synthetic fixture)</title></head>
+<body>
+<div style="display:none">
+<ix:header>
+<ix:resources>
+<xbrli:context id="d2026q1">
+  <xbrli:entity><xbrli:identifier scheme="http://www.sec.gov/CIK">0009999999</xbrli:identifier></xbrli:entity>
+  <xbrli:period><xbrli:startDate>2026-01-01</xbrli:startDate><xbrli:endDate>2026-03-31</xbrli:endDate></xbrli:period>
+</xbrli:context>
+<xbrli:context id="i20260331">
+  <xbrli:entity><xbrli:identifier scheme="http://www.sec.gov/CIK">0009999999</xbrli:identifier></xbrli:entity>
+  <xbrli:period><xbrli:instant>2026-03-31</xbrli:instant></xbrli:period>
+</xbrli:context>
+<xbrli:context id="d2026q1Widgets">
+  <xbrli:entity><xbrli:identifier scheme="http://www.sec.gov/CIK">0009999999</xbrli:identifier></xbrli:entity>
+  <xbrli:period><xbrli:startDate>2026-01-01</xbrli:startDate><xbrli:endDate>2026-03-31</xbrli:endDate></xbrli:period>
+  <xbrli:scenario><xbrldi:explicitMember dimension="us-gaap:StatementBusinessSegmentsAxis">syn:WidgetSegmentMember</xbrldi:explicitMember></xbrli:scenario>
+</xbrli:context>
+<xbrli:unit id="usd"><xbrli:measure>iso4217:USD</xbrli:measure></xbrli:unit>
+<xbrli:unit id="shares"><xbrli:measure>xbrli:shares</xbrli:measure></xbrli:unit>
+</ix:resources>
+</ix:header>
+</div>
+<h1>Synthetic Example Corporation</h1>
+<p>Quarterly report for the fiscal quarter ended March 31, 2026. This document is a synthetic test fixture.</p>
+<h2>Part I. Financial Information</h2>
+<h3>Item 1. Financial Statements</h3>
+<p>Revenue for the quarter was $<ix:nonFraction name="us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax" contextRef="d2026q1" unitRef="usd" scale="6" decimals="-6" format="ixt:num-dot-decimal">1,250</ix:nonFraction> million, an increase over the prior-year quarter.</p>
+<p>Restructuring charges of $<ix:nonFraction name="us-gaap:RestructuringCharges" contextRef="d2026q1" unitRef="usd" scale="3" decimals="-3" sign="-">450</ix:nonFraction> thousand were recorded as a loss in the period.</p>
+<table>
+<caption>Condensed results (synthetic)</caption>
+<tr><th>Metric</th><th>Q1 2026</th><th>Q1 2025</th></tr>
+<tr><td>Revenue ($M)</td><td>1,250</td><td>1,100</td></tr>
+<tr><td>Net income ($M)</td><td>210</td><td>180</td></tr>
+</table>
+<h3>Item 2. Management&#8217;s Discussion and Analysis</h3>
+<p>Total assets were $<ix:nonFraction name="us-gaap:Assets" contextRef="i20260331" unitRef="usd" scale="6" decimals="-6">8,400</ix:nonFraction> million as of March 31, 2026.</p>
+<p>Widget segment revenue was $<ix:nonFraction name="us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax" contextRef="d2026q1Widgets" unitRef="usd" scale="6" decimals="-6">700</ix:nonFraction> million.</p>
+<p>As discussed in Item 1, revenue of $<ix:nonFraction name="us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax" contextRef="d2026q1" unitRef="usd" scale="6" decimals="-6">1,250</ix:nonFraction> million is presented again here.</p>
+<h2>Part II. Other Information</h2>
+<p>Weighted average basic shares outstanding were <ix:nonFraction name="us-gaap:WeightedAverageNumberOfSharesOutstandingBasic" contextRef="d2026q1" unitRef="shares" scale="3" decimals="0">120,000</ix:nonFraction> thousand.</p>
+</body>
+</html>
