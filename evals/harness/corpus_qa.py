@@ -250,6 +250,7 @@ _ALL_FETCH_JOBS_SQL = """
 """
 # Pre-run dedicated-database gate inputs (see ensure_dedicated_queue).
 _PREEXISTING_JOBS_SQL = "SELECT count(*) AS n FROM jobs"
+_PREEXISTING_DOCUMENTS_SQL = "SELECT count(*) AS n FROM documents"
 _PREEXISTING_FETCH_KEYS_SQL = """
     SELECT count(*) AS n FROM jobs
     WHERE kind = %s AND idempotency_key = ANY(%s::text[])
@@ -425,12 +426,14 @@ def ensure_dedicated_queue(conn: psycopg.Connection[Any]) -> None:
     belongs to this run.
     """
     preexisting_jobs = _count(conn, _PREEXISTING_JOBS_SQL, ())
-    if preexisting_jobs:
+    preexisting_documents = _count(conn, _PREEXISTING_DOCUMENTS_SQL, ())
+    if preexisting_jobs or preexisting_documents:
         raise HarnessError(
             "harness requires a dedicated database with an empty ingestion"
-            f" queue (found {preexisting_jobs} pre-existing jobs); use a"
-            " fresh DB or --reset-corpus on a disposable one (reset clears"
-            " corpus + jobs coherently)"
+            f" queue and an empty corpus (found {preexisting_jobs}"
+            f" pre-existing jobs, {preexisting_documents} pre-existing"
+            " documents); use a fresh DB or --reset-corpus on a disposable"
+            " one (reset clears corpus + jobs coherently)"
         )
 
 
@@ -852,6 +855,13 @@ def evaluate_acceptance(
         reasons.append(
             "zero-evidence run: no source spans were persisted;"
             " span_hash_verification_rate is unavailable"
+        )
+    elif totals.get("span_hash_verification_rate") != "1.000000":
+        reasons.append(
+            "span_hash_verification_rate is"
+            f" {totals.get('span_hash_verification_rate')!r};"
+            " acceptance requires 1.000000 (every persisted span must"
+            " re-verify against the canonical text)"
         )
     return {"accepted": not reasons, "reasons": reasons}
 

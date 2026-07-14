@@ -46,6 +46,7 @@ from harness.corpus_qa import (
     HarnessError,
     collect_job_outcomes,
     ensure_disposable_reset_target,
+    evaluate_acceptance,
     load_cohort,
     main,
     run_corpus_qa,
@@ -1013,7 +1014,13 @@ def test_midrun_missing_blob_is_run_failure_not_refusal(
     queue), re-enqueues, then span verification raises HarnessError
     MID-RUN because the corpus rows reference the first run's blobs. That
     is a RUN FAILURE: exit 1 with a written non-acceptance failure report
-    naming the missing-blob reason — not exit 2."""
+    naming the missing-blob reason — not exit 2.
+
+    The dedicated-DB gate now also refuses leftover CORPUS rows (see
+    test_preexisting_documents_are_refused_fail_closed), which closes this
+    scenario's front door; the gate is bypassed here deliberately to keep
+    the mid-run phase semantics (defense-in-depth) pinned."""
+    monkeypatch.setattr("harness.corpus_qa.ensure_dedicated_queue", lambda conn: None)
     first = run_corpus_qa(
         mode="synthetic",
         database_url=qa_database_url,
@@ -1133,9 +1140,16 @@ def test_synthetic_then_live_shaped_run_share_nothing(
     assert {row[0] for row in entity_rows} == synthetic_ids | live_ids
 
 
-def test_report_counts_only_this_runs_rows(qa_database_url: str, tmp_path: pathlib.Path) -> None:
+def test_report_counts_only_this_runs_rows(
+    qa_database_url: str, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Finding 3b: metrics aggregate over exactly this run's accession set —
-    pre-existing rows under the same entity are excluded."""
+    pre-existing rows under the same entity are excluded.
+
+    The dedicated-DB gate would now refuse this dirty database outright;
+    it is bypassed here deliberately so the run-scoped metric aggregation
+    (defense-in-depth behind the gate) stays pinned."""
+    monkeypatch.setattr("harness.corpus_qa.ensure_dedicated_queue", lambda conn: None)
     cohort = load_cohort(DEFAULT_COHORT_PATH)
     stray_entity = synthetic_entity_id(cohort.issuers[0]["ticker"])
     with psycopg.connect(qa_database_url, autocommit=True) as conn:
@@ -1319,3 +1333,55 @@ def test_committed_synthetic_report_is_schema_valid_and_labeled() -> None:
         # The committed artifact pins the exact cohort file it measured.
         cohort = load_cohort(DEFAULT_COHORT_PATH)
         assert report["cohort"]["sha256"] == cohort.sha256
+
+
+def test_partial_span_hash_rate_blocks_acceptance() -> None:
+    """Re-review nit (Important): a live run with any span-hash mismatch
+    must not be acceptance-grade — the rate must be exactly 1.000000."""
+    rows = [{"ticker": "X", "documents_parsed": 1}]
+    perfect = evaluate_acceptance(
+        "live", rows, {"spans_total": 10, "span_hash_verification_rate": "1.000000"}, []
+    )
+    partial = evaluate_acceptance(
+        "live", rows, {"spans_total": 10, "span_hash_verification_rate": "0.998252"}, []
+    )
+    assert perfect["accepted"] is True
+    assert partial["accepted"] is False
+    assert any("1.000000" in r for r in partial["reasons"])
+
+
+def test_preexisting_documents_are_refused_fail_closed(
+    qa_database_url: str,
+    tmp_path: pathlib.Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Re-review follow-up: a leftover CORPUS row (empty queue) also marks
+    the database non-dedicated — exit 2 before any enqueue."""
+    import uuid as _uuid
+
+    import psycopg as _psycopg
+
+    with _psycopg.connect(qa_database_url) as conn:
+        conn.execute(
+            "INSERT INTO documents (id, entity_id, accession, source_url,"
+            " content_hash, storage_key, published_at)"
+            " VALUES (%s, %s, 'MARKER-DOC-1', 'https://example.invalid/m',"
+            " 'sha256:" + "0" * 64 + "', 'raw/sha256/marker', now())",
+            (str(_uuid.uuid4()), str(_uuid.uuid4())),
+        )
+    monkeypatch.setenv("TEST_DATABASE_URL", qa_database_url)
+    rc = main(
+        [
+            "--mode",
+            "synthetic",
+            "--reports-dir",
+            str(tmp_path),
+            "--label",
+            "leftover-corpus",
+        ]
+    )
+    err = capsys.readouterr().err
+    assert rc == 2
+    assert "pre-existing" in err and "documents" in err
+    assert not list(tmp_path.glob("*.json"))
