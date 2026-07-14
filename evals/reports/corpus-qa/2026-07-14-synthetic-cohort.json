@@ -3,10 +3,10 @@
   "schema_version": 1,
   "mode": "synthetic",
   "label": "2026-07-14-synthetic-cohort",
-  "generated_at": "2026-07-14T02:32:31.553713+00:00",
+  "generated_at": "2026-07-14T03:24:12.286619+00:00",
   "provenance_note": "SYNTHETIC RUN: the pipeline, queue, quarantine, and metrics paths are real, but every ingested byte was generated from committed synthetic templates (evals/datasets/synthetic-corpus/). Cohort tickers label the benchmark slots in this report ONLY — every database row is keyed by a namespaced synthetic identity, and NO metric in this report describes any real company's filings.",
   "run": {
-    "run_id": "1d9223b6d9de4d79b6cec65d1ee73baf",
+    "run_id": "11f525301ba04b468516f2051ba5419a",
     "mode": "synthetic",
     "as_of": "2026-07-13",
     "identity_namespace": "fel-corpus-qa-synthetic/v1",
@@ -59,7 +59,9 @@
       "pending": 0,
       "missing_fetch_jobs": [],
       "backlog_after_run": 0,
-      "failures": []
+      "failures": [],
+      "surplus_fetch_jobs": [],
+      "stale_fetch_jobs": []
     }
   },
   "issuers": [

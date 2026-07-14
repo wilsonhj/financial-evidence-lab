@@ -26,6 +26,7 @@ import copy
 import json
 import pathlib
 import uuid
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import psycopg
@@ -35,7 +36,7 @@ from psycopg import conninfo
 from fel_providers.mocks import MockStorageProvider
 from fel_workers import queue
 from fel_workers.consumer import entity_id_for_cik, run_worker
-from fel_workers.ingestion.discovery import JOB_KIND_SEC_DISCOVERY
+from fel_workers.ingestion.discovery import JOB_KIND_SEC_DISCOVERY, JOB_KIND_SEC_FILING_FETCH
 from fel_workers.ingestion.sec_client import normalize_cik
 from harness import corpus_qa
 from harness.corpus_qa import (
@@ -43,10 +44,12 @@ from harness.corpus_qa import (
     DEFAULT_COHORT_PATH,
     RATE_UNAVAILABLE,
     HarnessError,
+    collect_job_outcomes,
     ensure_disposable_reset_target,
     load_cohort,
     main,
     run_corpus_qa,
+    run_failure_reasons,
     synthetic_cik,
     synthetic_entity_id,
     validate_report,
@@ -171,6 +174,8 @@ def test_synthetic_run_records_per_job_terminal_outcomes(
     assert jobs["missing_fetch_jobs"] == []
     assert jobs["backlog_after_run"] == 0
     assert jobs["failures"] == []
+    assert jobs["surplus_fetch_jobs"] == []
+    assert jobs["stale_fetch_jobs"] == []
     assert synthetic_report["pipeline"]["jobs_completed"] == EXPECTED_JOBS
 
 
@@ -227,25 +232,65 @@ def test_synthetic_run_per_issuer_shape(synthetic_report: dict[str, Any]) -> Non
         assert metrics["facts_total"] > 0
 
 
-def test_rerun_is_idempotent_and_reproduces_identical_metrics(
-    qa_database_url: str, tmp_path: pathlib.Path
+def test_rerun_without_reset_is_refused_by_dedicated_db_gate(
+    qa_database_url: str, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """T0111c meets T0112: replaying the whole cohort run on the same
-    database is a corpus no-op — the recorded metrics are identical."""
-    blobs = tmp_path / "blobs"  # durable across the two passes
+    """Finding R2-1a/R2-4: the previously documented rerun path (same
+    database, no --storage-dir) used to dedupe fetch jobs into the new
+    run's accounting and then crash with a raw KeyError in span
+    verification. The dedicated-DB gate now refuses it cleanly: exit 2
+    BEFORE any enqueue or crash, and no report is written."""
+    first = run_corpus_qa(
+        mode="synthetic",
+        database_url=qa_database_url,
+        reports_dir=tmp_path,
+        label="run-one",
+    )
+    assert first.failed is False
+    with pytest.raises(HarnessError, match="dedicated database"):
+        run_corpus_qa(
+            mode="synthetic",
+            database_url=qa_database_url,
+            reports_dir=tmp_path,
+            label="run-two",
+        )
+    monkeypatch.setenv("TEST_DATABASE_URL", qa_database_url)
+    rc = main(
+        [
+            "--mode",
+            "synthetic",
+            "--reports-dir",
+            str(tmp_path),
+            "--label",
+            "run-two-cli",
+        ]
+    )
+    assert rc == 2
+    assert not (tmp_path / "run-two.json").exists()
+    assert not (tmp_path / "run-two-cli.json").exists()
+
+
+def test_reset_rerun_reproduces_identical_metrics(
+    qa_database_url: str, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """T0111c meets T0112 under the dedicated-DB ruling: replaying the
+    cohort run is done on a RESET disposable database (the gate refuses a
+    used one) and reproduces identical corpus metrics."""
+    dbname = conninfo.conninfo_to_dict(qa_database_url).get("dbname")
+    if not str(dbname or "").endswith("_test"):  # pragma: no cover — CI uses fel_test
+        monkeypatch.setenv("FEL_HARNESS_ALLOW_RESET", "1")
     first_result = run_corpus_qa(
         mode="synthetic",
         database_url=qa_database_url,
         reports_dir=tmp_path,
         label="run-one",
-        storage_dir=blobs,
     )
     second_result = run_corpus_qa(
         mode="synthetic",
         database_url=qa_database_url,
         reports_dir=tmp_path,
         label="run-two",
-        storage_dir=blobs,
+        reset=True,
     )
     assert first_result.failed is False and second_result.failed is False
     first = json.loads(first_result.path.read_text())
@@ -254,10 +299,8 @@ def test_rerun_is_idempotent_and_reproduces_identical_metrics(
     assert first["totals"] == second["totals"]
     assert first["cohort"] == second["cohort"]
     assert first["run"]["run_id"] != second["run"]["run_id"]
-    # The rerun re-executes discovery (run-scoped keys) while every fetch
-    # deduplicates onto the first run's succeeded jobs — the second run
-    # still accounts for all of its expected jobs as terminal-succeeded.
-    assert second["pipeline"]["jobs_completed"] == EXPECTED_ISSUERS
+    # Each pass starts from an empty queue, so both fully re-execute.
+    assert second["pipeline"]["jobs_completed"] == EXPECTED_JOBS
     assert second["pipeline"]["jobs"]["terminal_counts"] == {"succeeded": EXPECTED_JOBS}
 
 
@@ -538,6 +581,341 @@ def test_failed_fetch_jobs_are_a_run_failure_with_recorded_errors(
         assert failure["status"] == "failed"
         assert "synthetic outage" in str(failure["error"])
         assert failure["accession"]
+
+
+# ---------------------------------------------------------------------------
+# Round-2 finding 1: the dedicated-database gate (both modes) and the
+# created_at staleness belt-and-braces.
+# ---------------------------------------------------------------------------
+
+
+def test_preexisting_jobs_are_refused_fail_closed(
+    qa_database_url: str,
+    tmp_path: pathlib.Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Finding R2-1a: ANY pre-existing job in the queue (here: an unrelated
+    marker job) means the database is not dedicated — exit 2 before any
+    enqueue, nothing deleted, no report written."""
+    marker = _seed_marker_job(qa_database_url)
+    monkeypatch.setenv("TEST_DATABASE_URL", qa_database_url)
+    rc = main(
+        [
+            "--mode",
+            "synthetic",
+            "--reports-dir",
+            str(tmp_path),
+            "--label",
+            "not-dedicated",
+        ]
+    )
+    assert rc == 2
+    err = capsys.readouterr().err
+    assert "dedicated database" in err
+    assert "1 pre-existing jobs" in err
+    assert not (tmp_path / "not-dedicated.json").exists()
+    assert _marker_job_exists(qa_database_url, marker), "the gate must not delete anything"
+
+
+def test_preexisting_expected_fetch_key_is_refused_fail_closed(
+    qa_database_url: str,
+    tmp_path: pathlib.Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Finding R2-1a: a pre-existing fetch job carrying one of THIS run's
+    expected idempotency keys (a prior harness run or a production worker)
+    would silently satisfy dedupe and be mis-attributed to this run — the
+    gate refuses it and reports the key collision explicitly."""
+    accession = build_plan(_synthetic_ciks()[0], 0)[0].accession
+    with psycopg.connect(qa_database_url, autocommit=True) as conn:
+        queue.enqueue(
+            conn,
+            kind=JOB_KIND_SEC_FILING_FETCH,
+            payload={"accession": accession},
+            queue="ingestion",
+            idempotency_key=f"sec-fetch|{accession}",
+        )
+    monkeypatch.setenv("TEST_DATABASE_URL", qa_database_url)
+    rc = main(
+        [
+            "--mode",
+            "synthetic",
+            "--reports-dir",
+            str(tmp_path),
+            "--label",
+            "stale-key",
+        ]
+    )
+    assert rc == 2
+    err = capsys.readouterr().err
+    assert "dedicated database" in err
+    assert "1 pre-existing fetch keys" in err
+    assert not (tmp_path / "stale-key.json").exists()
+    with psycopg.connect(qa_database_url, autocommit=True) as conn:
+        row = conn.execute("SELECT count(*) FROM jobs").fetchone()
+    assert row is not None and row[0] == 1, "the gate must neither enqueue nor delete"
+
+
+def test_stale_expected_fetch_jobs_are_a_run_failure(
+    qa_database_url: str, tmp_path: pathlib.Path
+) -> None:
+    """Finding R2-1b (belt-and-braces): an expected fetch job whose
+    created_at predates the run start is accounted as a stale corpus row
+    and fails the run — even if the pre-run gate were somehow bypassed."""
+    result = run_corpus_qa(
+        mode="synthetic",
+        database_url=qa_database_url,
+        reports_dir=tmp_path,
+        label="stale-probe",
+    )
+    assert result.failed is False
+    accessions = [
+        filing.accession
+        for index, cik in enumerate(_synthetic_ciks())
+        for filing in build_plan(cik, index)
+    ]
+    with psycopg.connect(qa_database_url, autocommit=True) as conn:
+        jobs = collect_job_outcomes(
+            conn,
+            discovery_job_ids=[],
+            expected_accessions=accessions,
+            # Pretend the run started in the future: every fetch job in the
+            # queue now predates it, i.e. is a stale historical row.
+            run_started_at=datetime.now(UTC) + timedelta(hours=1),
+        )
+    assert set(jobs.stale_accessions) == set(accessions)
+    assert jobs.as_report_field()["stale_fetch_jobs"] == sorted(accessions)
+    reasons = run_failure_reasons(jobs)
+    assert any("stale corpus rows" in reason for reason in reasons)
+
+
+# ---------------------------------------------------------------------------
+# Round-2 finding 2: the expected-set snapshot race — surplus fetch jobs
+# are reconciled, reported, and fail the run when not succeeded.
+# ---------------------------------------------------------------------------
+
+
+def _one_issuer_cohort(tmp_path: pathlib.Path) -> pathlib.Path:
+    cohort_path = tmp_path / "one-issuer-cohort.json"
+    cohort_path.write_text(
+        json.dumps(
+            {
+                "as_of": "2026-07-14",
+                "issuers": [{"ticker": "SYN1", "cik": "0000000001", "name": "Synthetic One"}],
+            }
+        )
+    )
+    return cohort_path
+
+
+class _LateFilingClient:
+    """SecClient stub reproducing the live snapshot race: the FIRST
+    submissions() call per CIK (the harness's expected-set snapshot) omits
+    the newest filing; the discovery job's own later call sees it."""
+
+    def __init__(self, inner: SyntheticCohortSecClient, *, late_fetch_fails: bool) -> None:
+        self._inner = inner
+        self._snapshotted: set[str] = set()
+        self.late_documents: set[str] = set()
+        self.late_accessions: set[str] = set()
+        self._late_fetch_fails = late_fetch_fails
+
+    def submissions(self, cik: str) -> dict[str, object]:
+        payload = copy.deepcopy(self._inner.submissions(cik))
+        recent = payload["filings"]["recent"]  # type: ignore[index]
+        if cik not in self._snapshotted:
+            self._snapshotted.add(cik)
+            self.late_documents.add(str(recent["primaryDocument"][-1]))
+            self.late_accessions.add(str(recent["accessionNumber"][-1]))
+            for field in ("accessionNumber", "form", "filingDate", "primaryDocument"):
+                recent[field] = recent[field][:-1]
+        return payload
+
+    def fetch_document(self, url: str) -> bytes:
+        name = url.rsplit("/", 1)[-1]
+        if self._late_fetch_fails and name in self.late_documents:
+            raise RuntimeError("synthetic outage: late-arriving filing fetch refused")
+        return self._inner.fetch_document(url)
+
+
+def test_surplus_fetch_job_failure_is_a_run_failure(
+    qa_database_url: str, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Finding R2-2: a filing that appears between the harness snapshot and
+    the discovery job's own listing yields a fetch job OUTSIDE the expected
+    set. It must not be invisible: it is reconciled as surplus, and its
+    failure fails the run."""
+    clients: list[_LateFilingClient] = []
+
+    def _factory(ciks: list[str]) -> _LateFilingClient:
+        client = _LateFilingClient(SyntheticCohortSecClient(ciks), late_fetch_fails=True)
+        clients.append(client)
+        return client
+
+    monkeypatch.setattr(corpus_qa, "SyntheticCohortSecClient", _factory)
+    result = run_corpus_qa(
+        mode="synthetic",
+        database_url=qa_database_url,
+        reports_dir=tmp_path,
+        label="surplus-outage",
+        cohort_path=_one_issuer_cohort(tmp_path),
+        max_iterations=200,
+    )
+    assert result.failed is True
+    assert any("surplus" in reason for reason in result.failure_reasons)
+    jobs = result.report["pipeline"]["jobs"]
+    # The expected jobs (1 discovery + 2 snapshot fetches) all succeeded —
+    # without surplus reconciliation this failure would be invisible.
+    assert jobs["failures"] == []
+    assert jobs["terminal_counts"] == {"succeeded": 3}
+    (surplus,) = jobs["surplus_fetch_jobs"]
+    assert surplus["status"] == "failed"
+    assert surplus["accession"] in clients[0].late_accessions
+    assert "synthetic outage" in str(surplus["error"])
+    assert result.report["acceptance"]["accepted"] is False
+
+
+def test_succeeded_surplus_fetch_job_is_recorded_but_not_a_failure(
+    qa_database_url: str, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Finding R2-2: a surplus fetch job that SUCCEEDS is not a run
+    failure, but it is recorded in the report and stays out of the
+    expected-set metrics."""
+    monkeypatch.setattr(
+        corpus_qa,
+        "SyntheticCohortSecClient",
+        lambda ciks: _LateFilingClient(SyntheticCohortSecClient(ciks), late_fetch_fails=False),
+    )
+    result = run_corpus_qa(
+        mode="synthetic",
+        database_url=qa_database_url,
+        reports_dir=tmp_path,
+        label="surplus-ok",
+        cohort_path=_one_issuer_cohort(tmp_path),
+    )
+    assert result.failed is False, result.failure_reasons
+    report = result.report
+    (surplus,) = report["pipeline"]["jobs"]["surplus_fetch_jobs"]
+    assert surplus["status"] == "succeeded"
+    # SYN1 (index 0) plans 10-K + 10-Q + 10-Q/A; the snapshot saw only the
+    # first two, and the late 10-Q/A stays out of the scoped metrics.
+    issuer = report["issuers"][0]
+    assert issuer["expected_documents"] == 2
+    assert issuer["documents_ingested"] == 2
+    assert report["totals"]["documents_ingested"] == 2
+
+
+# ---------------------------------------------------------------------------
+# Round-2 finding 4: span verification never leaks a raw KeyError.
+# ---------------------------------------------------------------------------
+
+
+def test_verify_spans_missing_blob_raises_harness_error(
+    qa_database_url: str, tmp_path: pathlib.Path
+) -> None:
+    """Finding R2-4 (defensive half; the gate covers the CLI path): corpus
+    rows whose canonical-text blobs are absent from this run's storage
+    raise a diagnosable HarnessError, never a raw KeyError."""
+    result = run_corpus_qa(
+        mode="synthetic",
+        database_url=qa_database_url,
+        reports_dir=tmp_path,
+        label="blob-probe",
+        storage_dir=tmp_path / "blobs",
+    )
+    assert result.failed is False
+    ticker = _cohort_tickers()[0]
+    accessions = [filing.accession for filing in build_plan(synthetic_cik(ticker), 0)]
+    with psycopg.connect(qa_database_url, autocommit=True) as conn:
+        with pytest.raises(HarnessError, match="absent from this run's storage"):
+            corpus_qa._verify_spans(
+                conn, MockStorageProvider(), synthetic_entity_id(ticker), accessions
+            )
+
+
+# ---------------------------------------------------------------------------
+# Round-2 finding 5: the exit-code contract never leaks raw tracebacks.
+# ---------------------------------------------------------------------------
+
+
+def _assert_one_line_config_error(capsys: pytest.CaptureFixture[str]) -> str:
+    err = capsys.readouterr().err
+    lines = [line for line in err.splitlines() if line.strip()]
+    assert len(lines) == 1, f"expected a one-line message, got: {err!r}"
+    assert lines[0].startswith("corpus-qa:")
+    assert "Traceback" not in err
+    return lines[0]
+
+
+def test_unreachable_database_exits_2_with_one_line_message(
+    tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Finding R2-5: a connection/DSN error is a CONFIG failure (exit 2,
+    one line) — never a raw psycopg.OperationalError traceback."""
+    rc = main(
+        [
+            "--mode",
+            "synthetic",
+            "--database-url",
+            "postgresql://fel@127.0.0.1:9/fel_test",
+            "--reports-dir",
+            str(tmp_path),
+            "--label",
+            "no-database",
+        ]
+    )
+    assert rc == 2
+    message = _assert_one_line_config_error(capsys)
+    assert "cannot connect" in message
+    assert not (tmp_path / "no-database.json").exists()
+
+
+def test_missing_cohort_file_exits_2(
+    tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    rc = main(
+        [
+            "--mode",
+            "synthetic",
+            "--database-url",
+            _UNROUTABLE_DB,
+            "--cohort",
+            str(tmp_path / "does-not-exist.json"),
+            "--reports-dir",
+            str(tmp_path),
+            "--label",
+            "no-cohort",
+        ]
+    )
+    assert rc == 2
+    message = _assert_one_line_config_error(capsys)
+    assert "unreadable" in message
+
+
+def test_malformed_cohort_json_exits_2(
+    tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    bad = tmp_path / "bad-cohort.json"
+    bad.write_text("{ this is not json")
+    rc = main(
+        [
+            "--mode",
+            "synthetic",
+            "--database-url",
+            _UNROUTABLE_DB,
+            "--cohort",
+            str(bad),
+            "--reports-dir",
+            str(tmp_path),
+            "--label",
+            "bad-cohort",
+        ]
+    )
+    assert rc == 2
+    message = _assert_one_line_config_error(capsys)
+    assert "not valid JSON" in message
 
 
 # ---------------------------------------------------------------------------

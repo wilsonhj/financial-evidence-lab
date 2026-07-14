@@ -7,12 +7,29 @@ computes corpus-quality metrics and records them to a versioned JSON
 report under ``evals/reports/corpus-qa/``. Schema:
 ``evals/reports/corpus-qa/SCHEMA.md`` (contract corpus-qa-report/v1).
 
+DEDICATED DATABASE REQUIRED (both modes, integration-lead ruling): the
+harness NEVER runs against the production/shared database. Enforced
+fail-closed in code by :func:`ensure_dedicated_queue`: before enqueuing
+anything, the harness refuses (exit 2) if the jobs table holds ANY
+pre-existing job or ANY of this run's expected fetch idempotency keys.
+That gate is what makes every post-run accounting query correct: the
+queue started empty, so every job present afterwards belongs to this run.
+
+Exit codes: 0 = run succeeded (report written, may still be
+non-acceptance); 1 = run failure (report written where possible) or an
+SEC discovery/fetch failure; 2 = configuration/gate refusal (dedicated-DB
+gate, destructive-reset gates, live SEC-identity gate, unreachable
+database/DSN, unreadable or malformed cohort file) — refused before any
+work, no report written.
+
 Synthetic mode (default; NO network) keys every database row by a
 NAMESPACED SYNTHETIC identity (:func:`synthetic_cik` /
 :func:`synthetic_entity_id`, derived from a synthetic UUID namespace over
 the cohort ticker) — never by the real cohort CIKs/entity ids — so
 synthetic rows can never collide with a live run's discovery idempotency
-keys or corpus rows in the same database:
+keys or corpus rows. A rerun against a used database is refused by the
+dedicated-DB gate; rerun on a fresh dedicated DB, or ``--reset-corpus``
+on a disposable one:
 
     TEST_DATABASE_URL="postgresql://..." \\
     PYTHONPATH=evals:workers/src:packages/providers:apps/api \\
@@ -21,12 +38,14 @@ keys or corpus rows in the same database:
         --reports-dir evals/reports/corpus-qa --label <date>-synthetic-cohort
 
 Live mode (SEC egress + fair-access compliance REQUIRED; never run from
-CI or an egress-blocked session) requires ``FEL_SEC_USER_AGENT`` — a
-non-empty SEC fair-access identity containing an ``@`` contact marker,
-mirroring the worker deployment gate — and fails with exit 2 BEFORE any
-network access when it is absent or malformed:
+CI or an egress-blocked session) runs against a FRESH dedicated database
+(migrations 0001+0002 applied, empty queue — the gate refuses anything
+else) and requires ``FEL_SEC_USER_AGENT`` — a non-empty SEC fair-access
+identity containing an ``@`` contact marker, mirroring the worker
+deployment gate — failing with exit 2 BEFORE any network access when it
+is absent or malformed:
 
-    FEL_DATABASE_URL="postgresql://..." \\
+    FEL_DATABASE_URL="postgresql://.../<fresh-dedicated-db>" \\
     FEL_SEC_USER_AGENT="org-or-app name (contact@example.com)" \\
     PYTHONPATH=evals:workers/src:packages/providers:apps/api \\
     .venv/bin/python -m harness.corpus_qa \\
@@ -46,9 +65,15 @@ the run's expected filings up front (same submissions index the pipeline
 uses), records every expected job's terminal outcome from the queryable
 ``jobs`` table, and aggregates corpus metrics over exactly the run's
 (entity, accession) set — never over global/historical table contents.
-A run that leaves expected jobs failed/pending/missing, or exhausts its
-iteration budget with a backlog, is a RUN FAILURE (nonzero exit; report
-marked non-acceptance).
+Because the dedicated-DB gate guarantees the queue started empty, the
+post-run accounting additionally reconciles ALL fetch jobs now present
+against the expected snapshot: fetch jobs outside the snapshot (filings
+that appeared between the harness's listing and the discovery job's own
+listing) are recorded as the SURPLUS set, and every expected fetch job's
+``created_at`` must postdate the run start (staleness belt-and-braces).
+A run that leaves any job — expected or surplus — failed/pending/missing,
+carries stale expected fetch jobs, or exhausts its iteration budget with
+a backlog, is a RUN FAILURE (nonzero exit; report marked non-acceptance).
 """
 
 from __future__ import annotations
@@ -77,10 +102,12 @@ from fel_workers.consumer import entity_id_for_cik, run_worker
 from fel_workers.ingestion.discovery import (
     JOB_KIND_SEC_DISCOVERY,
     JOB_KIND_SEC_FILING_FETCH,
+    DiscoveryError,
     FilingRef,
     discover_filings,
 )
 from fel_workers.ingestion.parser import PARSER_VERSION
+from fel_workers.ingestion.sec_client import SecFetchError
 from fel_workers.ingestion.xbrl import NORMALIZER_VERSION
 from fel_workers.storage import LocalDirStorageProvider
 from harness.synthetic_sec import SyntheticCohortSecClient
@@ -195,10 +222,26 @@ _JOBS_BY_ID_SQL = """
     SELECT id::text AS id, kind, status, error, payload FROM jobs
     WHERE id = ANY(%s::uuid[])
 """
-_FETCH_JOBS_BY_KEY_SQL = """
-    SELECT id::text AS id, kind, status, error, payload, idempotency_key FROM jobs
+# ALL fetch jobs, not just the expected keys: the dedicated-DB gate
+# guarantees the queue started empty, so every fetch job present after
+# the run belongs to this run — rows outside the expected snapshot are
+# this run's SURPLUS set (filings that appeared between the harness's
+# submissions snapshot and the discovery job's own listing).
+_ALL_FETCH_JOBS_SQL = """
+    SELECT id::text AS id, kind, status, error, payload, idempotency_key, created_at
+    FROM jobs WHERE kind = %s
+"""
+# Pre-run dedicated-database gate inputs (see ensure_dedicated_queue).
+_PREEXISTING_JOBS_SQL = "SELECT count(*) AS n FROM jobs"
+_PREEXISTING_FETCH_KEYS_SQL = """
+    SELECT count(*) AS n FROM jobs
     WHERE kind = %s AND idempotency_key = ANY(%s::text[])
 """
+# Whole-queue backlog check. Counting the WHOLE queue is correct only
+# because ensure_dedicated_queue proved it empty before this run enqueued
+# anything — the invariant chain is: empty queue at start ⇒ every job in
+# the queue afterwards is this run's ⇒ any backlog is this run's failure
+# to drain, and any fetch job is either expected or this run's surplus.
 _QUEUE_BACKLOG_SQL = """
     SELECT count(*) AS n FROM jobs
     WHERE queue = %s AND status IN ('queued', 'claimed', 'running')
@@ -347,6 +390,41 @@ def resolve_database_url(
     return url
 
 
+def ensure_dedicated_queue(
+    conn: psycopg.Connection[Any], expected_fetch_keys: Sequence[str] = ()
+) -> None:
+    """Fail-closed dedicated-database gate (BOTH modes; integration-lead
+    ruling): the harness always requires a dedicated database — never the
+    production/shared one.
+
+    Runs BEFORE anything is enqueued: if the jobs table holds ANY
+    pre-existing job, or ANY of this run's expected fetch idempotency keys
+    already exist, the run is refused (:class:`HarnessError`, exit 2).
+    Without this gate, per-accession fetch-job dedupe would silently remap
+    historical jobs (from a prior harness run or a production worker) into
+    this run's accounting — false acceptance attesting to work this run
+    never did, or one historical parked-failed job permanently failing
+    every future run. The gate is also the invariant every post-run check
+    relies on: the queue started empty, so every job present afterwards
+    belongs to this run.
+    """
+    preexisting_jobs = _count(conn, _PREEXISTING_JOBS_SQL, ())
+    preexisting_keys = 0
+    if expected_fetch_keys:
+        preexisting_keys = _count(
+            conn,
+            _PREEXISTING_FETCH_KEYS_SQL,
+            (JOB_KIND_SEC_FILING_FETCH, list(expected_fetch_keys)),
+        )
+    if preexisting_jobs or preexisting_keys:
+        raise HarnessError(
+            "harness requires a dedicated database with an empty ingestion"
+            f" queue (found {preexisting_jobs} pre-existing jobs /"
+            f" {preexisting_keys} pre-existing fetch keys); use a fresh DB or"
+            " --reset-corpus on a disposable one"
+        )
+
+
 # ---------------------------------------------------------------------------
 # Cohort + reset.
 # ---------------------------------------------------------------------------
@@ -361,13 +439,27 @@ class Cohort:
 
 
 def load_cohort(path: pathlib.Path) -> Cohort:
-    """Read the canonical issuer cohort (read-only; never modified)."""
-    raw = path.read_bytes()
-    payload = json.loads(raw)
-    issuers = tuple(
-        {"ticker": str(i["ticker"]), "cik": str(i["cik"]), "name": str(i["name"])}
-        for i in payload["issuers"]
-    )
+    """Read the canonical issuer cohort (read-only; never modified).
+
+    A missing/unreadable file, malformed JSON, or an unexpected shape is a
+    CONFIGURATION error (:class:`HarnessError`, exit 2) — never a raw
+    traceback.
+    """
+    try:
+        raw = path.read_bytes()
+    except OSError as exc:
+        raise HarnessError(f"cohort file {path} is unreadable: {exc}") from exc
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise HarnessError(f"cohort file {path} is not valid JSON: {exc}") from exc
+    try:
+        issuers = tuple(
+            {"ticker": str(i["ticker"]), "cik": str(i["cik"]), "name": str(i["name"])}
+            for i in payload["issuers"]
+        )
+    except (KeyError, TypeError) as exc:
+        raise HarnessError(f"cohort file {path} has an unexpected shape: {exc!r}") from exc
     if not issuers:
         raise HarnessError(f"cohort {path} lists no issuers")
     return Cohort(
@@ -415,8 +507,10 @@ def enqueue_discovery(
     """Enqueue one discovery job per issuer; returns the job ids.
 
     The idempotency key is RUN-SCOPED so every harness run re-executes
-    discovery (fetch jobs still deduplicate per accession downstream in
-    the pipeline's own discovery handler).
+    discovery. Fetch jobs still deduplicate per accession downstream in
+    the pipeline's own discovery handler — safe here only because the
+    dedicated-DB gate proved the queue empty first, so per-accession
+    dedupe can only ever collapse onto THIS run's own jobs.
     """
     job_ids = []
     for issuer in issuers:
@@ -437,8 +531,16 @@ def enqueue_discovery(
 
 @dataclass(frozen=True)
 class JobsSummary:
-    """Terminal outcomes of every job THIS run expected (queryable jobs
-    table), plus the queue backlog left after the iteration budget."""
+    """Terminal outcomes of every job THIS run created.
+
+    The dedicated-DB gate proved the queue empty before this run enqueued
+    anything, so the summary reconciles ALL fetch jobs now present: the
+    expected set (from the harness's submissions snapshot), the SURPLUS
+    set (fetch jobs outside the snapshot — filings that appeared between
+    the snapshot and the discovery job's own listing), the stale set
+    (expected fetch jobs whose ``created_at`` predates the run start —
+    belt-and-braces; must be empty), and the whole-queue backlog left
+    after the iteration budget."""
 
     discovery_expected: int
     fetch_expected: int
@@ -447,6 +549,8 @@ class JobsSummary:
     missing_accessions: tuple[str, ...]
     backlog_after_run: int
     failures: tuple[dict[str, Any], ...]
+    surplus: tuple[dict[str, Any], ...]
+    stale_accessions: tuple[str, ...]
 
     def as_report_field(self) -> dict[str, Any]:
         return {
@@ -457,6 +561,8 @@ class JobsSummary:
             "missing_fetch_jobs": list(self.missing_accessions),
             "backlog_after_run": self.backlog_after_run,
             "failures": list(self.failures),
+            "surplus_fetch_jobs": list(self.surplus),
+            "stale_fetch_jobs": list(self.stale_accessions),
         }
 
 
@@ -468,24 +574,52 @@ def _job_error_message(error: object) -> str | None:
     return None if error is None else str(error)
 
 
+def _job_entry(row: Mapping[str, Any]) -> dict[str, Any]:
+    payload = row["payload"] if isinstance(row["payload"], dict) else {}
+    return {
+        "job_id": row["id"],
+        "kind": row["kind"],
+        "status": str(row["status"]),
+        "accession": payload.get("accession"),
+        "cik": payload.get("cik"),
+        "error": _job_error_message(row["error"]),
+    }
+
+
 def collect_job_outcomes(
     conn: psycopg.Connection[Any],
     *,
     discovery_job_ids: Sequence[str],
     expected_accessions: Sequence[str],
+    run_started_at: datetime,
     queue_name: str = DEFAULT_QUEUE,
 ) -> JobsSummary:
-    """Record the terminal state of every job this run expected."""
+    """Reconcile every job this run created against the expected snapshot.
+
+    Correct only under the dedicated-DB invariant (the queue was proven
+    empty before this run enqueued anything — :func:`ensure_dedicated_queue`),
+    which makes every fetch job in the table this run's: expected-snapshot
+    keys are accounted individually, everything else is the SURPLUS set,
+    and any expected fetch job created before ``run_started_at`` is a
+    stale historical row (belt-and-braces; the gate should have refused it).
+    """
     fetch_keys = {f"sec-fetch|{accession}": accession for accession in expected_accessions}
     with conn.cursor(row_factory=dict_row) as cur:
         rows = list(cur.execute(_JOBS_BY_ID_SQL, (list(discovery_job_ids),)).fetchall())
-        fetch_rows = list(
-            cur.execute(
-                _FETCH_JOBS_BY_KEY_SQL, (JOB_KIND_SEC_FILING_FETCH, list(fetch_keys))
-            ).fetchall()
+        all_fetch_rows = list(
+            cur.execute(_ALL_FETCH_JOBS_SQL, (JOB_KIND_SEC_FILING_FETCH,)).fetchall()
         )
         backlog_row = cur.execute(_QUEUE_BACKLOG_SQL, (queue_name,)).fetchone()
-    rows.extend(fetch_rows)
+    expected_rows = [row for row in all_fetch_rows if str(row["idempotency_key"]) in fetch_keys]
+    surplus_rows = [row for row in all_fetch_rows if str(row["idempotency_key"]) not in fetch_keys]
+    stale = tuple(
+        sorted(
+            fetch_keys[str(row["idempotency_key"])]
+            for row in expected_rows
+            if row["created_at"] < run_started_at
+        )
+    )
+    rows.extend(expected_rows)
     counts: dict[str, int] = {}
     failures: list[dict[str, Any]] = []
     pending = 0
@@ -495,18 +629,8 @@ def collect_job_outcomes(
         if status in _PENDING_STATUSES:
             pending += 1
         if status != "succeeded":
-            payload = row["payload"] if isinstance(row["payload"], dict) else {}
-            failures.append(
-                {
-                    "job_id": row["id"],
-                    "kind": row["kind"],
-                    "status": status,
-                    "accession": payload.get("accession"),
-                    "cik": payload.get("cik"),
-                    "error": _job_error_message(row["error"]),
-                }
-            )
-    found_keys = {str(row["idempotency_key"]) for row in fetch_rows}
+            failures.append(_job_entry(row))
+    found_keys = {str(row["idempotency_key"]) for row in expected_rows}
     missing = tuple(accession for key, accession in fetch_keys.items() if key not in found_keys)
     return JobsSummary(
         discovery_expected=len(discovery_job_ids),
@@ -516,18 +640,37 @@ def collect_job_outcomes(
         missing_accessions=missing,
         backlog_after_run=int(backlog_row["n"]) if backlog_row is not None else 0,
         failures=tuple(failures),
+        surplus=tuple(
+            _job_entry(row) | {"idempotency_key": row["idempotency_key"]} for row in surplus_rows
+        ),
+        stale_accessions=stale,
     )
 
 
 def run_failure_reasons(jobs: JobsSummary, *, queue_name: str = DEFAULT_QUEUE) -> list[str]:
     """Reasons this run FAILED (nonzero exit): a returning ``run_worker``
-    proves nothing — only all-expected-jobs-succeeded and a drained queue do."""
+    proves nothing — only every-job-succeeded (expected AND surplus), no
+    stale rows, and a drained queue do."""
     reasons = []
     if jobs.failures:
         statuses = sorted({str(f["status"]) for f in jobs.failures})
         reasons.append(
             f"{len(jobs.failures)} expected job(s) did not reach status"
             f" 'succeeded' (statuses: {', '.join(statuses)})"
+        )
+    surplus_failed = [entry for entry in jobs.surplus if entry["status"] != "succeeded"]
+    if surplus_failed:
+        statuses = sorted({str(entry["status"]) for entry in surplus_failed})
+        reasons.append(
+            f"{len(surplus_failed)} surplus fetch job(s) — filings that"
+            " appeared after this run's expected-set snapshot — did not reach"
+            f" status 'succeeded' (statuses: {', '.join(statuses)})"
+        )
+    if jobs.stale_accessions:
+        reasons.append(
+            f"{len(jobs.stale_accessions)} expected fetch job(s) predate this"
+            " run's start: stale corpus rows from a prior run or another"
+            " writer (the dedicated-database invariant was violated)"
         )
     if jobs.missing_accessions:
         reasons.append(
@@ -561,7 +704,18 @@ def _verify_spans(
     with conn.cursor(row_factory=dict_row) as cur:
         versions = cur.execute(_ISSUER_TEXT_KEYS_SQL, (entity_id, list(accessions))).fetchall()
         for version in versions:
-            text = storage.get(str(version["canonical_text_key"])).decode()
+            key = str(version["canonical_text_key"])
+            try:
+                text = storage.get(key).decode()
+            except (KeyError, OSError) as exc:
+                # Defensive (the dedicated-DB gate should refuse such runs
+                # first): never a raw KeyError/FileNotFoundError.
+                raise HarnessError(
+                    "corpus rows reference blobs absent from this run's"
+                    f" storage (missing {key!r}) — use a fresh database,"
+                    " --reset-corpus on a disposable one, or the original"
+                    " --storage-dir"
+                ) from exc
             spans = cur.execute(_VERSION_SPANS_SQL, (version["version_id"],)).fetchall()
             for span in spans:
                 total += 1
@@ -814,7 +968,14 @@ def validate_report(report: dict[str, Any]) -> None:
     pipeline = report["pipeline"]
     if not isinstance(pipeline, dict) or not isinstance(pipeline.get("jobs"), dict):
         raise HarnessError("pipeline.jobs (per-job terminal outcomes) is missing")
-    for key in ("terminal_counts", "pending", "missing_fetch_jobs", "failures"):
+    for key in (
+        "terminal_counts",
+        "pending",
+        "missing_fetch_jobs",
+        "surplus_fetch_jobs",
+        "stale_fetch_jobs",
+        "failures",
+    ):
         if key not in pipeline["jobs"]:
             raise HarnessError(f"pipeline.jobs is missing {key!r}")
     for issuer in issuers:
@@ -881,9 +1042,11 @@ def run_corpus_qa(
 ) -> RunResult:
     """Run one full harness pass and return the written report + outcome.
 
-    All fail-closed gates run BEFORE any connection or network access:
-    mode validation, the destructive-reset disposability check, and (live
-    mode) the FEL_SEC_USER_AGENT identity requirement.
+    Fail-closed gates run BEFORE any connection or network access — mode
+    validation, the destructive-reset disposability check, and (live mode)
+    the FEL_SEC_USER_AGENT identity requirement — and the dedicated-DB
+    gate (:func:`ensure_dedicated_queue`) runs after connecting (and after
+    an optional reset) but BEFORE anything is enqueued.
     """
     if mode not in ("synthetic", "live"):
         raise HarnessError(f"unknown mode {mode!r}")
@@ -894,10 +1057,9 @@ def run_corpus_qa(
     storage: StorageProvider
     sec: SecClient
     if mode == "synthetic":
-        # A storage dir makes blobs durable across harness reruns (a rerun
-        # is a corpus no-op that writes nothing, so span re-verification
-        # needs the first run's canonical texts); without one, an
-        # in-memory store covers a single-pass run.
+        # The dedicated-DB gate refuses reruns against a used database, so
+        # every synthetic pass ingests from scratch: an in-memory store
+        # covers it; --storage-dir merely keeps the blobs inspectable.
         storage = (
             LocalDirStorageProvider(storage_dir)
             if storage_dir is not None
@@ -917,12 +1079,27 @@ def run_corpus_qa(
         effective_forms = forms if forms is not None else DEFAULT_LIVE_FORMS
 
     run_id = uuid.uuid4().hex
-    with psycopg.connect(database_url, autocommit=True) as conn:
+    try:
+        connection = psycopg.connect(database_url, autocommit=True)
+    except (psycopg.OperationalError, psycopg.ProgrammingError) as exc:
+        message = " ".join(str(exc).split())
+        raise HarnessError(f"cannot connect to the target database: {message}") from exc
+    with connection as conn:
         if reset:
             reset_corpus(conn)
         expected = {
             issuer.db_cik: expected_filings(sec, issuer, effective_forms) for issuer in issuers
         }
+        expected_accessions = [ref.accession for refs in expected.values() for ref in refs]
+        # Dedicated-database gate: refuse (exit 2) BEFORE enqueuing anything
+        # if any job — or any of this run's expected fetch keys — already
+        # exists. Every post-run accounting query below relies on the
+        # queue having been empty here.
+        ensure_dedicated_queue(
+            conn, [f"sec-fetch|{accession}" for accession in expected_accessions]
+        )
+        started_row = conn.execute("SELECT now()").fetchone()
+        run_started_at: datetime = started_row[0] if started_row is not None else datetime.now(UTC)
         discovery_job_ids = enqueue_discovery(conn, issuers, run_id=run_id, forms=effective_forms)
         jobs_completed = run_worker(
             conn, storage, sec, queue_name=DEFAULT_QUEUE, max_iterations=max_iterations
@@ -930,7 +1107,8 @@ def run_corpus_qa(
         jobs = collect_job_outcomes(
             conn,
             discovery_job_ids=discovery_job_ids,
-            expected_accessions=[ref.accession for refs in expected.values() for ref in refs],
+            expected_accessions=expected_accessions,
+            run_started_at=run_started_at,
         )
         failure_reasons = run_failure_reasons(jobs)
         report = build_report(
@@ -973,8 +1151,8 @@ def main(argv: list[str] | None = None) -> int:
         "--storage-dir",
         type=pathlib.Path,
         default=None,
-        help="durable blob root (required for live mode; optional for "
-        "synthetic reruns against a persistent database)",
+        help="durable blob root (required for live mode; optional for"
+        " synthetic mode, whose single-pass runs are covered in-memory)",
     )
     parser.add_argument(
         "--forms",
@@ -1024,6 +1202,17 @@ def main(argv: list[str] | None = None) -> int:
     except HarnessError as exc:
         print(f"corpus-qa: {exc}", file=sys.stderr)  # noqa: T201 — operator-facing CLI
         return 2
+    except psycopg.OperationalError as exc:
+        # Connection/DSN problems are configuration, not run failures.
+        message = " ".join(str(exc).split())
+        print(f"corpus-qa: database connection failed: {message}", file=sys.stderr)  # noqa: T201
+        return 2
+    except (SecFetchError, DiscoveryError) as exc:
+        # SEC/discovery failures outside a job (e.g. while snapshotting the
+        # expected set) are run failures; jobs' own failures are parked and
+        # reported through the written report instead.
+        print(f"corpus-qa: RUN FAILURE: {exc}", file=sys.stderr)  # noqa: T201
+        return 1
     print(f"wrote {result.path}")  # noqa: T201 — operator-facing CLI
     if result.failed:
         for reason in result.failure_reasons:
