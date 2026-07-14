@@ -22,6 +22,7 @@ from fel_workers.http import HttpRequestError, ThrottledRetryingClient
 
 SEC_USER_AGENT = "financial-evidence-lab research (sordidsunday@icloud.com)"
 SUBMISSIONS_BASE_URL = "https://data.sec.gov/submissions"
+COMPANY_FACTS_BASE_URL = "https://data.sec.gov/api/xbrl/companyfacts"
 
 
 class SecFetchError(Exception):
@@ -34,6 +35,11 @@ def normalize_cik(cik: str) -> str:
     if not digits.isdigit():
         raise SecFetchError(f"invalid CIK {cik!r}: expected digits")
     return digits.zfill(10)
+
+
+def company_facts_url(cik: str) -> str:
+    """Canonical data.sec.gov companyfacts URL for an issuer (FR-ING-001)."""
+    return f"{COMPANY_FACTS_BASE_URL}/CIK{normalize_cik(cik)}.json"
 
 
 class LiveSecClient:
@@ -77,6 +83,19 @@ class LiveSecClient:
     def submissions(self, cik: str) -> dict[str, object]:
         """Fetch the issuer's submissions index (SecClient protocol)."""
         url = f"{SUBMISSIONS_BASE_URL}/CIK{normalize_cik(cik)}.json"
+        payload = self._get(url).json()
+        if not isinstance(payload, dict):
+            raise SecFetchError(f"GET {url} returned a non-object JSON payload")
+        return cast(dict[str, object], payload)
+
+    def company_facts(self, cik: str) -> dict[str, object]:
+        """Fetch the issuer's XBRL companyfacts aggregate (issue #83).
+
+        Same shared throttled/retrying transport and fair-access discipline
+        as every other SEC request (workers-local CompanyFactsSecClient
+        capability; the frozen SecClient protocol is untouched).
+        """
+        url = company_facts_url(cik)
         payload = self._get(url).json()
         if not isinstance(payload, dict):
             raise SecFetchError(f"GET {url} returned a non-object JSON payload")
