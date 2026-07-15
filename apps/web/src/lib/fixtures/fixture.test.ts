@@ -10,6 +10,7 @@ import { fixtureEvidenceSource } from "../data/fixture-source";
 import {
   DOC_10Q_ID,
   DOC_10Q_VERSION_ID,
+  DOC_10QA_CANONICAL_COVER_LENGTH,
   DOC_10QA_ID,
   DOC_10QA_VERSION_ID,
   ENTITY_ID,
@@ -60,6 +61,52 @@ describe("synthetic filing fixture", () => {
       );
       const digest = createHash("sha256").update(text!, "utf8").digest("hex");
       expect(`sha256:${digest}`).toBe(record.span.text_hash);
+    }
+  });
+
+  // Regression (issue #87, package B): the old fixture started every
+  // section's coordinates at 0, masking readers that treated GLOBAL span
+  // offsets as section-local. The fixture must model canonical-global
+  // coordinates realistically: cumulative section ranges, and spans whose
+  // global offsets exceed their section-content length.
+  it("sections carry cumulative global canonical ranges consistent with their content", () => {
+    for (const versionId of [DOC_10Q_VERSION_ID, DOC_10QA_VERSION_ID]) {
+      const sections = fixtureSections
+        .filter((section) => section.document_version_id === versionId)
+        .sort((a, b) => a.order - b.order);
+      expect(sections.length).toBeGreaterThan(0);
+      for (const section of sections) {
+        expect(section.end_char - section.start_char, section.id).toBe(section.content.length);
+      }
+      // Sections tile the canonical text cumulatively.
+      for (let i = 1; i < sections.length; i += 1) {
+        expect(sections[i]!.start_char, sections[i]!.id).toBe(sections[i - 1]!.end_char);
+      }
+      // Non-first sections start at nonzero global offsets.
+      for (const section of sections.slice(1)) {
+        expect(section.start_char, section.id).toBeGreaterThan(0);
+      }
+    }
+    // The 10-Q/A's FIRST section starts after an unsectioned cover region: the
+    // reader must not assume the first returned section starts at 0.
+    const firstAmended = fixtureSections
+      .filter((section) => section.document_version_id === DOC_10QA_VERSION_ID)
+      .sort((a, b) => a.order - b.order)[0]!;
+    expect(DOC_10QA_CANONICAL_COVER_LENGTH).toBeGreaterThan(0);
+    expect(firstAmended.start_char).toBe(DOC_10QA_CANONICAL_COVER_LENGTH);
+  });
+
+  // The named #87 regression precondition: every fixture span is a VALID span
+  // whose global start offset exceeds its section-content length, so any code
+  // that reads span offsets as section-local fails loudly on this fixture.
+  it("every span's global offsets exceed its section-content length yet stay in-section", () => {
+    const sectionsById = new Map(fixtureSections.map((section) => [section.id, section]));
+    for (const record of fixtureSpans) {
+      const section = sectionsById.get(record.span.section_id)!;
+      expect(record.span.start_char, record.id).toBeGreaterThan(section.content.length);
+      expect(record.span.start_char, record.id).toBeGreaterThanOrEqual(section.start_char);
+      expect(record.span.end_char, record.id).toBeLessThanOrEqual(section.end_char);
+      expect(record.span.end_char, record.id).toBeGreaterThan(record.span.start_char);
     }
   });
 

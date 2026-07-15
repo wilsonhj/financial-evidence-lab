@@ -29,15 +29,18 @@ function headingLevel(depth: number): "h2" | "h3" | "h4" {
  * current selection toggles it off.
  */
 export function DocumentPane({ sections, spans, selectedSpanId, onSelectSpan }: DocumentPaneProps) {
-  // Memoized so selection changes re-render without re-segmenting every section.
+  // Memoized so selection changes re-render without re-segmenting every
+  // section. Span offsets are GLOBAL canonical offsets; segmentSection derives
+  // the section-local render anchors internally (last-moment derivation).
   const segmentedSections = useMemo(
     () =>
       sections.map((section) => ({
         section,
-        segments: segmentSection(section.content, spans, section.id),
+        segments: segmentSection(section, spans),
       })),
     [sections, spans],
   );
+  // Span length is coordinate-system independent (global end - global start).
   const spanLengthById = useMemo(
     () =>
       new Map(spans.map((record) => [record.id, record.span.end_char - record.span.start_char])),

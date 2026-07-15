@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import type { DocumentMeta } from "../lib/contracts";
 import { fixtureEvidenceSource } from "../lib/data";
 import { loadReaderData, type ReaderData } from "../lib/reader-loader";
+import { extractSpanText } from "../lib/spans";
 import { DOC_10Q_ID, DOC_10QA_ID } from "../lib/fixtures/synthetic-filing";
 import { EvidenceReader } from "./EvidenceReader";
 
@@ -71,6 +72,48 @@ describe("EvidenceReader rendering", () => {
     expect(markup10q).not.toContain("Explanatory Note");
     expect(markup10qa).toContain("Explanatory Note");
     expect(markup10qa).not.toContain("Part I — Financial Information");
+  });
+
+  // THE #87 regression case: a valid span in a NON-FIRST section, whose
+  // GLOBAL canonical offsets exceed the section-content length, must render
+  // its exact hash-verified text as a highlighted citation. Before the
+  // coordinate fix this span was dropped as out-of-range (or, worse under the
+  // old fixture, section-local offsets silently highlighted the wrong text).
+  it("highlights the exact cited text of a non-first-section span with global offsets", async () => {
+    const data = await readyData(DOC_10Q_ID);
+    const span = data.spans.find((record) => record.id === "cccccccc-0000-4000-8000-000000000001")!;
+    const section = data.sections.find((s) => s.id === span.span.section_id)!;
+    // Regression precondition (#87): global offset exceeds the section length.
+    expect(span.span.start_char).toBeGreaterThan(section.content.length);
+    const cited = extractSpanText(section, span);
+    expect(cited).toContain("Revenue for the three months ended March 31, 2026");
+    const markup = renderReader(DOC_10Q_ID, data);
+    expect(markup).toContain(cited!);
+    // And nothing was excluded: every fixture span verifies under global
+    // coordinates.
+    expect(data.integrityFailures).toEqual([]);
+  });
+
+  // Regression (issue #87): out-of-section offsets (e.g. section-local
+  // leftovers) surface the explicit integrity alert, never a clamped quote.
+  it("surfaces the integrity alert for a span outside its section's canonical range", async () => {
+    const data = await readyData(DOC_10Q_ID);
+    const failedSpan = data.spans.find((span) => data.documentIdBySpanId[span.id] === DOC_10Q_ID)!;
+    const tampered: ReaderData = {
+      ...data,
+      spans: data.spans.filter((span) => span.id !== failedSpan.id),
+      integrityFailures: [
+        {
+          spanId: failedSpan.id,
+          sectionId: failedSpan.span.section_id,
+          reason: "offsets_out_of_range",
+        },
+      ],
+    };
+    const markup = renderReader(DOC_10Q_ID, tampered);
+    expect(markup).toContain("Citation integrity error.");
+    expect(markup).toContain('role="alert"');
+    expect(markup).toContain("outside the section&#x27;s canonical range");
   });
 
   // Regression (finding 7): absent period fields used to render as

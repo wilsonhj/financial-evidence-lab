@@ -55,7 +55,16 @@ export interface FinancialFactRecord {
 
 /**
  * UI view-model for an extracted filing section. Sections are referenced by
- * SourceSpan.section_id; span offsets are relative to `content`.
+ * SourceSpan.section_id.
+ *
+ * COORDINATE SYSTEM (ingestion emission semantics, PR #80 / issue #87):
+ * `start_char`/`end_char` are GLOBAL offsets into the canonical document text
+ * of the parsed version, and `content` is exactly the canonical slice
+ * `[start_char, end_char)`. SourceSpan offsets are ALSO global canonical
+ * offsets — never section-local — so a span in any non-first section has
+ * offsets that exceed its section's content length. Local render anchors are
+ * derived at the last moment as `span.start_char - section.start_char` (see
+ * spans.ts); persisted SourceSpan values are never mutated or rewritten.
  */
 export interface SectionRecord {
   id: string;
@@ -65,5 +74,10 @@ export interface SectionRecord {
   /** 1 = top-level part, 2 = item, 3 = statement/note. */
   level: number;
   title: string;
+  /** Canonical global range this section covers (db sections.start_char). */
+  start_char: number;
+  /** Canonical global end offset, exclusive (db sections.end_char). */
+  end_char: number;
+  /** The exact canonical text slice `[start_char, end_char)`. */
   content: string;
 }

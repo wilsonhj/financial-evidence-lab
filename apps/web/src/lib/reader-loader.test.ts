@@ -91,6 +91,39 @@ describe("loadReaderData", () => {
     expect(data.spans.length).toBe(fixtureSpans.length - 2);
   });
 
+  // Regression (issue #87, package B): a span whose offsets were rewritten to
+  // SECTION-LOCAL coordinates (the pre-fix reading) now falls outside its
+  // section's global canonical range and must fail closed as an integrity
+  // failure — never render as a clamped highlight.
+  it("flags spans carrying section-local offsets as out of the section's canonical range", async () => {
+    const tamperedSource: EvidenceSource = {
+      capabilities: { sections: true, spans: true, facts: true },
+      listDocuments: () => fixtureEvidenceSource.listDocuments(),
+      getDocument: (id) => fixtureEvidenceSource.getDocument(id),
+      getSections: (id) => fixtureEvidenceSource.getSections(id),
+      getFacts: (id) => fixtureEvidenceSource.getFacts(id),
+      getSpans: async (id) => {
+        const spans = await fixtureEvidenceSource.getSpans(id);
+        if (id === DOC_10Q_ID && spans[0]) {
+          const sections = await fixtureEvidenceSource.getSections(id);
+          const section = sections.find((s) => s.id === spans[0]!.span.section_id)!;
+          // Shift back to section-local coordinates (the old world's values).
+          spans[0].span.start_char -= section.start_char;
+          spans[0].span.end_char -= section.start_char;
+        }
+        return spans;
+      },
+    };
+
+    const result = await loadReaderData(tamperedSource, DOC_10Q_ID);
+    expect(result.kind).toBe("ready");
+    if (result.kind !== "ready") return;
+    expect(result.data.integrityFailures.map((failure) => failure.reason)).toEqual([
+      "offsets_out_of_range",
+    ]);
+    expect(result.data.spans.length).toBe(fixtureSpans.length - 1);
+  });
+
   // Regression (finding 3e): the reader used to await getSections/getSpans/
   // getFacts unguarded, crashing on sources that cannot serve them yet.
   it("returns details_unavailable instead of calling unsupported methods", async () => {
