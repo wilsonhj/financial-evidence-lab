@@ -63,7 +63,7 @@ export class FixtureEvidenceSource implements EvidenceSource {
       fixtureFacts
         .filter((record) => record.fact.entity_id === entityId)
         .map((record) => ({
-          id: record.id,
+          ...record,
           fact: {
             ...record.fact,
             period: { ...record.fact.period },

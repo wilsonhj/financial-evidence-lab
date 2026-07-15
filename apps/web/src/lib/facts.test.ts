@@ -28,7 +28,11 @@ function fact(overrides: Partial<NormalizedFinancialFact> = {}): NormalizedFinan
 }
 
 function record(id: string, overrides: Partial<NormalizedFinancialFact> = {}): FinancialFactRecord {
-  return { id, fact: fact(overrides) };
+  return {
+    id,
+    document_version_id: "aaaaaaaa-0000-4000-8000-000000001001",
+    fact: fact(overrides),
+  };
 }
 
 describe("scaledDecimal", () => {

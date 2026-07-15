@@ -1,3 +1,6 @@
+// Node built-in import is a compile-time server-only tripwire for bearer auth.
+import "node:process";
+
 import type { components } from "@fel/contracts";
 
 import type {
@@ -7,6 +10,7 @@ import type {
   SourceSpan,
 } from "../contracts";
 import type { EvidenceSource } from "./evidence-source";
+import { matchesReaderResponseSchema } from "./reader-contract-validator";
 
 export type ErrorEnvelope = components["schemas"]["Error"];
 export type EvidenceFailureKind =
@@ -239,6 +243,9 @@ function validateReaderResponse(
   requestedAsOf?: string,
   requestedCorpusVersionId?: string,
 ): ReaderResponse {
+  if (!matchesReaderResponseSchema(value)) {
+    throw new EvidenceContractError("payload does not match reader-response/v1");
+  }
   const response = object(value, "reader");
   const effectiveAsOf = assertTimestamp(response.as_of, "reader.as_of");
   const corpusVersionId =
@@ -285,6 +292,51 @@ function validateReaderResponse(
     siblingIds.add(sibling.meta.id);
     if (Date.parse(sibling.meta.published_at) > cutoff) {
       throw new EvidenceContractError(`${siblingPath} is newer than the effective cutoff`);
+    }
+  }
+
+  const versionOwners = new Map<string, string>();
+  const spanOwners = new Map<string, string>();
+  const factOwners = new Map<string, string>();
+  const blocks = [document, ...(response.siblings as ReaderResponse["siblings"])];
+  for (const block of blocks) {
+    const documentId = block.meta.id;
+    const priorVersionOwner = versionOwners.get(block.document_version_id);
+    if (priorVersionOwner) {
+      throw new EvidenceContractError(
+        `document version is shared by ${priorVersionOwner} and ${documentId}`,
+      );
+    }
+    versionOwners.set(block.document_version_id, documentId);
+    for (const record of block.spans) {
+      const priorSpanOwner = spanOwners.get(record.id);
+      if (priorSpanOwner) {
+        throw new EvidenceContractError(
+          `source span id is shared by ${priorSpanOwner} and ${documentId}`,
+        );
+      }
+      spanOwners.set(record.id, documentId);
+    }
+    for (const record of block.facts) {
+      const priorFactOwner = factOwners.get(record.id);
+      if (priorFactOwner) {
+        throw new EvidenceContractError(
+          `financial fact id is shared by ${priorFactOwner} and ${documentId}`,
+        );
+      }
+      factOwners.set(record.id, documentId);
+    }
+  }
+  for (const block of blocks) {
+    for (const record of block.facts) {
+      for (const [name, target] of [
+        ["duplicate_of", record.duplicate_of],
+        ["restates", record.restates],
+      ] as const) {
+        if (target && (target === record.id || !factOwners.has(target))) {
+          throw new EvidenceContractError(`${name} does not resolve to another response fact`);
+        }
+      }
     }
   }
 
@@ -377,12 +429,31 @@ export class HttpEvidenceSource implements EvidenceSource {
         });
       }),
     );
-    return perEntity
+    const candidates = perEntity
       .flat()
       .sort(
         (a, b) =>
           Date.parse(a.published_at) - Date.parse(b.published_at) || a.id.localeCompare(b.id),
       );
+    const unique = [...new Map(candidates.map((document) => [document.id, document])).values()];
+    if (!this.corpusVersionId) return unique;
+
+    // Entity listings have no corpus-pin parameter in contract v0.2.0. Treat
+    // them as discovery only, then fail closed by resolving every advertised
+    // document through the pinned composite endpoint. A 404 means absent from
+    // the selected snapshot and is filtered; every other error aborts.
+    const pinned: DocumentMeta[] = [];
+    const concurrency = 6;
+    for (let offset = 0; offset < unique.length; offset += concurrency) {
+      const batch = unique.slice(offset, offset + concurrency);
+      const resolved = await Promise.all(batch.map((document) => this.getReader(document.id)));
+      for (const reader of resolved) {
+        if (reader) pinned.push(reader.document.meta);
+      }
+    }
+    return pinned.sort(
+      (a, b) => Date.parse(a.published_at) - Date.parse(b.published_at) || a.id.localeCompare(b.id),
+    );
   }
 
   async getReader(documentId: string): Promise<ReaderResponse | null> {

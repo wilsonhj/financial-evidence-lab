@@ -15,13 +15,8 @@ export type ReaderSibling = components["schemas"]["ReaderSibling"];
 export type ReaderSection = components["schemas"]["ReaderSection"];
 export type ReaderFactRecord = components["schemas"]["ReaderFactRecord"];
 
-/**
- * UI fact record derived from the generated reader wrapper. Fixture-era unit
- * helpers may omit version/linkage metadata; production composite responses
- * always carry the generated required `document_version_id`.
- */
-export type FinancialFactRecord = Pick<ReaderFactRecord, "id" | "fact"> &
-  Partial<Omit<ReaderFactRecord, "id" | "fact">>;
+/** The generated reader fact wrapper, including required version provenance. */
+export type FinancialFactRecord = ReaderFactRecord;
 
 /**
  * UI view-model for an extracted filing section. Sections are referenced by

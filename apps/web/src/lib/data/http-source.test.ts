@@ -231,6 +231,96 @@ describe("HttpEvidenceSource composite reader", () => {
     );
     await expect(source.getReader(DOCUMENT_ID)).rejects.toBeInstanceOf(EvidenceContractError);
   });
+
+  it("rejects values and extra fields forbidden by the frozen reader schemas", async () => {
+    const mutations: Array<(body: ReaderResponse) => void> = [
+      (body) => {
+        body.document.facts[0]!.fact.value = "not-a-decimal";
+      },
+      (body) => {
+        body.document.facts[0]!.fact.reported_or_derived = "predicted" as "reported";
+      },
+      (body) => {
+        body.document.facts[0]!.fact.entity_id = "not-a-uuid";
+      },
+      (body) => {
+        body.document.spans[0]!.span.text_hash = "sha256:bad";
+      },
+      (body) => {
+        body.document.meta.period_end = "2026-99-99";
+      },
+      (body) => {
+        body.document.facts[0]!.fact.confidence = 2;
+      },
+      (body) => {
+        (body.document.meta as unknown as Record<string, unknown>).internal_secret = "hidden";
+      },
+    ];
+
+    for (const mutate of mutations) {
+      const body = structuredClone(readerFixture);
+      mutate(body);
+      await expect(
+        makeSource(vi.fn(async () => jsonResponse(body)) as unknown as typeof fetch).getReader(
+          DOCUMENT_ID,
+        ),
+      ).rejects.toBeInstanceOf(EvidenceContractError);
+    }
+  });
+
+  it("accepts unknown selection policies marked as an open enum", async () => {
+    const body = structuredClone(readerFixture);
+    body.selection_policy = "future_policy" as "latest_parsed";
+    await expect(
+      makeSource(vi.fn(async () => jsonResponse(body)) as unknown as typeof fetch).getReader(
+        DOCUMENT_ID,
+      ),
+    ).resolves.toMatchObject({ selection_policy: "future_policy" });
+  });
+
+  it("rejects response-global span, fact, and version collisions", async () => {
+    const mutations: Array<(body: ReaderResponse) => void> = [
+      (body) => {
+        const targetId = body.document.spans[0]!.id;
+        body.siblings[0]!.spans[0]!.id = targetId;
+        body.siblings[0]!.facts[0]!.fact.source_span_id = targetId;
+      },
+      (body) => {
+        delete body.siblings[0]!.facts[0]!.restates;
+        body.siblings[0]!.facts[0]!.id = body.document.facts[0]!.id;
+      },
+      (body) => {
+        const versionId = body.document.document_version_id;
+        body.siblings[0]!.document_version_id = versionId;
+        body.siblings[0]!.spans[0]!.span.document_version_id = versionId;
+        body.siblings[0]!.facts[0]!.document_version_id = versionId;
+      },
+    ];
+    for (const mutate of mutations) {
+      const body = structuredClone(readerFixture);
+      mutate(body);
+      await expect(
+        makeSource(vi.fn(async () => jsonResponse(body)) as unknown as typeof fetch).getReader(
+          DOCUMENT_ID,
+        ),
+      ).rejects.toBeInstanceOf(EvidenceContractError);
+    }
+  });
+
+  it("rejects dangling or self-referential duplicate/restatement links", async () => {
+    for (const target of [
+      "aaaaaaaa-0000-4000-8000-000000000404",
+      readerFixture.document.facts[0]!.id,
+    ]) {
+      const body = structuredClone(readerFixture);
+      body.document.facts[0]!.duplicate_of = target;
+      await expect(
+        makeSource(vi.fn(async () => jsonResponse(body)) as unknown as typeof fetch).getReader(
+          DOCUMENT_ID,
+        ),
+      ).rejects.toBeInstanceOf(EvidenceContractError);
+    }
+  });
 });
 
 describe("HttpEvidenceSource document listing", () => {
@@ -277,5 +367,42 @@ describe("HttpEvidenceSource document listing", () => {
     await expect(
       makeSource(fetchImpl as unknown as typeof fetch, { asOf: AS_OF }).listDocuments(),
     ).rejects.toBeInstanceOf(EvidenceContractError);
+  });
+
+  it("advertises only documents that resolve through the configured corpus pin", async () => {
+    const missing = doc(
+      "bbbbbbbb-0000-4000-8000-000000000404",
+      readerFixture.document.meta.entity_id,
+      "2026-06-01T00:00:00Z",
+    );
+    const pinned: ReaderResponse = {
+      ...structuredClone(readerFixture),
+      corpus_version_id: CORPUS_VERSION_ID,
+      selection_policy: "corpus_pinned",
+    };
+    const fetchImpl = vi.fn(async (url: string) => {
+      if (url.includes("/entities/")) {
+        return jsonResponse([readerFixture.document.meta, missing]);
+      }
+      if (url.includes(`/documents/${DOCUMENT_ID}/reader`)) return jsonResponse(pinned);
+      return jsonResponse(
+        { error: { code: "NOT_FOUND", message: "not pinned", request_id: "r-pin" } },
+        404,
+      );
+    });
+
+    const documents = await makeSource(fetchImpl as unknown as typeof fetch, {
+      asOf: AS_OF,
+      corpusVersionId: CORPUS_VERSION_ID,
+    }).listDocuments();
+
+    expect(documents.map((document) => document.id)).toEqual([DOCUMENT_ID]);
+    const compositeUrls = (fetchImpl.mock.calls as unknown as Array<[string]>)
+      .map(([url]) => url)
+      .filter((url) => url.includes("/reader"));
+    expect(compositeUrls).toHaveLength(2);
+    for (const url of compositeUrls) {
+      expect(url).toContain(`corpus_version_id=${CORPUS_VERSION_ID}`);
+    }
   });
 });

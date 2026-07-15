@@ -1,3 +1,8 @@
+import { env as serverEnvironment } from "node:process";
+
+// The Node-only import is deliberate: a future Client Component import fails
+// at build time instead of pulling secret-backed configuration into its graph.
+
 export type EvidenceRuntimeConfig =
   | { mode: "fixture" }
   | {
@@ -27,7 +32,7 @@ function required(env: Readonly<Record<string, string | undefined>>, name: strin
 
 /** Parses only server runtime variables. Never import this module from a client component. */
 export function loadEvidenceRuntimeConfig(
-  env: Readonly<Record<string, string | undefined>> = process.env,
+  env: Readonly<Record<string, string | undefined>> = serverEnvironment,
 ): EvidenceRuntimeConfig {
   const mode = env.FEL_EVIDENCE_SOURCE?.trim();
   if (mode === "fixture") return { mode };
