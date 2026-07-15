@@ -89,6 +89,21 @@ describe("HttpEvidenceSource composite reader", () => {
     expect((init.headers as Record<string, string>).Authorization).toBe("Bearer minted-token");
   });
 
+  it("classifies token-provider failures without leaking their message", async () => {
+    const source = new HttpEvidenceSource({
+      baseUrl: "https://api.example.test",
+      entityIds: [ENTITY_A],
+      token: async () => {
+        throw new Error("refresh secret leaked");
+      },
+      fetchImpl: vi.fn() as unknown as typeof fetch,
+    });
+    const error = await source.getReader(DOCUMENT_ID).catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(EvidenceApiError);
+    expect((error as EvidenceApiError).kind).toBe("authentication");
+    expect((error as Error).message).not.toContain("refresh secret leaked");
+  });
+
   it("maps only a composite endpoint 404 to null", async () => {
     const fetchImpl = vi.fn(async () =>
       jsonResponse({ error: { code: "NOT_FOUND", message: "no", request_id: "r-1" } }, 404),
@@ -253,5 +268,14 @@ describe("HttpEvidenceSource document listing", () => {
       "bbbbbbbb-0000-4000-8000-000000000002",
       "bbbbbbbb-0000-4000-8000-000000000003",
     ]);
+  });
+
+  it("rejects documents newer than the configured list cutoff", async () => {
+    const fetchImpl = vi.fn(async () =>
+      jsonResponse([doc("bbbbbbbb-0000-4000-8000-000000000004", ENTITY_A, "2026-07-02T00:00:00Z")]),
+    );
+    await expect(
+      makeSource(fetchImpl as unknown as typeof fetch, { asOf: AS_OF }).listDocuments(),
+    ).rejects.toBeInstanceOf(EvidenceContractError);
   });
 });

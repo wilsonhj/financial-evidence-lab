@@ -55,5 +55,19 @@ describe("loadEvidenceRuntimeConfig", () => {
     expect(() =>
       loadEvidenceRuntimeConfig({ ...HTTP_ENV, FEL_CORPUS_VERSION_ID: "not-a-uuid" }),
     ).toThrow(EvidenceConfigurationError);
+    expect(() =>
+      loadEvidenceRuntimeConfig({
+        ...HTTP_ENV,
+        NODE_ENV: "production",
+        FEL_API_BASE_URL: "http://api.example.test",
+      }),
+    ).toThrow(EvidenceConfigurationError);
+    expect(() =>
+      loadEvidenceRuntimeConfig({
+        ...HTTP_ENV,
+        NODE_ENV: "production",
+        FEL_API_BASE_URL: "http://127.0.0.1:8000",
+      }),
+    ).not.toThrow();
   });
 });

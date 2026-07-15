@@ -55,6 +55,12 @@ export function loadEvidenceRuntimeConfig(
       "FEL_API_BASE_URL must be an HTTP(S) URL without credentials, query, or fragment",
     );
   }
+  const loopback = ["localhost", "127.0.0.1", "::1"].includes(url.hostname);
+  if (env.NODE_ENV === "production" && url.protocol !== "https:" && !loopback) {
+    throw new EvidenceConfigurationError(
+      "FEL_API_BASE_URL must use HTTPS outside local development",
+    );
+  }
 
   const entityIds = required(env, "FEL_ENTITY_IDS")
     .split(",")

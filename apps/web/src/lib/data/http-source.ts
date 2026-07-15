@@ -322,7 +322,12 @@ export class HttpEvidenceSource implements EvidenceSource {
   }
 
   private async request(path: string): Promise<Response> {
-    const token = typeof this.token === "function" ? await this.token() : this.token;
+    let token: string;
+    try {
+      token = typeof this.token === "function" ? await this.token() : this.token;
+    } catch {
+      throw new EvidenceApiError(0, path, "authentication");
+    }
     try {
       return await this.fetchImpl(`${this.baseUrl}${path}`, {
         cache: "no-store",
@@ -365,6 +370,9 @@ export class HttpEvidenceSource implements EvidenceSource {
         const raw = array(await this.getJson(path), path);
         return raw.map((value, index) => {
           assertDocumentMeta(value, `${path}[${index}]`);
+          if (this.asOf && Date.parse(value.published_at) > Date.parse(this.asOf)) {
+            throw new EvidenceContractError(`${path}[${index}] is newer than the requested cutoff`);
+          }
           return value;
         });
       }),
