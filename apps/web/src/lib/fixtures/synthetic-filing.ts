@@ -19,7 +19,15 @@ import type {
  *   10-Q/A) linking the two document versions;
  * - a dimensioned fact (Instruments segment revenue).
  *
- * Span offsets are relative to their section's `content`; every text_hash is
+ * COORDINATE SYSTEM (issue #87, package B): section `start_char`/`end_char`
+ * and span offsets are GLOBAL offsets into the canonical document text of the
+ * parsed version — exactly how ingestion persists them (PR #80). Sections are
+ * laid out CUMULATIVELY, so every non-first section starts at a nonzero
+ * global offset and every span anchored there has global offsets exceeding
+ * its section-content length (the regression case #87 names — the old
+ * fixture's sections all started at 0, masking the section-local bug). The
+ * 10-Q/A additionally starts its FIRST section at a nonzero offset, modeling
+ * a canonical cover region the API returns no section for. Every text_hash is
  * the sha256 of the exact cited substring. fixture.test.ts recomputes offsets
  * and hashes and validates every fact against the frozen JSON Schema, so this
  * file cannot silently drift from the contracts.
@@ -91,7 +99,31 @@ const SEC_A_EXPLANATORY = "bbbbbbbb-0000-4000-8000-00000000b001";
 const SEC_A_ITEM1 = "bbbbbbbb-0000-4000-8000-00000000b002";
 const SEC_A_STATEMENTS = "bbbbbbbb-0000-4000-8000-00000000b003";
 
-export const fixtureSections: SectionRecord[] = [
+/**
+ * The 10-Q/A's canonical text begins with a cover region the parser emitted
+ * no reader-visible section for, so even its FIRST section starts at a
+ * nonzero global offset. The reader must never assume the first returned
+ * section starts at 0.
+ */
+export const DOC_10QA_CANONICAL_COVER_LENGTH = 128;
+
+type SectionSeed = Omit<SectionRecord, "start_char" | "end_char">;
+
+/**
+ * Lays out sections CUMULATIVELY against the canonical document text of one
+ * parsed version (ingestion emission semantics: sections tile the canonical
+ * text, each `content` being exactly the slice `[start_char, end_char)`).
+ */
+function layoutSections(base: number, seeds: readonly SectionSeed[]): SectionRecord[] {
+  let cursor = base;
+  return seeds.map((seed) => {
+    const start_char = cursor;
+    cursor += seed.content.length;
+    return { ...seed, start_char, end_char: cursor };
+  });
+}
+
+const sections10q: SectionSeed[] = [
   {
     id: SEC_PART1,
     document_version_id: DOC_10Q_VERSION_ID,
@@ -151,6 +183,9 @@ export const fixtureSections: SectionRecord[] = [
     content:
       "Management, with the participation of the principal executive officer and principal financial officer, evaluated the effectiveness of our disclosure controls and procedures as of March 31, 2026 and concluded they were effective.",
   },
+];
+
+const sections10qa: SectionSeed[] = [
   {
     id: SEC_A_EXPLANATORY,
     document_version_id: DOC_10QA_VERSION_ID,
@@ -181,6 +216,29 @@ export const fixtureSections: SectionRecord[] = [
   },
 ];
 
+export const fixtureSections: SectionRecord[] = [
+  ...layoutSections(0, sections10q),
+  ...layoutSections(DOC_10QA_CANONICAL_COVER_LENGTH, sections10qa),
+];
+
+const sectionById = new Map(fixtureSections.map((section) => [section.id, section]));
+
+/**
+ * Converts a section-local offset into the GLOBAL canonical offset persisted
+ * on source spans (`section.start_char + local`). The spans below keep the
+ * exact cited substrings of the original fixture — only the coordinate system
+ * moved from section-local to canonical-global — so every committed
+ * `text_hash` still matches the derived-local slice.
+ */
+function canonicalOffset(sectionId: string, local: number): number {
+  const section = sectionById.get(sectionId);
+  if (!section) throw new Error(`fixture bug: unknown section ${sectionId}`);
+  if (!Number.isInteger(local) || local < 0 || local > section.content.length) {
+    throw new Error(`fixture bug: local offset ${local} outside section ${sectionId}`);
+  }
+  return section.start_char + local;
+}
+
 const SPAN_REVENUE_STMT = "cccccccc-0000-4000-8000-000000000001";
 const SPAN_REVENUE_MDA = "cccccccc-0000-4000-8000-000000000002";
 const SPAN_NET_INCOME_STMT = "cccccccc-0000-4000-8000-000000000003";
@@ -189,6 +247,13 @@ const SPAN_SEGMENT_REVENUE = "cccccccc-0000-4000-8000-000000000005";
 const SPAN_NET_INCOME_RESTATED = "cccccccc-0000-4000-8000-000000000006";
 const SPAN_REVENUE_RESTATED = "cccccccc-0000-4000-8000-000000000007";
 
+/**
+ * Span offsets are GLOBAL canonical offsets (`canonicalOffset(section,
+ * local)`). Every span below anchors in a section at a nonzero global offset,
+ * so every global start_char EXCEEDS its section's content length — the #87
+ * regression case that a section-local reading of these offsets breaks on
+ * (fixture.test.ts asserts this precondition).
+ */
 export const fixtureSpans: SourceSpanRecord[] = [
   {
     id: SPAN_REVENUE_STMT,
@@ -196,8 +261,8 @@ export const fixtureSpans: SourceSpanRecord[] = [
       document_version_id: DOC_10Q_VERSION_ID,
       section_id: SEC_STATEMENTS,
       page: 4,
-      start_char: 73,
-      end_char: 201,
+      start_char: canonicalOffset(SEC_STATEMENTS, 73),
+      end_char: canonicalOffset(SEC_STATEMENTS, 201),
       text_hash: "sha256:d0c91586447d18fe6ab7d92ccfdba9a9c0ba06cd798684838317fcae61b754fb",
     },
   },
@@ -207,8 +272,8 @@ export const fixtureSpans: SourceSpanRecord[] = [
       document_version_id: DOC_10Q_VERSION_ID,
       section_id: SEC_STATEMENTS,
       page: 4,
-      start_char: 238,
-      end_char: 295,
+      start_char: canonicalOffset(SEC_STATEMENTS, 238),
+      end_char: canonicalOffset(SEC_STATEMENTS, 295),
       text_hash: "sha256:b9f093265b2593efd5e27845cf185ab04a9839aea93edc8164435efe30c8cf18",
     },
   },
@@ -218,8 +283,8 @@ export const fixtureSpans: SourceSpanRecord[] = [
       document_version_id: DOC_10Q_VERSION_ID,
       section_id: SEC_NOTES,
       page: 9,
-      start_char: 32,
-      end_char: 129,
+      start_char: canonicalOffset(SEC_NOTES, 32),
+      end_char: canonicalOffset(SEC_NOTES, 129),
       text_hash: "sha256:af97a10ce99fcd5be0f68ef9b61187104cac6f119a6b46b033efda8aa4f1d04c",
     },
   },
@@ -229,8 +294,8 @@ export const fixtureSpans: SourceSpanRecord[] = [
       document_version_id: DOC_10Q_VERSION_ID,
       section_id: SEC_MDA,
       page: 18,
-      start_char: 0,
-      end_char: 80,
+      start_char: canonicalOffset(SEC_MDA, 0),
+      end_char: canonicalOffset(SEC_MDA, 80),
       text_hash: "sha256:8dee481a3be8bc1abad39a867b568cfb3b3150ebbaf2866f1490641c855ef021",
     },
   },
@@ -240,8 +305,8 @@ export const fixtureSpans: SourceSpanRecord[] = [
       document_version_id: DOC_10Q_VERSION_ID,
       section_id: SEC_MDA,
       page: 18,
-      start_char: 138,
-      end_char: 205,
+      start_char: canonicalOffset(SEC_MDA, 138),
+      end_char: canonicalOffset(SEC_MDA, 205),
       text_hash: "sha256:03a491c2a06d5f69b6c58c1b3f6121681ad05d91674194d7a111497de2d99002",
     },
   },
@@ -251,8 +316,8 @@ export const fixtureSpans: SourceSpanRecord[] = [
       document_version_id: DOC_10QA_VERSION_ID,
       section_id: SEC_A_STATEMENTS,
       page: 3,
-      start_char: 73,
-      end_char: 115,
+      start_char: canonicalOffset(SEC_A_STATEMENTS, 73),
+      end_char: canonicalOffset(SEC_A_STATEMENTS, 115),
       text_hash: "sha256:61ba46c5e1165be54a911ae27c05f14163e3f2e48c211cecfdb7b6f0217380b1",
     },
   },
@@ -262,8 +327,8 @@ export const fixtureSpans: SourceSpanRecord[] = [
       document_version_id: DOC_10QA_VERSION_ID,
       section_id: SEC_A_STATEMENTS,
       page: 3,
-      start_char: 116,
-      end_char: 227,
+      start_char: canonicalOffset(SEC_A_STATEMENTS, 116),
+      end_char: canonicalOffset(SEC_A_STATEMENTS, 227),
       text_hash: "sha256:97b9d4abbb7f0babf169ea25079df7bd9d665227ed5d7a7800c7e878af997f4c",
     },
   },

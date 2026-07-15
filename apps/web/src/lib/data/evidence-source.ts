@@ -40,9 +40,18 @@ export interface EvidenceSource {
   listDocuments(): Promise<DocumentMeta[]>;
   /** One document by id (DocumentMeta.id), or null when unknown. */
   getDocument(documentId: string): Promise<DocumentMeta | null>;
-  /** Extracted sections of the document's active version, in document order. */
+  /**
+   * Extracted sections of the document's active version, in document order.
+   * Sections carry GLOBAL canonical-text ranges (`start_char`/`end_char`)
+   * with `content` being exactly that canonical slice.
+   */
   getSections(documentId: string): Promise<SectionRecord[]>;
-  /** Source spans anchored in the document's active version. */
+  /**
+   * Source spans anchored in the document's active version. Span offsets are
+   * GLOBAL canonical-document offsets (never section-local); the UI derives
+   * local render anchors as `span.start_char - section.start_char` and never
+   * rewrites the persisted values.
+   */
   getSpans(documentId: string): Promise<SourceSpanRecord[]>;
   /**
    * Normalized facts for an entity across all of its documents —

@@ -19,6 +19,8 @@ function section(id: string, order: number, level: number, parent_id?: string): 
     order,
     level,
     title: `Section ${id}`,
+    start_char: 0,
+    end_char: 0,
     content: "",
   };
 }

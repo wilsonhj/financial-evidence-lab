@@ -4,6 +4,10 @@ import type { SectionRecord, SourceSpanRecord } from "./contracts";
  * A contiguous slice of a section's content. `spanIds` lists every source
  * span covering the slice (empty = plain text). Overlapping spans are split
  * at every span boundary so each segment has a stable set of covering spans.
+ *
+ * `start`/`end` are SECTION-LOCAL render anchors (offsets into `content`),
+ * derived from the global canonical coordinates at the last moment — they are
+ * a view-model detail and are never written back onto any SourceSpan.
  */
 export interface SectionSegment {
   text: string;
@@ -12,35 +16,88 @@ export interface SectionSegment {
   spanIds: string[];
 }
 
-/** Offsets are valid only when 0 <= start < end <= length (fail-closed). */
-function offsetsValid(start: number, end: number, length: number): boolean {
+/**
+ * True when a section's global canonical range is internally consistent:
+ * integer bounds, 0 <= start <= end, and `content` is exactly the canonical
+ * slice length `end_char - start_char`. A section failing this check cannot
+ * anchor any span (fail-closed).
+ */
+export function sectionRangeConsistent(section: SectionRecord): boolean {
   return (
-    Number.isInteger(start) && Number.isInteger(end) && start >= 0 && end > start && end <= length
+    Number.isInteger(section.start_char) &&
+    Number.isInteger(section.end_char) &&
+    section.start_char >= 0 &&
+    section.end_char >= section.start_char &&
+    section.content.length === section.end_char - section.start_char
   );
 }
 
 /**
- * Maps section-relative span offsets onto the section text, producing an
- * ordered, gap-free list of segments covering the whole content. Handles
- * overlapping and adjacent spans.
+ * Result of deriving a section-local anchor from a span's GLOBAL canonical
+ * offsets. Failures name which invariant broke so the verification layer
+ * (citation-integrity.ts) can surface the precise reason; rendering code
+ * treats any failure as "do not highlight".
+ */
+export type LocalAnchorResult =
+  | { ok: true; start: number; end: number }
+  | { ok: false; reason: "section_range_mismatch" | "offsets_out_of_range" };
+
+/**
+ * Derives the section-local render anchor for a span:
+ * `local = span.start_char - section.start_char`.
  *
- * Fail-closed: spans with out-of-range or empty offsets are SKIPPED, never
- * clamped into plausible-looking highlights. Callers are expected to have
- * already excluded and flagged invalid spans via
+ * Fail-closed, never clamped:
+ * - the section's own canonical range must be consistent
+ *   (`section_range_mismatch` otherwise);
+ * - the span's global offsets must be integers, non-empty, and fully
+ *   CONTAINED in the section's global range
+ *   (`offsets_out_of_range` otherwise).
+ *
+ * The input SourceSpan is read, never mutated: global offsets remain the only
+ * persisted coordinates.
+ */
+export function deriveLocalSpanAnchor(
+  section: SectionRecord,
+  record: SourceSpanRecord,
+): LocalAnchorResult {
+  if (!sectionRangeConsistent(section)) {
+    return { ok: false, reason: "section_range_mismatch" };
+  }
+  const { start_char: start, end_char: end } = record.span;
+  const contained =
+    Number.isInteger(start) &&
+    Number.isInteger(end) &&
+    start >= section.start_char &&
+    end > start &&
+    end <= section.end_char;
+  if (!contained) return { ok: false, reason: "offsets_out_of_range" };
+  return { ok: true, start: start - section.start_char, end: end - section.start_char };
+}
+
+/**
+ * Maps spans onto the section text, producing an ordered, gap-free list of
+ * segments covering the whole content. Span offsets are GLOBAL canonical
+ * offsets; local anchors are derived per span via `deriveLocalSpanAnchor`.
+ * Handles overlapping and adjacent spans.
+ *
+ * Fail-closed: spans whose global offsets fall outside the section's
+ * canonical range (and all spans of a section whose own range is
+ * inconsistent) are SKIPPED, never clamped into plausible-looking highlights.
+ * Callers are expected to have already excluded and flagged invalid spans via
  * `verifySpanIntegrity` (see citation-integrity.ts); the skip here is a
  * defensive second line, not an error channel.
  */
 export function segmentSection(
-  content: string,
+  section: SectionRecord,
   spans: readonly SourceSpanRecord[],
-  sectionId: string,
 ): SectionSegment[] {
+  const content = section.content;
   const relevant: { id: string; start: number; end: number }[] = [];
   for (const record of spans) {
-    if (record.span.section_id !== sectionId) continue;
-    const { start_char: start, end_char: end } = record.span;
-    if (!offsetsValid(start, end, content.length)) continue;
-    relevant.push({ id: record.id, start, end });
+    if (record.span.section_id !== section.id) continue;
+    const anchor = deriveLocalSpanAnchor(section, record);
+    if (!anchor.ok) continue;
+    relevant.push({ id: record.id, start: anchor.start, end: anchor.end });
   }
 
   const boundaries = new Set<number>([0, content.length]);
@@ -64,15 +121,15 @@ export function segmentSection(
 }
 
 /**
- * Extracts the exact raw source text a span cites from its section content,
- * or null when the offsets are invalid for that content. Callers must treat
- * null as "citation cannot be trusted" — there is no clamped best-effort
- * substring.
+ * Extracts the exact raw source text a span cites from its section content
+ * (sliced via the derived local anchor), or null when the span's global
+ * offsets are invalid for that section. Callers must treat null as "citation
+ * cannot be trusted" — there is no clamped best-effort substring.
  */
 export function extractSpanText(section: SectionRecord, record: SourceSpanRecord): string | null {
-  const { start_char: start, end_char: end } = record.span;
-  if (!offsetsValid(start, end, section.content.length)) return null;
-  return section.content.slice(start, end);
+  const anchor = deriveLocalSpanAnchor(section, record);
+  if (!anchor.ok) return null;
+  return section.content.slice(anchor.start, anchor.end);
 }
 
 /**

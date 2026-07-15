@@ -22,6 +22,10 @@ import type { EvidenceSource, EvidenceSourceCapabilities } from "./evidence-sour
  * resolution is the source's job, never the UI's (integration-lead ruling,
  * PR #79). Returned records still carry `document_version_id` for
  * display/provenance only.
+ *
+ * Coordinate contract (issue #87): sections carry GLOBAL canonical ranges and
+ * span offsets are GLOBAL canonical offsets, exactly as ingestion persists
+ * them; the source serves them verbatim and never rewrites offsets.
  */
 export class FixtureEvidenceSource implements EvidenceSource {
   readonly capabilities: EvidenceSourceCapabilities = {
