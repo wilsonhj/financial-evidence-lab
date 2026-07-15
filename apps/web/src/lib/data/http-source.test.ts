@@ -1,10 +1,20 @@
 import { describe, expect, it, vi } from "vitest";
 
-import type { DocumentMeta } from "../contracts";
-import { EvidenceApiError, HttpEvidenceSource } from "./http-source";
+import readerFixtureJson from "../../../../../packages/contracts/fixtures/reader-response.json";
+import type { DocumentMeta, ReaderResponse } from "../contracts";
+import {
+  EvidenceApiError,
+  EvidenceContractError,
+  HttpEvidenceSource,
+} from "./http-source";
 
 const ENTITY_A = "11111111-1111-4111-8111-111111111111";
 const ENTITY_B = "22222222-2222-4222-8222-222222222222";
+const DOCUMENT_ID = readerFixtureJson.document.meta.id;
+const AS_OF = readerFixtureJson.as_of;
+const CORPUS_VERSION_ID = "33333333-3333-4333-8333-333333333333";
+
+const readerFixture = structuredClone(readerFixtureJson) as ReaderResponse;
 
 function doc(id: string, entityId: string, publishedAt: string): DocumentMeta {
   return {
@@ -27,76 +37,216 @@ function jsonResponse(body: unknown, status = 200): Response {
 
 function makeSource(
   fetchImpl: typeof fetch,
-  options: Partial<{ asOf: string; entityIds: string[] }> = {},
+  options: Partial<{
+    asOf: string;
+    corpusVersionId: string;
+    entityIds: string[];
+  }> = {},
 ) {
   return new HttpEvidenceSource({
-    baseUrl: "https://api.example.test",
+    baseUrl: "https://api.example.test/",
     entityIds: options.entityIds ?? [ENTITY_A],
     token: "test-token",
     asOf: options.asOf,
+    corpusVersionId: options.corpusVersionId,
     fetchImpl,
   });
 }
 
-describe("HttpEvidenceSource", () => {
-  // Regression (finding 3a): no Authorization header was ever sent, so every
-  // call against apps/api would 401.
-  it("sends a bearer Authorization header on every request", async () => {
-    const fetchImpl = vi.fn(async () => jsonResponse([]));
-    await makeSource(fetchImpl as unknown as typeof fetch).listDocuments();
+describe("HttpEvidenceSource composite reader", () => {
+  it("calls the composite endpoint with bearer auth and configured temporal/corpus scope", async () => {
+    const body: ReaderResponse = {
+      ...structuredClone(readerFixture),
+      corpus_version_id: CORPUS_VERSION_ID,
+      selection_policy: "corpus_pinned",
+    };
+    const fetchImpl = vi.fn(async () => jsonResponse(body));
+
+    const result = await makeSource(fetchImpl as unknown as typeof fetch, {
+      asOf: AS_OF,
+      corpusVersionId: CORPUS_VERSION_ID,
+    }).getReader(DOCUMENT_ID);
+
+    expect(result?.document.meta.id).toBe(DOCUMENT_ID);
     expect(fetchImpl).toHaveBeenCalledTimes(1);
-    const [, init] = fetchImpl.mock.calls[0]! as unknown as [string, RequestInit];
+    const [url, init] = fetchImpl.mock.calls[0]! as unknown as [string, RequestInit];
+    expect(url).toBe(
+      `https://api.example.test/v1/documents/${DOCUMENT_ID}/reader?as_of=${encodeURIComponent(AS_OF)}&corpus_version_id=${CORPUS_VERSION_ID}`,
+    );
+    expect(init.cache).toBe("no-store");
     expect((init.headers as Record<string, string>).Authorization).toBe("Bearer test-token");
   });
 
-  it("supports an async token provider", async () => {
-    const fetchImpl = vi.fn(async () => jsonResponse([]));
+  it("supports an async token provider without putting the token in the URL", async () => {
+    const fetchImpl = vi.fn(async () => jsonResponse(readerFixture));
     const source = new HttpEvidenceSource({
       baseUrl: "https://api.example.test",
       entityIds: [ENTITY_A],
       token: async () => "minted-token",
       fetchImpl: fetchImpl as unknown as typeof fetch,
     });
-    await source.listDocuments();
-    const [, init] = fetchImpl.mock.calls[0]! as unknown as [string, RequestInit];
+
+    await source.getReader(DOCUMENT_ID);
+
+    const [url, init] = fetchImpl.mock.calls[0]! as unknown as [string, RequestInit];
+    expect(url).not.toContain("minted-token");
     expect((init.headers as Record<string, string>).Authorization).toBe("Bearer minted-token");
   });
 
-  // Regression (finding 3b): as_of was never propagated although point-in-time
-  // filtering is a core contract invariant.
-  it("propagates asOf as the as_of query parameter on document listing", async () => {
+  it("maps only a composite endpoint 404 to null", async () => {
+    const fetchImpl = vi.fn(async () =>
+      jsonResponse({ error: { code: "NOT_FOUND", message: "no", request_id: "r-1" } }, 404),
+    );
+    await expect(
+      makeSource(fetchImpl as unknown as typeof fetch).getReader(DOCUMENT_ID),
+    ).resolves.toBeNull();
+  });
+
+  it.each([
+    [401, "authentication"],
+    [403, "forbidden"],
+    [409, "conflict"],
+    [422, "invalid_scope"],
+    [429, "unavailable"],
+    [503, "unavailable"],
+  ] as const)("preserves HTTP %i as typed %s failure", async (status, kind) => {
+    const fetchImpl = vi.fn(async () =>
+      jsonResponse(
+        {
+          error: {
+            code: "UPSTREAM_DETAIL",
+            message: "sensitive internal detail",
+            details: { secret: "must-not-render" },
+            request_id: "req-42",
+          },
+        },
+        status,
+      ),
+    );
+    const error = await makeSource(fetchImpl as unknown as typeof fetch)
+      .getReader(DOCUMENT_ID)
+      .catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(EvidenceApiError);
+    expect((error as EvidenceApiError).kind).toBe(kind);
+    expect((error as EvidenceApiError).status).toBe(status);
+    expect((error as Error).message).not.toContain("sensitive internal detail");
+    expect((error as Error).message).not.toContain("must-not-render");
+  });
+
+  it("classifies transport failures as unavailable without exposing token material", async () => {
+    const fetchImpl = vi.fn(async () => {
+      throw new Error("request failed with Authorization: Bearer secret-token");
+    });
+    const error = await makeSource(fetchImpl as unknown as typeof fetch)
+      .getReader(DOCUMENT_ID)
+      .catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(EvidenceApiError);
+    expect((error as EvidenceApiError).kind).toBe("unavailable");
+    expect((error as Error).message).not.toContain("secret-token");
+  });
+
+  it("rejects a target id that differs from the requested document", async () => {
+    const body = structuredClone(readerFixture);
+    body.document.meta.id = "aaaaaaaa-0000-4000-8000-000000000001";
+    const source = makeSource(vi.fn(async () => jsonResponse(body)) as unknown as typeof fetch);
+    await expect(source.getReader(DOCUMENT_ID)).rejects.toBeInstanceOf(EvidenceContractError);
+  });
+
+  it("rejects effective cutoff or corpus pins that differ from the configured scope", async () => {
+    const wrongCutoff = structuredClone(readerFixture);
+    wrongCutoff.as_of = "2026-07-02T00:00:00Z";
+    await expect(
+      makeSource(vi.fn(async () => jsonResponse(wrongCutoff)) as unknown as typeof fetch, {
+        asOf: AS_OF,
+      }).getReader(DOCUMENT_ID),
+    ).rejects.toBeInstanceOf(EvidenceContractError);
+
+    const wrongCorpus = structuredClone(readerFixture);
+    wrongCorpus.corpus_version_id = null;
+    await expect(
+      makeSource(vi.fn(async () => jsonResponse(wrongCorpus)) as unknown as typeof fetch, {
+        corpusVersionId: CORPUS_VERSION_ID,
+      }).getReader(DOCUMENT_ID),
+    ).rejects.toBeInstanceOf(EvidenceContractError);
+  });
+
+  it("rejects cross-version sections, spans, facts, and dangling fact citations", async () => {
+    const mutations: Array<(body: ReaderResponse) => void> = [
+      (body) => {
+        body.document.sections[0]!.document_version_id = "aaaaaaaa-0000-4000-8000-000000000001";
+      },
+      (body) => {
+        body.document.spans[0]!.span.document_version_id =
+          "aaaaaaaa-0000-4000-8000-000000000001";
+      },
+      (body) => {
+        body.document.facts[0]!.document_version_id =
+          "aaaaaaaa-0000-4000-8000-000000000001";
+      },
+      (body) => {
+        body.document.facts[0]!.fact.source_span_id =
+          "aaaaaaaa-0000-4000-8000-000000000001";
+      },
+    ];
+
+    for (const mutate of mutations) {
+      const body = structuredClone(readerFixture);
+      mutate(body);
+      await expect(
+        makeSource(vi.fn(async () => jsonResponse(body)) as unknown as typeof fetch).getReader(
+          DOCUMENT_ID,
+        ),
+      ).rejects.toBeInstanceOf(EvidenceContractError);
+    }
+  });
+
+  it("rejects siblings outside the effective cutoff", async () => {
+    const body = structuredClone(readerFixture);
+    body.siblings[0]!.meta.published_at = "2026-07-02T00:00:00Z";
+    await expect(
+      makeSource(vi.fn(async () => jsonResponse(body)) as unknown as typeof fetch).getReader(
+        DOCUMENT_ID,
+      ),
+    ).rejects.toBeInstanceOf(EvidenceContractError);
+  });
+});
+
+describe("HttpEvidenceSource document listing", () => {
+  it("sends bearer auth and as_of on every configured entity request", async () => {
     const fetchImpl = vi.fn(async () => jsonResponse([]));
     await makeSource(fetchImpl as unknown as typeof fetch, {
-      asOf: "2026-06-30T00:00:00Z",
+      asOf: AS_OF,
+      entityIds: [ENTITY_A, ENTITY_B],
     }).listDocuments();
-    const [url] = fetchImpl.mock.calls[0]! as unknown as [string];
-    expect(url).toBe(
-      `https://api.example.test/v1/entities/${ENTITY_A}/documents?as_of=2026-06-30T00%3A00%3A00Z`,
+
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    for (const [url, init] of fetchImpl.mock.calls as unknown as Array<[string, RequestInit]>) {
+      expect(url).toContain(`?as_of=${encodeURIComponent(AS_OF)}`);
+      expect(init.cache).toBe("no-store");
+      expect((init.headers as Record<string, string>).Authorization).toBe("Bearer test-token");
+    }
+  });
+
+  it("merges entity listings in deterministic published-then-id order", async () => {
+    const fetchImpl = vi.fn(async (url: string) =>
+      jsonResponse(
+        url.includes(ENTITY_A)
+          ? [doc("bbbbbbbb-0000-4000-8000-000000000002", ENTITY_A, "2026-05-01T00:00:00Z")]
+          : [
+              doc(
+                "bbbbbbbb-0000-4000-8000-000000000001",
+                ENTITY_B,
+                "2026-04-30T22:00:00+02:00",
+              ),
+              doc(
+                "bbbbbbbb-0000-4000-8000-000000000003",
+                ENTITY_B,
+                "2026-06-01T00:00:00Z",
+              ),
+            ],
+      ),
     );
-  });
-
-  it("omits as_of when not configured", async () => {
-    const fetchImpl = vi.fn(async () => jsonResponse([]));
-    await makeSource(fetchImpl as unknown as typeof fetch).listDocuments();
-    const [url] = fetchImpl.mock.calls[0]! as unknown as [string];
-    expect(url).toBe(`https://api.example.test/v1/entities/${ENTITY_A}/documents`);
-  });
-
-  // Regression (finding 3d): a single hard-coded entityId silently narrowed
-  // the advertised workspace-wide listing to one entity.
-  it("merges documents across entityIds in deterministic published-then-id order", async () => {
-    const fetchImpl = vi.fn(async (url: string) => {
-      if (url.includes(ENTITY_A)) {
-        return jsonResponse([
-          doc("bbbbbbbb-0000-4000-8000-000000000002", ENTITY_A, "2026-05-01T00:00:00Z"),
-        ]);
-      }
-      return jsonResponse([
-        // Offset timestamp equal to an earlier instant than ENTITY_A's doc.
-        doc("bbbbbbbb-0000-4000-8000-000000000001", ENTITY_B, "2026-04-30T22:00:00+02:00"),
-        doc("bbbbbbbb-0000-4000-8000-000000000003", ENTITY_B, "2026-06-01T00:00:00Z"),
-      ]);
-    });
     const documents = await makeSource(fetchImpl as unknown as typeof fetch, {
       entityIds: [ENTITY_A, ENTITY_B],
     }).listDocuments();
@@ -105,65 +255,5 @@ describe("HttpEvidenceSource", () => {
       "bbbbbbbb-0000-4000-8000-000000000002",
       "bbbbbbbb-0000-4000-8000-000000000003",
     ]);
-  });
-
-  // Regression (finding 3c): getDocument used to catch ALL errors and return
-  // null, so API outages and auth failures rendered as 404 pages.
-  it("maps only a true API 404 to null", async () => {
-    const fetchImpl = vi.fn(async () =>
-      jsonResponse({ error: { code: "NOT_FOUND", message: "no", request_id: "r-1" } }, 404),
-    );
-    const result = await makeSource(fetchImpl as unknown as typeof fetch).getDocument(
-      "bbbbbbbb-0000-4000-8000-000000000404",
-    );
-    expect(result).toBeNull();
-  });
-
-  it("throws a typed EvidenceApiError carrying the contract envelope on non-404 failures", async () => {
-    const fetchImpl = vi.fn(async () =>
-      jsonResponse(
-        { error: { code: "INTERNAL", message: "database unavailable", request_id: "req-42" } },
-        500,
-      ),
-    );
-    const source = makeSource(fetchImpl as unknown as typeof fetch);
-    const error = await source
-      .getDocument("bbbbbbbb-0000-4000-8000-000000000500")
-      .then(() => null)
-      .catch((caught: unknown) => caught);
-    expect(error).toBeInstanceOf(EvidenceApiError);
-    const apiError = error as EvidenceApiError;
-    expect(apiError.status).toBe(500);
-    expect(apiError.code).toBe("INTERNAL");
-    expect(apiError.requestId).toBe("req-42");
-    expect(apiError.message).toContain("database unavailable");
-  });
-
-  it("throws a typed EvidenceApiError even when the error body is not an envelope", async () => {
-    const fetchImpl = vi.fn(async () => new Response("gateway timeout", { status: 504 }));
-    const source = makeSource(fetchImpl as unknown as typeof fetch);
-    await expect(source.getDocument("bbbbbbbb-0000-4000-8000-000000000504")).rejects.toBeInstanceOf(
-      EvidenceApiError,
-    );
-  });
-
-  it("throws on listDocuments failures instead of returning an empty list", async () => {
-    const fetchImpl = vi.fn(async () =>
-      jsonResponse(
-        { error: { code: "UNAUTHENTICATED", message: "no token", request_id: "r" } },
-        401,
-      ),
-    );
-    await expect(
-      makeSource(fetchImpl as unknown as typeof fetch).listDocuments(),
-    ).rejects.toBeInstanceOf(EvidenceApiError);
-  });
-
-  // Regression (finding 3e): getSections/getSpans/getFacts reject
-  // unconditionally, and the reader used to await them unguarded; the
-  // capabilities flags are what let the UI degrade gracefully.
-  it("advertises that sections, spans, and facts are unavailable", () => {
-    const source = makeSource(vi.fn() as unknown as typeof fetch);
-    expect(source.capabilities).toEqual({ sections: false, spans: false, facts: false });
   });
 });
