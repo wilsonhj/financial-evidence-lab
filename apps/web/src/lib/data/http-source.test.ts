@@ -2,11 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import readerFixtureJson from "../../../../../packages/contracts/fixtures/reader-response.json";
 import type { DocumentMeta, ReaderResponse } from "../contracts";
-import {
-  EvidenceApiError,
-  EvidenceContractError,
-  HttpEvidenceSource,
-} from "./http-source";
+import { EvidenceApiError, EvidenceContractError, HttpEvidenceSource } from "./http-source";
 
 const ENTITY_A = "11111111-1111-4111-8111-111111111111";
 const ENTITY_B = "22222222-2222-4222-8222-222222222222";
@@ -177,16 +173,19 @@ describe("HttpEvidenceSource composite reader", () => {
         body.document.sections[0]!.document_version_id = "aaaaaaaa-0000-4000-8000-000000000001";
       },
       (body) => {
-        body.document.spans[0]!.span.document_version_id =
-          "aaaaaaaa-0000-4000-8000-000000000001";
+        body.document.spans[0]!.span.document_version_id = "aaaaaaaa-0000-4000-8000-000000000001";
       },
       (body) => {
-        body.document.facts[0]!.document_version_id =
-          "aaaaaaaa-0000-4000-8000-000000000001";
+        body.document.facts[0]!.document_version_id = "aaaaaaaa-0000-4000-8000-000000000001";
       },
       (body) => {
-        body.document.facts[0]!.fact.source_span_id =
-          "aaaaaaaa-0000-4000-8000-000000000001";
+        body.document.facts[0]!.fact.source_span_id = "aaaaaaaa-0000-4000-8000-000000000001";
+      },
+      (body) => {
+        body.document.spans[0]!.span.section_id = "aaaaaaaa-0000-4000-8000-000000000001";
+      },
+      (body) => {
+        body.document.facts[0]!.fact.entity_id = "aaaaaaaa-0000-4000-8000-000000000001";
       },
     ];
 
@@ -209,6 +208,13 @@ describe("HttpEvidenceSource composite reader", () => {
         DOCUMENT_ID,
       ),
     ).rejects.toBeInstanceOf(EvidenceContractError);
+  });
+
+  it("rejects non-JSON success bodies as contract failures", async () => {
+    const source = makeSource(
+      vi.fn(async () => new Response("not json", { status: 200 })) as unknown as typeof fetch,
+    );
+    await expect(source.getReader(DOCUMENT_ID)).rejects.toBeInstanceOf(EvidenceContractError);
   });
 });
 
@@ -234,16 +240,8 @@ describe("HttpEvidenceSource document listing", () => {
         url.includes(ENTITY_A)
           ? [doc("bbbbbbbb-0000-4000-8000-000000000002", ENTITY_A, "2026-05-01T00:00:00Z")]
           : [
-              doc(
-                "bbbbbbbb-0000-4000-8000-000000000001",
-                ENTITY_B,
-                "2026-04-30T22:00:00+02:00",
-              ),
-              doc(
-                "bbbbbbbb-0000-4000-8000-000000000003",
-                ENTITY_B,
-                "2026-06-01T00:00:00Z",
-              ),
+              doc("bbbbbbbb-0000-4000-8000-000000000001", ENTITY_B, "2026-04-30T22:00:00+02:00"),
+              doc("bbbbbbbb-0000-4000-8000-000000000003", ENTITY_B, "2026-06-01T00:00:00Z"),
             ],
       ),
     );

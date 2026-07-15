@@ -7,51 +7,21 @@ import type { components } from "@fel/contracts";
  */
 export type DocumentMeta = components["schemas"]["DocumentMeta"];
 export type SourceSpan = components["schemas"]["SourceSpan"];
+export type NormalizedFinancialFact = components["schemas"]["FinancialFact"];
+export type SourceSpanRecord = components["schemas"]["ReaderSpanRecord"];
+export type ReaderResponse = components["schemas"]["ReaderResponse"];
+export type ReaderDocument = components["schemas"]["ReaderDocument"];
+export type ReaderSibling = components["schemas"]["ReaderSibling"];
+export type ReaderSection = components["schemas"]["ReaderSection"];
+export type ReaderFactRecord = components["schemas"]["ReaderFactRecord"];
 
 /**
- * Mirror of the frozen financial-fact contract
- * (packages/contracts/schemas/financial-fact.schema.json,
- * $id https://contracts.fel.dev/schemas/financial-fact/v1). The schema is not
- * part of the OpenAPI surface yet, so no generated TS type exists; this alias
- * is kept honest by apps/web/src/lib/fixtures/fixture.test.ts, which validates
- * every fixture fact against the canonical JSON Schema with ajv.
- *
- * TODO(contract-change): replace this hand-mirrored type with a generated one
- * once the financial-fact schema joins the OpenAPI surface in
- * packages/contracts (frozen for PR #79; needs a `contract-change` issue and
- * an accepted ADR). Deliberately NOT fixed here.
+ * UI fact record derived from the generated reader wrapper. Fixture-era unit
+ * helpers may omit version/linkage metadata; production composite responses
+ * always carry the generated required `document_version_id`.
  */
-export interface NormalizedFinancialFact {
-  entity_id: string;
-  concept: string;
-  label?: string;
-  /** Decimal string — monetary values are never binary floats (spec 11.4). */
-  value: string;
-  unit: string;
-  scale: number;
-  period: {
-    type: "instant" | "duration";
-    instant?: string;
-    start?: string;
-    end?: string;
-  };
-  dimensions?: Record<string, string>;
-  source_span_id: string;
-  reported_or_derived: "reported" | "derived";
-  confidence?: number;
-}
-
-/** A source span keyed by the server-side span id (see GET /v1/source-spans/{sourceSpanId}). */
-export interface SourceSpanRecord {
-  id: string;
-  span: SourceSpan;
-}
-
-/** A normalized fact keyed by a stable record id. */
-export interface FinancialFactRecord {
-  id: string;
-  fact: NormalizedFinancialFact;
-}
+export type FinancialFactRecord = Pick<ReaderFactRecord, "id" | "fact"> &
+  Partial<Omit<ReaderFactRecord, "id" | "fact">>;
 
 /**
  * UI view-model for an extracted filing section. Sections are referenced by

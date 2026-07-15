@@ -1,6 +1,7 @@
 import type {
   DocumentMeta,
   FinancialFactRecord,
+  ReaderResponse,
   SectionRecord,
   SourceSpanRecord,
 } from "./contracts";
@@ -8,100 +9,84 @@ import type { CitationIntegrityFailure } from "./citation-integrity";
 import { verifySpanIntegrity } from "./citation-integrity";
 import type { EvidenceSource } from "./data";
 
-/** Everything the EvidenceReader needs, fully resolved server-side. */
 export interface ReaderData {
   document: DocumentMeta;
-  /** All documents of the viewed document's entity (amendment linkage). */
   documents: DocumentMeta[];
-  /** Sections across the entity's documents (document-scoped fetches, merged). */
+  /** Only the target's sections; siblings deliberately omit canonical content. */
   sections: SectionRecord[];
-  /** Integrity-verified spans across the entity's documents. */
+  /** Verified target spans plus sibling provenance spans used for attribution. */
   spans: SourceSpanRecord[];
-  /** All normalized facts of the entity. */
   facts: FinancialFactRecord[];
-  /**
-   * Provenance maps built from the per-document fetches. These — not
-   * `document_version_id` — are how the UI attributes a section/span to a
-   * document (integration-lead ruling: never compare version ids against
-   * DocumentMeta.id).
-   */
   documentIdBySectionId: Record<string, string>;
   documentIdBySpanId: Record<string, string>;
-  /** Spans excluded fail-closed because offsets or text_hash did not verify. */
   integrityFailures: CitationIntegrityFailure[];
+  scope: Pick<ReaderResponse, "as_of" | "corpus_version_id" | "selection_policy">;
 }
 
-export type ReaderLoadResult =
-  | { kind: "not_found" }
-  /** The source cannot serve sections/spans/facts yet (see capabilities). */
-  | { kind: "details_unavailable"; document: DocumentMeta }
-  | { kind: "ready"; data: ReaderData };
+export type ReaderLoadResult = { kind: "not_found" } | { kind: "ready"; data: ReaderData };
+
+function toSectionRecord(section: ReaderResponse["document"]["sections"][number]): SectionRecord {
+  return {
+    id: section.id,
+    document_version_id: section.document_version_id,
+    ...(section.parent_id ? { parent_id: section.parent_id } : {}),
+    order: section.ord,
+    level: Math.max(1, section.heading_path.length),
+    title: section.heading,
+    start_char: section.start_char,
+    end_char: section.end_char,
+    content: section.content,
+  };
+}
 
 /**
- * Loads and assembles all reader data for one document. Independent fetches
- * run in parallel; only `getFacts` waits on `getDocument` (it needs the
- * entity id). Spans are verified fail-closed before they ever reach the UI.
+ * Converts one snapshot-consistent ADR-0005 response into the existing reader
+ * view model. Only target spans can be hash-verified because sibling blocks
+ * intentionally omit canonical section content; sibling spans are never
+ * highlighted or quoted while viewing the target.
  */
 export async function loadReaderData(
   source: EvidenceSource,
   documentId: string,
 ): Promise<ReaderLoadResult> {
-  const [document, allDocuments] = await Promise.all([
-    source.getDocument(documentId),
-    source.listDocuments(),
-  ]);
-  if (!document) return { kind: "not_found" };
+  const response = await source.getReader(documentId);
+  if (!response) return { kind: "not_found" };
 
-  const { capabilities } = source;
-  if (!capabilities.sections || !capabilities.spans || !capabilities.facts) {
-    return { kind: "details_unavailable", document };
-  }
+  const target = response.document;
+  const sections = target.sections.map(toSectionRecord);
+  const targetVerification = verifySpanIntegrity(sections, target.spans);
+  const documents = [target.meta, ...response.siblings.map((sibling) => sibling.meta)];
+  const siblingSpans = response.siblings.flatMap((sibling) => sibling.spans);
+  const facts: FinancialFactRecord[] = [
+    ...target.facts,
+    ...response.siblings.flatMap((sibling) => sibling.facts),
+  ];
 
-  const documents = allDocuments.filter((doc) => doc.entity_id === document.entity_id);
-
-  // Sections and spans across every document of this entity: duplicate
-  // comparison and restatement flagging must see sibling filings.
-  const [facts, perDocument] = await Promise.all([
-    source.getFacts(document.entity_id),
-    Promise.all(
-      documents.map(async (doc) => {
-        const [sections, spans] = await Promise.all([
-          source.getSections(doc.id),
-          source.getSpans(doc.id),
-        ]);
-        return { doc, sections, spans };
-      }),
-    ),
-  ]);
-
-  const sections: SectionRecord[] = [];
-  const rawSpans: SourceSpanRecord[] = [];
   const documentIdBySectionId: Record<string, string> = {};
-  const documentIdBySpanId: Record<string, string> = {};
-  for (const entry of perDocument) {
-    for (const section of entry.sections) {
-      sections.push(section);
-      documentIdBySectionId[section.id] = entry.doc.id;
-    }
-    for (const span of entry.spans) {
-      rawSpans.push(span);
-      documentIdBySpanId[span.id] = entry.doc.id;
-    }
-  }
+  for (const section of sections) documentIdBySectionId[section.id] = target.meta.id;
 
-  const { verified: spans, failures: integrityFailures } = verifySpanIntegrity(sections, rawSpans);
+  const documentIdBySpanId: Record<string, string> = {};
+  for (const span of target.spans) documentIdBySpanId[span.id] = target.meta.id;
+  for (const sibling of response.siblings) {
+    for (const span of sibling.spans) documentIdBySpanId[span.id] = sibling.meta.id;
+  }
 
   return {
     kind: "ready",
     data: {
-      document,
+      document: target.meta,
       documents,
       sections,
-      spans,
+      spans: [...targetVerification.verified, ...siblingSpans],
       facts,
       documentIdBySectionId,
       documentIdBySpanId,
-      integrityFailures,
+      integrityFailures: targetVerification.failures,
+      scope: {
+        as_of: response.as_of,
+        corpus_version_id: response.corpus_version_id,
+        selection_policy: response.selection_policy,
+      },
     },
   };
 }

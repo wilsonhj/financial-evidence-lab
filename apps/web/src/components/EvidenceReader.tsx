@@ -24,9 +24,9 @@ export interface EvidenceReaderProps {
   documentId: string;
   /** Every document of the entity (for amendment linkage). */
   documents: DocumentMeta[];
-  /** Sections across all entity documents (document-scoped fetches, merged). */
+  /** Canonical sections of the selected target version. */
   sections: SectionRecord[];
-  /** Integrity-verified spans across all entity documents. */
+  /** Verified target spans plus non-rendered sibling provenance spans. */
   spans: SourceSpanRecord[];
   /** All normalized facts of the entity. */
   facts: FinancialFactRecord[];

@@ -1,20 +1,28 @@
 import Link from "next/link";
 
+import { EvidenceFailureState } from "../components/EvidenceFailureState";
 import { amendmentStatusFor, linkAmendments } from "../lib/amendments";
-import { evidenceSource } from "../lib/data";
+import { evidenceFailureState } from "../lib/data/failure-state";
+import { getEvidenceSource } from "../lib/data/server";
 import { formatPeriodRange } from "../lib/document-display";
 
+export const dynamic = "force-dynamic";
+
 export default async function DocumentListPage() {
-  const documents = await evidenceSource.listDocuments();
+  let documents;
+  try {
+    documents = await getEvidenceSource().listDocuments();
+  } catch (error) {
+    const kind = evidenceFailureState(error);
+    if (kind) return <EvidenceFailureState kind={kind} />;
+    throw error;
+  }
   const links = linkAmendments(documents);
 
   return (
     <main className="page-main" aria-labelledby="documents-heading">
       <h2 id="documents-heading">Filings</h2>
-      <p>
-        Select a filing to open it in the evidence reader. Data comes from the committed synthetic
-        fixture until the ingestion API (M1-INGESTION) is available.
-      </p>
+      <p>Select a filing to open its version-pinned evidence snapshot.</p>
       <table className="doc-table">
         <thead>
           <tr>

@@ -6,8 +6,7 @@ const HTTP_ENV = {
   FEL_EVIDENCE_SOURCE: "http",
   FEL_API_BASE_URL: "https://api.example.test/",
   FEL_API_BEARER_TOKEN: "server-secret",
-  FEL_ENTITY_IDS:
-    "11111111-1111-4111-8111-111111111111, 22222222-2222-4222-8222-222222222222",
+  FEL_ENTITY_IDS: "11111111-1111-4111-8111-111111111111, 22222222-2222-4222-8222-222222222222",
 };
 
 describe("loadEvidenceRuntimeConfig", () => {
@@ -40,10 +39,7 @@ describe("loadEvidenceRuntimeConfig", () => {
       mode: "http",
       baseUrl: "https://api.example.test",
       token: "server-secret",
-      entityIds: [
-        "11111111-1111-4111-8111-111111111111",
-        "22222222-2222-4222-8222-222222222222",
-      ],
+      entityIds: ["11111111-1111-4111-8111-111111111111", "22222222-2222-4222-8222-222222222222"],
       asOf: "2026-07-01T00:00:00Z",
       corpusVersionId: "33333333-3333-4333-8333-333333333333",
     });

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import type { ReaderResponse } from "./contracts";
 import type { EvidenceSource } from "./data";
 import { fixtureEvidenceSource } from "./data";
 import { sha256Hex } from "./citation-integrity";
@@ -9,9 +10,19 @@ import {
   DOC_10QA_ID,
   fixtureDocuments,
   fixtureFacts,
-  fixtureSections,
   fixtureSpans,
 } from "./fixtures/synthetic-filing";
+
+function sourceWithMutation(mutate: (response: ReaderResponse) => void): EvidenceSource {
+  return {
+    listDocuments: () => fixtureEvidenceSource.listDocuments(),
+    getReader: async (documentId) => {
+      const response = await fixtureEvidenceSource.getReader(documentId);
+      if (response) mutate(response);
+      return response;
+    },
+  };
+}
 
 describe("loadReaderData", () => {
   it("returns not_found for an unknown document id", async () => {
@@ -22,153 +33,94 @@ describe("loadReaderData", () => {
     expect(result).toEqual({ kind: "not_found" });
   });
 
-  // Regression (finding 1, ID conflation): with DISTINCT document and version
-  // ids the old pipeline (UI filtering `document_version_id === documentId`)
-  // produced an empty reader: no sections, no spans, no facts. The loader must
-  // deliver all of them, attributed to documents via the provenance maps.
-  it("assembles sections, spans, and facts for a document whose version id differs from its id", async () => {
+  it("assembles the target and siblings from one composite snapshot", async () => {
     const result = await loadReaderData(fixtureEvidenceSource, DOC_10Q_ID);
     expect(result.kind).toBe("ready");
     if (result.kind !== "ready") return;
     const { data } = result;
 
-    const ownSections = data.sections.filter(
-      (section) => data.documentIdBySectionId[section.id] === DOC_10Q_ID,
-    );
-    expect(ownSections.length).toBe(6);
-
-    const ownSpans = data.spans.filter((span) => data.documentIdBySpanId[span.id] === DOC_10Q_ID);
-    expect(ownSpans.length).toBe(5);
-
-    const ownFacts = data.facts.filter(
-      (record) => data.documentIdBySpanId[record.fact.source_span_id] === DOC_10Q_ID,
-    );
-    expect(ownFacts.length).toBe(6);
-
-    // Every fixture span verifies, so nothing is excluded.
+    expect(data.sections).toHaveLength(6);
+    expect(
+      data.sections.every((section) => data.documentIdBySectionId[section.id] === DOC_10Q_ID),
+    ).toBe(true);
+    expect(
+      data.spans.filter((span) => data.documentIdBySpanId[span.id] === DOC_10Q_ID),
+    ).toHaveLength(5);
+    expect(
+      data.facts.filter(
+        (record) => data.documentIdBySpanId[record.fact.source_span_id] === DOC_10Q_ID,
+      ),
+    ).toHaveLength(6);
     expect(data.integrityFailures).toEqual([]);
-    expect(data.spans.length).toBe(fixtureSpans.length);
-    expect(data.sections.length).toBe(fixtureSections.length);
-    expect(data.facts.length).toBe(fixtureFacts.length);
-
-    // Sibling filings of the entity are included for amendment comparison.
+    expect(data.spans).toHaveLength(fixtureSpans.length);
+    expect(data.facts).toHaveLength(fixtureFacts.length);
     expect(data.documents.map((doc) => doc.id).sort()).toEqual([DOC_10Q_ID, DOC_10QA_ID].sort());
+    expect(data.scope).toEqual({
+      as_of: "2026-12-31T23:59:59Z",
+      corpus_version_id: null,
+      selection_policy: "latest_parsed",
+    });
   });
 
-  // Regression (finding 2): a span that no longer verifies must be excluded
-  // from the verified span set and surfaced as an integrity failure.
-  it("excludes and flags spans failing offset or hash verification", async () => {
-    const tamperedSource: EvidenceSource = {
-      capabilities: { sections: true, spans: true, facts: true },
-      listDocuments: () => fixtureEvidenceSource.listDocuments(),
-      getDocument: (id) => fixtureEvidenceSource.getDocument(id),
-      getSections: (id) => fixtureEvidenceSource.getSections(id),
-      getFacts: (id) => fixtureEvidenceSource.getFacts(id),
-      getSpans: async (id) => {
-        const spans = await fixtureEvidenceSource.getSpans(id);
-        if (id === DOC_10Q_ID && spans[0]) {
-          spans[0].span.text_hash = `sha256:${sha256Hex("tampered text")}`;
-          spans[1]!.span.end_char = 100_000; // out of range
-        }
-        return spans;
-      },
-    };
+  it("excludes and flags target spans failing offset or hash verification", async () => {
+    const source = sourceWithMutation((response) => {
+      response.document.spans[0]!.span.text_hash = `sha256:${sha256Hex("tampered text")}`;
+      response.document.spans[1]!.span.end_char = 100_000;
+    });
 
-    const result = await loadReaderData(tamperedSource, DOC_10Q_ID);
+    const result = await loadReaderData(source, DOC_10Q_ID);
     expect(result.kind).toBe("ready");
     if (result.kind !== "ready") return;
-    const { data } = result;
 
-    expect(data.integrityFailures.map((failure) => failure.reason).sort()).toEqual([
+    expect(result.data.integrityFailures.map((failure) => failure.reason).sort()).toEqual([
       "offsets_out_of_range",
       "text_hash_mismatch",
     ]);
-    const failedIds = new Set(data.integrityFailures.map((failure) => failure.spanId));
-    expect(failedIds.size).toBe(2);
-    for (const span of data.spans) {
-      expect(failedIds.has(span.id)).toBe(false);
-    }
-    expect(data.spans.length).toBe(fixtureSpans.length - 2);
+    const failedIds = new Set(result.data.integrityFailures.map((failure) => failure.spanId));
+    expect(result.data.spans.filter((span) => failedIds.has(span.id))).toEqual([]);
+    expect(result.data.spans).toHaveLength(fixtureSpans.length - 2);
   });
 
-  // Regression (issue #87, package B): a span whose offsets were rewritten to
-  // SECTION-LOCAL coordinates (the pre-fix reading) now falls outside its
-  // section's global canonical range and must fail closed as an integrity
-  // failure — never render as a clamped highlight.
-  it("flags spans carrying section-local offsets as out of the section's canonical range", async () => {
-    const tamperedSource: EvidenceSource = {
-      capabilities: { sections: true, spans: true, facts: true },
-      listDocuments: () => fixtureEvidenceSource.listDocuments(),
-      getDocument: (id) => fixtureEvidenceSource.getDocument(id),
-      getSections: (id) => fixtureEvidenceSource.getSections(id),
-      getFacts: (id) => fixtureEvidenceSource.getFacts(id),
-      getSpans: async (id) => {
-        const spans = await fixtureEvidenceSource.getSpans(id);
-        if (id === DOC_10Q_ID && spans[0]) {
-          const sections = await fixtureEvidenceSource.getSections(id);
-          const section = sections.find((s) => s.id === spans[0]!.span.section_id)!;
-          // Shift back to section-local coordinates (the old world's values).
-          spans[0].span.start_char -= section.start_char;
-          spans[0].span.end_char -= section.start_char;
-        }
-        return spans;
-      },
-    };
+  it("flags section-local target offsets instead of rendering a clamped citation", async () => {
+    const source = sourceWithMutation((response) => {
+      const span = response.document.spans[0]!;
+      const section = response.document.sections.find(
+        (candidate) => candidate.id === span.span.section_id,
+      )!;
+      span.span.start_char -= section.start_char;
+      span.span.end_char -= section.start_char;
+    });
 
-    const result = await loadReaderData(tamperedSource, DOC_10Q_ID);
+    const result = await loadReaderData(source, DOC_10Q_ID);
     expect(result.kind).toBe("ready");
     if (result.kind !== "ready") return;
     expect(result.data.integrityFailures.map((failure) => failure.reason)).toEqual([
       "offsets_out_of_range",
     ]);
-    expect(result.data.spans.length).toBe(fixtureSpans.length - 1);
   });
 
-  // Regression (finding 3e): the reader used to await getSections/getSpans/
-  // getFacts unguarded, crashing on sources that cannot serve them yet.
-  it("returns details_unavailable instead of calling unsupported methods", async () => {
-    const calls: string[] = [];
-    const limitedSource: EvidenceSource = {
-      capabilities: { sections: false, spans: false, facts: false },
-      listDocuments: () => fixtureEvidenceSource.listDocuments(),
-      getDocument: (id) => fixtureEvidenceSource.getDocument(id),
-      getSections: () => {
-        calls.push("getSections");
-        return Promise.reject(new Error("not in contract"));
-      },
-      getSpans: () => {
-        calls.push("getSpans");
-        return Promise.reject(new Error("not in contract"));
-      },
-      getFacts: () => {
-        calls.push("getFacts");
-        return Promise.reject(new Error("not in contract"));
-      },
+  it("does not try to hash-verify sibling spans without sibling content", async () => {
+    const source = sourceWithMutation((response) => {
+      response.siblings[0]!.spans[0]!.span.text_hash = "sha256:bad";
+    });
+    const result = await loadReaderData(source, DOC_10Q_ID);
+    expect(result.kind).toBe("ready");
+    if (result.kind !== "ready") return;
+    expect(result.data.integrityFailures).toEqual([]);
+    expect(
+      result.data.spans.some((span) => span.id === result.data.facts.at(-1)?.fact.source_span_id),
+    ).toBe(true);
+  });
+
+  it("propagates source failures instead of mapping them to not_found", async () => {
+    const source: EvidenceSource = {
+      listDocuments: () => Promise.resolve([]),
+      getReader: () => Promise.reject(new Error("api unavailable")),
     };
-
-    const result = await loadReaderData(limitedSource, DOC_10Q_ID);
-    expect(result.kind).toBe("details_unavailable");
-    if (result.kind !== "details_unavailable") return;
-    expect(result.document.id).toBe(DOC_10Q_ID);
-    expect(calls).toEqual([]);
+    await expect(loadReaderData(source, DOC_10Q_ID)).rejects.toThrow("api unavailable");
   });
 
-  // Regression (finding 3c): source errors must propagate (to the route error
-  // boundary), never be swallowed into a not-found.
-  it("propagates evidence-source failures instead of mapping them to not_found", async () => {
-    const failingSource: EvidenceSource = {
-      ...fixtureEvidenceSource,
-      capabilities: { sections: true, spans: true, facts: true },
-      listDocuments: () => fixtureEvidenceSource.listDocuments(),
-      getSections: (id) => fixtureEvidenceSource.getSections(id),
-      getSpans: (id) => fixtureEvidenceSource.getSpans(id),
-      getFacts: (id) => fixtureEvidenceSource.getFacts(id),
-      getDocument: () => Promise.reject(new Error("api unavailable")),
-    };
-    await expect(loadReaderData(failingSource, DOC_10Q_ID)).rejects.toThrow("api unavailable");
-  });
-
-  it("only includes documents of the viewed document's entity", async () => {
+  it("only includes same-entity documents returned by the composite source", async () => {
     const result = await loadReaderData(fixtureEvidenceSource, DOC_10QA_ID);
     expect(result.kind).toBe("ready");
     if (result.kind !== "ready") return;
