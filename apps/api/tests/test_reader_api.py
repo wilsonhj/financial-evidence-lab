@@ -165,9 +165,7 @@ def _insert_evidence(
     return ids
 
 
-def _seed_reader(
-    db_url: str, storage_root: Path
-) -> dict[str, str | datetime]:
+def _seed_reader(db_url: str, storage_root: Path) -> dict[str, str | datetime]:
     entity_id = str(uuid.uuid4())
     published = datetime(2026, 5, 5, 16, 30, tzinfo=UTC)
     target_text = "HEADER" + "x" * 200 + "Revenue grew by 20 percent." + "z" * 40
@@ -530,9 +528,7 @@ def test_latest_version_total_order_uses_c_collation_tiebreakers(
             span_start=2,
             span_end=10,
         )
-    response = client.get(
-        f"/v1/documents/{document_id}/reader", headers=_headers(org_fixture)
-    )
+    response = client.get(f"/v1/documents/{document_id}/reader", headers=_headers(org_fixture))
     assert response.status_code == 200, response.text
     assert response.json()["document"]["document_version_id"] == selected
     assert response.json()["document"]["document_version_id"] != lower
