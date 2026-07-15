@@ -1,7 +1,8 @@
 # ADR-0005: Composite version-pinned evidence reader endpoint
 
-Status: Proposed
+Status: Accepted
 Date: 2026-07-15
+Accepted: 2026-07-15 by integration lead following architect endorsement of the four decision points.
 Occasioned by: issue #87 (M1-READER-INTEGRATION) / child issue #89 (READER-CONTRACT)
 
 ## Decision
