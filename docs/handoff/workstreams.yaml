@@ -184,6 +184,24 @@ packages:
       - workers/src/fel_workers/ingestion/**
       - workers/tests/**
       - apps/api/**
+  # M1-READER-INTEGRATION (#87, contract-change): production reader integration.
+  # Packages C/D/E of #87 are created when their dependencies release paths.
+  - id: READER-CONTRACT # child A of #87
+    issue: 89
+    tasks: []
+    depends_on: [M1-CORPUS-QA]
+    team: contracts
+    branch: contract/reader-evidence-v1
+    status: active # dispatched 2026-07-14; ADR requires integration-lead acceptance
+    allowed_paths: [packages/contracts/**, docs/decisions/**]
+  - id: READER-WEB-OFFSETS # child B of #87
+    issue: 90
+    tasks: []
+    depends_on: [M1-EVIDENCE-UI]
+    team: experience
+    branch: fix/reader-global-offsets
+    status: active # dispatched 2026-07-14 (paths disjoint from READER-CONTRACT and M1-COMPANY-FACTS)
+    allowed_paths: [apps/web/**]
   - id: INFRA-WORKER-DEPLOY # Railway worker startCommand -> consumer mode (issue #84)
     issue: 84
     tasks: []
