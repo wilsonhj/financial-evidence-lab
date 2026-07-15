@@ -324,6 +324,17 @@ def test_latest_reader_is_cutoff_safe_version_consistent_and_hash_verified(
     assert fact["fact"]["value"] == "100.00"
     assert body["siblings"][0]["facts"][0]["restates"] == ids["target_fact"]
 
+    blocks = [body["document"], *body["siblings"]]
+    returned_fact_ids = {item["id"] for block in blocks for item in block["facts"]}
+    for block in blocks:
+        returned_span_ids = {item["id"] for item in block["spans"]}
+        for item in block["facts"]:
+            assert item["document_version_id"] == block["document_version_id"]
+            assert item["fact"]["source_span_id"] in returned_span_ids
+            for link in ("duplicate_of", "restates"):
+                if link in item:
+                    assert item[link] in returned_fact_ids
+
 
 def test_cutoff_boundary_and_hidden_target_match_missing_404(
     client: TestClient,
