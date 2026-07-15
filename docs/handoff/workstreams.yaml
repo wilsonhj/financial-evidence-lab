@@ -179,7 +179,7 @@ packages:
     depends_on: [M1-CORPUS-QA] # serialized: workers/tests/** overlapped M1-CORPUS-QA (now merged)
     team: data
     branch: agent/m1-company-facts
-    status: active # dispatched 2026-07-14 per issue #83 ruling
+    status: review # PR #88 ready-for-review @ 9315b17; consumer.py deviation authorized on #83
     allowed_paths:
       - workers/src/fel_workers/ingestion/**
       - workers/tests/**
@@ -192,7 +192,7 @@ packages:
     depends_on: [M1-CORPUS-QA]
     team: contracts
     branch: contract/reader-evidence-v1
-    status: active # dispatched 2026-07-14; ADR requires integration-lead acceptance
+    status: merged # PR #92 merged (ADR-0005 accepted at 3c08291); contract v0.2.0 live
     allowed_paths: [packages/contracts/**, docs/decisions/**]
   - id: READER-WEB-OFFSETS # child B of #87
     issue: 90
@@ -200,7 +200,7 @@ packages:
     depends_on: [M1-EVIDENCE-UI]
     team: experience
     branch: fix/reader-global-offsets
-    status: active # dispatched 2026-07-14 (paths disjoint from READER-CONTRACT and M1-COMPANY-FACTS)
+    status: merged # PR #91 merged (canonical-global offsets)
     allowed_paths: [apps/web/**]
   - id: INFRA-WORKER-DEPLOY # Railway worker startCommand -> consumer mode (issue #84)
     issue: 84

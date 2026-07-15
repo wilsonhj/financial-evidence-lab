@@ -43,3 +43,5 @@ Provider interface and mock-behavior contracts are delivered by
 One exception is recorded: the exact provider interfaces (final freeze-list
 bullet) ship with T0010 because their shapes depend on the mock
 implementations built alongside them; they enter the freeze at that merge.
+
+- **v0.2.0** (2026-07-15, PR #92, ADR-0005): additive reader composite endpoint `GET /v1/documents/{documentId}/reader`; `FinancialFact` promoted into generated types via file `$ref`; `reader-response/v1` schema + fixture + drift gate.
