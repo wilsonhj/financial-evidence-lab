@@ -9,6 +9,7 @@ export const SCHEMA_IDS = {
   jobEnvelope: "https://contracts.fel.dev/schemas/job-envelope/v1",
   tenantContext: "https://contracts.fel.dev/schemas/tenant-context/v1",
   error: "https://contracts.fel.dev/schemas/error/v1",
+  readerResponse: "https://contracts.fel.dev/schemas/reader-response/v1",
 } as const;
 
-export const CONTRACT_VERSION = "0.1.0" as const;
+export const CONTRACT_VERSION = "0.2.0" as const;

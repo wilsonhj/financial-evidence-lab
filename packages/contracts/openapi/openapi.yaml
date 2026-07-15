@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Financial Evidence Lab API
-  version: 0.1.0
+  version: 0.2.0
   description: >-
     Frozen v1 contract surface (ADR-0001). This file seeds the M0 freeze:
     conventions (error envelope, idempotency, optimistic concurrency,
@@ -192,6 +192,69 @@ paths:
                 $ref: "#/components/schemas/DocumentMeta"
         default:
           $ref: "#/components/responses/Error"
+  /v1/documents/{documentId}/reader:
+    parameters:
+      - name: documentId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      operationId: getDocumentReader
+      summary: Composite version-pinned evidence reader (ADR-0005)
+      description: >-
+        Returns the target document plus same-entity sibling evidence in one
+        snapshot-consistent, cutoff-enforced response. Exactly one parsed
+        document_version_id is selected per returned document: the version
+        pinned by corpus_version_id when given, otherwise the latest parsed
+        version under the ADR-0005 total order (created_at DESC, then
+        bytewise parser_version DESC, normalizer_version DESC, id DESC).
+        A cutoff-hidden target returns the same 404 as a missing target.
+        Authentication and org membership are mandatory; 401/403/409/422/5xx
+        keep the typed error envelope and are never converted to 404.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: as_of
+          in: query
+          required: false
+          description: >-
+            Inclusive cutoff (published_at <= as_of), enforced server-side
+            on the target document and all nested evidence. Must carry an
+            explicit UTC offset. Defaults to the request time; the response
+            echoes the effective value actually enforced.
+          schema:
+            type: string
+            format: date-time
+        - name: corpus_version_id
+          in: query
+          required: false
+          description: >-
+            Pin evidence to a published (active or superseded) corpus
+            version. Unknown or draft corpus versions return 404 with
+            details.resource = "corpus_version".
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Composite reader evidence.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReaderResponse"
+        "404":
+          description: >-
+            Target document missing, hidden by the cutoff (identical
+            envelope in both cases), unreadable under the corpus pin, or
+            unknown/draft corpus version.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          $ref: "#/components/responses/Error"
   /v1/source-spans/{sourceSpanId}:
     parameters:
       - name: sourceSpanId
@@ -254,6 +317,14 @@ paths:
         default:
           $ref: "#/components/responses/Error"
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: >-
+        Authenticated tenant context (ADR-0004 read path); org membership
+        is enforced server-side on every corpus read.
   parameters:
     IdempotencyKey:
       name: Idempotency-Key
@@ -538,3 +609,158 @@ components:
           format: date-time
         error:
           $ref: "#/components/schemas/Error"
+    FinancialFact:
+      # Single source of truth: the frozen financial-fact/v1 JSON Schema.
+      # The file $ref (not a copy) makes drift between the OpenAPI surface
+      # and the canonical schema impossible (ADR-0005 section 6).
+      $ref: "../schemas/financial-fact.schema.json"
+    ReaderSelectionPolicy:
+      type: string
+      description: >-
+        How the document_version_id of every returned document was chosen
+        (ADR-0005 section 3). Consumers must tolerate unknown values.
+      enum: [corpus_pinned, latest_parsed]
+      x-fel-open-enum: true
+    ReaderSection:
+      type: object
+      description: >-
+        Filing section of the selected parsed version. start_char/end_char
+        are canonical document-global offsets into the immutable canonical
+        text; content is exactly canonical_text[start_char:end_char], so a
+        span's section-local offset is span.start_char - section.start_char
+        (ADR-0005 section 4).
+      required:
+        [id, document_version_id, heading, heading_path, ord, start_char, end_char, content]
+      properties:
+        id:
+          type: string
+          format: uuid
+        document_version_id:
+          type: string
+          format: uuid
+        parent_id:
+          type: string
+          format: uuid
+        heading:
+          type: string
+        heading_path:
+          type: array
+          items:
+            type: string
+        ord:
+          type: integer
+          minimum: 0
+        start_char:
+          type: integer
+          minimum: 0
+        end_char:
+          type: integer
+          minimum: 0
+        content:
+          type: string
+    ReaderSpanRecord:
+      type: object
+      description: >-
+        A stable source span keyed by its server-side id. The span payload
+        is the frozen source-span/v1 shape with canonical document-global
+        offsets; persisted provenance is never rewritten.
+      required: [id, span]
+      properties:
+        id:
+          type: string
+          format: uuid
+        span:
+          $ref: "#/components/schemas/SourceSpan"
+    ReaderFactRecord:
+      type: object
+      description: >-
+        A normalized fact keyed by its server-side id, belonging to exactly
+        the enclosing document block's selected document_version_id. Its
+        fact.source_span_id resolves to a ReaderSpanRecord id in the same
+        block. duplicate_of / restates expose the ingestion-computed
+        duplicate and restatement linkage for sibling comparison.
+      required: [id, document_version_id, fact]
+      properties:
+        id:
+          type: string
+          format: uuid
+        document_version_id:
+          type: string
+          format: uuid
+        duplicate_of:
+          type: string
+          format: uuid
+        restates:
+          type: string
+          format: uuid
+        fact:
+          $ref: "#/components/schemas/FinancialFact"
+    ReaderDocument:
+      type: object
+      description: >-
+        The target document: metadata, the one selected parsed version, and
+        that version's sections, spans, and facts.
+      required: [meta, document_version_id, sections, spans, facts]
+      properties:
+        meta:
+          $ref: "#/components/schemas/DocumentMeta"
+        document_version_id:
+          type: string
+          format: uuid
+        sections:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReaderSection"
+        spans:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReaderSpanRecord"
+        facts:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReaderFactRecord"
+    ReaderSibling:
+      type: object
+      description: >-
+        A same-entity document visible at the cutoff (excluding the target)
+        with fact-level evidence for duplicate/amendment comparison. Carries
+        no sections/content by design (ADR-0005 section 5); spans include at
+        least every span referenced by the sibling's facts.
+      required: [meta, document_version_id, spans, facts]
+      properties:
+        meta:
+          $ref: "#/components/schemas/DocumentMeta"
+        document_version_id:
+          type: string
+          format: uuid
+        spans:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReaderSpanRecord"
+        facts:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReaderFactRecord"
+    ReaderResponse:
+      type: object
+      description: >-
+        Composite version-pinned reader evidence (ADR-0005). Canonical JSON
+        Schema: https://contracts.fel.dev/schemas/reader-response/v1.
+      required: [as_of, corpus_version_id, selection_policy, document, siblings]
+      properties:
+        as_of:
+          type: string
+          format: date-time
+          description: Effective inclusive cutoff actually enforced, UTC.
+        corpus_version_id:
+          type: ["string", "null"]
+          format: uuid
+          description: The corpus pin used, or null when unpinned.
+        selection_policy:
+          $ref: "#/components/schemas/ReaderSelectionPolicy"
+        document:
+          $ref: "#/components/schemas/ReaderDocument"
+        siblings:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReaderSibling"

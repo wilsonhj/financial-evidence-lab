@@ -1,12 +1,12 @@
 {
   "name": "@fel/contracts",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "main": "src/index.ts",
   "scripts": {
-    "generate": "openapi-typescript openapi/openapi.yaml -o src/generated/api.ts",
-    "check:generated": "openapi-typescript openapi/openapi.yaml -o /tmp/fel-contracts-check.ts && diff -q /tmp/fel-contracts-check.ts src/generated/api.ts",
+    "generate": "openapi-typescript openapi/openapi.yaml -o src/generated/api.ts && prettier --write src/generated/api.ts",
+    "check:generated": "openapi-typescript openapi/openapi.yaml -o /tmp/fel-contracts-check.ts && prettier --config ../../.prettierrc.json --write /tmp/fel-contracts-check.ts && diff -q /tmp/fel-contracts-check.ts src/generated/api.ts",
     "test": "vitest run"
   },
   "devDependencies": {
