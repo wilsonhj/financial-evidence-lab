@@ -13,7 +13,8 @@ import hashlib
 import json
 import os
 import pathlib
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
+from decimal import Decimal
 
 import httpx
 import psycopg
@@ -59,7 +60,7 @@ def fixture_bytes(name: str) -> bytes:
 
 def companyfacts_raw() -> bytes:
     """Fixture payload as the deterministic bytes the handler would store."""
-    payload = json.loads(fixture_bytes("companyfacts_synthetic.json"))
+    payload = json.loads(fixture_bytes("companyfacts_synthetic.json"), parse_float=Decimal)
     assert isinstance(payload, dict)
     return canonical_company_facts_bytes(payload)
 
@@ -76,7 +77,7 @@ class FixtureCompanyFactsClient:
         return fixture_bytes("synthetic_10q.html")
 
     def company_facts(self, cik: str) -> dict[str, object]:
-        payload = json.loads(fixture_bytes("companyfacts_synthetic.json"))
+        payload = json.loads(fixture_bytes("companyfacts_synthetic.json"), parse_float=Decimal)
         assert isinstance(payload, dict)
         return payload
 
@@ -119,6 +120,61 @@ def test_live_client_company_facts_rejects_non_object_payload() -> None:
     )
     with pytest.raises(SecFetchError, match="non-object"):
         client.company_facts(CIK)
+
+
+def test_live_client_preserves_non_float_exact_decimals() -> None:
+    """Regression (#88 review): response.json() float-decodes, then
+    canonical_company_facts_bytes re-dumps corrupted IEEE-754 values into the
+    stored corpus. High-magnitude decimals that float cannot represent must
+    survive the live-client → handler path unchanged (AGENTS.md deterministic
+    finance; issue #83 real-bytes ruling)."""
+    # 999999999999999.99 is not exactly representable as binary float —
+    # json.loads without parse_float=Decimal yields 1000000000000000.0.
+    wire = (
+        b'{"cik":9999999,"facts":{"us-gaap":{"Assets":{"units":{"USD":'
+        b'[{"end":"2025-12-31","val":999999999999999.99,"accn":"a","form":"10-K"}]}}}}}'
+    )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=wire)
+
+    client = LiveSecClient(
+        transport=httpx.MockTransport(handler), sleep=lambda s: None, monotonic=lambda: 0.0
+    )
+    payload = client.company_facts(CIK)
+    val = payload["facts"]["us-gaap"]["Assets"]["units"]["USD"][0]["val"]  # type: ignore[index]
+    assert val == Decimal("999999999999999.99")
+    assert not isinstance(val, float)
+
+    stored = canonical_company_facts_bytes(payload)
+    assert b"999999999999999.99" in stored
+    assert b"1000000000000000" not in stored
+
+
+@requires_db
+def test_handler_stores_decimal_faithful_live_payload(
+    corpus_conn: psycopg.Connection,
+) -> None:
+    """Live fetch → handle_sec_company_facts must persist the exact decimal."""
+    wire = (
+        b'{"cik":9999999,"facts":{"us-gaap":{"Assets":{"units":{"USD":'
+        b'[{"end":"2025-12-31","val":999999999999999.99,"accn":"a","form":"10-K"}]}}}}}'
+    )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=wire)
+
+    client = LiveSecClient(
+        transport=httpx.MockTransport(handler), sleep=lambda s: None, monotonic=lambda: 0.0
+    )
+    outcome = handle_sec_company_facts(corpus_conn, MockStorageProvider(), client, {"cik": CIK})
+    assert outcome.status == "succeeded"
+    row = corpus_conn.execute(
+        "SELECT value FROM financial_facts WHERE concept = %s",
+        ("us-gaap:Assets",),
+    ).fetchone()
+    assert row is not None
+    assert row[0] == "999999999999999.99"
 
 
 def test_capability_protocol_runtime_narrowing() -> None:
@@ -324,13 +380,17 @@ def test_end_to_end_snapshot_persists_and_reverifies(corpus_conn: psycopg.Connec
     )
     assert completed == 1
     doc = corpus_conn.execute(
-        "SELECT id::text, accession, form, mime_type, source_url FROM documents"
+        "SELECT id::text, accession, form, mime_type, source_url, published_at" " FROM documents"
     ).fetchone()
     assert doc is not None
     assert doc[2] == COMPANY_FACTS_FORM
     assert doc[3] == COMPANY_FACTS_MIME_TYPE
     assert doc[1].startswith("COMPANYFACTS-0009999999-")
     assert doc[4] == "https://data.sec.gov/api/xbrl/companyfacts/CIK0009999999.json"
+    # Fixture client → handle uses datetime.now(UTC); pin that published_at is
+    # timezone-aware UTC (fetch instant), not a naive/filing-date midnight.
+    assert doc[5].tzinfo is not None
+    assert doc[5].utcoffset().total_seconds() == 0
     version = corpus_conn.execute(
         "SELECT id::text, parser_version, normalizer_version, canonical_text_key"
         " FROM document_versions WHERE status = 'parsed'"
@@ -384,7 +444,7 @@ def test_same_day_refetch_identical_noop_mutated_new_document(
     assert replay.status == "noop"
     assert replay.document_id == first.document_id
     # data.sec.gov mutated the payload within the same day.
-    payload = json.loads(raw)
+    payload = json.loads(raw, parse_float=Decimal)
     payload["facts"]["us-gaap"]["Assets"]["units"]["USD"][2]["val"] = 5300000
     mutated = ingest_company_facts(
         corpus_conn,
@@ -510,8 +570,6 @@ def test_handler_payload_validation_fails_closed(corpus_conn: psycopg.Connection
 
 @requires_db
 def test_enqueue_idempotency_is_day_scoped(corpus_conn: psycopg.Connection) -> None:
-    from datetime import date
-
     first = enqueue_company_facts(corpus_conn, cik=CIK, snapshot_day=date(2026, 5, 20))
     replay = enqueue_company_facts(corpus_conn, cik="CIK0009999999", snapshot_day=date(2026, 5, 20))
     next_day = enqueue_company_facts(corpus_conn, cik=CIK, snapshot_day=date(2026, 5, 21))

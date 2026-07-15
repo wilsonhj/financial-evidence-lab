@@ -153,12 +153,45 @@ def canonical_company_facts_bytes(payload: dict[str, object]) -> bytes:
     """Deterministic bytes for a fetched companyfacts payload.
 
     The client protocol returns the decoded JSON object; these bytes are its
-    stable serialization (sorted keys, compact separators), so byte identity
-    equals semantic identity of the payload — key order or whitespace churn
-    in the HTTP response never mints a new document. Non-finite floats are
-    left for the parser to reject fail-closed (quarantine, not a crash).
+    stable serialization (sorted keys, compact separators, Decimal-faithful
+    numbers), so byte identity equals semantic identity of the payload — key
+    order or whitespace churn in the HTTP response never mints a new
+    document. Callers MUST decode with ``parse_float=Decimal`` (never IEEE
+    float): binary floats are rejected here so a float-decoded live client
+    cannot silently corrupt the stored corpus.
     """
-    return json.dumps(payload, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode()
+    return _compact_json_value(payload).encode()
+
+
+def _compact_json_value(value: object) -> str:
+    """Compact JSON (no spaces) with Decimal-as-number rendering."""
+    if value is None:
+        return "null"
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, Decimal):
+        return decimal_str(value)
+    if isinstance(value, int):
+        return json.dumps(value)
+    if isinstance(value, str):
+        return json.dumps(value, ensure_ascii=False)
+    if isinstance(value, float):
+        raise TypeError(
+            "companyfacts canonical bytes reject IEEE-754 floats; decode "
+            "with json.loads(..., parse_float=Decimal) before serializing"
+        )
+    if isinstance(value, list):
+        return "[" + ",".join(_compact_json_value(item) for item in value) + "]"
+    if isinstance(value, dict):
+        return (
+            "{"
+            + ",".join(
+                f"{json.dumps(str(key), ensure_ascii=False)}:{_compact_json_value(value[key])}"
+                for key in sorted(value)
+            )
+            + "}"
+        )
+    raise TypeError(f"companyfacts canonical bytes cannot serialize {type(value).__name__}")
 
 
 @dataclass(frozen=True)

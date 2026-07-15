@@ -12,8 +12,10 @@ default binding for all pipelines.
 
 from __future__ import annotations
 
+import json
 import time
 from collections.abc import Callable
+from decimal import Decimal
 from typing import cast
 
 import httpx
@@ -94,9 +96,22 @@ class LiveSecClient:
         Same shared throttled/retrying transport and fair-access discipline
         as every other SEC request (workers-local CompanyFactsSecClient
         capability; the frozen SecClient protocol is untouched).
+
+        Decodes with ``parse_float=Decimal`` so stored corpus bytes (via
+        ``canonical_company_facts_bytes``) preserve numeric fidelity —
+        ``response.json()`` IEEE-754 decoding is deliberately avoided.
         """
         url = company_facts_url(cik)
-        payload = self._get(url).json()
+        raw = self._get(url).content
+        try:
+            payload = json.loads(raw.decode("utf-8"), parse_float=Decimal)
+        except UnicodeDecodeError as exc:
+            raise SecFetchError(f"GET {url} returned non-UTF-8 body") from exc
+        except json.JSONDecodeError as exc:
+            raise SecFetchError(
+                f"GET {url} returned invalid JSON (line {exc.lineno} "
+                f"column {exc.colno}: {exc.msg})"
+            ) from exc
         if not isinstance(payload, dict):
             raise SecFetchError(f"GET {url} returned a non-object JSON payload")
         return cast(dict[str, object], payload)

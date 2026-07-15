@@ -17,6 +17,7 @@ import json
 import pathlib
 import re
 from datetime import UTC, datetime
+from decimal import Decimal
 
 import psycopg
 from fastapi.testclient import TestClient
@@ -179,7 +180,10 @@ def test_company_facts_snapshot_visible_via_api(
     A quarantined-only companyfacts document stays invisible."""
     entity_id = entity_id_for_cik("9999999")
     raw = canonical_company_facts_bytes(
-        json.loads((FIXTURES / "companyfacts_synthetic.json").read_bytes())
+        json.loads(
+            (FIXTURES / "companyfacts_synthetic.json").read_bytes(),
+            parse_float=Decimal,
+        )
     )
     fetched_at = datetime(2026, 5, 20, 12, 0, tzinfo=UTC)
     with psycopg.connect(db_url, autocommit=True) as conn:
@@ -216,6 +220,8 @@ def test_company_facts_snapshot_visible_via_api(
     assert documents[0]["form"] == "COMPANYFACTS"
     assert documents[0]["accession"].startswith("COMPANYFACTS-0009999999-2026-05-20-")
     assert re.match(r"^sha256:[0-9a-f]{64}$", documents[0]["content_hash"])
+    # published_at IS the fetch instant (issue #83 ruling) — not filing date.
+    assert documents[0]["published_at"] == "2026-05-20T12:00:00+00:00"
 
     by_id = client.get(f"/v1/documents/{documents[0]['id']}", headers=headers)
     assert by_id.status_code == 200
@@ -232,6 +238,14 @@ def test_company_facts_snapshot_visible_via_api(
         params={"as_of": "2026-05-01T00:00:00Z"},
     )
     assert nothing.json() == []
+    # Boundary-inclusive: as_of at the fetch instant must return the doc.
+    at_fetch = client.get(
+        f"/v1/entities/{entity_id}/documents",
+        headers=headers,
+        params={"as_of": "2026-05-20T12:00:00Z"},
+    )
+    assert len(at_fetch.json()) == 1
+    assert at_fetch.json()[0]["id"] == documents[0]["id"]
 
 
 def test_publish_maintains_single_active_pointer(db_url: str) -> None:
