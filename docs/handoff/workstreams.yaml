@@ -179,7 +179,7 @@ packages:
     depends_on: [M1-CORPUS-QA] # serialized: workers/tests/** overlapped M1-CORPUS-QA (now merged)
     team: data
     branch: agent/m1-company-facts
-    status: review # PR #88 ready-for-review @ 9315b17; consumer.py deviation authorized on #83
+    status: merged # PR #88 merged to main @ c7d19ff (2026-07-15); companyfacts requirement complete
     allowed_paths:
       - workers/src/fel_workers/ingestion/**
       - workers/tests/**
@@ -202,6 +202,30 @@ packages:
     branch: fix/reader-global-offsets
     status: merged # PR #91 merged (canonical-global offsets)
     allowed_paths: [apps/web/**]
+  - id: READER-API # child C of #87
+    issue: 94
+    tasks: []
+    depends_on: [READER-CONTRACT, M1-COMPANY-FACTS]
+    team: platform
+    branch: feat/reader-evidence-api
+    status: active # dispatched 2026-07-15 from main @ c7d19ff
+    allowed_paths: [apps/api/**]
+  - id: READER-WEB-HTTP # child D of #87
+    issue: 95
+    tasks: []
+    depends_on: [READER-CONTRACT, READER-WEB-OFFSETS]
+    team: experience
+    branch: feat/http-evidence-reader
+    status: active # dispatched 2026-07-15 from main @ c7d19ff
+    allowed_paths: [apps/web/**]
+  - id: READER-CROSS-STACK # child E of #87
+    issue: 96
+    tasks: []
+    depends_on: [READER-API, READER-WEB-HTTP]
+    team: trust
+    branch: test/reader-cross-stack
+    status: blocked # dispatch after C/D merge; initial test package owns evals only
+    allowed_paths: [evals/**]
   - id: INFRA-WORKER-DEPLOY # Railway worker startCommand -> consumer mode (issue #84)
     issue: 84
     tasks: []
@@ -215,7 +239,7 @@ packages:
   - id: M2-RETRIEVAL-BACKEND # indexes + retrieval trace (trace schema owner)
     issue: 57
     tasks: [T0201, T0202, T0203, T0204, T0205, T0206]
-    depends_on: [M1-CORPUS-QA]
+    depends_on: [M1-CORPUS-QA, READER-API] # serialize apps/api/** behind reader package C
     team: retrieval
     branch: agent/m2-retrieval-backend
     allowed_paths: [packages/retrieval/**, apps/api/**]
@@ -233,7 +257,7 @@ packages:
   - id: M2-OBSERVATORY-UI # consumes the retrieval trace schema
     issue: 59
     tasks: [T0210]
-    depends_on: [M2-RETRIEVAL-BACKEND]
+    depends_on: [M2-RETRIEVAL-BACKEND, READER-WEB-HTTP] # serialize apps/web/** behind reader package D
     team: experience
     branch: agent/m2-observatory-ui
     allowed_paths: [apps/web/**, packages/ui/**]
