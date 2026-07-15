@@ -1,0 +1,120 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.fel.dev/schemas/reader-response/v1",
+  "x-fel-version": "1.0.0",
+  "title": "ReaderResponse",
+  "description": "Composite version-pinned reader evidence (ADR-0005): effective cutoff, corpus pin, target document with exactly one selected parsed version and its sections (canonical document-global offsets) / spans / facts, plus same-entity sibling fact evidence visible at the cutoff. Spans and facts $ref the frozen source-span/v1 and financial-fact/v1 schemas.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["as_of", "corpus_version_id", "selection_policy", "document", "siblings"],
+  "properties": {
+    "as_of": { "type": "string", "format": "date-time" },
+    "corpus_version_id": { "type": ["string", "null"], "format": "uuid" },
+    "selection_policy": {
+      "type": "string",
+      "enum": ["corpus_pinned", "latest_parsed"],
+      "x-fel-open-enum": true
+    },
+    "document": { "$ref": "#/$defs/readerDocument" },
+    "siblings": { "type": "array", "items": { "$ref": "#/$defs/readerSibling" } }
+  },
+  "$defs": {
+    "documentMeta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "entity_id",
+        "accession",
+        "source_url",
+        "content_hash",
+        "published_at",
+        "ingested_at"
+      ],
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "entity_id": { "type": "string", "format": "uuid" },
+        "form": { "type": "string" },
+        "accession": { "type": "string" },
+        "source_url": { "type": "string", "format": "uri" },
+        "content_hash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "published_at": { "type": "string", "format": "date-time" },
+        "filed_at": { "type": "string", "format": "date-time" },
+        "period_start": { "type": "string", "format": "date" },
+        "period_end": { "type": "string", "format": "date" },
+        "ingested_at": { "type": "string", "format": "date-time" },
+        "valid_from": { "type": "string", "format": "date-time" },
+        "valid_to": { "type": "string", "format": "date-time" }
+      }
+    },
+    "readerSection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "document_version_id",
+        "heading",
+        "heading_path",
+        "ord",
+        "start_char",
+        "end_char",
+        "content"
+      ],
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "document_version_id": { "type": "string", "format": "uuid" },
+        "parent_id": { "type": "string", "format": "uuid" },
+        "heading": { "type": "string" },
+        "heading_path": { "type": "array", "items": { "type": "string" } },
+        "ord": { "type": "integer", "minimum": 0 },
+        "start_char": { "type": "integer", "minimum": 0 },
+        "end_char": { "type": "integer", "minimum": 0 },
+        "content": { "type": "string" }
+      }
+    },
+    "spanRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "span"],
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "span": { "$ref": "https://contracts.fel.dev/schemas/source-span/v1" }
+      }
+    },
+    "factRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "document_version_id", "fact"],
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "document_version_id": { "type": "string", "format": "uuid" },
+        "duplicate_of": { "type": "string", "format": "uuid" },
+        "restates": { "type": "string", "format": "uuid" },
+        "fact": { "$ref": "https://contracts.fel.dev/schemas/financial-fact/v1" }
+      }
+    },
+    "readerDocument": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["meta", "document_version_id", "sections", "spans", "facts"],
+      "properties": {
+        "meta": { "$ref": "#/$defs/documentMeta" },
+        "document_version_id": { "type": "string", "format": "uuid" },
+        "sections": { "type": "array", "items": { "$ref": "#/$defs/readerSection" } },
+        "spans": { "type": "array", "items": { "$ref": "#/$defs/spanRecord" } },
+        "facts": { "type": "array", "items": { "$ref": "#/$defs/factRecord" } }
+      }
+    },
+    "readerSibling": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["meta", "document_version_id", "spans", "facts"],
+      "properties": {
+        "meta": { "$ref": "#/$defs/documentMeta" },
+        "document_version_id": { "type": "string", "format": "uuid" },
+        "spans": { "type": "array", "items": { "$ref": "#/$defs/spanRecord" } },
+        "facts": { "type": "array", "items": { "$ref": "#/$defs/factRecord" } }
+      }
+    }
+  }
+}

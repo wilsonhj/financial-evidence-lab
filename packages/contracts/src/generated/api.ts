@@ -133,6 +133,28 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/documents/{documentId}/reader": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        documentId: string;
+      };
+      cookie?: never;
+    };
+    /**
+     * Composite version-pinned evidence reader (ADR-0005)
+     * @description Returns the target document plus same-entity sibling evidence in one snapshot-consistent, cutoff-enforced response. Exactly one parsed document_version_id is selected per returned document: the version pinned by corpus_version_id when given, otherwise the latest parsed version under the ADR-0005 total order (created_at DESC, then bytewise parser_version DESC, normalizer_version DESC, id DESC). A cutoff-hidden target returns the same 404 as a missing target. Authentication and org membership are mandatory; 401/403/409/422/5xx keep the typed error envelope and are never converted to 404.
+     */
+    get: operations["getDocumentReader"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/v1/source-spans/{sourceSpanId}": {
     parameters: {
       query?: never;
@@ -327,6 +349,109 @@ export interface components {
       /** Format: date-time */
       finished_at?: string;
       error?: components["schemas"]["Error"];
+    };
+    FinancialFact: components["schemas"]["financial-fact.schema"];
+    /**
+     * @description How the document_version_id of every returned document was chosen (ADR-0005 section 3). Consumers must tolerate unknown values.
+     * @enum {string}
+     */
+    ReaderSelectionPolicy: "corpus_pinned" | "latest_parsed";
+    /** @description Filing section of the selected parsed version. start_char/end_char are canonical document-global offsets into the immutable canonical text; content is exactly canonical_text[start_char:end_char], so a span's section-local offset is span.start_char - section.start_char (ADR-0005 section 4). */
+    ReaderSection: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      document_version_id: string;
+      /** Format: uuid */
+      parent_id?: string;
+      heading: string;
+      heading_path: string[];
+      ord: number;
+      start_char: number;
+      end_char: number;
+      content: string;
+    };
+    /** @description A stable source span keyed by its server-side id. The span payload is the frozen source-span/v1 shape with canonical document-global offsets; persisted provenance is never rewritten. */
+    ReaderSpanRecord: {
+      /** Format: uuid */
+      id: string;
+      span: components["schemas"]["SourceSpan"];
+    };
+    /** @description A normalized fact keyed by its server-side id, belonging to exactly the enclosing document block's selected document_version_id. Its fact.source_span_id resolves to a ReaderSpanRecord id in the same block. duplicate_of / restates expose the ingestion-computed duplicate and restatement linkage for sibling comparison. */
+    ReaderFactRecord: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      document_version_id: string;
+      /** Format: uuid */
+      duplicate_of?: string;
+      /** Format: uuid */
+      restates?: string;
+      fact: components["schemas"]["financial-fact.schema"];
+    };
+    /** @description The target document: metadata, the one selected parsed version, and that version's sections, spans, and facts. */
+    ReaderDocument: {
+      meta: components["schemas"]["DocumentMeta"];
+      /** Format: uuid */
+      document_version_id: string;
+      sections: components["schemas"]["ReaderSection"][];
+      spans: components["schemas"]["ReaderSpanRecord"][];
+      facts: components["schemas"]["ReaderFactRecord"][];
+    };
+    /** @description A same-entity document visible at the cutoff (excluding the target) with fact-level evidence for duplicate/amendment comparison. Carries no sections/content by design (ADR-0005 section 5); spans include at least every span referenced by the sibling's facts. */
+    ReaderSibling: {
+      meta: components["schemas"]["DocumentMeta"];
+      /** Format: uuid */
+      document_version_id: string;
+      spans: components["schemas"]["ReaderSpanRecord"][];
+      facts: components["schemas"]["ReaderFactRecord"][];
+    };
+    /** @description Composite version-pinned reader evidence (ADR-0005). Canonical JSON Schema: https://contracts.fel.dev/schemas/reader-response/v1. */
+    ReaderResponse: {
+      /**
+       * Format: date-time
+       * @description Effective inclusive cutoff actually enforced, UTC.
+       */
+      as_of: string;
+      /**
+       * Format: uuid
+       * @description The corpus pin used, or null when unpinned.
+       */
+      corpus_version_id: string | null;
+      selection_policy: components["schemas"]["ReaderSelectionPolicy"];
+      document: components["schemas"]["ReaderDocument"];
+      siblings: components["schemas"]["ReaderSibling"][];
+    };
+    /**
+     * NormalizedFinancialFact
+     * @description Monetary values are decimal strings, never binary floats (spec 11.4).
+     */
+    "financial-fact.schema": {
+      /** Format: uuid */
+      entity_id: string;
+      concept: string;
+      label?: string;
+      value: string;
+      unit: string;
+      scale: number;
+      period: {
+        /** @enum {unknown} */
+        type: "instant" | "duration";
+        /** Format: date */
+        instant?: string;
+        /** Format: date */
+        start?: string;
+        /** Format: date */
+        end?: string;
+      };
+      dimensions?: {
+        [key: string]: string;
+      };
+      /** Format: uuid */
+      source_span_id: string;
+      /** @enum {unknown} */
+      reported_or_derived: "reported" | "derived";
+      confidence?: number;
     };
   };
   responses: {
@@ -581,6 +706,43 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["DocumentMeta"];
+        };
+      };
+      default: components["responses"]["Error"];
+    };
+  };
+  getDocumentReader: {
+    parameters: {
+      query?: {
+        /** @description Inclusive cutoff (published_at <= as_of), enforced server-side on the target document and all nested evidence. Must carry an explicit UTC offset. Defaults to the request time; the response echoes the effective value actually enforced. */
+        as_of?: string;
+        /** @description Pin evidence to a published (active or superseded) corpus version. Unknown or draft corpus versions return 404 with details.resource = "corpus_version". */
+        corpus_version_id?: string;
+      };
+      header?: never;
+      path: {
+        documentId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Composite reader evidence. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ReaderResponse"];
+        };
+      };
+      /** @description Target document missing, hidden by the cutoff (identical envelope in both cases), unreadable under the corpus pin, or unknown/draft corpus version. */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
         };
       };
       default: components["responses"]["Error"];
