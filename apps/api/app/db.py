@@ -20,14 +20,25 @@ from app.config import settings
 
 
 @contextmanager
-def tenant_connection(ctx: TenantContext) -> Iterator[psycopg.Connection[dict[str, Any]]]:
-    """One transaction with RLS active for the caller's org."""
+def tenant_connection(
+    ctx: TenantContext, *, snapshot_read: bool = False
+) -> Iterator[psycopg.Connection[dict[str, Any]]]:
+    """One transaction with RLS active for the caller's org.
+
+    Composite reads opt into a repeatable-read, read-only transaction so
+    every statement observes one PostgreSQL snapshot. Ordinary single-query
+    request paths retain the default transaction characteristics.
+    """
     url = settings().database_url
     if url is None:
         raise RuntimeError("FEL_DATABASE_URL is not configured")
     claims = json.dumps({"org_id": ctx.org_id, "sub": ctx.user_id, "role": ctx.role})
     with psycopg.connect(url, row_factory=dict_row) as conn:
         with conn.transaction():
+            if snapshot_read:
+                # Must be the first statement after BEGIN. Values are fixed
+                # literals rather than caller-controlled SQL.
+                conn.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
             conn.execute("SET LOCAL ROLE fel_app")
             conn.execute("SELECT set_config('request.jwt.claims', %s, true)", (claims,))
             yield conn
