@@ -12,6 +12,7 @@ class Settings:
     """Runtime configuration; values come from the environment only."""
 
     database_url: str | None = field(default_factory=lambda: os.environ.get("FEL_DATABASE_URL"))
+    storage_dir: str | None = field(default_factory=lambda: os.environ.get("FEL_STORAGE_DIR"))
     auth_mode: str = field(default_factory=lambda: os.environ.get("FEL_AUTH_MODE", "mock"))
     # Spec section 18.2 default hard limits.
     user_daily_cost_limit_usd: Decimal = field(
