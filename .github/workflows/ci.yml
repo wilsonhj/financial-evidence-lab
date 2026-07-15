@@ -40,7 +40,7 @@ jobs:
       - run: pnpm run lint
       - run: pnpm run typecheck
       - run: pnpm run test
-      - run: pnpm audit
+      - run: node scripts/audit-bulk.mjs
 
   python:
     name: Python — format, lint, typecheck, test, security
