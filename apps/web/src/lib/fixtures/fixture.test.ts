@@ -186,12 +186,12 @@ describe("FixtureEvidenceSource", () => {
     expect(await fixtureEvidenceSource.getSpans(DOC_10Q_VERSION_ID)).toEqual([]);
   });
 
-  it("advertises full capabilities", () => {
-    expect(fixtureEvidenceSource.capabilities).toEqual({
-      sections: true,
-      spans: true,
-      facts: true,
-    });
+  it("serves a complete version-pinned reader snapshot", async () => {
+    const response = await fixtureEvidenceSource.getReader(DOC_10Q_ID);
+    expect(response?.document.meta.id).toBe(DOC_10Q_ID);
+    expect(response?.document.document_version_id).toBe(DOC_10Q_VERSION_ID);
+    expect(response?.document.sections).toHaveLength(6);
+    expect(response?.siblings.map((sibling) => sibling.meta.id)).toEqual([DOC_10QA_ID]);
   });
 
   it("returns defensive copies, never fixture references", async () => {

@@ -336,7 +336,7 @@ export const fixtureSpans: SourceSpanRecord[] = [
 
 const Q1_2026 = { type: "duration", start: "2026-01-01", end: "2026-03-31" } as const;
 
-export const fixtureFacts: FinancialFactRecord[] = [
+const fixtureFactSeeds: Array<Omit<FinancialFactRecord, "document_version_id">> = [
   {
     id: "dddddddd-0000-4000-8000-000000000001",
     fact: {
@@ -466,3 +466,9 @@ export const fixtureFacts: FinancialFactRecord[] = [
     },
   },
 ];
+
+export const fixtureFacts: FinancialFactRecord[] = fixtureFactSeeds.map((record) => {
+  const span = fixtureSpans.find((candidate) => candidate.id === record.fact.source_span_id);
+  if (!span) throw new Error(`fixture bug: fact ${record.id} references an unknown span`);
+  return { ...record, document_version_id: span.span.document_version_id };
+});

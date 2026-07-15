@@ -30,18 +30,29 @@ pnpm --filter @fel/web typecheck
 
 ## Data access
 
-The UI talks only to the `EvidenceSource` interface (`src/lib/data`):
+The UI talks only to the `EvidenceSource` interface (`src/lib/data`). Runtime
+selection is explicit and server-only:
 
-- `FixtureEvidenceSource` (current binding) serves the committed synthetic
+- `FEL_EVIDENCE_SOURCE=fixture` serves the committed synthetic
   filing in `src/lib/fixtures/synthetic-filing.ts` — a fictional issuer with a
   10-Q, a restating 10-Q/A, a conflicting duplicate fact pair, a consistent
   duplicate pair, and a dimensioned segment fact. Fixture spans and facts are
   validated against the frozen @fel/contracts JSON Schemas, and every span's
   `text_hash` is recomputed in tests.
-- `HttpEvidenceSource` is stubbed against the frozen OpenAPI document
-  endpoints; section/span/fact listing fills in when the ingestion API
-  (M1-INGESTION) publishes those contracts. Swap the binding in
-  `src/lib/data/index.ts`.
+- `FEL_EVIDENCE_SOURCE=http` uses ADR-0005's authenticated composite reader
+  endpoint. It requires `FEL_API_BASE_URL`, `FEL_API_BEARER_TOKEN`, and the
+  comma-separated `FEL_ENTITY_IDS` used by the filing list. Optional
+  `FEL_AS_OF` and `FEL_CORPUS_VERSION_ID` pin the temporal/corpus scope. The
+  bearer token is read only by `src/lib/data/server.ts`; do not use a
+  `NEXT_PUBLIC_` variable for it.
 
-Contract shapes (`DocumentMeta`, `SourceSpan`, financial fact) are consumed
-from `@fel/contracts` and never redefined here (see `src/lib/contracts.ts`).
+No mode is inferred. Missing or incomplete configuration fails closed and
+never falls back to fixtures. Both the filing list and reader routes are
+dynamic and issue uncached requests.
+
+`DocumentMeta`, `SourceSpan`, `FinancialFact`, and `ReaderResponse` are
+generated from `@fel/contracts` and never redefined here. The HTTP adapter
+validates target identity, effective cutoff/corpus scope, selected-version
+consistency, same-entity siblings, and fact/span references before the reader
+can render. Target citations are then hash-verified against canonical-global
+section offsets and fail closed on mismatch.

@@ -20,7 +20,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           <h1>
             <Link href="/">Financial Evidence Lab</Link>
           </h1>
-          <p className="tagline">Evidence Reader — fixture corpus (M1)</p>
+          <p className="tagline">Version-pinned evidence reader</p>
         </header>
         {children}
       </body>

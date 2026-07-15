@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReactElement } from "react";
 
 import ReaderPage from "./[documentId]/page";
@@ -12,6 +12,10 @@ async function renderPageElement(documentId: string): Promise<ReactElement> {
 }
 
 describe("ReaderPage", () => {
+  beforeEach(() => {
+    vi.stubEnv("FEL_EVIDENCE_SOURCE", "fixture");
+  });
+
   // Regression (finding 5): the reader was not keyed by document, so client
   // state (selection, outline focus, notes) leaked across filings when
   // navigating. The page must render <EvidenceReader key={documentId}> so a
