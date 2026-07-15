@@ -22,6 +22,9 @@ class ReasonCode(StrEnum):
     # Parser-side (malformed source document).
     ENCODING_ERROR = "ENCODING_ERROR"
     EMPTY_DOCUMENT = "EMPTY_DOCUMENT"
+    # A JSON source (e.g. a companyfacts payload) does not decode or does
+    # not have the structural shape the parser requires (issue #83).
+    MALFORMED_JSON = "MALFORMED_JSON"
     INCOMPLETE_FACT = "INCOMPLETE_FACT"
     UNKNOWN_CONTEXT = "UNKNOWN_CONTEXT"
     UNKNOWN_UNIT = "UNKNOWN_UNIT"

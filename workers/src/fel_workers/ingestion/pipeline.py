@@ -50,6 +50,14 @@ from fel_workers.ingestion.raw_store import (
 )
 from fel_workers.ingestion.xbrl import NORMALIZER_VERSION, PriorFact, normalize_facts
 
+# Form marker for SEC companyfacts snapshot documents (issue #83 ruling).
+# Defined here (not in company_facts.py, which imports this module) because
+# the restatement-target query below must exclude that channel: companyfacts
+# snapshots are point-in-time API aggregates, never restatement targets for
+# filing facts, and companyfacts normalization symmetrically passes
+# ``prior_facts=None`` — isolation in both directions.
+COMPANY_FACTS_FORM = "COMPANYFACTS"
+
 
 class PublishConflictError(Exception):
     """A concurrent publisher activated another corpus version first.
@@ -111,6 +119,12 @@ def _prior_canonical_facts(
     version of each prior document is consulted, and candidates are totally
     ordered (published_at DESC, version created_at DESC, fact id) so reruns
     always link ``restates`` to the same fact row.
+
+    Companyfacts snapshot documents (``form = 'COMPANYFACTS'``) are excluded
+    (issue #83 ruling — cross-channel restatement isolation): filing
+    ingestion must never treat a companyfacts aggregate value as a
+    restatement target; cross-channel value reconciliation is a QA-report
+    concern, not a restatement edge.
     """
     with conn.cursor(row_factory=dict_row) as cur:
         rows = cur.execute(
@@ -123,6 +137,7 @@ def _prior_canonical_facts(
               AND ff.duplicate_of IS NULL
               AND dv.status = 'parsed'
               AND d.published_at < %s
+              AND d.form IS DISTINCT FROM %s
               AND dv.id = (
                   SELECT dv2.id FROM document_versions dv2
                   WHERE dv2.document_id = d.id AND dv2.status = 'parsed'
@@ -131,7 +146,7 @@ def _prior_canonical_facts(
               )
             ORDER BY ff.fact_key, d.published_at DESC, dv.created_at DESC, ff.id
             """,
-            (entity_id, published_before),
+            (entity_id, published_before, COMPANY_FACTS_FORM),
         ).fetchall()
     return {
         str(row["fact_key"]): PriorFact(fact_id=str(row["id"]), value=str(row["value"]))

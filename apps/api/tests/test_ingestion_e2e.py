@@ -16,6 +16,8 @@ from __future__ import annotations
 import json
 import pathlib
 import re
+from datetime import UTC, datetime
+from decimal import Decimal
 
 import psycopg
 from fastapi.testclient import TestClient
@@ -24,6 +26,10 @@ from app.auth import make_mock_token
 from fel_providers.mocks import MockStorageProvider
 from fel_workers import queue
 from fel_workers.consumer import entity_id_for_cik, run_worker
+from fel_workers.ingestion.company_facts import (
+    canonical_company_facts_bytes,
+    ingest_company_facts,
+)
 from fel_workers.ingestion.discovery import JOB_KIND_SEC_DISCOVERY
 from fel_workers.ingestion.pipeline import (
     active_corpus_version,
@@ -163,6 +169,83 @@ def test_unpublished_parsed_document_is_visible(
     assert [doc["accession"] for doc in documents] == ["0009999999-26-000010"]
     by_id = client.get(f"/v1/documents/{documents[0]['id']}", headers=headers)
     assert by_id.status_code == 200
+
+
+def test_company_facts_snapshot_visible_via_api(
+    client: TestClient, org_fixture: tuple[str, str], db_url: str
+) -> None:
+    """Issue #83: a companyfacts snapshot is an ordinary corpus document —
+    parsed-gated visibility, point-in-time filtering, and span verification
+    all work through the UNCHANGED corpus API (the API is form-agnostic).
+    A quarantined-only companyfacts document stays invisible."""
+    entity_id = entity_id_for_cik("9999999")
+    raw = canonical_company_facts_bytes(
+        json.loads(
+            (FIXTURES / "companyfacts_synthetic.json").read_bytes(),
+            parse_float=Decimal,
+        )
+    )
+    fetched_at = datetime(2026, 5, 20, 12, 0, tzinfo=UTC)
+    with psycopg.connect(db_url, autocommit=True) as conn:
+        for table in _TABLES:
+            conn.execute(f"DELETE FROM {table}")  # noqa: S608 — fixed table list
+        outcome = ingest_company_facts(
+            conn, MockStorageProvider(), cik="9999999", raw=raw, fetched_at=fetched_at
+        )
+        assert outcome.status == "succeeded"
+        span_row = conn.execute(
+            "SELECT id::text FROM source_spans WHERE document_version_id = %s LIMIT 1",
+            (outcome.document_version_id,),
+        ).fetchone()
+        assert span_row is not None
+        # A quarantined-only companyfacts snapshot (non-finite payload) has a
+        # document row but no parsed version — it must stay invisible.
+        bad = ingest_company_facts(
+            conn,
+            MockStorageProvider(),
+            cik="9999999",
+            raw=(
+                b'{"cik": 9999999, "facts": {"us-gaap": {"Assets": {"units":'
+                b' {"USD": [{"end": "2025-12-31", "val": NaN, "accn": "a"}]}}}}}'
+            ),
+            fetched_at=fetched_at,
+        )
+        assert bad.status == "quarantined"
+
+    headers = _auth_headers(org_fixture)
+    listing = client.get(f"/v1/entities/{entity_id}/documents", headers=headers)
+    assert listing.status_code == 200
+    documents = listing.json()
+    assert len(documents) == 1, "only the PARSED snapshot is evidence"
+    assert documents[0]["form"] == "COMPANYFACTS"
+    assert documents[0]["accession"].startswith("COMPANYFACTS-0009999999-2026-05-20-")
+    assert re.match(r"^sha256:[0-9a-f]{64}$", documents[0]["content_hash"])
+    # published_at IS the fetch instant (issue #83 ruling) — not filing date.
+    assert documents[0]["published_at"] == "2026-05-20T12:00:00+00:00"
+
+    by_id = client.get(f"/v1/documents/{documents[0]['id']}", headers=headers)
+    assert by_id.status_code == 200
+    assert by_id.json()["entity_id"] == entity_id
+
+    span = client.get(f"/v1/source-spans/{span_row[0]}", headers=headers)
+    assert span.status_code == 200
+    assert re.match(r"^sha256:[0-9a-f]{64}$", span.json()["text_hash"])
+
+    # Point-in-time: before the fetch instant the snapshot did not exist.
+    nothing = client.get(
+        f"/v1/entities/{entity_id}/documents",
+        headers=headers,
+        params={"as_of": "2026-05-01T00:00:00Z"},
+    )
+    assert nothing.json() == []
+    # Boundary-inclusive: as_of at the fetch instant must return the doc.
+    at_fetch = client.get(
+        f"/v1/entities/{entity_id}/documents",
+        headers=headers,
+        params={"as_of": "2026-05-20T12:00:00Z"},
+    )
+    assert len(at_fetch.json()) == 1
+    assert at_fetch.json()[0]["id"] == documents[0]["id"]
 
 
 def test_publish_maintains_single_active_pointer(db_url: str) -> None:
