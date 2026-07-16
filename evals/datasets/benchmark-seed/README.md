@@ -1,24 +1,23 @@
 # Benchmark seed questions (EXT-1, issue #71)
 
-**Status: delivered.** `questions.jsonl` contains 65 candidate benchmark
-questions, each grounded in SEC EDGAR filings fetched during authoring. SEC
-EDGAR egress is now enabled for the authoring session (the earlier checkpoint
-was blocked purely by a session egress restriction that has since been
-lifted); every accession, value, unit, period, and verbatim quote in the
-dataset was copied from bytes fetched this session through a shared,
-rate-limited SEC fetch helper (global <= 2 req/s, compliant `User-Agent`
-with contact info).
+**Status: RESEARCH DRAFT / candidate seed.** `questions.jsonl` contains 65
+structurally validated candidate questions recovered from PR #74. It is not
+yet T0214a acceptance evidence. Before promotion, every record must be checked
+against the SEC acceptance/publication timestamp used by the product's
+point-in-time policy; same-day midnight UTC cutoffs are provisional and may
+otherwise introduce look-ahead leakage. Source-byte verification was reported
+by the authoring session but is not reproducible from the committed artifacts.
 
 ## Deliverable summary
 
 - **Questions:** 65 (target 60-100).
 - **Distinct issuers:** 16 of the canonical 20-issuer cohort.
 - **Categories:** all ten represented, each with >= 5 questions.
-- **Integrity:** every answerable question carries >= 1 evidence entry whose
-  `quote` is present **byte-for-byte** in the fetched filing document; every
-  unanswerable (`insufficient_evidence`) question sets
-  `expected_answer: null`, leaves `evidence` empty, and lists the real
-  accession(s) actually reviewed in `documents_reviewed`.
+- **Structural integrity:** every answerable question carries at least one
+  accession/quote evidence entry; unanswerable records have a null answer and
+  list reviewed accessions. Byte presence, absence coverage, and public-time
+  eligibility remain promotion gates because the original fetch cache,
+  content hashes, and verifier were not committed.
 
 ### Category counts
 
@@ -56,13 +55,11 @@ Not yet covered (4): FIVN, APPF, PCTY, PAYC — see Known gaps.
   customer metrics, and margin data in quotable narrative form. Restatement
   questions are grounded in BILL Holdings' Form 10-K/A (FY2022) and Form
   10-Q/A (Q1 FY2023).
-- **Verbatim-quote rule:** because EDGAR HTML wraps figures in tags and
-  encodes spaces as `&#160;`, quotes were selected as contiguous, tag-free
-  spans of the raw document bytes. An automated build step re-fetches each
-  cited document and asserts every `quote` is a byte-exact substring before
-  the JSONL is emitted; any quote that fails is trimmed or dropped. Numbers
-  drawn from financial-statement tables (e.g., Snowflake's income statement)
-  are quoted as the exact cell tokens that appear in the fetched bytes.
+- **Verbatim-quote rule (authoring-session report):** the authoring workflow
+  selected raw-document substrings and re-fetched cited documents. The
+  reconciliation branch does not include that cache or verifier, so T0214a
+  must add a sanitized provenance manifest (URL/accession, acceptance time,
+  content hash) and deterministic verification before promotion.
 - **Trap construction (grounded, not synthetic):**
   - *temporal_cutoff_trap* — `as_of` is set to a date **before** a
     subsequently issued guidance revision, so the correct answer is the
@@ -118,7 +115,16 @@ print("OK", n, "questions;", "categories:", dict(cat))
 PY
 ```
 
-## Known gaps
+## Promotion gates and known gaps
+
+- **Temporal eligibility (blocking):** resolve each evidence document's actual
+  SEC acceptance/publication timestamp and prove it is less than or equal to
+  the record's `as_of`. Correct provisional midnight cutoffs; never reinterpret
+  timestamps as calendar dates.
+- **Reproducible provenance (blocking):** commit a sanitized source manifest and
+  deterministic verifier, then re-run all quote checks.
+- **Absence coverage (blocking for six unanswerable records):** review all
+  relevant documents public by the cutoff, not only one 8-K.
 
 - **Four cohort issuers uncovered:** FIVN, APPF, PCTY, PAYC. Their filings
   are reachable, but 16 issuers already exceed the >= 12 coverage target;
