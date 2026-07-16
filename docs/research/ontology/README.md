@@ -4,13 +4,28 @@
 
 **Status: COMPLETE — SEC EDGAR egress enabled this session; survey written.**
 
-The disclosure survey that feeds the T0301 ontology is in
+The disclosure survey that informs, but does not define, the T0301 ontology is in
 `saas-disclosure-survey.md`. SEC egress (`data.sec.gov`, `www.sec.gov`) is now
 allowed for this session, so the prior BLOCKED checkpoint has been replaced with
 the real deliverable. All access went through the shared rate-limited helper
 `sec/sec_fetch.sh` (global ≤2 req/s lock).
 
-## 1. Completion summary
+## 1. Reconciliation status
+
+The survey meets its structural family-count bars, but only 16 of 20 issuers
+have accession-cited narrative claims. APPF, FIVN, PAYC, and PCTY require cited
+disclosures or documented absence. Roughly thirteen issuer-specific assertions
+also require citations or removal. The referenced fetch helper, provenance log,
+cached responses, and 48-claim verifier were not committed, so byte-verification
+claims are author-reported and cannot serve as acceptance evidence.
+
+Promotion to authoritative T0301 research requires: repair the issuer/citation
+gaps; correct the Family 7 RPO roll call; commit a sanitized deterministic
+provenance/content-hash verifier; and re-run targeted source checks. The M3
+Spec Kit package converts accepted findings into a machine-readable, versioned
+ontology contract.
+
+## 2. Authoring-session summary (provisional)
 
 - **Issuers surveyed rigorously: 20 / 20** (target ≥15). For each: latest 10-K,
   latest 10-Q, most recent 8-K carrying Item 2.02 and its EX-99.1 exhibit, plus
@@ -31,9 +46,9 @@ the real deliverable. All access went through the shared rate-limited helper
 
 The methodology that was executed is retained verbatim in section 2 below.
 
-## 2. Survey methodology (executed)
+## 3. Survey methodology (author-reported)
 
-### 2.1 Cohort and coverage target
+### 3.1 Cohort and coverage target
 
 Canonical cohort: the 20 issuers in `evals/datasets/issuer-cohort.json`
 (read-only): CRM, NOW, WDAY, TEAM, HUBS, ZS, OKTA, DDOG, MDB, SNOW, TWLO,
@@ -42,7 +57,7 @@ surveyed rigorously (depth beats breadth), ≥3 cited issuer examples per
 metric family, every issuer-specific claim carrying an accession + section
 citation, unverifiable cells marked `not surveyed`.
 
-### 2.2 Metric families and source strategy per metric
+### 3.2 Metric families and source strategy per metric
 
 | # | Metric family | Primary source | Secondary source | XBRL check |
 |---|---|---|---|---|
@@ -66,7 +81,7 @@ customers"; "seats", "paid users", "monthly active"; "bookings"; "billings",
 revenue", "contract liabilities"; "subscription gross margin", "cost of
 subscription", "professional services and other".
 
-### 2.3 Per-issuer procedure
+### 3.3 Per-issuer procedure
 
 At ≤2 requests/second with
 `User-Agent: financial-evidence-lab research ([redacted contact])`:
@@ -91,7 +106,7 @@ Citation format: `CIK / accession-number (dashed) / form, section` — e.g.
 `0001561550 / 0001561550-25-000025 / 10-K, MD&A — Key Business Metrics`
 (illustrative format only; not a verified claim).
 
-### 2.4 Deliverable structure (unchanged from the brief)
+### 3.4 Deliverable structure (unchanged from the brief)
 
 `saas-disclosure-survey.md` = per-metric survey (issuers, locations, labels,
 definition variants, tagging, ≥3 citations each), then (a) normalized metric
@@ -101,7 +116,7 @@ period_semantics — point-in-time vs flow vs trailing-window, value_type),
 (b) top ten definitional conflicts stated issuer-vs-issuer with verbatim
 definitions, (c) XBRL-derivable vs extraction-only split verified per issuer.
 
-## 3. Scope note
+## 4. Scope note
 
 Only `docs/research/ontology/**` is touched, per the EXT-3 allowed paths.
 The canonical cohort file `evals/datasets/issuer-cohort.json` was read and
