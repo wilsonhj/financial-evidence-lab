@@ -1,0 +1,232 @@
+openapi: 3.1.0
+info:
+  title: FEL M3 Extraction Contract
+  version: 0.4.0
+  description: Additive excerpt to merge into packages/contracts/openapi/openapi.yaml.
+paths:
+  /v1/workspaces/{workspaceId}/extraction-runs:
+    post:
+      operationId: createExtractionRun
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: '#/components/schemas/ExtractionRunCreate'}}}
+      responses:
+        '202': {description: Accepted, headers: {ETag: {$ref: '#/components/headers/ETag'}}, content: {application/json: {schema: {$ref: '#/components/schemas/ExtractionRun'}}}}
+        default: {$ref: '#/components/responses/Error'}
+    get:
+      operationId: listExtractionRuns
+      parameters: [{$ref: '#/components/parameters/WorkspaceId'}, {$ref: '#/components/parameters/Cursor'}]
+      responses:
+        '200': {description: Runs, content: {application/json: {schema: {type: object, required: [items], properties: {items: {type: array, items: {$ref: '#/components/schemas/ExtractionRun'}}, next_cursor: {type: [string, 'null']}}}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /v1/extraction-runs/{runId}:
+    get:
+      operationId: getExtractionRun
+      parameters: [{$ref: '#/components/parameters/RunId'}]
+      responses:
+        '200': {description: Run, headers: {ETag: {$ref: '#/components/headers/ETag'}}, content: {application/json: {schema: {$ref: '#/components/schemas/ExtractionRun'}}}}
+        default: {$ref: '#/components/responses/Error'}
+    delete:
+      operationId: cancelExtractionRun
+      parameters: [{$ref: '#/components/parameters/RunId'}, {$ref: '#/components/parameters/IdempotencyKey'}, {$ref: '#/components/parameters/IfMatch'}]
+      responses:
+        '200': {description: Cancel requested, content: {application/json: {schema: {$ref: '#/components/schemas/ExtractionRun'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /v1/extraction-runs/{runId}/events:
+    get:
+      operationId: streamExtractionRunEvents
+      parameters: [{$ref: '#/components/parameters/RunId'}, {name: Last-Event-ID, in: header, schema: {type: integer, minimum: 0}}]
+      responses:
+        '200': {description: SSE stream of extraction-event/v1; heartbeat every 15-30 seconds, x-fel-event-schema: {$ref: '#/components/schemas/ExtractionEvent'}, content: {text/event-stream: {schema: {type: string}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /v1/extraction-runs/{runId}/rerun:
+    post:
+      operationId: rerunExtraction
+      parameters: [{$ref: '#/components/parameters/RunId'}, {$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [reason], properties: {reason: {type: string, minLength: 1}}}}}}
+      responses:
+        '202': {description: Child run, content: {application/json: {schema: {$ref: '#/components/schemas/ExtractionRun'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /v1/workspaces/{workspaceId}/extractions:
+    get:
+      operationId: listExtractions
+      parameters: [{$ref: '#/components/parameters/WorkspaceId'}, {$ref: '#/components/parameters/Cursor'}, {name: state, in: query, schema: {$ref: '#/components/schemas/ProposalState'}}]
+      responses:
+        '200': {description: Proposals, content: {application/json: {schema: {type: object, required: [items], properties: {items: {type: array, items: {$ref: '#/components/schemas/ExtractionProposal'}}, next_cursor: {type: [string, 'null']}}}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /v1/extractions/{extractionId}:
+    get:
+      operationId: getExtraction
+      parameters: [{$ref: '#/components/parameters/ExtractionId'}]
+      responses:
+        '200': {description: Proposal, headers: {ETag: {$ref: '#/components/headers/ETag'}}, content: {application/json: {schema: {$ref: '#/components/schemas/ExtractionProposal'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /v1/extractions/review:
+    post:
+      operationId: reviewExtractions
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/ReviewCommand'}}}}
+      responses:
+        '200': {description: Atomic review result, content: {application/json: {schema: {$ref: '#/components/schemas/ReviewResult'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /v1/approved-extractions/{recordId}:
+    get:
+      operationId: getApprovedExtraction
+      parameters: [{name: recordId, in: path, required: true, schema: {type: string, format: uuid}}]
+      responses:
+        '200': {description: Current approved version, content: {application/json: {schema: {$ref: '#/components/schemas/ApprovedExtraction'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /v1/approved-extractions/{recordId}/versions:
+    get:
+      operationId: listApprovedExtractionVersions
+      parameters: [{name: recordId, in: path, required: true, schema: {type: string, format: uuid}}, {$ref: '#/components/parameters/Cursor'}]
+      responses:
+        '200': {description: Immutable history, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/ApprovedExtraction'}}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /v1/approved-extractions/{recordId}/corrections:
+    post:
+      operationId: correctApprovedExtraction
+      parameters:
+        - {name: recordId, in: path, required: true, schema: {type: string, format: uuid}}
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+        - {$ref: '#/components/parameters/IfMatch'}
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: '#/components/schemas/CorrectionCommand'}}}
+      responses:
+        '201': {description: Immutable child version, headers: {ETag: {$ref: '#/components/headers/ETag'}}, content: {application/json: {schema: {$ref: '#/components/schemas/ApprovedExtraction'}}}}
+        default: {$ref: '#/components/responses/Error'}
+components:
+  securitySchemes: {bearerAuth: {type: http, scheme: bearer}}
+  parameters:
+    WorkspaceId: {name: workspaceId, in: path, required: true, schema: {type: string, format: uuid}}
+    RunId: {name: runId, in: path, required: true, schema: {type: string, format: uuid}}
+    ExtractionId: {name: extractionId, in: path, required: true, schema: {type: string, format: uuid}}
+    Cursor: {name: cursor, in: query, schema: {type: string}}
+    IdempotencyKey: {name: Idempotency-Key, in: header, required: true, schema: {type: string, minLength: 8}}
+    IfMatch: {name: If-Match, in: header, required: true, schema: {type: string}}
+  headers: {ETag: {schema: {type: string}}}
+  responses:
+    Error: {description: Existing error-envelope/v1, content: {application/json: {schema: {$ref: '../../../packages/contracts/schemas/error.schema.json'}}}}
+  schemas:
+    RunStatus: {type: string, enum: [queued, running, waiting_review, succeeded, failed, cancelled], x-fel-open-enum: false}
+    ProposalState: {type: string, enum: [proposed, needs_review, accepted, rejected, superseded], x-fel-open-enum: false}
+    ExtractionRunCreate:
+      type: object
+      additionalProperties: false
+      required: [entity_id, as_of, modes, source_span_ids]
+      properties:
+        entity_id: {type: string, format: uuid}
+        as_of:
+          type: string
+          format: date-time
+          description: >
+            Run cutoff. Effective cutoff is min(workspace.as_of, requested as_of);
+            request cannot widen workspace scope.
+        modes: {type: array, minItems: 1, uniqueItems: true, items: {type: string, enum: [kpi, guidance, revenue_driver]}}
+        source_span_ids: {type: array, minItems: 1, uniqueItems: true, items: {type: string, format: uuid}}
+        claim_ids: {type: array, uniqueItems: true, items: {type: string, format: uuid}}
+        corpus_version_id: {type: [string, 'null'], format: uuid}
+        limits: {$ref: '#/components/schemas/RunLimits'}
+    RunLimits:
+      type: object
+      additionalProperties: false
+      properties:
+        max_calls: {type: integer, minimum: 1, maximum: 10}
+        max_input_tokens: {type: integer, minimum: 1, maximum: 100000}
+        max_output_tokens: {type: integer, minimum: 1, maximum: 20000}
+        max_cost_usd:
+          type: string
+          pattern: '^(0(\.\d{1,6})?|1(\.\d{1,6})?|2(\.0{1,6})?)$'
+          description: >
+            Decimal USD. Request may only lower relative to active policy.
+            Absolute M3 v0.4.0 schema ceiling equals ADR-0007 default 2.00.
+            Raising org policy above 2.00 requires a later contract/ADR change.
+        max_wall_seconds: {type: integer, minimum: 1, maximum: 600}
+    ExtractionRun:
+      type: object
+      additionalProperties: false
+      required: [id, workspace_id, entity_id, status, as_of, ontology_version, workflow_version, provider, model, limits, usage, version, created_at]
+      properties:
+        id: {type: string, format: uuid}
+        workspace_id: {type: string, format: uuid}
+        entity_id: {type: string, format: uuid}
+        parent_run_id: {type: [string, 'null'], format: uuid}
+        status: {$ref: '#/components/schemas/RunStatus'}
+        as_of: {type: string, format: date-time}
+        corpus_version_id: {type: string, format: uuid}
+        ontology_version: {type: string}
+        workflow_version: {type: string}
+        provider: {type: string}
+        model: {type: string}
+        limits: {$ref: '#/components/schemas/RunLimits'}
+        usage: {type: object, additionalProperties: false, required: [calls, input_tokens, output_tokens, cost_usd], properties: {calls: {type: integer}, input_tokens: {type: integer}, output_tokens: {type: integer}, cost_usd: {type: string}}}
+        version: {type: integer, minimum: 1}
+        error: {type: [object, 'null']}
+        created_at: {type: string, format: date-time}
+    ExtractionEvent:
+      type: object
+      additionalProperties: false
+      required: [schema_version, id, run_id, type, occurred_at, payload]
+      properties:
+        schema_version: {const: extraction-event/v1}
+        id: {type: integer, minimum: 1}
+        run_id: {type: string, format: uuid}
+        type: {type: string, enum: [run_queued, run_started, step_started, step_completed, step_failed, budget_updated, proposals_persisted, review_waiting, review_completed, run_succeeded, run_failed, run_cancelled, heartbeat]}
+        occurred_at: {type: string, format: date-time}
+        payload: {type: object, description: IDs, counts, states and redacted errors only; no source or prompt text}
+    ExtractionPayload: {$ref: './schemas/extraction-payload.schema.json'}
+    ExtractionProposal:
+      type: object
+      additionalProperties: false
+      required: [id, run_id, kind, metric_id, payload, evidence, record_confidence, field_confidences, validations, state, review_priority, version]
+      properties:
+        id: {type: string, format: uuid}
+        run_id: {type: string, format: uuid}
+        kind: {type: string, enum: [kpi, guidance, revenue_driver]}
+        metric_id: {type: string}
+        payload: {$ref: '#/components/schemas/ExtractionPayload'}
+        evidence: {type: array, minItems: 1, items: {$ref: '#/components/schemas/EvidenceEdge'}}
+        record_confidence: {type: string, pattern: '^(0(\.\d{1,3})?|1(\.0{1,3})?)$'}
+        field_confidences: {type: object, additionalProperties: {type: string}}
+        validations: {type: array, items: {type: object, required: [code, status], properties: {code: {type: string}, status: {type: string, enum: [pass, warning, fail]}, detail: {type: object}}}}
+        state: {$ref: '#/components/schemas/ProposalState'}
+        review_priority: {type: string, enum: [normal, high]}
+        version: {type: integer, minimum: 1}
+    EvidenceEdge:
+      type: object
+      additionalProperties: false
+      required: [source_span_id, document_version_id, role, citation_status]
+      properties: {source_span_id: {type: string, format: uuid}, document_version_id: {type: string, format: uuid}, role: {type: string, enum: [supports, definition, conflicts, derivation_input]}, citation_status: {type: string, enum: [verified, partial, contradictory, invalid]}}
+    ReviewCommand:
+      type: object
+      additionalProperties: false
+      required: [action, extraction_ids, expected_versions, reason]
+      properties:
+        action: {type: string, enum: [accept, edit, reject, merge]}
+        extraction_ids: {type: array, minItems: 1, uniqueItems: true, items: {type: string, format: uuid}}
+        expected_versions: {type: object, minProperties: 1, propertyNames: {format: uuid}, additionalProperties: {type: integer, minimum: 1}, description: Must contain exactly one key for every extraction_id; any mismatch fails the entire transaction with 412}
+        reason: {type: string, minLength: 1, maxLength: 2000}
+        patch: {type: [object, 'null']}
+        conflict_resolution: {type: [object, 'null']}
+    ReviewResult:
+      type: object
+      required: [review_id, action, proposal_states, approved_record_ids]
+      properties: {review_id: {type: string, format: uuid}, action: {type: string}, proposal_states: {type: object}, approved_record_ids: {type: array, items: {type: string, format: uuid}}}
+    CorrectionCommand:
+      type: object
+      additionalProperties: false
+      required: [reason, payload, evidence]
+      properties:
+        reason: {type: string, minLength: 1, maxLength: 2000}
+        payload: {$ref: '#/components/schemas/ExtractionPayload'}
+        evidence: {type: array, minItems: 1, items: {$ref: '#/components/schemas/EvidenceEdge'}}
+    ApprovedExtraction:
+      type: object
+      additionalProperties: false
+      required: [record_id, version_id, version, kind, metric_id, payload, evidence, evidence_manifest_hash, ontology_version, approved_by, created_at]
+      properties: {record_id: {type: string, format: uuid}, version_id: {type: string, format: uuid}, parent_version_id: {type: [string, 'null'], format: uuid}, version: {type: integer, minimum: 1}, kind: {type: string, enum: [kpi, guidance, revenue_driver]}, metric_id: {type: string}, payload: {$ref: '#/components/schemas/ExtractionPayload'}, evidence: {type: array, minItems: 1, items: {$ref: '#/components/schemas/EvidenceEdge'}}, evidence_manifest_hash: {type: string, pattern: '^sha256:[0-9a-f]{64}$'}, ontology_version: {type: string}, approved_by: {type: string, format: uuid}, created_at: {type: string, format: date-time}}
+security: [{bearerAuth: []}]
