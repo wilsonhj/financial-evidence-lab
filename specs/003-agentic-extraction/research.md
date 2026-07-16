@@ -12,8 +12,8 @@
 - Worker queue/consumer: `FOR UPDATE SKIP LOCKED`, short claim, 60-second stale threshold, 15-second heartbeat, lease fencing, retries, and idempotency.
 - FastAPI auth/database patterns: non-privileged `fel_app`, `SET LOCAL request.jwt.claims`, membership re-resolution, ETag/If-Match, and contract error envelopes.
 - Frozen contracts v0.2.0 and provider protocols. Current `LLMProvider.generate()` returns free text and exposes neither structured schema nor model usage metadata.
-- Issues #60–#62. All still name `integration/m0`; #60 omits worker-dispatch/provider paths; no issue owns required contracts/migration.
-- PR #75 and `integration/m0` ontology survey. Its 14-row normalized metric table and issuer-definition conflicts are useful inputs. A later integration-lead comment identified missing provenance artifacts, four under-cited issuers, and uncited/overstated survey claims; ontology v1 must not convert those uncorrected claims into guarantees.
+- Issues #60–#62 refreshed 2026-07-16 onto current `main` with concrete dependencies/paths; they no longer target retired `integration/m0`. Contract/migration ownership is issues #100/#101 (serial: M2 `0003_retrieval_core.sql` then M3 `0004_extraction_core.sql`).
+- PR #75 ontology survey recovered as RESEARCH DRAFT on this design branch. Its 14-row normalized metric table and issuer-definition conflicts are useful inputs. A later integration-lead comment identified missing provenance artifacts, four under-cited issuers, and uncited/overstated survey claims; ontology v1 must not convert those uncorrected claims into guarantees.
 
 ## 2. External primary documentation
 

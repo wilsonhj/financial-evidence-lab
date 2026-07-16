@@ -1,13 +1,14 @@
 # ADR-0006: Versioned observable retrieval and trace replay
 
-Status: Proposed  
+Status: Accepted  
 Date: 2026-07-16  
+Accepted: 2026-07-16 by integration lead on merge of PR #102  
 Occasioned by: M2 / issues #57–#59
 
 ## Decision
 
 1. Store retrieval in existing Supabase Postgres/pgvector. No new search service or queue.
-2. Add an immutable `retrieval_index_version` pinned to one published corpus version, chunker/config hash, embedding provider/model and 512 dimensions. Its UUIDv5 and unique tuple are deterministic, so an identical build reuses/resumes the same row; changing any pinned input creates a new version. Index publication is atomic.
+2. Add an immutable `retrieval_index_version` pinned to one published corpus version, chunker/config hash, embedding provider/model and 512 dimensions. Its UUIDv5 and unique tuple are deterministic, so an identical build reuses/resumes the same row; changing any pinned input creates a new version. Index publication is atomic. Land these tables (and tenant-scoped query/trace/claim tables) in additive migration `0003_retrieval_core.sql` before M3’s `0004_extraction_core.sql`.
 3. Normalize passage, table-row and fact representations into shared `retrieval_items`. Items and embeddings are public-corpus-derived, carry no `org_id`, and are SELECT-only to `fel_app` under ADR-0004. Every context-eligible item must resolve to a hash-verifiable source span from the same selected document version.
 4. Queries, runs, events, candidates, feedback, claims and citations are tenant-created analysis records. They carry `org_id`, enforce RLS, and are unavailable cross-tenant.
 5. Baseline retrieval is deterministic: original query plus versioned synonym expansions (max four), four concurrent lanes, lane top-100, RRF `k=60`, fused top-100 and context top-16. A no-op reranker interface ships. If the checksum-frozen M2 smoke baseline Recall@10 is below 90%, add a cross-encoder over the fused top 100 as ADR-0002 requires.

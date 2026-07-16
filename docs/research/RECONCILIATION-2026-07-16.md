@@ -1,19 +1,22 @@
 # PR #74 / #75 research reconciliation audit
 
-Audited against GitHub `main` at `70ee86fd4ff1a4bc9abe54bc0e0f56144566bc89` on 2026-07-16. This is a read-only audit; no repository or GitHub state was changed.
+Audited against GitHub `main` at `70ee86fd4ff1a4bc9abe54bc0e0f56144566bc89` on 2026-07-16.
 
-## Recommendation
+> **Process status (2026-07-16):** Artifact recovery is **COMPLETE** on
+> `spec/m2-m3-implementation-design` / PR #102. Do **not** open a second
+> reconciliation branch. Remaining items are **promotion gates**
+> (benchmark compiler / temporal checks; ontology citation repair), not file recovery.
 
-Create one main-based reconciliation branch, suggested name `chore/reconcile-m2-m3-research`, and one narrowly scoped PR. Recover the four artifact files from the final reviewed heads, not from either merge commit or branch history. The paths do not overlap existing `main` content and have no code dependency, so the file recovery itself is low-conflict.
+## Recommendation (historical)
 
-Do **not** merge `agent/ext-benchmark-seed` or `agent/ext-ontology-research` into `main`, and do not cherry-pick merge commits `a549fbf2b2609d5f753add8173ade414e0a991bc` or `bb74aa31f3f49b35d676bc7384b6f77e79d90e4c`. Both heads have diverged from current `main` (3 commits ahead, 50 behind, merge base `11a59c7677316f7b911b255d687b36953be4f4fa`), so merging history risks importing retired `integration/m0` ancestry.
+The recovery below was executed on this design branch. Do **not** create a second branch named `chore/reconcile-m2-m3-research`. Do **not** merge `agent/ext-benchmark-seed` or `agent/ext-ontology-research` into `main`, and do not cherry-pick merge commits `a549fbf2b2609d5f753add8173ade414e0a991bc` or `bb74aa31f3f49b35d676bc7384b6f77e79d90e4c`. Both heads have diverged from current `main` (3 commits ahead, 50 behind, merge base `11a59c7677316f7b911b255d687b36953be4f4fa`), so merging history risks importing retired `integration/m0` ancestry.
 
-Two safe recovery options exist:
+Two safe recovery options existed (and option 1 was used):
 
-1. Preferred: copy the four blobs from the exact final heads into a fresh main-based branch and commit them as a single provenance-preserving reconciliation change.
+1. Preferred (done): copy the four blobs from the exact final heads into a fresh main-based branch and commit them as provenance-preserving reconciliation changes.
 2. Also safe but noisier: cherry-pick only the four path-scoped commits in dependency order: `c2fae2e` then `cf4b702`, and `0120088` then `4ee4129`. Do not cherry-pick any other branch or merge commit.
 
-The benchmark seed is structurally sound enough to recover as a **candidate M2 smoke dataset**. The ontology survey should be recovered only as **research draft**, with the corrections below included before it is treated as authoritative input to T0301.
+The benchmark seed is structurally sound enough to recover as a **candidate M2 smoke dataset**. The ontology survey was recovered only as **research draft**, with the corrections below tracked as promotion gates before it is treated as authoritative input to T0301.
 
 ## Exact missing artifacts and provenance
 

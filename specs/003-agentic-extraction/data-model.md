@@ -10,7 +10,7 @@ One versioned policy per organization: `id`, `org_id`, `version`, `record_thresh
 
 ### `extraction_runs`
 
-`id`, `org_id`, `workspace_id`, `entity_id`, `status`, `mode`, `as_of`, `corpus_version_id`, `ontology_version`, `workflow_version`, `provider`, `model`, `policy_id`, `input_manifest jsonb`, `input_hash`, `idempotency_key`, budget/cost counters, `parent_run_id`, `version`, `error jsonb`, `created_by`, `created_at`, `started_at`, `finished_at`.
+`id`, `org_id`, `workspace_id`, `entity_id`, `status`, `modes` (array of `kpi`|`guidance`|`revenue_driver`), `as_of`, `corpus_version_id`, `ontology_version`, `workflow_version`, `provider`, `model`, `policy_id`, `input_manifest jsonb`, `input_hash`, `idempotency_key`, budget/cost counters, `parent_run_id`, `version`, `error jsonb`, `created_by`, `created_at`, `started_at`, `finished_at`.
 
 Closed status: `queued`, `running`, `waiting_review`, `succeeded`, `failed`, `cancelled`. Unique `(org_id, workspace_id, idempotency_key)`. `input_manifest` is canonical JSON containing sorted claim/span IDs and versions; never source text.
 
@@ -56,7 +56,7 @@ Common fields: `schema_version`, `entity_id`, `issuer_label`, `metric_id`, `raw_
 
 - KPI requires decimal/count/ratio value plus ontology qualifiers.
 - Guidance is discriminated by `shape`: point has `value`; range has `low/high`; floor has `low`; ceiling has `high`; qualitative has `text` and no numeric field.
-- Revenue driver requires `category`, `description`, optional `direction` (`positive`, `negative`, `mixed`, `unknown`), target metric IDs, period, and evidence. It is a cited management assertion, not a validated causal estimate.
+- Revenue driver requires closed `category` (`price`, `volume`, `mix`, `acquisition`, `retention`, `usage`, `seats`, `fx`, `services`, `cost`, `other`), `description`, optional `direction` (`positive`, `negative`, `mixed`, `unknown`), target metric IDs, period, and evidence. It is a cited management assertion, not a validated causal estimate.
 
 ## Transactions and invariants
 

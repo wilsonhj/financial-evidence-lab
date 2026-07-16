@@ -24,7 +24,7 @@ uv run pytest evals/tests/test_extraction_gates.py -q
 ## Mock acceptance flow
 
 1. Seed one organization, owner/editor/reviewer/viewer, workspace cutoff, active corpus version, a filing with two sections, verified source spans, facts/table, and M2 citations including one conflict.
-2. POST `/v1/workspaces/{id}/extraction-runs` with a stable `Idempotency-Key`, modes `kpi,guidance,revenue_driver`, pinned span IDs, and budgets at or below policy.
+2. POST `/v1/workspaces/{id}/extraction-runs` with a stable `Idempotency-Key`, required `entity_id` + `as_of`, modes `kpi,guidance,revenue_driver`, pinned span IDs, and budgets at or below policy.
 3. Run the extraction worker against `MockStructuredLLMProvider`; poll/stream events and assert fixed stage order, versions, counters, and `waiting_review`.
 4. Replay the POST and verify the same run/job ID.
 5. Review a non-first-section KPI, a monetary guidance range, and a driver. Verify exact global span hashes and proposal blockers.

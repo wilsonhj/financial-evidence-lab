@@ -73,4 +73,4 @@ Resolved: index-version UUIDv5 and a unique pinned-input tuple reuse identical b
 
 ## Result
 
-No unresolved high/medium findings. Low follow-ups: expand four uncovered issuers, diversify restatement cases, and calibrate `ef_search` on the final reference corpus.
+Design-pass HIGH/MEDIUM items listed above were resolved in the Spec Kit package. A subsequent design review (PR #102) found contract/doc alignment gaps (migration numbering M2=`0003` / M3=`0004`, SSE typing, `index_version_id` pin alignment). Those are addressed in the design-fix commit(s) on this branch. Low follow-ups: expand four uncovered issuers, diversify restatement cases, and calibrate `ef_search` on the final reference corpus.

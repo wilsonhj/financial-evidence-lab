@@ -15,8 +15,8 @@ rate-limited SEC helper (`sec/sec_fetch.sh`), cited as
 (HTTP 200 with facts = tagged; 404 = not tagged under that concept).
 
 - **Cohort:** 20 issuers in `evals/datasets/issuer-cohort.json`.
-- **Surveyed rigorously:** 20 / 20 (each: latest 10-K, latest 10-Q, most recent
-  8-K carrying Item 2.02 + its EX-99.1 exhibit, plus six XBRL concept probes).
+- **Author-reported survey scope:** claimed 20 / 20 rigorous (each: latest 10-K, latest 10-Q, most recent
+  8-K carrying Item 2.02 + its EX-99.1 exhibit, plus six XBRL concept probes). **Not acceptance evidence** — only 16/20 issuers have accession-cited narrative claims in this recovered draft.
 - **Filing vintage:** latest available as of 2026-07-13 (FY2025/FY2026 10-Ks and
   Q1-FY2026/FY2027 10-Qs).
 
@@ -633,17 +633,15 @@ Probes run per issuer (HTTP 200 = tagged, 404 = not under that concept):
 
 ## Provenance & integrity
 
-- All quotations above are byte-present in the corresponding cached response
+- **Author-reported:** quotations above were claimed byte-present in corresponding cached response
   bodies after HTML normalization (tag/entity stripping). A 48-claim sample
-  spanning all nine families and every surveyed issuer was re-verified
-  programmatically against the cached bytes: **48/48 present** after HTML
-  normalization (many also match raw pre-normalization bytes; misses there are
-  only where markup or entities split a word mid-sentence).
-- SEC access exclusively via `sec/sec_fetch.sh` (global ≤2 req/s lock). Session
-  provenance log: `sec/provenance.jsonl`. The only non-200 responses were
-  `companyconcept` 404s, which are themselves the narrative-only determinations
-  (expected, not failures).
-- Coverage: **20 / 20 issuers surveyed** (target ≥15). Each metric family carries
-  ≥3 cited issuer examples (target met). No cell in Parts 1-3 is `not surveyed`
+  spanning all nine families and every surveyed issuer was claimed re-verified
+  programmatically against the cached bytes: **author-reported 48/48 present** after HTML
+  normalization. Fetch helper, provenance log, and verifier were **not committed**; these claims are **not** acceptance evidence.
+- SEC access was described as exclusively via `sec/sec_fetch.sh` (global ≤2 req/s lock). Session
+  provenance log path referenced: `sec/provenance.jsonl` (absent from this repo). The only non-200 responses were
+  described as `companyconcept` 404s (expected narrative-only determinations).
+- Coverage: **author-reported 20 / 20 issuers surveyed** (target ≥15); independently countable accession-cited narrative coverage is **16 / 20**. Each metric family carries
+  author-reported ≥3 cited issuer examples. No cell in Parts 1-3 is `not surveyed`
   except the seats/users KPI for issuers that disclose none (Family 4), which is
   itself the finding.

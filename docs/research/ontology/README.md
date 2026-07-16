@@ -30,20 +30,12 @@ provenance/content-hash verifier; and re-run targeted source checks. The M3
 Spec Kit package converts accepted findings into a machine-readable, versioned
 ontology contract.
 
-## 2. Authoring-session summary (provisional)
+## 2. Authoring-session summary (provisional — not acceptance evidence)
 
-- **Issuers surveyed rigorously: 20 / 20** (target ≥15). For each: latest 10-K,
-  latest 10-Q, most recent 8-K carrying Item 2.02 and its EX-99.1 exhibit, plus
-  six XBRL `companyconcept` probes.
-- **Per-metric-family citations: ≥3 cited issuer examples each** (target met) for
-  all nine families (ARR, NRR/GRR, spend-threshold customer cohorts, seats/users,
-  bookings, billings/calculated billings, RPO/cRPO, deferred revenue/contract
-  liabilities, subscription-vs-services gross margin).
-- **Integrity:** every issuer-specific claim quotes a sentence verbatim from a
-  filing fetched and read this session, cited as `CIK / accession / form
-  §section`. A 48-claim cross-family sample was re-verified byte-present in the
-  cached response bodies (48/48 after HTML normalization).
-- **XBRL determination:** `RevenueRemainingPerformanceObligation` tagged for all
+- **Author-reported coverage:** “20/20 rigorous” is **not** independently reproducible from committed provenance. Independently countable: **16/20** issuers have accession-cited narrative claims (APPF, FIVN, PAYC, PCTY lack accession-cited narrative claims).
+- **Per-metric-family citations:** author-reported ≥3 cited issuer examples each for nine families; treat as provisional pending promotion-gate citation repair.
+- **Author-reported integrity:** “48/48 byte verification” is **author-reported only**; fetch helper / provenance / verifier were not committed and cannot serve as acceptance evidence.
+- **XBRL determination (author-reported):** `RevenueRemainingPerformanceObligation` tagged for all
   20; deferred revenue/contract liabilities tagged for all 20 but under mixed
   ASC 606 / legacy conventions (recorded per issuer). ARR, NRR/GRR, customer
   counts, seats, bookings, calculated billings are extraction-only (no GAAP

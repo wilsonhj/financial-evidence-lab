@@ -44,7 +44,7 @@
 | MEDIUM | Calibrator tenant ownership was ambiguous | Classified calibrators as tenant-neutral release artifacts over approved non-tenant fixtures, SELECT-only to app/worker roles |
 | MEDIUM | Numeric matching/calibration gates underspecified | Exact decimal/unit/period/sign/scale scoring and versioned isotonic artifact |
 
-**Result:** zero unresolved HIGH or MEDIUM findings. Remaining LOW items are implementation naming/layout choices governed by generated contracts and package tests.
+**Result:** Design-pass HIGH/MEDIUM items listed above were resolved in the Spec Kit package. A subsequent design review (PR #102) found contract/doc alignment gaps (migration numbering, create pins, cost ceiling, review reason, closed driver categories, research provenance wording). Those are addressed in the design-fix commit(s) on this branch. Remaining LOW items are implementation naming/layout choices governed by generated contracts and package tests.
 
 ## Constitution check
 

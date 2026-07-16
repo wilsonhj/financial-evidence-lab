@@ -5,7 +5,7 @@ Tasks are test-first. Integration lead alone marks completion after merge and ev
 ## Phase 0 — Shared contract gate (serial)
 
 - [ ] **M3-000** Reconcile PR #75 artifacts to `main`; correct or explicitly track the post-merge provenance/coverage review findings.
-- [ ] **M3-001** Merge issue #101 against accepted ADR-0007: migration `0003_extraction_core.sql`, RLS/grants/immutability tests, extraction JSON schemas/fixtures/OpenAPI v0.4.0, generated client, and additive structured-provider protocol/mock.
+- [ ] **M3-001** Merge issue #101 against accepted ADR-0007: migration `0004_extraction_core.sql` (after M2 `0003_retrieval_core.sql`), RLS/grants/immutability tests, extraction JSON schemas/fixtures/OpenAPI v0.4.0, generated client, and additive structured-provider protocol/mock.
 - [ ] **M3-002** Verify contract semver, generated drift, migration up/down/restore smoke, RLS negatives, and `make ci` before implementation branches rebase.
 
 ## Package #60 — M3-EXTRACTION-CORE

@@ -1,7 +1,8 @@
 # ADR-0007: Bounded agentic-extraction contract and persistence
 
-**Status:** Proposed  
-**Date:** 2026-07-16
+**Status:** Accepted  
+**Date:** 2026-07-16  
+**Accepted:** 2026-07-16 by integration lead on merge of PR #102
 
 ## Context
 
@@ -10,7 +11,7 @@ M3 needs durable typed workflows, review commands, immutable approved versions, 
 ## Decision
 
 1. Use one finite extraction state machine in the existing Python worker and PostgreSQL queue. Checkpoint stages in tenant-scoped PostgreSQL tables; retain existing claim-short, heartbeat, reaper, retry, and lease-fencing semantics.
-2. Add migration `0003_extraction_core.sql` for policies, runs, steps, events, proposals/evidence/conflicts, append-only reviews, immutable approved versions/head pointers, and calibrator artifacts with RLS/grants.
+2. Add migration `0004_extraction_core.sql` for policies, runs, steps, events, proposals/evidence/conflicts, append-only reviews, immutable approved versions/head pointers, and calibrator artifacts with RLS/grants. This runs after M2’s `0003_retrieval_core.sql` (issue #100); never invent a second `0003_*` migration.
 3. Add extraction JSON schemas, fixtures, OpenAPI endpoints, and generated TypeScript client as contract v0.4.0 (additive minor after M2 v0.3.0).
 4. Add an additive `StructuredLLMProvider` protocol/result and deterministic mock. The OpenAI adapter uses JSON Schema Structured Outputs and records provider/model/response/usage/refusal metadata. Existing `LLMProvider` remains unchanged.
 5. Fix the workflow roles and tools in versioned code. No agent-to-agent conversation or model-defined tools.

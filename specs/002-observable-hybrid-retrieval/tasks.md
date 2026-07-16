@@ -3,7 +3,7 @@
 ## Phase 0 — Contract and migration gate
 
 - [ ] **M2-001** Merge issue #100 against accepted ADR-0006: additive OpenAPI/JSON Schema v0.3.0, generated TS client, and drift tests.
-- [ ] **M2-002** Add migration for index artifacts and tenant trace/claim tables, grants, RLS, append-only rules, and negative isolation tests.
+- [ ] **M2-002** Add migration `0003_retrieval_core.sql` for index artifacts and tenant trace/claim tables, grants, RLS, append-only rules, and negative isolation tests (before M3 `0004_extraction_core.sql`).
 
 ## Package A — Retrieval backend (#57)
 

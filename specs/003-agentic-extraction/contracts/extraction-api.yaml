@@ -117,8 +117,15 @@ components:
     ExtractionRunCreate:
       type: object
       additionalProperties: false
-      required: [modes, source_span_ids]
+      required: [entity_id, as_of, modes, source_span_ids]
       properties:
+        entity_id: {type: string, format: uuid}
+        as_of:
+          type: string
+          format: date-time
+          description: >
+            Run cutoff. Effective cutoff is min(workspace.as_of, requested as_of);
+            request cannot widen workspace scope.
         modes: {type: array, minItems: 1, uniqueItems: true, items: {type: string, enum: [kpi, guidance, revenue_driver]}}
         source_span_ids: {type: array, minItems: 1, uniqueItems: true, items: {type: string, format: uuid}}
         claim_ids: {type: array, uniqueItems: true, items: {type: string, format: uuid}}
@@ -127,7 +134,18 @@ components:
     RunLimits:
       type: object
       additionalProperties: false
-      properties: {max_calls: {type: integer, minimum: 1, maximum: 10}, max_input_tokens: {type: integer, minimum: 1, maximum: 100000}, max_output_tokens: {type: integer, minimum: 1, maximum: 20000}, max_cost_usd: {type: string, pattern: '^\d+(\.\d{1,6})?$'}, max_wall_seconds: {type: integer, minimum: 1, maximum: 600}}
+      properties:
+        max_calls: {type: integer, minimum: 1, maximum: 10}
+        max_input_tokens: {type: integer, minimum: 1, maximum: 100000}
+        max_output_tokens: {type: integer, minimum: 1, maximum: 20000}
+        max_cost_usd:
+          type: string
+          pattern: '^(0(\.\d{1,6})?|1(\.\d{1,6})?|2(\.0{1,6})?)$'
+          description: >
+            Decimal USD. Request may only lower relative to active policy.
+            Absolute M3 v0.4.0 schema ceiling equals ADR-0007 default 2.00.
+            Raising org policy above 2.00 requires a later contract/ADR change.
+        max_wall_seconds: {type: integer, minimum: 1, maximum: 600}
     ExtractionRun:
       type: object
       additionalProperties: false
@@ -186,12 +204,12 @@ components:
     ReviewCommand:
       type: object
       additionalProperties: false
-      required: [action, extraction_ids, expected_versions]
+      required: [action, extraction_ids, expected_versions, reason]
       properties:
         action: {type: string, enum: [accept, edit, reject, merge]}
         extraction_ids: {type: array, minItems: 1, uniqueItems: true, items: {type: string, format: uuid}}
         expected_versions: {type: object, minProperties: 1, propertyNames: {format: uuid}, additionalProperties: {type: integer, minimum: 1}, description: Must contain exactly one key for every extraction_id; any mismatch fails the entire transaction with 412}
-        reason: {type: [string, 'null']}
+        reason: {type: string, minLength: 1, maxLength: 2000}
         patch: {type: [object, 'null']}
         conflict_resolution: {type: [object, 'null']}
     ReviewResult:
