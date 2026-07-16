@@ -118,8 +118,11 @@ def verify_span_integrity(
             continue
         ok, local_start, local_end, reason = derive_local_anchor(section, span)
         if not ok:
-            assert reason is not None
-            failures.append(CitationIntegrityFailure(record["id"], section_id, reason))
+            failures.append(
+                CitationIntegrityFailure(
+                    record["id"], section_id, reason or "integrity_failed"
+                )
+            )
             continue
         cited = section["content"][local_start:local_end]
         if f"sha256:{sha256_hex(cited)}" != span["text_hash"]:
@@ -374,7 +377,10 @@ class MockHttpEvidenceTransport:
             if isinstance(body, dict) and isinstance(body.get("error"), dict):
                 code = body["error"].get("code")
             raise EvidenceApiFailure(status=status, kind=kind, code=code, path=path)
-        assert isinstance(body, dict)
+        if not isinstance(body, dict):
+            raise ReaderCrossStackError(
+                f"reader 200 body must be an object, got {type(body).__name__}"
+            )
         return body
 
 
