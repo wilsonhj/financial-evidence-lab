@@ -59,7 +59,7 @@ defaults:
 
 # Queue restructure (architecture audit, 2026-07): 41 packages consolidated to 19
 # milestone-scoped packages (18 pending once the completed M0-SCAFFOLD merges).
-# Issues re-synced 2026-07-12: each package's `issue:` field points at its
+# Issues #57-#62 refreshed and contract waves #100/#101 added 2026-07-16. Each package's `issue:` field points at its
 # GitHub issue (#51-#68); legacy issues #9-#49 are closed. Deferred post-MVP and
 # removed from the queue: T0211-T0213 (Embedding Atlas) and T0506 (analogues).
 # T0214 is split: T0214a (50-100-question smoke benchmark, M2) and T0214b (frozen
@@ -208,7 +208,7 @@ packages:
     depends_on: [READER-CONTRACT, M1-COMPANY-FACTS]
     team: platform
     branch: feat/reader-evidence-api
-    status: active # dispatched 2026-07-15 from main @ c7d19ff
+    status: merged # PR #98 merged to main @ 5336adf (2026-07-15)
     allowed_paths: [apps/api/**]
   - id: READER-WEB-HTTP # child D of #87
     issue: 95
@@ -216,7 +216,7 @@ packages:
     depends_on: [READER-CONTRACT, READER-WEB-OFFSETS]
     team: experience
     branch: feat/http-evidence-reader
-    status: active # dispatched 2026-07-15 from main @ c7d19ff
+    status: merged # PR #99 merged to main @ 70ee86f (2026-07-15)
     allowed_paths: [apps/web/**]
   - id: READER-CROSS-STACK # child E of #87
     issue: 96
@@ -224,7 +224,7 @@ packages:
     depends_on: [READER-API, READER-WEB-HTTP]
     team: trust
     branch: test/reader-cross-stack
-    status: blocked # dispatch after C/D merge; initial test package owns evals only
+    status: ready # C/D merged via PRs #98/#99; dispatch cross-stack verification from current main
     allowed_paths: [evals/**]
   - id: INFRA-WORKER-DEPLOY # Railway worker startCommand -> consumer mode (issue #84)
     issue: 84
@@ -236,10 +236,21 @@ packages:
     allowed_paths: [infra/**]
 
   # M2 — retrieval, claims verification, observatory.
+  - id: M2-CONTRACT # additive retrieval DB/OpenAPI v0.3.0 freeze
+    issue: 100
+    tasks: []
+    depends_on: [READER-CONTRACT, M1-CORPUS-QA]
+    team: contracts
+    branch: agent/m2-retrieval-contract-v0.3
+    status: ready # dispatch after ADR-0006/spec design PR merges
+    allowed_paths:
+      - db/migrations/**
+      - packages/contracts/**
+      - docs/handoff/CONTRACTS.md
   - id: M2-RETRIEVAL-BACKEND # indexes + retrieval trace (trace schema owner)
     issue: 57
     tasks: [T0201, T0202, T0203, T0204, T0205, T0206]
-    depends_on: [M1-CORPUS-QA, READER-API] # serialize apps/api/** behind reader package C
+    depends_on: [M2-CONTRACT, READER-CROSS-STACK] # issues #100 and #96
     team: retrieval
     branch: agent/m2-retrieval-backend
     allowed_paths: [packages/retrieval/**, apps/api/**]
@@ -257,16 +268,27 @@ packages:
   - id: M2-OBSERVATORY-UI # consumes the retrieval trace schema
     issue: 59
     tasks: [T0210]
-    depends_on: [M2-RETRIEVAL-BACKEND, READER-WEB-HTTP] # serialize apps/web/** behind reader package D
+    depends_on: [M2-RETRIEVAL-BACKEND, READER-CROSS-STACK] # contract inherited; #96 is reader gate
     team: experience
     branch: agent/m2-observatory-ui
     allowed_paths: [apps/web/**, packages/ui/**]
 
   # M3 — extraction.
+  - id: M3-CONTRACT # additive extraction DB/OpenAPI/provider v0.4.0 freeze
+    issue: 101
+    tasks: []
+    depends_on: [M2-CONTRACT]
+    team: contracts
+    branch: agent/m3-extraction-contract-v0.4
+    allowed_paths:
+      - db/migrations/**
+      - packages/contracts/**
+      - packages/providers/**
+      - docs/handoff/CONTRACTS.md
   - id: M3-EXTRACTION-CORE # ontology, agent runtime, normalization
     issue: 60
     tasks: [T0301, T0302, T0303, T0304, T0305]
-    depends_on: [M2-CLAIMS-VERIFICATION]
+    depends_on: [M2-CLAIMS-VERIFICATION, M3-CONTRACT]
     team: extraction
     branch: agent/m3-extraction-core
     allowed_paths:
