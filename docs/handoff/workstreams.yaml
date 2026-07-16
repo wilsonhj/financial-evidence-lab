@@ -242,7 +242,7 @@ packages:
     depends_on: [READER-CONTRACT, M1-CORPUS-QA]
     team: contracts
     branch: agent/m2-retrieval-contract-v0.3
-    status: ready # dispatch after ADR-0006/spec design PR merges
+    status: blocked # integration lead marks ready only after PR #102 merges
     allowed_paths:
       - db/migrations/**
       - packages/contracts/**
@@ -293,7 +293,10 @@ packages:
     branch: agent/m3-extraction-core
     allowed_paths:
       - packages/ontology/**
+      - packages/providers/**
       - workers/src/fel_workers/extraction/**
+      - workers/src/fel_workers/consumer.py
+      - workers/src/fel_workers/__main__.py
       - workers/tests/**
   - id: M3-REVIEW
     issue: 61
