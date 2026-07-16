@@ -2,7 +2,12 @@
 
 # EXT-3 — B2B SaaS disclosure ontology research (issue #73)
 
-**Status: COMPLETE — SEC EDGAR egress enabled this session; survey written.**
+> **Reconciliation advisory (2026-07-16):** The recovered authoring-session
+> claims of 20/20 rigorous issuer coverage and 48/48 byte verification are not
+> reproducible from committed provenance. Only 16 issuers have accession-cited
+> narrative claims. The promotion gates below supersede any completion wording.
+
+**Status: RESEARCH DRAFT — advisory input to T0301, not acceptance evidence.**
 
 The disclosure survey that informs, but does not define, the T0301 ontology is in
 `saas-disclosure-survey.md`. SEC egress (`data.sec.gov`, `www.sec.gov`) is now
