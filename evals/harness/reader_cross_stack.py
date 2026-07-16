@@ -119,9 +119,7 @@ def verify_span_integrity(
         ok, local_start, local_end, reason = derive_local_anchor(section, span)
         if not ok:
             failures.append(
-                CitationIntegrityFailure(
-                    record["id"], section_id, reason or "integrity_failed"
-                )
+                CitationIntegrityFailure(record["id"], section_id, reason or "integrity_failed")
             )
             continue
         cited = section["content"][local_start:local_end]
