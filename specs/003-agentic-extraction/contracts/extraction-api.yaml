@@ -110,7 +110,7 @@ components:
     IfMatch: {name: If-Match, in: header, required: true, schema: {type: string}}
   headers: {ETag: {schema: {type: string}}}
   responses:
-    Error: {description: Existing error-envelope/v1, content: {application/json: {schema: {$ref: './schemas/error.schema.json'}}}}
+    Error: {description: Existing error-envelope/v1, content: {application/json: {schema: {$ref: '../../../packages/contracts/schemas/error.schema.json'}}}}
   schemas:
     RunStatus: {type: string, enum: [queued, running, waiting_review, succeeded, failed, cancelled], x-fel-open-enum: false}
     ProposalState: {type: string, enum: [proposed, needs_review, accepted, rejected, superseded], x-fel-open-enum: false}
