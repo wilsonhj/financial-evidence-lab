@@ -224,7 +224,7 @@ packages:
     depends_on: [READER-API, READER-WEB-HTTP]
     team: trust
     branch: test/reader-cross-stack
-    status: ready # post-#102: dispatch in parallel with #100 (evals/** vs contracts/migrations; no path overlap)
+    status: active # dispatched 2026-07-16 from main @ 6c28a57; exclusive evals/**
     allowed_paths: [evals/**]
   - id: INFRA-WORKER-DEPLOY # Railway worker startCommand -> consumer mode (issue #84)
     issue: 84
@@ -242,7 +242,7 @@ packages:
     depends_on: [READER-CONTRACT, M1-CORPUS-QA]
     team: contracts
     branch: agent/m2-retrieval-contract-v0.3
-    status: ready # design #102 merged @ 052836d; dispatch with #96; never concurrent with #101
+    status: active # dispatched 2026-07-16 from main @ 6c28a57; exclusive contracts/migrations; never concurrent with #101
     allowed_paths:
       - db/migrations/**
       - packages/contracts/**

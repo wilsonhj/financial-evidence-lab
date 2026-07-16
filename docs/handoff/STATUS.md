@@ -5,7 +5,7 @@ Last updated: 2026-07-16
 ## Repository
 
 - Default and implementation base: `main`.
-- Current main tip: `052836d423a600cb7b84caeebf83841a76f83e6f` (PR #102 merged; prior tip was PR #99 @ `70ee86f`).
+- Current main tip: `6c28a57490f1976e49ae61efd3293d761a114792` (PR #103 handoff; design #102 @ `052836d`).
 - Canonical product spec: `specs/001-financial-evidence-lab/spec.md` v1.2.
 - M2 implementation design: `specs/002-observable-hybrid-retrieval/` plus ADR-0006 (live on main).
 - M3 implementation design: `specs/003-agentic-extraction/` plus ADR-0007 (live on main).
@@ -32,14 +32,14 @@ Still research-draft (not a dispatch blocker): recovered benchmark needs SEC tim
 
 ## Active
 
-None. Next dispatch is ready-queue only (no package currently `active`).
+1. **Active:** READER-CROSS-STACK (#96) — `evals/**` only; branch `test/reader-cross-stack`.
+2. **Active:** M2-CONTRACT (#100) — mock-first v0.3.0 freeze; `db/migrations/**`, `packages/contracts/**`, `docs/handoff/CONTRACTS.md`; branch `agent/m2-retrieval-contract-v0.3`.
 
-## Ready (post-#102 dispatch)
+Dispatched **in parallel** 2026-07-16 from main @ `6c28a57`. **Never** run #100 concurrent with #101.
 
-1. **Ready:** READER-CROSS-STACK (#96) — `evals/**`; dispatch from current main.
-2. **Ready:** M2-CONTRACT (#100) — mock-first v0.3.0 freeze; `db/migrations/**`, `packages/contracts/**`, `docs/handoff/CONTRACTS.md` only.
+## Ready
 
-Dispatch **#96 and #100 in parallel** (no path overlap). **Never** run #100 concurrent with #101.
+None (both ready packages now active).
 
 ## Next (after ready merges)
 
