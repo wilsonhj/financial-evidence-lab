@@ -1,3 +1,10 @@
+> **Reconciliation advisory (2026-07-16):** This is the raw PR #75 authoring-session
+> survey preserved for provenance. Its 20/20 rigor and byte-verification claims
+> are provisional and are not M3 acceptance evidence: only 16 issuers have
+> accession-cited narrative claims, several issuer assertions remain uncited,
+> and the fetch/provenance/verifier artifacts were not committed. T0301 may use
+> only cited, revalidated findings that pass the gates in the companion README.
+
 # B2B SaaS disclosure ontology — issuer survey (EXT-3, issue #73)
 
 Feeds the T0301 ontology. Every issuer-specific claim below quotes a sentence
