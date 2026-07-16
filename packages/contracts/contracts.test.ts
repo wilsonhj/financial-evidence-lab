@@ -83,11 +83,11 @@ describe("contract schemas", () => {
 });
 
 describe("contract version identity (VERSIONING.md)", () => {
-  it("openapi info.version and CONTRACT_VERSION agree on the 0.2.0 minor bump", () => {
+  it("openapi info.version and CONTRACT_VERSION agree on the 0.3.0 minor bump", () => {
     const yaml = readFileSync(join(here, "openapi/openapi.yaml"), "utf8");
     const infoVersion = /^ {2}version: (\d+\.\d+\.\d+)$/m.exec(yaml)?.[1];
     expect(infoVersion).toBe(CONTRACT_VERSION);
-    expect(CONTRACT_VERSION).toBe("0.2.0");
+    expect(CONTRACT_VERSION).toBe("0.3.0");
   });
 
   it("SCHEMA_IDS covers every schema file (and nothing else)", () => {
@@ -122,6 +122,54 @@ describe("generated client drift (check:generated in-suite)", () => {
     // FinancialFact aliases the file-$ref'd frozen financial-fact/v1 schema,
     // so apps/web can drop its hand mirror.
     expect(api).toMatch(/FinancialFact: components\["schemas"\]\["financial-fact\.schema"\];/);
+  });
+
+  it("generated surface exposes observable retrieval paths and required index pin", () => {
+    const api = readFileSync(join(here, "src/generated/api.ts"), "utf8");
+    expect(api).toContain('"/v1/workspaces/{workspaceId}/queries"');
+    expect(api).toContain('"/v1/queries/{queryId}"');
+    expect(api).toContain('"/v1/queries/{queryId}/reruns"');
+    expect(api).toContain('"/v1/retrieval-runs/{runId}"');
+    expect(api).toContain('"/v1/retrieval-runs/{runId}/events"');
+    expect(api).toContain('"/v1/retrieval-runs/{runId}/feedback"');
+    expect(api).toContain("CreateQuery:");
+    expect(api).toContain("QueryPlan:");
+    expect(api).toContain("RetrievalEvent:");
+    expect(api).toContain("RetrievalTrace:");
+    // Optional create pin; required resolved pin on the plan.
+    expect(api).toMatch(/CreateQuery:[\s\S]*index_version_id\?:/);
+    expect(api).toMatch(/QueryPlan:[\s\S]*index_version_id: string;/);
+  });
+});
+
+describe("observable retrieval fixtures (ADR-0006)", () => {
+  it("query-plan requires index_version_id and rejects a missing pin", () => {
+    const validate = ajv.getSchema(SCHEMA_IDS.queryPlan)!;
+    const plan = load("fixtures/query-plan.json");
+    expect(validate(plan)).toBe(true);
+    const { index_version_id: _drop, ...unpinned } = plan;
+    expect(validate(unpinned)).toBe(false);
+  });
+
+  it("retrieval-event sequences are positive and typed for SSE", () => {
+    const validate = ajv.getSchema(SCHEMA_IDS.retrievalEvent)!;
+    const event = load("fixtures/retrieval-event.json");
+    expect(validate(event)).toBe(true);
+    expect(validate({ ...event, seq: 0 })).toBe(false);
+    expect(validate({ ...event, type: "not_an_event" })).toBe(false);
+  });
+
+  it("retrieval-trace lineage pins match the plan index and events are ordered", () => {
+    const validate = ajv.getSchema(SCHEMA_IDS.retrievalTrace)!;
+    const trace = load("fixtures/retrieval-trace.json") as {
+      plan: { index_version_id: string };
+      lineage: { index_version_id: string };
+      events: Array<{ seq: number }>;
+    };
+    expect(validate(trace), JSON.stringify(validate.errors)).toBe(true);
+    expect(trace.lineage.index_version_id).toBe(trace.plan.index_version_id);
+    const seqs = trace.events.map((e) => e.seq);
+    expect(seqs).toEqual([...seqs].sort((a, b) => a - b));
   });
 });
 

@@ -1,0 +1,112 @@
+{
+  "run_id": "d4e5f6a7-b8c9-0123-def0-234567890123",
+  "query_id": "f6a7b8c9-d0e1-2345-f012-456789012345",
+  "status": "succeeded",
+  "plan": {
+    "schema_version": "query-plan/v1",
+    "intent": "fact_lookup",
+    "entity_ids": ["a1b2c3d4-e5f6-7890-abcd-ef1234567890"],
+    "effective_as_of": "2024-12-31T23:59:59Z",
+    "corpus_version_id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+    "index_version_id": "c3d4e5f6-a7b8-9012-cdef-123456789012",
+    "lanes": ["dense", "lexical", "facts", "tables"],
+    "variants": ["quarterly revenue", "Q4 revenue"],
+    "filters": { "forms": ["10-K"], "periods": ["2024"] },
+    "budgets": {
+      "lane_top_k": 100,
+      "fused_top_k": 100,
+      "context_items": 16,
+      "timeout_ms": 15000
+    }
+  },
+  "parent_run_id": null,
+  "lineage": {
+    "corpus_version_id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+    "index_version_id": "c3d4e5f6-a7b8-9012-cdef-123456789012",
+    "planner_version": "synonym-planner/v1",
+    "config_hash": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "embedding_provider": "openai",
+    "embedding_model": "text-embedding-3-small",
+    "generation_provider": "openai",
+    "generation_model": "gpt-4.1-mini"
+  },
+  "events": [
+    {
+      "schema_version": "retrieval-event/v1",
+      "run_id": "d4e5f6a7-b8c9-0123-def0-234567890123",
+      "seq": 1,
+      "type": "run_started",
+      "occurred_at": "2026-07-16T12:00:00Z",
+      "payload": { "mode": "execute" }
+    },
+    {
+      "schema_version": "retrieval-event/v1",
+      "run_id": "d4e5f6a7-b8c9-0123-def0-234567890123",
+      "seq": 2,
+      "type": "run_completed",
+      "occurred_at": "2026-07-16T12:00:01Z",
+      "payload": { "status": "succeeded" }
+    }
+  ],
+  "candidates": [
+    {
+      "item_id": "e5f6a7b8-c9d0-1234-ef01-345678901234",
+      "kind": "passage",
+      "contributions": [
+        {
+          "lane": "dense",
+          "variant_index": 0,
+          "lane_rank": 1,
+          "raw_score": "0.91",
+          "normalized_score": "0.91",
+          "rrf_contribution": "0.016393",
+          "timing_ms": 12
+        }
+      ],
+      "fused_score": "0.032786",
+      "fused_rank": 1,
+      "rerank_score": null,
+      "rerank_rank": null,
+      "accepted": true,
+      "rejection_code": null,
+      "decision_detail": {},
+      "source_span_id": "a7b8c9d0-e1f2-3456-0123-567890123456",
+      "document_version_id": "b8c9d0e1-f2a3-4567-1234-678901234567",
+      "published_at": "2025-02-15T00:00:00Z"
+    }
+  ],
+  "decisions": [
+    {
+      "stage": "context",
+      "code": "ACCEPTED_TOP_K",
+      "item_ids": ["e5f6a7b8-c9d0-1234-ef01-345678901234"],
+      "detail": { "k": 16 },
+      "occurred_at": "2026-07-16T12:00:00.500Z"
+    }
+  ],
+  "claims": [
+    {
+      "id": "c9d0e1f2-a3b4-5678-2345-789012345678",
+      "text": "Quarterly revenue was $1.25 billion.",
+      "status": "supported",
+      "citations": [
+        {
+          "item_id": "e5f6a7b8-c9d0-1234-ef01-345678901234",
+          "source_span_id": "a7b8c9d0-e1f2-3456-0123-567890123456",
+          "status": "entailed",
+          "numeric_checks": { "1.25e9": true }
+        }
+      ]
+    }
+  ],
+  "timings_ms": { "planning": 5, "retrieving": 40, "total": 90 },
+  "budget_usage": {
+    "context_items": 1,
+    "context_tokens": 128,
+    "input_tokens": 256,
+    "output_tokens": 64
+  },
+  "cost_usd": "0.002500",
+  "started_at": "2026-07-16T12:00:00Z",
+  "finished_at": "2026-07-16T12:00:01Z"
+}

@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.fel.dev/schemas/evidence-feedback/v1",
+  "x-fel-version": "1.0.0",
+  "title": "EvidenceFeedback",
+  "description": "Append-only evidence feedback on a retrieval run (ADR-0006).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["item_id", "label"],
+  "properties": {
+    "item_id": { "type": "string", "format": "uuid" },
+    "label": {
+      "enum": ["relevant", "irrelevant", "duplicate", "temporally_invalid"]
+    },
+    "reason": { "type": "string", "maxLength": 2000 }
+  }
+}

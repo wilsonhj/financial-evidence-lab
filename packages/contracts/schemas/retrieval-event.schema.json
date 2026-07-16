@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.fel.dev/schemas/retrieval-event/v1",
+  "x-fel-version": "1.0.0",
+  "title": "RetrievalEvent",
+  "description": "Persisted retrieval run event; SSE data payload (ADR-0006). Event id is decimal seq; Last-Event-ID resumes after that sequence.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "run_id", "seq", "type", "occurred_at", "payload"],
+  "properties": {
+    "schema_version": { "const": "retrieval-event/v1" },
+    "run_id": { "type": "string", "format": "uuid" },
+    "seq": { "type": "integer", "minimum": 1 },
+    "type": {
+      "enum": [
+        "run_started",
+        "plan_ready",
+        "lane_started",
+        "candidate_batch",
+        "lane_completed",
+        "fusion_completed",
+        "rerank_completed",
+        "context_selected",
+        "claim_generated",
+        "citation_verified",
+        "run_abstained",
+        "run_completed",
+        "run_failed",
+        "heartbeat"
+      ]
+    },
+    "occurred_at": { "type": "string", "format": "date-time" },
+    "payload": { "type": "object" }
+  }
+}

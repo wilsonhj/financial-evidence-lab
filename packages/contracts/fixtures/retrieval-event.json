@@ -1,0 +1,8 @@
+{
+  "schema_version": "retrieval-event/v1",
+  "run_id": "d4e5f6a7-b8c9-0123-def0-234567890123",
+  "seq": 1,
+  "type": "run_started",
+  "occurred_at": "2026-07-16T12:00:00Z",
+  "payload": { "mode": "execute" }
+}

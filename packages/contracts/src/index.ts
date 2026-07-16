@@ -10,6 +10,10 @@ export const SCHEMA_IDS = {
   tenantContext: "https://contracts.fel.dev/schemas/tenant-context/v1",
   error: "https://contracts.fel.dev/schemas/error/v1",
   readerResponse: "https://contracts.fel.dev/schemas/reader-response/v1",
+  queryPlan: "https://contracts.fel.dev/schemas/query-plan/v1",
+  retrievalEvent: "https://contracts.fel.dev/schemas/retrieval-event/v1",
+  retrievalTrace: "https://contracts.fel.dev/schemas/retrieval-trace/v1",
+  evidenceFeedback: "https://contracts.fel.dev/schemas/evidence-feedback/v1",
 } as const;
 
-export const CONTRACT_VERSION = "0.2.0" as const;
+export const CONTRACT_VERSION = "0.3.0" as const;
