@@ -1,0 +1,34 @@
+{
+  "unauthenticated": {
+    "error": {
+      "code": "UNAUTHENTICATED",
+      "message": "Authentication required.",
+      "request_id": "req-401",
+      "details": {}
+    }
+  },
+  "forbidden": {
+    "error": {
+      "code": "NOT_A_MEMBER",
+      "message": "Not a member of this organization.",
+      "request_id": "req-403",
+      "details": {}
+    }
+  },
+  "not_found": {
+    "error": {
+      "code": "NOT_FOUND",
+      "message": "Document not found.",
+      "request_id": "req-404",
+      "details": {}
+    }
+  },
+  "integrity": {
+    "error": {
+      "code": "INTEGRITY_ERROR",
+      "message": "Corpus integrity failure.",
+      "request_id": "req-500",
+      "details": {}
+    }
+  }
+}

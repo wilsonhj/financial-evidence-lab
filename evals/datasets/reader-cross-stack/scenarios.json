@@ -1,0 +1,55 @@
+{
+  "policy": "mock-first",
+  "refs": [
+    "ADR-0005",
+    "https://github.com/wilsonhj/financial-evidence-lab/issues/96"
+  ],
+  "scenarios": [
+    {
+      "id": "latest_parsed_ok",
+      "fixture": "latest_parsed_ok.json",
+      "expects": [
+        "doc_ne_version",
+        "facts_resolve_spans",
+        "non_first_section_citation",
+        "deterministic"
+      ]
+    },
+    {
+      "id": "corpus_pinned_ok",
+      "fixture": "corpus_pinned_ok.json",
+      "expects": [
+        "selection_policy_corpus_pinned",
+        "doc_ne_version"
+      ]
+    },
+    {
+      "id": "integrity_corrupt_hash",
+      "fixture": "integrity_corrupt_hash.json",
+      "expects": [
+        "integrity_alert_no_quote"
+      ]
+    },
+    {
+      "id": "integrity_out_of_range",
+      "fixture": "integrity_out_of_range.json",
+      "expects": [
+        "integrity_alert_no_quote"
+      ]
+    },
+    {
+      "id": "amendment_chain",
+      "fixture": "amendment_chain_documents.json",
+      "expects": [
+        "terminal_authoritative_amendment"
+      ]
+    },
+    {
+      "id": "error_surfaces",
+      "fixture": "error_envelopes.json",
+      "expects": [
+        "auth_ne_404"
+      ]
+    }
+  ]
+}
