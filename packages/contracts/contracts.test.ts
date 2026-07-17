@@ -147,7 +147,8 @@ describe("observable retrieval fixtures (ADR-0006)", () => {
     const validate = ajv.getSchema(SCHEMA_IDS.queryPlan)!;
     const plan = load("fixtures/query-plan.json");
     expect(validate(plan)).toBe(true);
-    const { index_version_id: _drop, ...unpinned } = plan;
+    const unpinned = { ...plan };
+    delete (unpinned as { index_version_id?: string }).index_version_id;
     expect(validate(unpinned)).toBe(false);
   });
 
