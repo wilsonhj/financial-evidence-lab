@@ -52,7 +52,11 @@ def test_pinned_and_unpinned_selection_match_adr_0005() -> None:
     unpinned = rcs.load_json("latest_parsed_ok.json")
     pinned = rcs.load_json("corpus_pinned_ok.json")
     rcs.assert_selection_policy(unpinned)
-    rcs.assert_selection_policy(pinned)
+    rcs.assert_selection_policy(
+        pinned, expected_corpus_version_id="a1b2c3d4-e5f6-4789-a012-3456789abcde"
+    )
+    with pytest.raises(rcs.ReaderCrossStackError, match="pin echo mismatch"):
+        rcs.assert_selection_policy(pinned, expected_corpus_version_id=str(uuid.uuid4()))
     assert unpinned["corpus_version_id"] is None
     assert unpinned["selection_policy"] == "latest_parsed"
     assert pinned["corpus_version_id"] is not None
@@ -227,8 +231,9 @@ def _seed_stack_corpus(db_url: str, storage_root: Path) -> dict[str, Any]:
             normalizer_version: str,
             created_at: datetime,
             status: str = "parsed",
+            version_id: str | None = None,
         ) -> str:
-            version_id = str(uuid.uuid4())
+            version_id = version_id or str(uuid.uuid4())
             key = f"text/sha256/{hashlib.sha256(text.encode()).hexdigest()}-{version_id}"
             put(key, text)
             conn.execute(
@@ -251,12 +256,30 @@ def _seed_stack_corpus(db_url: str, storage_root: Path) -> dict[str, Any]:
             return version_id
 
         old_version = insert_version(target_id, "old parsed text", "z-old", "z-old", published)
+        latest_created = published + timedelta(hours=1)
+        insert_version(
+            target_id,
+            "parser tie-break loser",
+            "y-parser",
+            "z-normalizer",
+            latest_created,
+            version_id="ffffffff-ffff-4fff-bfff-ffffffffffff",
+        )
+        insert_version(
+            target_id,
+            "normalizer tie-break loser",
+            "z-parser",
+            "a-normalizer",
+            latest_created,
+            version_id="eeeeeeee-eeee-4eee-beee-eeeeeeeeeeee",
+        )
         selected_version = insert_version(
             target_id,
             target_text,
-            "a-selected",
-            "a-selected",
-            published + timedelta(hours=1),
+            "z-parser",
+            "z-normalizer",
+            latest_created,
+            version_id="00000000-0000-4000-8000-000000000001",
         )
         sibling_version = insert_version(
             sibling_id,
@@ -286,13 +309,30 @@ def _seed_stack_corpus(db_url: str, storage_root: Path) -> dict[str, Any]:
             start = section_start + 5 if span_start is None else span_start
             stop = min(end, start + 12) if span_end is None else span_end
             section_id, span_id, fact_id = (str(uuid.uuid4()) for _ in range(3))
+            if section_start > 0:
+                prefix_section_id = str(uuid.uuid4())
+                conn.execute(
+                    """
+                    INSERT INTO sections
+                        (id, document_version_id, heading, heading_path, ord, start_char, end_char)
+                    VALUES (%s, %s, 'Overview', %s, 0, 0, %s)
+                    """,
+                    (prefix_section_id, version_id, ["Part I", "Overview"], section_start),
+                )
             conn.execute(
                 """
                 INSERT INTO sections
                     (id, document_version_id, heading, heading_path, ord, start_char, end_char)
-                VALUES (%s, %s, 'MD&A', %s, 0, %s, %s)
+                VALUES (%s, %s, 'MD&A', %s, %s, %s, %s)
                 """,
-                (section_id, version_id, ["Part II", "Item 7"], section_start, end),
+                (
+                    section_id,
+                    version_id,
+                    ["Part II", "Item 7"],
+                    1 if section_start > 0 else 0,
+                    section_start,
+                    end,
+                ),
             )
             conn.execute(
                 """
@@ -406,6 +446,14 @@ def test_stack_latest_reader_doc_ne_version_cutoff_pin_and_determinism(
     assert body["selection_policy"] == "latest_parsed"
     assert [item["meta"]["id"] for item in body["siblings"]] == [ids["sibling_id"]]
     assert ids["late_id"] not in {item["meta"]["id"] for item in body["siblings"]}
+    assert [section["ord"] for section in body["document"]["sections"]] == [0, 1]
+    assert body["document"]["sections"][1]["start_char"] == 100
+    verification = rcs.verify_span_integrity(
+        body["document"]["sections"], body["document"]["spans"]
+    )
+    assert verification.failures == []
+    selected_span = next(item for item in verification.verified if item["id"] == ids["target_span"])
+    assert selected_span["verified_quote"] == ids["target_text"][206:232]
 
     # Exact cutoff: target visible, amendment sibling not yet published.
     at_boundary = client.get(
@@ -428,7 +476,12 @@ def test_stack_latest_reader_doc_ne_version_cutoff_pin_and_determinism(
         params={"as_of": cutoff.isoformat()},
     )
     assert hidden.status_code == missing.status_code == 404
-    assert hidden.json()["error"]["code"] == missing.json()["error"]["code"] == "NOT_FOUND"
+    hidden_error = hidden.json()["error"]
+    missing_error = missing.json()["error"]
+    assert hidden_error["code"] == missing_error["code"] == "NOT_FOUND"
+    assert {key: hidden_error[key] for key in ("code", "message", "details")} == {
+        key: missing_error[key] for key in ("code", "message", "details")
+    }
 
 
 def test_stack_corpus_pin_and_auth_surfaces(

@@ -143,7 +143,9 @@ def assert_document_id_differs_from_version(body: dict[str, Any]) -> None:
             raise ReaderCrossStackError("sibling document id equals version id")
 
 
-def assert_selection_policy(body: dict[str, Any]) -> None:
+def assert_selection_policy(
+    body: dict[str, Any], *, expected_corpus_version_id: str | None = None
+) -> None:
     pin = body.get("corpus_version_id")
     policy = body.get("selection_policy")
     if pin is None:
@@ -152,7 +154,7 @@ def assert_selection_policy(body: dict[str, Any]) -> None:
     else:
         if policy != "corpus_pinned":
             raise ReaderCrossStackError("pinned response must use corpus_pinned")
-        if pin != body["corpus_version_id"]:
+        if expected_corpus_version_id is not None and pin != expected_corpus_version_id:
             raise ReaderCrossStackError("corpus pin echo mismatch")
 
 

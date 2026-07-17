@@ -31,6 +31,11 @@ committed synthetic filing
 This package owns only `evals/**`. Product defects discovered in `apps/**`
 must stop and escalate — they are not patched here.
 
+The mock and FastAPI paths are a partial, credential-free gate. They do not
+complete issue #96 by themselves: only the separately authorized production
+smoke can verify the required worker -> API -> `HttpEvidenceSource` -> Next.js
+path and provide the browser/log/trace artifacts.
+
 ## Acceptance mapping
 
 | Acceptance bullet | Mock path | Stack path (`TEST_DATABASE_URL`) | Deferred |
