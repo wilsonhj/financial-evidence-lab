@@ -210,6 +210,125 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/workspaces/{workspaceId}/queries": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Create an immutable query and retrieval run
+     * @description Captures an immutable query plan pinned to corpus/index versions. Optional index_version_id pins a ready/superseded published index; omit to capture the workspace active default at creation. Requested as_of may narrow but never widen the workspace cutoff. Replay of a stored trace is a read of events/trace and creates no row; use POST .../reruns for an unchanged child run, or a new query with parent_query_id when controls change.
+     */
+    post: operations["createQuery"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/queries/{queryId}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        queryId: components["parameters"]["QueryId"];
+      };
+      cookie?: never;
+    };
+    /** Fetch an immutable query snapshot and its run history */
+    get: operations["getQuery"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/queries/{queryId}/reruns": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Create a child run pinned to the original query inputs
+     * @description Unchanged rerun: creates a child retrieval_run with parent_run_id, pinned to the original immutable plan/index/model inputs. Does not mutate the parent query. Distinct from stored-trace replay (GET events/trace), which creates no data.
+     */
+    post: operations["createQueryRerun"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/retrieval-runs/{runId}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        runId: components["parameters"]["RunId"];
+      };
+      cookie?: never;
+    };
+    /** Read the immutable trace snapshot */
+    get: operations["getRetrievalRun"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/retrieval-runs/{runId}/events": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        runId: components["parameters"]["RunId"];
+      };
+      cookie?: never;
+    };
+    /**
+     * Stream one run's persisted events; Last-Event-ID resumes
+     * @description text/event-stream. Each SSE `data:` payload is JSON RetrievalEvent (schema_version retrieval-event/v1). Events are committed before emission. Heartbeat every 15–30s. Last-Event-ID resumes after that sequence (decimal seq).
+     */
+    get: operations["streamRetrievalRunEvents"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/retrieval-runs/{runId}/feedback": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        runId: components["parameters"]["RunId"];
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Record append-only evidence feedback for a run */
+    post: operations["createRetrievalFeedback"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -422,6 +541,269 @@ export interface components {
       document: components["schemas"]["ReaderDocument"];
       siblings: components["schemas"]["ReaderSibling"][];
     };
+    CreateQuery: {
+      question: string;
+      /**
+       * Format: uuid
+       * @description Required when controls create a comparable child query; omitted for a root query.
+       */
+      parent_query_id?: string;
+      /**
+       * Format: date-time
+       * @description May narrow but never widen workspace cutoff.
+       */
+      as_of?: string;
+      /** Format: uuid */
+      corpus_version_id?: string;
+      /**
+       * Format: uuid
+       * @description Optional pin to a ready/superseded published index. Omit to capture the workspace active default at query creation. Never widen or mix versions mid-run.
+       */
+      index_version_id?: string;
+      lanes?: ("dense" | "lexical" | "facts" | "tables")[];
+      /** @description Optional. When omitted, the server applies a default of 100. */
+      top_k?: number;
+      forms?: string[];
+      periods?: string[];
+    };
+    QueryAccepted: {
+      /** Format: uuid */
+      query_id: string;
+      /** Format: uuid */
+      run_id: string;
+      events_url: string;
+    };
+    /** @description Immutable plan captured at query creation. Canonical JSON Schema: https://contracts.fel.dev/schemas/query-plan/v1. corpus_version_id and index_version_id are always required resolved pins. */
+    QueryPlan: {
+      /** @constant */
+      schema_version: "query-plan/v1";
+      /** @enum {string} */
+      intent:
+        | "fact_lookup"
+        | "section_lookup"
+        | "comparison"
+        | "table_reasoning"
+        | "guidance"
+        | "driver_analysis"
+        | "contradiction"
+        | "general";
+      entity_ids: string[];
+      /** Format: date-time */
+      effective_as_of: string;
+      /**
+       * Format: uuid
+       * @description Resolved corpus pin captured from the selected index at plan time.
+       */
+      corpus_version_id: string;
+      /**
+       * Format: uuid
+       * @description Resolved index pin captured at plan time; matches RetrievalTrace.lineage.
+       */
+      index_version_id: string;
+      lanes: ("dense" | "lexical" | "facts" | "tables")[];
+      variants: string[];
+      filters: {
+        forms?: string[];
+        periods?: string[];
+      };
+      budgets: {
+        lane_top_k: number;
+        fused_top_k: number;
+        context_items: number;
+        timeout_ms: number;
+      };
+    };
+    CandidateContribution: {
+      /** @enum {string} */
+      lane: "dense" | "lexical" | "facts" | "tables";
+      variant_index: number;
+      lane_rank: number;
+      raw_score: string;
+      normalized_score?: string | null;
+      rrf_contribution: string;
+      timing_ms: number;
+    };
+    Candidate: {
+      /** Format: uuid */
+      item_id: string;
+      /** @enum {string} */
+      kind: "passage" | "table_row" | "fact";
+      contributions: components["schemas"]["CandidateContribution"][];
+      fused_score: string;
+      fused_rank?: number | null;
+      rerank_score?: string | null;
+      rerank_rank?: number | null;
+      accepted: boolean;
+      rejection_code?: string | null;
+      decision_detail?: {
+        [key: string]: unknown;
+      };
+      /** Format: uuid */
+      source_span_id: string;
+      /** Format: uuid */
+      document_version_id: string;
+      /** Format: date-time */
+      published_at: string;
+    };
+    RetrievalDecision: {
+      /** @enum {string} */
+      stage: "filter" | "dedupe" | "fusion" | "rerank" | "context" | "verification" | "abstention";
+      code: string;
+      item_ids: string[];
+      detail?: {
+        [key: string]: unknown;
+      };
+      /** Format: date-time */
+      occurred_at: string;
+    };
+    /** @description Claim produced by a retrieval run (Observatory). Distinct from the frozen claim/v1 JSON Schema used for non-trace surfaces. */
+    RetrievalClaim: {
+      /** Format: uuid */
+      id: string;
+      text: string;
+      /** @enum {string} */
+      status: "supported" | "partially_supported" | "contradicted" | "derived" | "unsupported";
+      citations: components["schemas"]["RetrievalCitation"][];
+    };
+    /** @description Citation on a retrieval claim. Uses status (not entailment) per ADR-0006 trace contract; distinct from citation/v1. */
+    RetrievalCitation: {
+      /** Format: uuid */
+      item_id: string;
+      /** Format: uuid */
+      source_span_id: string;
+      /** @enum {string} */
+      status: "entailed" | "partial" | "contradictory" | "irrelevant";
+      numeric_checks: {
+        [key: string]: boolean;
+      };
+    };
+    /** @description Persisted run event (SSE data payload). Canonical JSON Schema: https://contracts.fel.dev/schemas/retrieval-event/v1. */
+    RetrievalEvent: {
+      /** @constant */
+      schema_version: "retrieval-event/v1";
+      /** Format: uuid */
+      run_id: string;
+      seq: number;
+      /** @enum {string} */
+      type:
+        | "run_started"
+        | "plan_ready"
+        | "lane_started"
+        | "candidate_batch"
+        | "lane_completed"
+        | "fusion_completed"
+        | "rerank_completed"
+        | "context_selected"
+        | "claim_generated"
+        | "citation_verified"
+        | "run_abstained"
+        | "run_completed"
+        | "run_failed"
+        | "run_cancelled"
+        | "heartbeat";
+      /** Format: date-time */
+      occurred_at: string;
+      payload: {
+        [key: string]: unknown;
+      };
+    };
+    /** @description Immutable Observatory trace. Canonical JSON Schema: https://contracts.fel.dev/schemas/retrieval-trace/v1. */
+    RetrievalTrace: {
+      /** Format: uuid */
+      run_id: string;
+      /** Format: uuid */
+      query_id: string;
+      /** @enum {string} */
+      status:
+        | "queued"
+        | "planning"
+        | "retrieving"
+        | "fusing"
+        | "generating"
+        | "verifying"
+        | "succeeded"
+        | "abstained"
+        | "failed"
+        | "cancelled";
+      plan: components["schemas"]["QueryPlan"];
+      /** Format: uuid */
+      parent_run_id?: string | null;
+      lineage: {
+        /** Format: uuid */
+        corpus_version_id: string;
+        /** Format: uuid */
+        index_version_id: string;
+        planner_version: string;
+        config_hash: string;
+        embedding_provider: string;
+        embedding_model: string;
+        generation_provider?: string | null;
+        generation_model?: string | null;
+      };
+      events: components["schemas"]["RetrievalEvent"][];
+      candidates: components["schemas"]["Candidate"][];
+      decisions: components["schemas"]["RetrievalDecision"][];
+      claims: components["schemas"]["RetrievalClaim"][];
+      timings_ms: {
+        [key: string]: number;
+      };
+      budget_usage: {
+        context_items: number;
+        context_tokens: number;
+        input_tokens: number;
+        output_tokens: number;
+      };
+      cost_usd: string;
+      /** Format: date-time */
+      started_at: string;
+      /** Format: date-time */
+      finished_at?: string | null;
+    };
+    RunSummary: {
+      /** Format: uuid */
+      run_id: string;
+      /** Format: uuid */
+      parent_run_id?: string | null;
+      /** @enum {string} */
+      status:
+        | "queued"
+        | "planning"
+        | "retrieving"
+        | "fusing"
+        | "generating"
+        | "verifying"
+        | "succeeded"
+        | "abstained"
+        | "failed"
+        | "cancelled";
+      /** @enum {string} */
+      mode: "execute" | "rerun";
+      /** Format: date-time */
+      created_at: string;
+    };
+    QuerySnapshot: {
+      /** Format: uuid */
+      query_id: string;
+      /** Format: uuid */
+      parent_query_id?: string | null;
+      question: string;
+      plan: components["schemas"]["QueryPlan"];
+      runs: components["schemas"]["RunSummary"][];
+      /** Format: date-time */
+      created_at: string;
+    };
+    EvidenceFeedback: {
+      /** Format: uuid */
+      item_id: string;
+      /** @enum {string} */
+      label: "relevant" | "irrelevant" | "duplicate" | "temporally_invalid";
+      reason?: string;
+      /**
+       * Format: uuid
+       * @description Earlier append-only feedback record corrected by this record.
+       */
+      supersedes_feedback_id?: string;
+    };
     /**
      * NormalizedFinancialFact
      * @description Monetary values are decimal strings, never binary floats (spec 11.4).
@@ -472,6 +854,8 @@ export interface components {
     IfMatch: string;
     WorkspaceId: string;
     EntityId: string;
+    QueryId: string;
+    RunId: string;
   };
   requestBodies: never;
   headers: {
@@ -818,6 +1202,169 @@ export interface operations {
         content: {
           "application/json": components["schemas"]["JobEnvelope"];
         };
+      };
+      default: components["responses"]["Error"];
+    };
+  };
+  createQuery: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Client-chosen key; retries with the same key return the original result and never duplicate work. */
+        "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+      };
+      path: {
+        workspaceId: components["parameters"]["WorkspaceId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["CreateQuery"];
+      };
+    };
+    responses: {
+      /** @description Query and run accepted. */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["QueryAccepted"];
+        };
+      };
+      401: components["responses"]["Error"];
+      403: components["responses"]["Error"];
+      409: components["responses"]["Error"];
+      422: components["responses"]["Error"];
+      default: components["responses"]["Error"];
+    };
+  };
+  getQuery: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        queryId: components["parameters"]["QueryId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Query snapshot. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["QuerySnapshot"];
+        };
+      };
+      404: components["responses"]["Error"];
+      default: components["responses"]["Error"];
+    };
+  };
+  createQueryRerun: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Client-chosen key; retries with the same key return the original result and never duplicate work. */
+        "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+      };
+      path: {
+        queryId: components["parameters"]["QueryId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Child run accepted. */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["QueryAccepted"];
+        };
+      };
+      default: components["responses"]["Error"];
+    };
+  };
+  getRetrievalRun: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        runId: components["parameters"]["RunId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Retrieval trace. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RetrievalTrace"];
+        };
+      };
+      default: components["responses"]["Error"];
+    };
+  };
+  streamRetrievalRunEvents: {
+    parameters: {
+      query?: never;
+      header?: {
+        "Last-Event-ID"?: number;
+      };
+      path: {
+        runId: components["parameters"]["RunId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description text/event-stream of RetrievalEvent JSON payloads. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "text/event-stream": components["schemas"]["RetrievalEvent"];
+        };
+      };
+      401: components["responses"]["Error"];
+      403: components["responses"]["Error"];
+      404: components["responses"]["Error"];
+      default: components["responses"]["Error"];
+    };
+  };
+  createRetrievalFeedback: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Client-chosen key; retries with the same key return the original result and never duplicate work. */
+        "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+      };
+      path: {
+        runId: components["parameters"]["RunId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["EvidenceFeedback"];
+      };
+    };
+    responses: {
+      /** @description Feedback recorded. */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
       };
       default: components["responses"]["Error"];
     };

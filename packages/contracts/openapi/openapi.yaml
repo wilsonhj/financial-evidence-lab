@@ -1,14 +1,15 @@
 openapi: 3.1.0
 info:
   title: Financial Evidence Lab API
-  version: 0.2.0
+  version: 0.3.0
   description: >-
     Frozen v1 contract surface (ADR-0001). This file seeds the M0 freeze:
     conventions (error envelope, idempotency, optimistic concurrency,
     run-ID pattern), identity/workspace resources, evidence reads, and
-    ingestion jobs. Retrieval, extraction, modeling, and forecasting paths
-    are added by their owning packages as minor versions under the rules in
-    VERSIONING.md.
+    ingestion jobs. v0.3.0 adds observable hybrid retrieval (ADR-0006):
+    immutable query creation with optional index pin, resumable typed SSE,
+    rerun, trace read, and evidence feedback. Extraction, modeling, and
+    forecasting paths are added by later minor versions under VERSIONING.md.
 servers:
   - url: /
 paths:
@@ -316,6 +317,162 @@ paths:
                 $ref: "#/components/schemas/JobEnvelope"
         default:
           $ref: "#/components/responses/Error"
+  /v1/workspaces/{workspaceId}/queries:
+    post:
+      operationId: createQuery
+      summary: Create an immutable query and retrieval run
+      description: >-
+        Captures an immutable query plan pinned to corpus/index versions.
+        Optional index_version_id pins a ready/superseded published index;
+        omit to capture the workspace active default at creation. Requested
+        as_of may narrow but never widen the workspace cutoff. Replay of a
+        stored trace is a read of events/trace and creates no row; use
+        POST .../reruns for an unchanged child run, or a new query with
+        parent_query_id when controls change.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/WorkspaceId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateQuery"
+      responses:
+        "202":
+          description: Query and run accepted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QueryAccepted"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/queries/{queryId}:
+    parameters:
+      - $ref: "#/components/parameters/QueryId"
+    get:
+      operationId: getQuery
+      summary: Fetch an immutable query snapshot and its run history
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Query snapshot.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QuerySnapshot"
+        "404":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/queries/{queryId}/reruns:
+    post:
+      operationId: createQueryRerun
+      summary: Create a child run pinned to the original query inputs
+      description: >-
+        Unchanged rerun: creates a child retrieval_run with parent_run_id,
+        pinned to the original immutable plan/index/model inputs. Does not
+        mutate the parent query. Distinct from stored-trace replay (GET
+        events/trace), which creates no data.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/QueryId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "202":
+          description: Child run accepted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QueryAccepted"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/retrieval-runs/{runId}:
+    parameters:
+      - $ref: "#/components/parameters/RunId"
+    get:
+      operationId: getRetrievalRun
+      summary: Read the immutable trace snapshot
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Retrieval trace.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RetrievalTrace"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/retrieval-runs/{runId}/events:
+    parameters:
+      - $ref: "#/components/parameters/RunId"
+    get:
+      operationId: streamRetrievalRunEvents
+      summary: Stream one run's persisted events; Last-Event-ID resumes
+      description: >-
+        text/event-stream. Each SSE `data:` payload is JSON RetrievalEvent
+        (schema_version retrieval-event/v1). Events are committed before
+        emission. Heartbeat every 15–30s. Last-Event-ID resumes after that
+        sequence (decimal seq).
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: Last-Event-ID
+          in: header
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+      responses:
+        "200":
+          description: >-
+            text/event-stream of RetrievalEvent JSON payloads.
+          content:
+            text/event-stream:
+              schema:
+                $ref: "#/components/schemas/RetrievalEvent"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/retrieval-runs/{runId}/feedback:
+    parameters:
+      - $ref: "#/components/parameters/RunId"
+    post:
+      operationId: createRetrievalFeedback
+      summary: Record append-only evidence feedback for a run
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EvidenceFeedback"
+      responses:
+        "201":
+          description: Feedback recorded.
+        default:
+          $ref: "#/components/responses/Error"
 components:
   securitySchemes:
     bearerAuth:
@@ -353,6 +510,20 @@ components:
         format: uuid
     EntityId:
       name: entityId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    QueryId:
+      name: queryId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    RunId:
+      name: runId
       in: path
       required: true
       schema:
@@ -764,3 +935,552 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ReaderSibling"
+    CreateQuery:
+      type: object
+      additionalProperties: false
+      required: [question]
+      properties:
+        question:
+          type: string
+          minLength: 1
+          maxLength: 4000
+        parent_query_id:
+          type: string
+          format: uuid
+          description: >-
+            Required when controls create a comparable child query; omitted
+            for a root query.
+        as_of:
+          type: string
+          format: date-time
+          description: May narrow but never widen workspace cutoff.
+        corpus_version_id:
+          type: string
+          format: uuid
+        index_version_id:
+          type: string
+          format: uuid
+          description: >-
+            Optional pin to a ready/superseded published index. Omit to
+            capture the workspace active default at query creation. Never
+            widen or mix versions mid-run.
+        lanes:
+          type: array
+          uniqueItems: true
+          maxItems: 4
+          items:
+            type: string
+            enum: [dense, lexical, facts, tables]
+        top_k:
+          type: integer
+          minimum: 1
+          maximum: 100
+          description: >-
+            Optional. When omitted, the server applies a default of 100.
+        forms:
+          type: array
+          maxItems: 20
+          items:
+            type: string
+        periods:
+          type: array
+          maxItems: 20
+          items:
+            type: string
+    QueryAccepted:
+      type: object
+      required: [query_id, run_id, events_url]
+      properties:
+        query_id:
+          type: string
+          format: uuid
+        run_id:
+          type: string
+          format: uuid
+        events_url:
+          type: string
+    QueryPlan:
+      type: object
+      additionalProperties: false
+      description: >-
+        Immutable plan captured at query creation. Canonical JSON Schema:
+        https://contracts.fel.dev/schemas/query-plan/v1. corpus_version_id and
+        index_version_id are always required resolved pins.
+      required:
+        [
+          schema_version,
+          intent,
+          entity_ids,
+          effective_as_of,
+          corpus_version_id,
+          index_version_id,
+          lanes,
+          variants,
+          filters,
+          budgets,
+        ]
+      properties:
+        schema_version:
+          const: query-plan/v1
+        intent:
+          type: string
+          enum:
+            [
+              fact_lookup,
+              section_lookup,
+              comparison,
+              table_reasoning,
+              guidance,
+              driver_analysis,
+              contradiction,
+              general,
+            ]
+        entity_ids:
+          type: array
+          minItems: 1
+          items:
+            type: string
+            format: uuid
+        effective_as_of:
+          type: string
+          format: date-time
+        corpus_version_id:
+          type: string
+          format: uuid
+          description: Resolved corpus pin captured from the selected index at plan time.
+        index_version_id:
+          type: string
+          format: uuid
+          description: >-
+            Resolved index pin captured at plan time; matches
+            RetrievalTrace.lineage.
+        lanes:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+            enum: [dense, lexical, facts, tables]
+        variants:
+          type: array
+          minItems: 1
+          maxItems: 4
+          items:
+            type: string
+        filters:
+          type: object
+          additionalProperties: false
+          properties:
+            forms:
+              type: array
+              items:
+                type: string
+            periods:
+              type: array
+              items:
+                type: string
+        budgets:
+          type: object
+          additionalProperties: false
+          required: [lane_top_k, fused_top_k, context_items, timeout_ms]
+          properties:
+            lane_top_k:
+              type: integer
+              minimum: 1
+              maximum: 100
+            fused_top_k:
+              type: integer
+              minimum: 1
+              maximum: 100
+            context_items:
+              type: integer
+              minimum: 1
+              maximum: 16
+            timeout_ms:
+              type: integer
+              minimum: 1
+              maximum: 60000
+    CandidateContribution:
+      type: object
+      additionalProperties: false
+      required: [lane, variant_index, lane_rank, raw_score, rrf_contribution, timing_ms]
+      properties:
+        lane:
+          type: string
+          enum: [dense, lexical, facts, tables]
+        variant_index:
+          type: integer
+          minimum: 0
+          maximum: 3
+        lane_rank:
+          type: integer
+          minimum: 1
+        raw_score:
+          type: string
+          pattern: "^-?[0-9]+(\\.[0-9]+)?$"
+        normalized_score:
+          type: ["string", "null"]
+          pattern: "^-?[0-9]+(\\.[0-9]+)?$"
+        rrf_contribution:
+          type: string
+          pattern: "^-?[0-9]+(\\.[0-9]+)?$"
+        timing_ms:
+          type: integer
+          minimum: 0
+    Candidate:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          item_id,
+          kind,
+          contributions,
+          fused_score,
+          accepted,
+          source_span_id,
+          document_version_id,
+          published_at,
+        ]
+      properties:
+        item_id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum: [passage, table_row, fact]
+        contributions:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/CandidateContribution"
+        fused_score:
+          type: string
+          pattern: "^-?[0-9]+(\\.[0-9]+)?$"
+        fused_rank:
+          type: ["integer", "null"]
+        rerank_score:
+          type: ["string", "null"]
+          pattern: "^-?[0-9]+(\\.[0-9]+)?$"
+        rerank_rank:
+          type: ["integer", "null"]
+        accepted:
+          type: boolean
+        rejection_code:
+          type: ["string", "null"]
+        decision_detail:
+          type: object
+          additionalProperties: true
+        source_span_id:
+          type: string
+          format: uuid
+        document_version_id:
+          type: string
+          format: uuid
+        published_at:
+          type: string
+          format: date-time
+    RetrievalDecision:
+      type: object
+      additionalProperties: false
+      required: [stage, code, item_ids, occurred_at]
+      properties:
+        stage:
+          type: string
+          enum: [filter, dedupe, fusion, rerank, context, verification, abstention]
+        code:
+          type: string
+        item_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        detail:
+          type: object
+          additionalProperties: true
+        occurred_at:
+          type: string
+          format: date-time
+    RetrievalClaim:
+      type: object
+      description: >-
+        Claim produced by a retrieval run (Observatory). Distinct from the
+        frozen claim/v1 JSON Schema used for non-trace surfaces.
+      required: [id, text, status, citations]
+      properties:
+        id:
+          type: string
+          format: uuid
+        text:
+          type: string
+        status:
+          type: string
+          enum:
+            [
+              supported,
+              partially_supported,
+              contradicted,
+              derived,
+              unsupported,
+            ]
+        citations:
+          type: array
+          items:
+            $ref: "#/components/schemas/RetrievalCitation"
+    RetrievalCitation:
+      type: object
+      description: >-
+        Citation on a retrieval claim. Uses status (not entailment) per
+        ADR-0006 trace contract; distinct from citation/v1.
+      required: [item_id, source_span_id, status, numeric_checks]
+      properties:
+        item_id:
+          type: string
+          format: uuid
+        source_span_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [entailed, partial, contradictory, irrelevant]
+        numeric_checks:
+          type: object
+          additionalProperties:
+            type: boolean
+    RetrievalEvent:
+      type: object
+      additionalProperties: false
+      description: >-
+        Persisted run event (SSE data payload). Canonical JSON Schema:
+        https://contracts.fel.dev/schemas/retrieval-event/v1.
+      required: [schema_version, run_id, seq, type, occurred_at, payload]
+      properties:
+        schema_version:
+          const: retrieval-event/v1
+        run_id:
+          type: string
+          format: uuid
+        seq:
+          type: integer
+          minimum: 1
+        type:
+          type: string
+          enum:
+            [
+              run_started,
+              plan_ready,
+              lane_started,
+              candidate_batch,
+              lane_completed,
+              fusion_completed,
+              rerank_completed,
+              context_selected,
+              claim_generated,
+              citation_verified,
+              run_abstained,
+              run_completed,
+              run_failed,
+              run_cancelled,
+              heartbeat,
+            ]
+        occurred_at:
+          type: string
+          format: date-time
+        payload:
+          type: object
+          additionalProperties: true
+    RetrievalTrace:
+      type: object
+      additionalProperties: false
+      description: >-
+        Immutable Observatory trace. Canonical JSON Schema:
+        https://contracts.fel.dev/schemas/retrieval-trace/v1.
+      required:
+        [
+          run_id,
+          query_id,
+          plan,
+          status,
+          lineage,
+          events,
+          candidates,
+          decisions,
+          claims,
+          timings_ms,
+          budget_usage,
+          cost_usd,
+          started_at,
+        ]
+      properties:
+        run_id:
+          type: string
+          format: uuid
+        query_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+            [
+              queued,
+              planning,
+              retrieving,
+              fusing,
+              generating,
+              verifying,
+              succeeded,
+              abstained,
+              failed,
+              cancelled,
+            ]
+        plan:
+          $ref: "#/components/schemas/QueryPlan"
+        parent_run_id:
+          type: ["string", "null"]
+          format: uuid
+        lineage:
+          type: object
+          additionalProperties: false
+          required:
+            [
+              corpus_version_id,
+              index_version_id,
+              planner_version,
+              config_hash,
+              embedding_provider,
+              embedding_model,
+            ]
+          properties:
+            corpus_version_id:
+              type: string
+              format: uuid
+            index_version_id:
+              type: string
+              format: uuid
+            planner_version:
+              type: string
+            config_hash:
+              type: string
+              pattern: "^sha256:[0-9a-f]{64}$"
+            embedding_provider:
+              type: string
+            embedding_model:
+              type: string
+            generation_provider:
+              type: ["string", "null"]
+            generation_model:
+              type: ["string", "null"]
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/RetrievalEvent"
+        candidates:
+          type: array
+          items:
+            $ref: "#/components/schemas/Candidate"
+        decisions:
+          type: array
+          items:
+            $ref: "#/components/schemas/RetrievalDecision"
+        claims:
+          type: array
+          items:
+            $ref: "#/components/schemas/RetrievalClaim"
+        timings_ms:
+          type: object
+          additionalProperties:
+            type: integer
+            minimum: 0
+        budget_usage:
+          type: object
+          required: [context_items, context_tokens, input_tokens, output_tokens]
+          properties:
+            context_items:
+              type: integer
+              minimum: 0
+            context_tokens:
+              type: integer
+              minimum: 0
+            input_tokens:
+              type: integer
+              minimum: 0
+            output_tokens:
+              type: integer
+              minimum: 0
+        cost_usd:
+          type: string
+          pattern: "^\\d+(\\.\\d{1,6})?$"
+        started_at:
+          type: string
+          format: date-time
+        finished_at:
+          type: ["string", "null"]
+          format: date-time
+    RunSummary:
+      type: object
+      required: [run_id, status, mode, created_at]
+      properties:
+        run_id:
+          type: string
+          format: uuid
+        parent_run_id:
+          type: ["string", "null"]
+          format: uuid
+        status:
+          type: string
+          enum:
+            [
+              queued,
+              planning,
+              retrieving,
+              fusing,
+              generating,
+              verifying,
+              succeeded,
+              abstained,
+              failed,
+              cancelled,
+            ]
+        mode:
+          type: string
+          enum: [execute, rerun]
+        created_at:
+          type: string
+          format: date-time
+    QuerySnapshot:
+      type: object
+      required: [query_id, question, plan, runs, created_at]
+      properties:
+        query_id:
+          type: string
+          format: uuid
+        parent_query_id:
+          type: ["string", "null"]
+          format: uuid
+        question:
+          type: string
+        plan:
+          $ref: "#/components/schemas/QueryPlan"
+        runs:
+          type: array
+          items:
+            $ref: "#/components/schemas/RunSummary"
+        created_at:
+          type: string
+          format: date-time
+    EvidenceFeedback:
+      type: object
+      additionalProperties: false
+      required: [item_id, label]
+      properties:
+        item_id:
+          type: string
+          format: uuid
+        label:
+          type: string
+          enum: [relevant, irrelevant, duplicate, temporally_invalid]
+        reason:
+          type: string
+          maxLength: 2000
+        supersedes_feedback_id:
+          type: string
+          format: uuid
+          description: Earlier append-only feedback record corrected by this record.

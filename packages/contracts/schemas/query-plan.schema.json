@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.fel.dev/schemas/query-plan/v1",
+  "x-fel-version": "1.0.0",
+  "title": "QueryPlan",
+  "description": "Immutable retrieval query plan (ADR-0006). corpus_version_id and index_version_id are the resolved pins captured at plan time.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "intent",
+    "entity_ids",
+    "effective_as_of",
+    "corpus_version_id",
+    "index_version_id",
+    "lanes",
+    "variants",
+    "filters",
+    "budgets"
+  ],
+  "properties": {
+    "schema_version": { "const": "query-plan/v1" },
+    "intent": {
+      "enum": [
+        "fact_lookup",
+        "section_lookup",
+        "comparison",
+        "table_reasoning",
+        "guidance",
+        "driver_analysis",
+        "contradiction",
+        "general"
+      ]
+    },
+    "entity_ids": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "format": "uuid" }
+    },
+    "effective_as_of": { "type": "string", "format": "date-time" },
+    "corpus_version_id": { "type": "string", "format": "uuid" },
+    "index_version_id": { "type": "string", "format": "uuid" },
+    "lanes": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "enum": ["dense", "lexical", "facts", "tables"] }
+    },
+    "variants": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 4,
+      "items": { "type": "string" }
+    },
+    "filters": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "forms": { "type": "array", "items": { "type": "string" } },
+        "periods": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "budgets": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lane_top_k", "fused_top_k", "context_items", "timeout_ms"],
+      "properties": {
+        "lane_top_k": { "type": "integer", "minimum": 1, "maximum": 100 },
+        "fused_top_k": { "type": "integer", "minimum": 1, "maximum": 100 },
+        "context_items": { "type": "integer", "minimum": 1, "maximum": 16 },
+        "timeout_ms": { "type": "integer", "minimum": 1, "maximum": 60000 }
+      }
+    }
+  }
+}

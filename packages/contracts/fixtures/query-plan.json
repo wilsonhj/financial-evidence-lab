@@ -1,0 +1,17 @@
+{
+  "schema_version": "query-plan/v1",
+  "intent": "fact_lookup",
+  "entity_ids": ["a1b2c3d4-e5f6-7890-abcd-ef1234567890"],
+  "effective_as_of": "2024-12-31T23:59:59Z",
+  "corpus_version_id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+  "index_version_id": "c3d4e5f6-a7b8-9012-cdef-123456789012",
+  "lanes": ["dense", "lexical", "facts", "tables"],
+  "variants": ["quarterly revenue", "Q4 revenue"],
+  "filters": { "forms": ["10-K"], "periods": ["2024"] },
+  "budgets": {
+    "lane_top_k": 100,
+    "fused_top_k": 100,
+    "context_items": 16,
+    "timeout_ms": 15000
+  }
+}
