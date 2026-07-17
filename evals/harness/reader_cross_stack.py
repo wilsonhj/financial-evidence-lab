@@ -347,7 +347,6 @@ class MockHttpEvidenceTransport:
     def __init__(self, routes: dict[tuple[str, str], tuple[int, Any]]) -> None:
         # key: (method, path_with_query) -> (status, body)
         self._routes = routes
-        self.fixture_fallback_attempted = False
 
     def get_reader(
         self,
@@ -365,8 +364,9 @@ class MockHttpEvidenceTransport:
         path = f"/v1/documents/{document_id}/reader{suffix}"
         key = ("GET", path)
         if key not in self._routes:
-            # Explicitly refuse fixture fallback when the stack route is absent.
-            self.fixture_fallback_attempted = False
+            # HTTP mode fails closed: a missing stack route raises rather than
+            # substituting fixture bytes. There is no fixture-fallback path, so
+            # the invariant is enforced by this raise, not by a flag.
             raise EvidenceApiFailure(status=0, kind="unavailable", code=None, path=path)
         status, body = self._routes[key]
         if status == 404:
@@ -414,14 +414,20 @@ def assert_http_mode_no_fixture_fallback() -> None:
     else:
         raise ReaderCrossStackError("expected authentication failure")
 
+    # Fixture fallback is architecturally impossible in HTTP mode: a missing
+    # stack route raises EvidenceApiFailure. The invariant is enforced by the
+    # raise, not a flag — any *returned* body could only be fixture-sourced, so
+    # a return (instead of a raise) fails the test.
     missing = MockHttpEvidenceTransport({})
     try:
-        missing.get_reader(doc_id)
-    except EvidenceApiFailure:
-        if missing.fixture_fallback_attempted:
-            raise ReaderCrossStackError("HTTP mode attempted fixture fallback") from None
+        leaked = missing.get_reader(doc_id)
+    except EvidenceApiFailure as exc:
+        if exc.status != 0 or exc.kind != "unavailable":
+            raise ReaderCrossStackError(
+                f"missing stack route must surface unavailable, got {exc.kind}"
+            ) from exc
     else:
-        raise ReaderCrossStackError("missing stack route must fail closed")
+        raise ReaderCrossStackError(f"missing stack route must fail closed, returned {leaked!r}")
 
 
 def assert_reader_response_invariants(body: dict[str, Any]) -> None:

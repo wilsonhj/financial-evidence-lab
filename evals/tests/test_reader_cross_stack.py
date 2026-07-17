@@ -153,17 +153,29 @@ def test_http_mode_cannot_fall_back_to_fixtures_when_stack_available() -> None:
 
 def test_repeated_mock_request_selects_identical_versions_and_scope() -> None:
     body = rcs.load_json("latest_parsed_ok.json")
-    first = rcs.assert_reader_response_invariants
-    # Pure function of fixture bytes: two loads are identical.
-    again = rcs.load_json("latest_parsed_ok.json")
-    assert body == again
-    first(body)
-    first(again)
-    assert body["document"]["document_version_id"] == again["document"]["document_version_id"]
-    assert body["as_of"] == again["as_of"]
-    assert [s["meta"]["id"] for s in body["siblings"]] == [
-        s["meta"]["id"] for s in again["siblings"]
-    ]
+
+    def derive_selection(payload: dict[str, Any]) -> dict[str, Any]:
+        """Snapshot what the harness selection/integrity logic derives."""
+        rcs.assert_reader_response_invariants(payload)
+        integrity = rcs.verify_span_integrity(
+            payload["document"]["sections"], payload["document"]["spans"]
+        )
+        return {
+            "selected_version": payload["document"]["document_version_id"],
+            "selection_policy": payload["selection_policy"],
+            "as_of": payload["as_of"],
+            "siblings": [s["meta"]["id"] for s in payload["siblings"]],
+            "verified_quotes": [record["verified_quote"] for record in integrity.verified],
+            "integrity_failures": [failure.span_id for failure in integrity.failures],
+        }
+
+    # Determinism of the harness itself: two runs of the derivation over the
+    # same input must produce an identical selection. This tests the harness,
+    # not json.load (the stack path covers full end-to-end determinism).
+    first_run = derive_selection(body)
+    second_run = derive_selection(body)
+    assert first_run == second_run
+    assert first_run["selected_version"] != body["document"]["meta"]["id"]
 
 
 # ---------------------------------------------------------------------------
