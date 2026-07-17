@@ -1,0 +1,187 @@
+{
+  "as_of": "2026-07-01T00:00:00Z",
+  "corpus_version_id": "a1b2c3d4-e5f6-4789-a012-3456789abcde",
+  "selection_policy": "corpus_pinned",
+  "document": {
+    "meta": {
+      "id": "0d9e1f2a-3b4c-4d5e-8f6a-7b8c9d0e1f2a",
+      "entity_id": "b2c4d6e8-1a3b-4c5d-8e9f-0a1b2c3d4e5f",
+      "form": "10-K",
+      "accession": "0000320193-26-000006",
+      "source_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019326000006/fy2025-10k.htm",
+      "content_hash": "sha256:b575f049fc7dae63ee862c34b0b647a41806abb72e8b24af337eea5b360bdd1a",
+      "published_at": "2026-02-27T21:05:00Z",
+      "filed_at": "2026-02-27T21:05:00Z",
+      "period_start": "2025-01-01",
+      "period_end": "2025-12-31",
+      "ingested_at": "2026-03-01T04:10:00Z",
+      "valid_from": "2026-03-01T04:10:00Z"
+    },
+    "document_version_id": "c1a2b3c4-d5e6-47f8-9a0b-1c2d3e4f5a6b",
+    "sections": [
+      {
+        "id": "11111a2b-3c4d-4e5f-8a6b-7c8d9e0f1a2b",
+        "document_version_id": "c1a2b3c4-d5e6-47f8-9a0b-1c2d3e4f5a6b",
+        "heading": "Part I",
+        "heading_path": [
+          "Part I"
+        ],
+        "ord": 0,
+        "start_char": 0,
+        "end_char": 240,
+        "content": "PART I  Item 1. Business. [p1-0] The registrant makes forward-looking statements within the meaning of the Private Securities Litigation Reform Act of 1995, and actual results may differ materially from those projected. [p1-1] The registran"
+      },
+      {
+        "id": "22222b3c-4d5e-4f6a-9b7c-8d9e0f1a2b3c",
+        "document_version_id": "c1a2b3c4-d5e6-47f8-9a0b-1c2d3e4f5a6b",
+        "heading": "Item 7. Management's Discussion and Analysis",
+        "heading_path": [
+          "Part II",
+          "Item 7. Management's Discussion and Analysis"
+        ],
+        "ord": 1,
+        "start_char": 240,
+        "end_char": 1120,
+        "content": "Item 7. Management's Discussion and Analysis of Financial Condition and Results of Operations. Total revenue for fiscal 2025 was $1,284.5 million, an increase of 11.2% over fiscal 2024, driven primarily by subscription growth. [md&a-0] The registrant makes forward-looking statements within the meaning of the Private Securities Litigation Reform Act of 1995, and actual results may differ materially from those projected. [md&a-1] The registrant makes forward-looking statements within the meaning of the Private Securities Litigation Reform Act of 1995, and actual results may differ materially from those projected. [md&a-2] The registrant makes forward-looking statements within the meaning of the Private Securities Litigation Reform Act of 1995, and actual results may differ materially from those projected. [md&a-3] The registrant makes forward-looking statements within t"
+      },
+      {
+        "id": "33333c4d-5e6f-4a7b-8c8d-9e0f1a2b3c4d",
+        "document_version_id": "c1a2b3c4-d5e6-47f8-9a0b-1c2d3e4f5a6b",
+        "heading": "Item 8. Financial Statements and Supplementary Data",
+        "heading_path": [
+          "Part II",
+          "Item 8. Financial Statements and Supplementary Data"
+        ],
+        "ord": 2,
+        "start_char": 1120,
+        "end_char": 1960,
+        "content": "Item 8. Financial Statements and Supplementary Data. CONSOLIDATED STATEMENTS OF OPERATIONS (in millions) Revenues                                                        $ 1,284.5 [fs-0] The registrant makes forward-looking statements within the meaning of the Private Securities Litigation Reform Act of 1995, and actual results may differ materially from those projected. [fs-1] The registrant makes forward-looking statements within the meaning of the Private Securities Litigation Reform Act of 1995, and actual results may differ materially from those projected. [fs-2] The registrant makes forward-looking statements within the meaning of the Private Securities Litigation Reform Act of 1995, and actual results may differ materially from those projected. [fs-3] The registrant makes forward-looking statements within the meaning of th"
+      }
+    ],
+    "spans": [
+      {
+        "id": "55555e6f-7a8b-4c9d-8e0f-1a2b3c4d5e6f",
+        "span": {
+          "document_version_id": "c1a2b3c4-d5e6-47f8-9a0b-1c2d3e4f5a6b",
+          "section_id": "22222b3c-4d5e-4f6a-9b7c-8d9e0f1a2b3c",
+          "page": 41,
+          "start_char": 335,
+          "end_char": 466,
+          "text_hash": "sha256:99e83115bf07ab18cdfd3553719b09c71fe228573f02bcf3d3f44fa47f8608d0"
+        }
+      },
+      {
+        "id": "66666f7a-8b9c-4d0e-9f1a-2b3c4d5e6f7a",
+        "span": {
+          "document_version_id": "c1a2b3c4-d5e6-47f8-9a0b-1c2d3e4f5a6b",
+          "section_id": "33333c4d-5e6f-4a7b-8c8d-9e0f1a2b3c4d",
+          "page": 42,
+          "start_char": 1225,
+          "end_char": 1298,
+          "text_hash": "sha256:0fce9376dd91133ad7415d5c30a34dfe00c1967354f337390a5bffd04746ef8c"
+        }
+      }
+    ],
+    "facts": [
+      {
+        "id": "88888b9c-0d1e-4f2a-9b3c-4d5e6f7a8b9c",
+        "document_version_id": "c1a2b3c4-d5e6-47f8-9a0b-1c2d3e4f5a6b",
+        "fact": {
+          "entity_id": "b2c4d6e8-1a3b-4c5d-8e9f-0a1b2c3d4e5f",
+          "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+          "label": "Revenue",
+          "value": "1284500000",
+          "unit": "USD",
+          "scale": 0,
+          "period": {
+            "type": "duration",
+            "start": "2025-01-01",
+            "end": "2025-12-31"
+          },
+          "dimensions": {},
+          "source_span_id": "66666f7a-8b9c-4d0e-9f1a-2b3c4d5e6f7a",
+          "reported_or_derived": "reported",
+          "confidence": 1
+        }
+      },
+      {
+        "id": "99999c0d-1e2f-4a3b-8c4d-5e6f7a8b9c0d",
+        "document_version_id": "c1a2b3c4-d5e6-47f8-9a0b-1c2d3e4f5a6b",
+        "duplicate_of": "88888b9c-0d1e-4f2a-9b3c-4d5e6f7a8b9c",
+        "fact": {
+          "entity_id": "b2c4d6e8-1a3b-4c5d-8e9f-0a1b2c3d4e5f",
+          "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+          "label": "Revenue (MD&A presentation)",
+          "value": "1284500000",
+          "unit": "USD",
+          "scale": 0,
+          "period": {
+            "type": "duration",
+            "start": "2025-01-01",
+            "end": "2025-12-31"
+          },
+          "dimensions": {},
+          "source_span_id": "55555e6f-7a8b-4c9d-8e0f-1a2b3c4d5e6f",
+          "reported_or_derived": "reported",
+          "confidence": 0.98
+        }
+      }
+    ]
+  },
+  "siblings": [
+    {
+      "meta": {
+        "id": "4e5f6a7b-8c9d-4e0f-9a1b-2c3d4e5f6a7b",
+        "entity_id": "b2c4d6e8-1a3b-4c5d-8e9f-0a1b2c3d4e5f",
+        "form": "10-K/A",
+        "accession": "0000320193-26-000042",
+        "source_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019326000042/fy2025-10ka.htm",
+        "content_hash": "sha256:3eebe77db342575c2c2808302711dc7240d580a21f2174ea80949576b37dd7c4",
+        "published_at": "2026-04-15T20:30:00Z",
+        "filed_at": "2026-04-15T20:30:00Z",
+        "period_start": "2025-01-01",
+        "period_end": "2025-12-31",
+        "ingested_at": "2026-04-16T04:10:00Z",
+        "valid_from": "2026-04-16T04:10:00Z"
+      },
+      "document_version_id": "9f8e7d6c-5b4a-4392-8170-6f5e4d3c2b1a",
+      "spans": [
+        {
+          "id": "77777a8b-9c0d-4e1f-8a2b-3c4d5e6f7a8b",
+          "span": {
+            "document_version_id": "9f8e7d6c-5b4a-4392-8170-6f5e4d3c2b1a",
+            "section_id": "44444d5e-6f7a-4b8c-9d9e-0f1a2b3c4d5e",
+            "page": 3,
+            "start_char": 310,
+            "end_char": 422,
+            "text_hash": "sha256:4ea19ec9c109f0a65c7a50a307ff529fe78b56e944d9ed9030064e5c486fa69b"
+          }
+        }
+      ],
+      "facts": [
+        {
+          "id": "aaaaad1e-2f3a-4b4c-9d5e-6f7a8b9c0d1e",
+          "document_version_id": "9f8e7d6c-5b4a-4392-8170-6f5e4d3c2b1a",
+          "restates": "88888b9c-0d1e-4f2a-9b3c-4d5e6f7a8b9c",
+          "fact": {
+            "entity_id": "b2c4d6e8-1a3b-4c5d-8e9f-0a1b2c3d4e5f",
+            "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+            "label": "Revenue (restated)",
+            "value": "1279800000",
+            "unit": "USD",
+            "scale": 0,
+            "period": {
+              "type": "duration",
+              "start": "2025-01-01",
+              "end": "2025-12-31"
+            },
+            "dimensions": {},
+            "source_span_id": "77777a8b-9c0d-4e1f-8a2b-3c4d5e6f7a8b",
+            "reported_or_derived": "reported",
+            "confidence": 1
+          }
+        }
+      ]
+    }
+  ]
+}

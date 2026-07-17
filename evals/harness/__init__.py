@@ -1,15 +1,11 @@
-"""Corpus-QA evaluation harness (T0112).
+"""Evaluation harnesses.
 
-Drives the REAL discovery -> fetch -> ingest pipeline over the canonical
-benchmark issuer cohort and records corpus-quality metrics to a versioned
-JSON report. Two modes:
+- ``corpus_qa`` (T0112): REAL discovery -> fetch -> ingest over the
+  benchmark issuer cohort. Synthetic (default) or live SEC modes.
+- ``reader_cross_stack`` (issue #96): ADR-0005 composite reader
+  mock-first verification; optional FastAPI stack path via
+  ``TEST_DATABASE_URL``.
 
-- ``synthetic`` (default; no egress): a deterministic mock ``SecClient``
-  serves committed synthetic fixture templates — the pipeline, queue,
-  quarantine, and metrics code paths are all real, the bytes are not.
-- ``live`` (requires SEC egress + fair-access compliance): the frozen
-  ``LiveSecClient`` fetches real EDGAR filings for the same cohort.
-
-See ``evals/reports/corpus-qa/SCHEMA.md`` for the report schema and the
-exact commands.
+See ``evals/reports/corpus-qa/SCHEMA.md`` and
+``evals/datasets/reader-cross-stack/README.md``.
 """
