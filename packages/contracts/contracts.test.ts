@@ -152,6 +152,16 @@ describe("observable retrieval fixtures (ADR-0006)", () => {
     expect(validate(unpinned)).toBe(false);
   });
 
+  it("query-plan rejects non-positive retrieval budgets", () => {
+    const validate = ajv.getSchema(SCHEMA_IDS.queryPlan)!;
+    const plan = load("fixtures/query-plan.json") as {
+      budgets: Record<string, number>;
+    };
+    for (const name of ["lane_top_k", "fused_top_k", "context_items", "timeout_ms"]) {
+      expect(validate({ ...plan, budgets: { ...plan.budgets, [name]: 0 } }), name).toBe(false);
+    }
+  });
+
   it("retrieval-event sequences are positive and typed for SSE", () => {
     const validate = ajv.getSchema(SCHEMA_IDS.retrievalEvent)!;
     const event = load("fixtures/retrieval-event.json");
@@ -160,17 +170,83 @@ describe("observable retrieval fixtures (ADR-0006)", () => {
     expect(validate({ ...event, type: "not_an_event" })).toBe(false);
   });
 
+  it("retrieval-event has a terminal event for cancelled runs", () => {
+    const validate = ajv.getSchema(SCHEMA_IDS.retrievalEvent)!;
+    const event = load("fixtures/retrieval-event.json");
+    expect(validate({ ...event, type: "run_cancelled" }), JSON.stringify(validate.errors)).toBe(
+      true,
+    );
+  });
+
   it("retrieval-trace lineage pins match the plan index and events are ordered", () => {
     const validate = ajv.getSchema(SCHEMA_IDS.retrievalTrace)!;
     const trace = load("fixtures/retrieval-trace.json") as {
+      run_id: string;
+      status: string;
       plan: { index_version_id: string };
       lineage: { index_version_id: string };
-      events: Array<{ seq: number }>;
+      events: Array<{ run_id: string; seq: number; type: string }>;
+      candidates: Array<{ item_id: string; source_span_id: string }>;
+      claims: Array<{
+        citations: Array<{ item_id: string; source_span_id: string }>;
+      }>;
     };
     expect(validate(trace), JSON.stringify(validate.errors)).toBe(true);
     expect(trace.lineage.index_version_id).toBe(trace.plan.index_version_id);
-    const seqs = trace.events.map((e) => e.seq);
-    expect(seqs).toEqual([...seqs].sort((a, b) => a - b));
+    for (const [index, event] of trace.events.entries()) {
+      expect(event.run_id).toBe(trace.run_id);
+      if (index > 0) expect(event.seq).toBeGreaterThan(trace.events[index - 1]!.seq);
+    }
+    const expectedTerminalEvent: Record<string, string> = {
+      succeeded: "run_completed",
+      abstained: "run_abstained",
+      failed: "run_failed",
+      cancelled: "run_cancelled",
+    };
+    if (trace.status in expectedTerminalEvent) {
+      expect(trace.events.at(-1)?.type).toBe(expectedTerminalEvent[trace.status]);
+    }
+    const candidateEvidence = new Set(
+      trace.candidates.map((candidate) => `${candidate.item_id}:${candidate.source_span_id}`),
+    );
+    for (const claim of trace.claims) {
+      for (const citation of claim.citations) {
+        expect(candidateEvidence.has(`${citation.item_id}:${citation.source_span_id}`)).toBe(true);
+      }
+    }
+  });
+
+  it("retrieval-trace candidates never exceed the inclusive effective cutoff", () => {
+    const trace = load("fixtures/retrieval-trace.json") as {
+      plan: { effective_as_of: string };
+      candidates: Array<{ published_at: string }>;
+    };
+    const cutoff = Date.parse(trace.plan.effective_as_of);
+    for (const candidate of trace.candidates) {
+      expect(Date.parse(candidate.published_at)).toBeLessThanOrEqual(cutoff);
+    }
+  });
+
+  it("retrieval-trace rejects non-decimal score strings", () => {
+    const validate = ajv.getSchema(SCHEMA_IDS.retrievalTrace)!;
+    const trace = load("fixtures/retrieval-trace.json") as {
+      candidates: Array<{ contributions: Array<{ raw_score: string }> }>;
+    };
+    const invalid = structuredClone(trace);
+    invalid.candidates[0]!.contributions[0]!.raw_score = "NaN";
+    expect(validate(invalid)).toBe(false);
+  });
+
+  it("evidence feedback can supersede an earlier append-only record", () => {
+    const validate = ajv.getSchema(SCHEMA_IDS.evidenceFeedback)!;
+    const feedback = load("fixtures/evidence-feedback.json");
+    expect(
+      validate({
+        ...feedback,
+        supersedes_feedback_id: "a7b8c9d0-e1f2-3456-0123-567890123456",
+      }),
+      JSON.stringify(validate.errors),
+    ).toBe(true);
   });
 });
 

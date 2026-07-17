@@ -1077,19 +1077,24 @@ components:
                 type: string
         budgets:
           type: object
+          additionalProperties: false
           required: [lane_top_k, fused_top_k, context_items, timeout_ms]
           properties:
             lane_top_k:
               type: integer
+              minimum: 1
               maximum: 100
             fused_top_k:
               type: integer
+              minimum: 1
               maximum: 100
             context_items:
               type: integer
+              minimum: 1
               maximum: 16
             timeout_ms:
               type: integer
+              minimum: 1
               maximum: 60000
     CandidateContribution:
       type: object
@@ -1108,10 +1113,13 @@ components:
           minimum: 1
         raw_score:
           type: string
+          pattern: "^-?[0-9]+(\\.[0-9]+)?$"
         normalized_score:
           type: ["string", "null"]
+          pattern: "^-?[0-9]+(\\.[0-9]+)?$"
         rrf_contribution:
           type: string
+          pattern: "^-?[0-9]+(\\.[0-9]+)?$"
         timing_ms:
           type: integer
           minimum: 0
@@ -1143,10 +1151,12 @@ components:
             $ref: "#/components/schemas/CandidateContribution"
         fused_score:
           type: string
+          pattern: "^-?[0-9]+(\\.[0-9]+)?$"
         fused_rank:
           type: ["integer", "null"]
         rerank_score:
           type: ["string", "null"]
+          pattern: "^-?[0-9]+(\\.[0-9]+)?$"
         rerank_rank:
           type: ["integer", "null"]
         accepted:
@@ -1263,6 +1273,7 @@ components:
               run_abstained,
               run_completed,
               run_failed,
+              run_cancelled,
               heartbeat,
             ]
         occurred_at:
@@ -1463,3 +1474,7 @@ components:
         reason:
           type: string
           maxLength: 2000
+        supersedes_feedback_id:
+          type: string
+          format: uuid
+          description: Earlier append-only feedback record corrected by this record.

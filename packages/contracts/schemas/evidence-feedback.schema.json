@@ -12,6 +12,11 @@
     "label": {
       "enum": ["relevant", "irrelevant", "duplicate", "temporally_invalid"]
     },
-    "reason": { "type": "string", "maxLength": 2000 }
+    "reason": { "type": "string", "maxLength": 2000 },
+    "supersedes_feedback_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Earlier append-only feedback record corrected by this record."
+    }
   }
 }

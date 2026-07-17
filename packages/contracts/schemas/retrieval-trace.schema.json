@@ -113,9 +113,12 @@
         "lane": { "enum": ["dense", "lexical", "facts", "tables"] },
         "variant_index": { "type": "integer", "minimum": 0, "maximum": 3 },
         "lane_rank": { "type": "integer", "minimum": 1 },
-        "raw_score": { "type": "string" },
-        "normalized_score": { "type": ["string", "null"] },
-        "rrf_contribution": { "type": "string" },
+        "raw_score": { "type": "string", "pattern": "^-?[0-9]+(\\.[0-9]+)?$" },
+        "normalized_score": {
+          "type": ["string", "null"],
+          "pattern": "^-?[0-9]+(\\.[0-9]+)?$"
+        },
+        "rrf_contribution": { "type": "string", "pattern": "^-?[0-9]+(\\.[0-9]+)?$" },
         "timing_ms": { "type": "integer", "minimum": 0 }
       }
     },
@@ -140,9 +143,12 @@
           "minItems": 1,
           "items": { "$ref": "#/$defs/candidateContribution" }
         },
-        "fused_score": { "type": "string" },
+        "fused_score": { "type": "string", "pattern": "^-?[0-9]+(\\.[0-9]+)?$" },
         "fused_rank": { "type": ["integer", "null"] },
-        "rerank_score": { "type": ["string", "null"] },
+        "rerank_score": {
+          "type": ["string", "null"],
+          "pattern": "^-?[0-9]+(\\.[0-9]+)?$"
+        },
         "rerank_rank": { "type": ["integer", "null"] },
         "accepted": { "type": "boolean" },
         "rejection_code": { "type": ["string", "null"] },

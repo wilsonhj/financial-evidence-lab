@@ -26,6 +26,7 @@
         "run_abstained",
         "run_completed",
         "run_failed",
+        "run_cancelled",
         "heartbeat"
       ]
     },

@@ -63,10 +63,10 @@
       "additionalProperties": false,
       "required": ["lane_top_k", "fused_top_k", "context_items", "timeout_ms"],
       "properties": {
-        "lane_top_k": { "type": "integer", "maximum": 100 },
-        "fused_top_k": { "type": "integer", "maximum": 100 },
-        "context_items": { "type": "integer", "maximum": 16 },
-        "timeout_ms": { "type": "integer", "maximum": 60000 }
+        "lane_top_k": { "type": "integer", "minimum": 1, "maximum": 100 },
+        "fused_top_k": { "type": "integer", "minimum": 1, "maximum": 100 },
+        "context_items": { "type": "integer", "minimum": 1, "maximum": 16 },
+        "timeout_ms": { "type": "integer", "minimum": 1, "maximum": 60000 }
       }
     }
   }

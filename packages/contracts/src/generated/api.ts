@@ -692,6 +692,7 @@ export interface components {
         | "run_abstained"
         | "run_completed"
         | "run_failed"
+        | "run_cancelled"
         | "heartbeat";
       /** Format: date-time */
       occurred_at: string;
@@ -788,6 +789,11 @@ export interface components {
       /** @enum {string} */
       label: "relevant" | "irrelevant" | "duplicate" | "temporally_invalid";
       reason?: string;
+      /**
+       * Format: uuid
+       * @description Earlier append-only feedback record corrected by this record.
+       */
+      supersedes_feedback_id?: string;
     };
     /**
      * NormalizedFinancialFact
