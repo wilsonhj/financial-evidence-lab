@@ -975,7 +975,8 @@ components:
           type: integer
           minimum: 1
           maximum: 100
-          default: 100
+          description: >-
+            Optional. When omitted, the server applies a default of 100.
         forms:
           type: array
           maxItems: 20
@@ -1167,6 +1168,7 @@ components:
           type: ["string", "null"]
         decision_detail:
           type: object
+          additionalProperties: true
         source_span_id:
           type: string
           format: uuid
@@ -1193,6 +1195,7 @@ components:
             format: uuid
         detail:
           type: object
+          additionalProperties: true
         occurred_at:
           type: string
           format: date-time
@@ -1283,6 +1286,7 @@ components:
           format: date-time
         payload:
           type: object
+          additionalProperties: true
     RetrievalTrace:
       type: object
       additionalProperties: false

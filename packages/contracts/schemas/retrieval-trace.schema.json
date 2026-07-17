@@ -152,7 +152,7 @@
         "rerank_rank": { "type": ["integer", "null"] },
         "accepted": { "type": "boolean" },
         "rejection_code": { "type": ["string", "null"] },
-        "decision_detail": { "type": "object" },
+        "decision_detail": { "type": "object", "additionalProperties": true },
         "source_span_id": { "type": "string", "format": "uuid" },
         "document_version_id": { "type": "string", "format": "uuid" },
         "published_at": { "type": "string", "format": "date-time" }
@@ -171,7 +171,7 @@
           "type": "array",
           "items": { "type": "string", "format": "uuid" }
         },
-        "detail": { "type": "object" },
+        "detail": { "type": "object", "additionalProperties": true },
         "occurred_at": { "type": "string", "format": "date-time" }
       }
     },

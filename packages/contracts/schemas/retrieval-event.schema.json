@@ -31,6 +31,6 @@
       ]
     },
     "occurred_at": { "type": "string", "format": "date-time" },
-    "payload": { "type": "object" }
+    "payload": { "type": "object", "additionalProperties": true }
   }
 }

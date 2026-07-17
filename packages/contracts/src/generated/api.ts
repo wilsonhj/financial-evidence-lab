@@ -561,8 +561,8 @@ export interface components {
        */
       index_version_id?: string;
       lanes?: ("dense" | "lexical" | "facts" | "tables")[];
-      /** @default 100 */
-      top_k: number;
+      /** @description Optional. When omitted, the server applies a default of 100. */
+      top_k?: number;
       forms?: string[];
       periods?: string[];
     };
@@ -635,7 +635,9 @@ export interface components {
       rerank_rank?: number | null;
       accepted: boolean;
       rejection_code?: string | null;
-      decision_detail?: Record<string, never>;
+      decision_detail?: {
+        [key: string]: unknown;
+      };
       /** Format: uuid */
       source_span_id: string;
       /** Format: uuid */
@@ -648,7 +650,9 @@ export interface components {
       stage: "filter" | "dedupe" | "fusion" | "rerank" | "context" | "verification" | "abstention";
       code: string;
       item_ids: string[];
-      detail?: Record<string, never>;
+      detail?: {
+        [key: string]: unknown;
+      };
       /** Format: date-time */
       occurred_at: string;
     };
@@ -699,7 +703,9 @@ export interface components {
         | "heartbeat";
       /** Format: date-time */
       occurred_at: string;
-      payload: Record<string, never>;
+      payload: {
+        [key: string]: unknown;
+      };
     };
     /** @description Immutable Observatory trace. Canonical JSON Schema: https://contracts.fel.dev/schemas/retrieval-trace/v1. */
     RetrievalTrace: {
