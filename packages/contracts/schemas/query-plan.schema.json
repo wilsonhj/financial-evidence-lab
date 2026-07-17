@@ -3,7 +3,7 @@
   "$id": "https://contracts.fel.dev/schemas/query-plan/v1",
   "x-fel-version": "1.0.0",
   "title": "QueryPlan",
-  "description": "Immutable retrieval query plan (ADR-0006). index_version_id is always the resolved pin captured at plan time.",
+  "description": "Immutable retrieval query plan (ADR-0006). corpus_version_id and index_version_id are the resolved pins captured at plan time.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -11,6 +11,7 @@
     "intent",
     "entity_ids",
     "effective_as_of",
+    "corpus_version_id",
     "index_version_id",
     "lanes",
     "variants",
@@ -37,7 +38,7 @@
       "items": { "type": "string", "format": "uuid" }
     },
     "effective_as_of": { "type": "string", "format": "date-time" },
-    "corpus_version_id": { "type": ["string", "null"], "format": "uuid" },
+    "corpus_version_id": { "type": "string", "format": "uuid" },
     "index_version_id": { "type": "string", "format": "uuid" },
     "lanes": {
       "type": "array",

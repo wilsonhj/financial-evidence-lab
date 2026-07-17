@@ -1003,14 +1003,15 @@ components:
       additionalProperties: false
       description: >-
         Immutable plan captured at query creation. Canonical JSON Schema:
-        https://contracts.fel.dev/schemas/query-plan/v1. index_version_id is
-        always required (resolved pin).
+        https://contracts.fel.dev/schemas/query-plan/v1. corpus_version_id and
+        index_version_id are always required resolved pins.
       required:
         [
           schema_version,
           intent,
           entity_ids,
           effective_as_of,
+          corpus_version_id,
           index_version_id,
           lanes,
           variants,
@@ -1043,8 +1044,9 @@ components:
           type: string
           format: date-time
         corpus_version_id:
-          type: ["string", "null"]
+          type: string
           format: uuid
+          description: Resolved corpus pin captured from the selected index at plan time.
         index_version_id:
           type: string
           format: uuid

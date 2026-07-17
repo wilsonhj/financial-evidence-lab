@@ -573,7 +573,7 @@ export interface components {
       run_id: string;
       events_url: string;
     };
-    /** @description Immutable plan captured at query creation. Canonical JSON Schema: https://contracts.fel.dev/schemas/query-plan/v1. index_version_id is always required (resolved pin). */
+    /** @description Immutable plan captured at query creation. Canonical JSON Schema: https://contracts.fel.dev/schemas/query-plan/v1. corpus_version_id and index_version_id are always required resolved pins. */
     QueryPlan: {
       /** @constant */
       schema_version: "query-plan/v1";
@@ -590,8 +590,11 @@ export interface components {
       entity_ids: string[];
       /** Format: date-time */
       effective_as_of: string;
-      /** Format: uuid */
-      corpus_version_id?: string | null;
+      /**
+       * Format: uuid
+       * @description Resolved corpus pin captured from the selected index at plan time.
+       */
+      corpus_version_id: string;
       /**
        * Format: uuid
        * @description Resolved index pin captured at plan time; matches RetrievalTrace.lineage.

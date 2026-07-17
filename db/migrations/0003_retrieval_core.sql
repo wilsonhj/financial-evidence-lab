@@ -597,6 +597,7 @@ AS $$
 DECLARE
     index_status text;
     index_published_at timestamptz;
+    workspace_cutoff timestamptz;
 BEGIN
     IF TG_OP <> 'INSERT' THEN
         RAISE EXCEPTION 'queries are immutable';
@@ -608,6 +609,13 @@ BEGIN
     IF index_status NOT IN ('ready', 'superseded')
        OR index_published_at IS NULL THEN
         RAISE EXCEPTION 'queries must pin a published retrieval index';
+    END IF;
+    SELECT as_of INTO workspace_cutoff
+    FROM workspaces
+    WHERE id = NEW.workspace_id AND org_id = NEW.org_id;
+    IF workspace_cutoff IS NOT NULL
+       AND NEW.effective_as_of > workspace_cutoff THEN
+        RAISE EXCEPTION 'query cutoff cannot exceed its workspace cutoff';
     END IF;
     RETURN NEW;
 END
@@ -624,6 +632,8 @@ DECLARE
     pinned_provider text;
     pinned_model text;
     pinned_planner text;
+    expected_terminal_event text;
+    latest_event text;
 BEGIN
     IF TG_OP = 'DELETE' THEN
         RAISE EXCEPTION 'retrieval runs cannot be deleted';
@@ -673,6 +683,25 @@ BEGIN
         RAISE EXCEPTION 'illegal retrieval run transition: % -> %',
             OLD.status, NEW.status;
     END IF;
+    expected_terminal_event := CASE NEW.status
+        WHEN 'succeeded' THEN 'run_completed'
+        WHEN 'abstained' THEN 'run_abstained'
+        WHEN 'failed' THEN 'run_failed'
+        WHEN 'cancelled' THEN 'run_cancelled'
+        ELSE NULL
+    END;
+    IF NEW.status IS DISTINCT FROM OLD.status
+       AND expected_terminal_event IS NOT NULL THEN
+        SELECT event_type INTO latest_event
+        FROM retrieval_events
+        WHERE run_id = NEW.id
+        ORDER BY seq DESC
+        LIMIT 1;
+        IF latest_event IS DISTINCT FROM expected_terminal_event THEN
+            RAISE EXCEPTION 'terminal run status % requires final event %',
+                NEW.status, expected_terminal_event;
+        END IF;
+    END IF;
     RETURN NEW;
 END
 $$;
@@ -719,9 +748,36 @@ BEGIN
 END
 $$;
 
+CREATE FUNCTION fel_guard_retrieval_event() RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = pg_catalog, public
+AS $$
+DECLARE
+    run_status text;
+    expected_seq bigint;
+BEGIN
+    SELECT status INTO run_status
+    FROM retrieval_runs
+    WHERE id = NEW.run_id AND org_id = NEW.org_id
+    FOR UPDATE;
+    IF run_status IS NULL THEN
+        RAISE EXCEPTION 'event has no same-organization run';
+    END IF;
+    IF run_status IN ('succeeded', 'abstained', 'failed', 'cancelled') THEN
+        RAISE EXCEPTION 'cannot append event after its run is terminal';
+    END IF;
+    SELECT COALESCE(max(seq), 0) + 1 INTO expected_seq
+    FROM retrieval_events
+    WHERE run_id = NEW.run_id;
+    IF NEW.seq <> expected_seq THEN
+        RAISE EXCEPTION 'event sequence must be %, got %', expected_seq, NEW.seq;
+    END IF;
+    RETURN NEW;
+END
+$$;
 CREATE TRIGGER retrieval_events_insert_guard
     BEFORE INSERT ON retrieval_events
-    FOR EACH ROW EXECUTE FUNCTION fel_guard_run_child();
+    FOR EACH ROW EXECUTE FUNCTION fel_guard_retrieval_event();
 CREATE TRIGGER retrieval_events_append_only
     BEFORE UPDATE OR DELETE ON retrieval_events
     FOR EACH ROW EXECUTE FUNCTION fel_reject_append_only_mutation();
@@ -733,16 +789,25 @@ AS $$
 DECLARE
     run_index_id uuid;
     item_index_id uuid;
+    effective_cutoff timestamptz;
+    item_published_at timestamptz;
 BEGIN
     PERFORM fel_assert_run_open(NEW.run_id, NEW.org_id);
-    SELECT q.index_version_id INTO run_index_id
+    SELECT q.index_version_id, q.effective_as_of
+    INTO run_index_id, effective_cutoff
     FROM retrieval_runs r
     JOIN queries q ON q.id = r.query_id AND q.org_id = r.org_id
     WHERE r.id = NEW.run_id AND r.org_id = NEW.org_id;
-    SELECT index_version_id INTO item_index_id
-    FROM retrieval_items WHERE id = NEW.retrieval_item_id;
+    SELECT ri.index_version_id, d.published_at
+    INTO item_index_id, item_published_at
+    FROM retrieval_items ri
+    JOIN documents d ON d.id = ri.document_id
+    WHERE ri.id = NEW.retrieval_item_id;
     IF run_index_id IS DISTINCT FROM item_index_id THEN
         RAISE EXCEPTION 'candidate item index disagrees with its run query';
+    END IF;
+    IF item_published_at > effective_cutoff THEN
+        RAISE EXCEPTION 'candidate evidence was published after the query cutoff';
     END IF;
     RETURN NEW;
 END

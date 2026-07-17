@@ -124,7 +124,7 @@ describe("generated client drift (check:generated in-suite)", () => {
     expect(api).toMatch(/FinancialFact: components\["schemas"\]\["financial-fact\.schema"\];/);
   });
 
-  it("generated surface exposes observable retrieval paths and required index pin", () => {
+  it("generated surface exposes observable retrieval paths and required resolved pins", () => {
     const api = readFileSync(join(here, "src/generated/api.ts"), "utf8");
     expect(api).toContain('"/v1/workspaces/{workspaceId}/queries"');
     expect(api).toContain('"/v1/queries/{queryId}"');
@@ -136,20 +136,24 @@ describe("generated client drift (check:generated in-suite)", () => {
     expect(api).toContain("QueryPlan:");
     expect(api).toContain("RetrievalEvent:");
     expect(api).toContain("RetrievalTrace:");
-    // Optional create pin; required resolved pin on the plan.
+    // Optional create pins; required resolved pins on the plan.
     expect(api).toMatch(/CreateQuery:[\s\S]*index_version_id\?:/);
+    expect(api).toMatch(/QueryPlan:[\s\S]*corpus_version_id: string;/);
     expect(api).toMatch(/QueryPlan:[\s\S]*index_version_id: string;/);
   });
 });
 
 describe("observable retrieval fixtures (ADR-0006)", () => {
-  it("query-plan requires index_version_id and rejects a missing pin", () => {
+  it("query-plan requires resolved corpus and index pins", () => {
     const validate = ajv.getSchema(SCHEMA_IDS.queryPlan)!;
     const plan = load("fixtures/query-plan.json");
     expect(validate(plan)).toBe(true);
-    const unpinned = { ...plan };
-    delete (unpinned as { index_version_id?: string }).index_version_id;
-    expect(validate(unpinned)).toBe(false);
+    for (const pin of ["corpus_version_id", "index_version_id"] as const) {
+      const unpinned = { ...plan };
+      delete (unpinned as Record<string, unknown>)[pin];
+      expect(validate(unpinned), pin).toBe(false);
+    }
+    expect(validate({ ...plan, corpus_version_id: null })).toBe(false);
   });
 
   it("query-plan rejects non-positive retrieval budgets", () => {
