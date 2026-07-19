@@ -1,11 +1,11 @@
 # Implementation status
 
-Last updated: 2026-07-18
+Last updated: 2026-07-19
 
 ## Repository
 
 - Default and implementation base: `main`.
-- Current main tip: `f34f5ecdab11fe99adadd1091e79946fe39f98a4` (PR #106 / M2-CONTRACT; prior tip PR #105 @ `4614af4`).
+- Current main tip: `e9b511e` (PR #110 activate M3-CONTRACT; prior tip PR #109 @ `2f4a513`).
 - Canonical product spec: `specs/001-financial-evidence-lab/spec.md` v1.2.
 - M2 implementation design: `specs/002-observable-hybrid-retrieval/` plus ADR-0006 (live on main).
 - M3 implementation design: `specs/003-agentic-extraction/` plus ADR-0007 (live on main).
@@ -38,14 +38,14 @@ Still research-draft (not a dispatch blocker): recovered benchmark needs SEC tim
 
 ## Active
 
-None. No package currently `active`.
+1. **Active:** M3-CONTRACT (#101) — additive extraction foundation v0.4.0; `db/migrations/**`, `packages/contracts/**`, `packages/providers/**`, `docs/handoff/CONTRACTS.md`; branch `agent/m3-extraction-contract-v0.4`. Dispatched 2026-07-19 from main @ `2f4a513`. Parallel-safe with #57. Never concurrent with another contracts/migrations owner.
+2. **Active:** M2-RETRIEVAL-BACKEND (#57) — `packages/retrieval/**`, `apps/api/**`; mock-first; branch `agent/m2-retrieval-backend`. Dispatched 2026-07-19 from main @ `e9b511e` (post-#110). First slice: M2-010 item builder. Parallel-safe with #101. Scaffold dir-list grant recorded on #57.
 
 ## Ready (post-#105/#106 reconciliation)
 
-1. **Ready:** M2-RETRIEVAL-BACKEND (#57) — `packages/retrieval/**`, `apps/api/**`; mock-first; deps `M2-CONTRACT` + `READER-CROSS-STACK` packages merged.
-2. **Ready:** M3-CONTRACT (#101) — `db/migrations/**`, `packages/contracts/**`, `packages/providers/**`, `docs/handoff/CONTRACTS.md`; serialize: never concurrent with another contracts/migrations owner.
+None. Both ready packages are now active.
 
-Dispatch **#57 and #101 in parallel** (no path overlap). Prefer starting #57 first if concurrency is capped.
+Dispatch note: #57 and #101 run **in parallel** (no path overlap).
 
 ## Blocked (registered, not dispatchable)
 
