@@ -36,6 +36,17 @@ from fel_retrieval.lanes import (
 )
 from fel_retrieval.models import BuildResult, Rejection, RetrievalItemDraft
 from fel_retrieval.oracle import cosine_distance, exact_knn, recall_at_k
+from fel_retrieval.planner import (
+    PlanBudgets,
+    PlanFilters,
+    PlannerValidationError,
+    QueryPlan,
+    QueryRequest,
+    classify_intent,
+    derive_budgets,
+    expand_variants,
+    plan_query,
+)  # noqa: E501
 
 __all__ = [
     "CHUNKER_VERSION",
@@ -53,18 +64,26 @@ __all__ = [
     "IndexVersionSpec",
     "LaneCandidate",
     "LaneQuery",
+    "PlanBudgets",
+    "PlanFilters",
+    "PlannerValidationError",
+    "QueryPlan",
+    "QueryRequest",
     "Rejection",
     "RetrievalItemDraft",
     "build_and_publish",
     "build_index",
     "build_items",
+    "classify_intent",
     "config_hash",
     "content_sha256",
     "cosine_distance",
     "dense_lane",
+    "derive_budgets",
     "effective_chunker_config",
     "embed_drafts",
     "exact_knn",
+    "expand_variants",
     "facts_lane",
     "format_halfvec",
     "hnsw_search",
@@ -72,6 +91,7 @@ __all__ = [
     "item_id",
     "lexical_lane",
     "make_index_version_spec",
+    "plan_query",
     "publish_index_version",
     "recall_at_k",
     "source_anchor",
