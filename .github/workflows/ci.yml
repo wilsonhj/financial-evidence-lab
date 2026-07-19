@@ -118,3 +118,26 @@ jobs:
             -e PGPASSWORD=fel-ci-only -e PGDATABASE=fel_ci \
             -e MIGRATIONS_DIR=/tmp/migrations \
             ${{ job.services.postgres.id }} bash /tmp/smoke.sh
+      # Behavioral regression harnesses for migration guards (RLS, grant,
+      # immutability, and idempotency rules): run every
+      # db/migrations/tests/*.test.sql against the restored database — which
+      # also proves the guards survive backup-restore. Each harness runs in
+      # its own transaction and rolls back; a violated guard raises, failing
+      # psql via ON_ERROR_STOP. No-op while tests/ is absent or empty
+      # (harnesses land alongside their migrations; smoke.sh's top-level
+      # *.sql glob never applies them as migrations).
+      - name: Run migration regression harnesses
+        run: |
+          docker exec \
+            -e PGHOST=localhost -e PGPORT=5432 -e PGUSER=fel \
+            -e PGPASSWORD=fel-ci-only -e PGDATABASE=fel_ci \
+            ${{ job.services.postgres.id }} bash -ec '
+              shopt -s nullglob
+              ran=0
+              for f in /tmp/migrations/tests/*.test.sql; do
+                echo "==> Running harness $(basename "$f")"
+                psql --set ON_ERROR_STOP=1 --file "$f"
+                ran=$((ran+1))
+              done
+              echo "OK: ${ran} migration harness(es) run"
+            '

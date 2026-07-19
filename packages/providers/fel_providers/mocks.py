@@ -4,17 +4,77 @@ credentials. These are the default bindings for all M0/M1 development."""
 from __future__ import annotations
 
 import hashlib
+import json
 import math
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 
-from fel_providers.interfaces import MarketBar
+from fel_providers.interfaces import (
+    MarketBar,
+    StructuredGenerationRequest,
+    StructuredModelResult,
+)
 
 
 class MockLLMProvider:
     def generate(self, prompt: str, *, max_tokens: int) -> str:
         digest = hashlib.sha256(prompt.encode()).hexdigest()[:12]
         return f"[mock-completion {digest} max_tokens={max_tokens}]"
+
+
+class MockStructuredLLMProvider:
+    """Deterministic structured mock: same request -> same result, no network."""
+
+    provider = "mock"
+    model = "mock-structured-v1"
+
+    def generate_structured(self, request: StructuredGenerationRequest) -> StructuredModelResult:
+        if request.max_output_tokens < 1:
+            raise ValueError("max_output_tokens must be >= 1")
+        seed_material = "|".join(
+            [
+                request.schema_name,
+                request.schema_version,
+                json.dumps(request.json_schema, sort_keys=True, default=str),
+                json.dumps(request.messages, sort_keys=True),
+                str(request.max_output_tokens),
+                str(request.temperature),
+            ]
+        )
+        digest = hashlib.sha256(seed_material.encode()).hexdigest()
+        refused = any("REFUSE" in (message.get("content") or "") for message in request.messages)
+        input_tokens = max(1, len(seed_material) // 4)
+        output_tokens = 8 if refused else min(request.max_output_tokens, 32)
+        parsed: dict[str, object] | None
+        refusal: str | None
+        if refused:
+            parsed = None
+            refusal = f"mock-refusal:{digest[:12]}"
+        else:
+            parsed = {
+                "schema_name": request.schema_name,
+                "schema_version": request.schema_version,
+                "mock": True,
+                "digest": digest[:24],
+            }
+            refusal = None
+        return StructuredModelResult(
+            provider=self.provider,
+            model=self.model,
+            response_id=f"mockresp_{digest[:16]}",
+            parsed=parsed,
+            refused=refused,
+            refusal=refusal,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            estimated_cost_usd=Decimal("0"),
+            raw={
+                "provider": self.provider,
+                "model": self.model,
+                "digest": digest,
+                "refused": refused,
+            },
+        )
 
 
 class MockEmbeddingProvider:

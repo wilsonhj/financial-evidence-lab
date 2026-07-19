@@ -14,6 +14,9 @@ from fel_providers.interfaces import (
     MarketDataProvider,
     SecClient,
     StorageProvider,
+    StructuredGenerationRequest,
+    StructuredLLMProvider,
+    StructuredModelResult,
 )
 from fel_providers.mocks import (
     MockEmbeddingProvider,
@@ -22,6 +25,7 @@ from fel_providers.mocks import (
     MockMarketDataProvider,
     MockSecClient,
     MockStorageProvider,
+    MockStructuredLLMProvider,
 )
 
 __all__ = [
@@ -36,6 +40,10 @@ __all__ = [
     "MockMarketDataProvider",
     "MockSecClient",
     "MockStorageProvider",
+    "MockStructuredLLMProvider",
     "SecClient",
     "StorageProvider",
+    "StructuredGenerationRequest",
+    "StructuredLLMProvider",
+    "StructuredModelResult",
 ]

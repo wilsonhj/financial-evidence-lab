@@ -83,11 +83,11 @@ describe("contract schemas", () => {
 });
 
 describe("contract version identity (VERSIONING.md)", () => {
-  it("openapi info.version and CONTRACT_VERSION agree on the 0.3.0 minor bump", () => {
+  it("openapi info.version and CONTRACT_VERSION agree on the 0.4.0 minor bump", () => {
     const yaml = readFileSync(join(here, "openapi/openapi.yaml"), "utf8");
     const infoVersion = /^ {2}version: (\d+\.\d+\.\d+)$/m.exec(yaml)?.[1];
     expect(infoVersion).toBe(CONTRACT_VERSION);
-    expect(CONTRACT_VERSION).toBe("0.3.0");
+    expect(CONTRACT_VERSION).toBe("0.4.0");
   });
 
   it("SCHEMA_IDS covers every schema file (and nothing else)", () => {
@@ -140,6 +140,23 @@ describe("generated client drift (check:generated in-suite)", () => {
     expect(api).toMatch(/CreateQuery:[\s\S]*index_version_id\?:/);
     expect(api).toMatch(/QueryPlan:[\s\S]*corpus_version_id: string;/);
     expect(api).toMatch(/QueryPlan:[\s\S]*index_version_id: string;/);
+  });
+
+  it("generated surface exposes extraction paths, modes, and typed SSE", () => {
+    const api = readFileSync(join(here, "src/generated/api.ts"), "utf8");
+    expect(api).toContain('"/v1/workspaces/{workspaceId}/extraction-runs"');
+    expect(api).toContain('"/v1/extraction-runs/{runId}"');
+    expect(api).toContain('"/v1/extraction-runs/{runId}/events"');
+    expect(api).toContain('"/v1/extraction-runs/{runId}/rerun"');
+    expect(api).toContain('"/v1/workspaces/{workspaceId}/extractions"');
+    expect(api).toContain('"/v1/extractions/{extractionId}"');
+    expect(api).toContain('"/v1/extractions/review"');
+    expect(api).toContain('"/v1/approved-extractions/{recordId}"');
+    expect(api).toContain("ExtractionRun:");
+    expect(api).toContain("ExtractionEvent:");
+    expect(api).toContain("ExtractionProposal:");
+    expect(api).toMatch(/ExtractionRun:[\s\S]*modes: \(/);
+    expect(api).toMatch(/"text\/event-stream": components\["schemas"\]\["ExtractionEvent"\]/);
   });
 });
 
@@ -251,6 +268,51 @@ describe("observable retrieval fixtures (ADR-0006)", () => {
       }),
       JSON.stringify(validate.errors),
     ).toBe(true);
+  });
+
+  it("marks volatile M2 planner/lane/event enums open (compatible loosening)", () => {
+    const plan = load("schemas/query-plan.schema.json");
+    expect(plan.properties.intent["x-fel-open-enum"]).toBe(true);
+    expect(plan.properties.lanes.items["x-fel-open-enum"]).toBe(true);
+    const event = load("schemas/retrieval-event.schema.json");
+    expect(event.properties.type["x-fel-open-enum"]).toBe(true);
+    const trace = load("schemas/retrieval-trace.schema.json");
+    expect(trace.$defs.candidateContribution.properties.lane["x-fel-open-enum"]).toBe(true);
+    expect(trace.$defs.decision.properties.stage["x-fel-open-enum"]).toBe(true);
+    const feedback = load("schemas/evidence-feedback.schema.json");
+    expect(feedback.properties.label["x-fel-open-enum"]).toBeUndefined();
+    const yaml = readFileSync(join(here, "openapi/openapi.yaml"), "utf8");
+    expect(yaml).toMatch(/intent:[\s\S]*x-fel-open-enum: true/);
+    expect(yaml).toMatch(/enum: \[dense, lexical, facts, tables\]\n\s+x-fel-open-enum: true/);
+  });
+});
+
+describe("agentic extraction fixtures (ADR-0007)", () => {
+  it("extraction-event sequences are positive and typed for SSE", () => {
+    const validate = ajv.getSchema(SCHEMA_IDS.extractionEvent)!;
+    const event = load("fixtures/extraction-event.json");
+    expect(validate(event), JSON.stringify(validate.errors)).toBe(true);
+    expect(validate({ ...event, id: 0 })).toBe(false);
+    expect(validate({ ...event, type: "not_an_event" })).toBe(false);
+  });
+
+  it("extraction-payload variants validate and revenue_driver requires direction", () => {
+    const validate = ajv.getSchema(SCHEMA_IDS.extractionPayload)!;
+    const variants = load("fixtures/extraction-payloads.valid.json") as Record<string, unknown>;
+    for (const [name, payload] of Object.entries(variants)) {
+      if (name === "note") continue;
+      expect(validate(payload), `${name}: ${JSON.stringify(validate.errors)}`).toBe(true);
+    }
+    const driver = { ...(variants.revenue_driver as Record<string, unknown>) };
+    delete driver.direction;
+    expect(validate(driver)).toBe(false);
+  });
+
+  it("ExtractionRun OpenAPI requires modes on the response", () => {
+    const yaml = readFileSync(join(here, "openapi/openapi.yaml"), "utf8");
+    expect(yaml).toMatch(
+      /ExtractionRun:[\s\S]*required:[\s\S]*modes,[\s\S]*properties:[\s\S]*modes:/,
+    );
   });
 });
 

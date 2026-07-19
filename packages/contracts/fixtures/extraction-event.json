@@ -1,0 +1,10 @@
+{
+  "schema_version": "extraction-event/v1",
+  "id": 1,
+  "run_id": "60000000-0000-0000-0000-000000000001",
+  "type": "run_started",
+  "occurred_at": "2026-07-16T12:00:00Z",
+  "payload": {
+    "status": "running"
+  }
+}

@@ -16,6 +16,43 @@ class LLMProvider(Protocol):
     def generate(self, prompt: str, *, max_tokens: int) -> str: ...
 
 
+@dataclass(frozen=True)
+class StructuredGenerationRequest:
+    """Typed structured-generation request (ADR-0007 / M3)."""
+
+    schema_name: str
+    schema_version: str
+    json_schema: dict[str, object]
+    messages: list[dict[str, str]]
+    max_output_tokens: int
+    temperature: float = 0.0
+
+
+@dataclass(frozen=True)
+class StructuredModelResult:
+    """Structured model result with usage/refusal metadata (ADR-0007)."""
+
+    provider: str
+    model: str
+    response_id: str
+    parsed: dict[str, object] | None
+    refused: bool
+    refusal: str | None
+    input_tokens: int
+    output_tokens: int
+    estimated_cost_usd: Decimal
+    raw: dict[str, object]
+
+
+class StructuredLLMProvider(Protocol):
+    """JSON-Schema-constrained generation. Additive to LLMProvider.
+    Env (live, later): FEL_OPENAI_API_KEY. M3-CONTRACT ships mock only."""
+
+    def generate_structured(
+        self, request: StructuredGenerationRequest
+    ) -> StructuredModelResult: ...
+
+
 class EmbeddingProvider(Protocol):
     """Dense embeddings, <= 512 dimensions per ADR-0002."""
 
