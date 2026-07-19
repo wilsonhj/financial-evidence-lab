@@ -31,15 +31,18 @@ shared_paths:
   - pyproject.toml
   - requirements-dev.txt
   - Makefile
-# Standing exception (the ONLY one): mechanical root-config edits that are
-# forced by an in-scope change may ride with the owning package's PR under
-# the four conditions of docs/decisions/ADR-0003-root-config-edits.md.
-# The exception deliberately covers only the JS workspace files listed in
-# applies_to; Python dependency files (pyproject.toml, requirements-dev.txt)
-# and everything else above have NO standing exception and always require
-# explicit per-dispatch integration-lead authorization or the full
-# contract-change process. Automated dispatch/review must treat every path
-# above as shared; the ADR-0003 exception is judged per-hunk at review time.
+# Standing exceptions: mechanical edits forced by an in-scope change may ride
+# with the owning package's PR under the four conditions of the named ADR.
+# ADR-0003 covers the JS workspace files. ADR-0008 (once accepted) covers the
+# scaffold-registration edits a NEW first-party package needs to become visible
+# to the shared gates (pyproject.toml dir-lists, Makefile dir-lists, the ci.yml
+# python-job dir-lists) — dir-list registration ONLY. Dependency additions
+# (requirements-dev.txt AND the pyproject.toml dependency tables
+# [project] dependencies / [project.optional-dependencies]) and everything
+# else above have NO standing exception
+# and always require explicit per-dispatch integration-lead authorization or
+# the full contract-change process. Automated dispatch/review must treat every
+# path above as shared; each exception is judged per-hunk at review time.
 shared_path_exceptions:
   - adr: docs/decisions/ADR-0003-root-config-edits.md
     applies_to:
@@ -51,6 +54,9 @@ shared_path_exceptions:
         tsconfig.base.json,
       ]
     rule: mechanical-consequence-of-in-scope-change-only
+  - adr: docs/decisions/ADR-0008-python-package-scaffold-edits.md
+    applies_to: [pyproject.toml, Makefile, .github/workflows/ci.yml]
+    rule: new-first-party-package-scaffold-registration-only
 defaults:
   status: blocked
   credentials: mock-only
