@@ -1,8 +1,8 @@
 # ADR-0008: New first-party package scaffold wiring rides with the owning package
 
-Status: Proposed
+Status: Accepted
 Date: 2026-07-19
-Accepted: (on merge by integration lead)
+Accepted: 2026-07-19 by integration lead on merge of PR #111
 Occasioned by: M2-RETRIEVAL-BACKEND (#57); recurs for every future first-party package
 Amends: ADR-0003 (root-config-edits)
 
@@ -11,14 +11,14 @@ Amends: ADR-0003 (root-config-edits)
 Extend the ADR-0003 mechanical-consequence exception to cover the shared
 build/test/CI registration files that a **new first-party package** must
 touch to become visible to the shared quality gates. When a package's core
-deliverable is a new directory under `packages/**` (or an equivalent new
-first-party module tree), its PR may include the **scaffold-registration**
-edits that wire that directory — and only that directory — into the gates,
-without a separate `contract-change` issue and ADR, when **all four ADR-0003
-conditions hold** (mechanical consequence of the in-scope package; no
-contract/schema/migration/auth change; each hunk itemized as a flagged
-deviation in the PR Scope; integration lead records the authorization
-durably on the work-package issue before the PR leaves draft).
+deliverable is a new directory under `packages/**`, its PR may include the
+**scaffold-registration** edits that wire that directory — and only that
+directory — into the gates, without a separate `contract-change` issue and
+ADR, when **all four ADR-0003 conditions hold** (mechanical consequence of
+the in-scope package; no contract/schema/migration/auth change; each hunk
+itemized as a flagged deviation in the PR Scope with its mechanical
+justification; integration lead records the authorization durably on the
+work-package issue before the PR leaves draft).
 
 The registration files now in scope of the exception, in addition to the
 ADR-0003 JS set:
@@ -39,8 +39,12 @@ ADR-0003 JS case did.
 
 ## Explicitly NOT covered
 
-- **`requirements-dev.txt`** (and any runtime/dev **dependency** addition).
-  Adding a dependency is a supply-chain and behavior change, not mechanical
+- **Dependency additions of any kind** — `requirements-dev.txt` and the
+  `pyproject.toml` dependency tables (`[project] dependencies`,
+  `[project.optional-dependencies]`, or any tool table that pulls in a
+  package). `pyproject.toml` is in `applies_to` for its **dir-list tool
+  tables only**; its dependency sections remain fully gated. Adding a
+  dependency is a supply-chain and behavior change, not mechanical
   scaffolding; it remains a per-dispatch integration-lead authorization (or
   the full contract-change process). A new package that needs a runtime dep
   requests it separately, by name, when justified.
