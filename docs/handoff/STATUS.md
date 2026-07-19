@@ -1,11 +1,11 @@
 # Implementation status
 
-Last updated: 2026-07-16
+Last updated: 2026-07-18
 
 ## Repository
 
 - Default and implementation base: `main`.
-- Current main tip: `6c28a57490f1976e49ae61efd3293d761a114792` (PR #103 handoff; design #102 @ `052836d`).
+- Current main tip: `f34f5ecdab11fe99adadd1091e79946fe39f98a4` (PR #106 / M2-CONTRACT; prior tip PR #105 @ `4614af4`).
 - Canonical product spec: `specs/001-financial-evidence-lab/spec.md` v1.2.
 - M2 implementation design: `specs/002-observable-hybrid-retrieval/` plus ADR-0006 (live on main).
 - M3 implementation design: `specs/003-agentic-extraction/` plus ADR-0007 (live on main).
@@ -19,10 +19,16 @@ Last updated: 2026-07-16
   - PR #91 / issue #90 — global offsets
   - PR #98 / issue #94 — reader API
   - PR #99 / issue #95 — HTTP reader runtime
+- READER-CROSS-STACK mock-first + CI stack path: PR #105 / package issue #96 (criteria 1–10).
+- M2-CONTRACT OpenAPI v0.3.0 + migration `0003_retrieval_core.sql` + pgvector CI image: PR #106 / issue #100 (closed).
 - External benchmark and ontology research recovered from PRs #74/#75 onto the M2/M3 design branch without merging retired `integration/m0` history.
 - Issues #57–#62 refreshed to current `main`, concrete dependencies, bounded paths, and implementation acceptance gates.
 - Contract-change issues #100 (M2 v0.3.0) and #101 (M3 v0.4.0) created with serialized shared-path ownership.
 - M2/M3 implementation design PR #102 merged to main @ `052836d` (Spec Kit packages, ADR-0006/0007, research reconciliation, contract gates documented).
+
+### Tracker note — #96 residual owned by #108
+
+Issue #96 remains **open** as a tracker only. Package `READER-CROSS-STACK` is `merged` via #105 for its `evals/**` mock/stack scope. Remaining acceptance **criterion #11** (production worker → Postgres → FastAPI → real `HttpEvidenceSource` → production Next.js reader + browser/hosted artifacts) is owned by **READER-PROD-SMOKE (#108)**. Do not re-dispatch #96; do not treat #96-open as blocking #57.
 
 ## Design gate (closed)
 
@@ -32,31 +38,39 @@ Still research-draft (not a dispatch blocker): recovered benchmark needs SEC tim
 
 ## Active
 
-1. **Active:** READER-CROSS-STACK (#96) — `evals/**` only; branch `test/reader-cross-stack`.
-2. **Active:** M2-CONTRACT (#100) — mock-first v0.3.0 freeze; `db/migrations/**`, `packages/contracts/**`, `docs/handoff/CONTRACTS.md`; branch `agent/m2-retrieval-contract-v0.3`.
+None. No package currently `active`.
 
-Dispatched **in parallel** 2026-07-16 from main @ `6c28a57`. **Never** run #100 concurrent with #101.
+## Ready (post-#105/#106 reconciliation)
 
-## Ready
+1. **Ready:** M2-RETRIEVAL-BACKEND (#57) — `packages/retrieval/**`, `apps/api/**`; mock-first; deps `M2-CONTRACT` + `READER-CROSS-STACK` packages merged.
+2. **Ready:** M3-CONTRACT (#101) — `db/migrations/**`, `packages/contracts/**`, `packages/providers/**`, `docs/handoff/CONTRACTS.md`; serialize: never concurrent with another contracts/migrations owner.
 
-None (both ready packages now active).
+Dispatch **#57 and #101 in parallel** (no path overlap). Prefer starting #57 first if concurrency is capped.
+
+## Blocked (registered, not dispatchable)
+
+1. **Blocked:** READER-PROD-SMOKE (#108) — branch `test/reader-prod-smoke`; child F of #87.
+   - Blocker A: hosted deployment credentials not provisioned (request by name only; never claim ready).
+   - Blocker B: known product residual — API `INTEGRITY_ERROR` classified as web `unavailable` (no integrity-alert UI kind); #108 must stop-and-escalate, not silently patch.
+   - Flip to `ready` only after integration-lead provisions hosted secrets **and** clears the integrity residual (fix landed or explicit lead waiver).
+   - Shared `.github/**` gated workflow requires separate integration-lead authorization before any smoke PR edits CI.
 
 ## Next (after ready merges)
 
-1. **Blocked until both #96 and #100 merge:** M2-RETRIEVAL-BACKEND (#57).
-2. Then M2-CLAIMS-VERIFICATION (#58) on #57; M2-OBSERVATORY-UI (#59) on #57 (+ #96 already satisfied if merged).
-3. **Blocked until #100 merges:** M3-CONTRACT (#101) — same shared paths as #100; serialize after #100 merges (never concurrent).
-4. Then M3-EXTRACTION-CORE (#60) on #58 + #101; M3-REVIEW (#61); M3-CONFIDENCE-GATE (#62).
+1. After #57: M2-CLAIMS-VERIFICATION (#58); M2-OBSERVATORY-UI (#59) (reader mock/stack gate already satisfied by merged `READER-CROSS-STACK`).
+2. After #101: M3-EXTRACTION-CORE (#60) on #58 + #101; then #61/#62.
+3. READER-PROD-SMOKE (#108) remains blocked until credentials + integrity residual cleared (does **not** gate #57/#101).
 
 ## Credentials
 
-CI and package implementation are mock-first. Request `FEL_OPENAI_API_KEY` only for the explicitly credentialed live retrieval/extraction smoke gates after deterministic fixtures and contracts pass. SEC source re-verification requires the configured compliant SEC identity and rate limiter; do not commit or log personal contact data.
+CI and package implementation remain mock-first for #57/#101. Hosted reader production smoke (#108) requires separately authorized deployment credentials — **not provisioned**; request by name only. Do not treat #108 as credential-ready. Request `FEL_OPENAI_API_KEY` only for the explicitly credentialed live retrieval/extraction smoke gates after deterministic fixtures and contracts pass. SEC source re-verification requires the configured compliant SEC identity and rate limiter; do not commit or log personal contact data.
 
 ## Resume rules
 
 1. Treat GitHub merged commits, issues, and PRs as authoritative.
 2. Reconcile this file with `workstreams.yaml` before dispatch.
-3. Never run #100 and #101 concurrently; both own contracts/migrations.
+3. Never run two packages that own `packages/contracts/**` / `db/migrations/**` concurrently (#101 vs any future contract owner).
 4. Do not dispatch any package whose allowed paths overlap an active package.
 5. Keep total active packages at four or fewer.
-6. Require tests, telemetry where applicable, documentation, acceptance evidence, and an independent PR review before merge.
+6. `#96` open ≠ package unfinished; residual criterion #11 is #108-owned.
+7. Require tests, telemetry where applicable, documentation, acceptance evidence, and an independent PR review before merge.

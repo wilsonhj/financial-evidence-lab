@@ -224,8 +224,22 @@ packages:
     depends_on: [READER-API, READER-WEB-HTTP]
     team: trust
     branch: test/reader-cross-stack
-    status: active # dispatched 2026-07-16 from main @ 6c28a57; exclusive evals/**
+    status: merged # PR #105 @ 4614af4 (2026-07-17); mock/stack criteria 1–10; criterion #11 owned by READER-PROD-SMOKE (#108); issue #96 stays open as tracker
     allowed_paths: [evals/**]
+  - id: READER-PROD-SMOKE # child F of #87; owns #96 criterion #11
+    issue: 108
+    tasks: []
+    depends_on: [READER-CROSS-STACK, M2-CONTRACT] # #105+#106; READER-WEB-HTTP inherited via READER-CROSS-STACK
+    team: trust
+    branch: test/reader-prod-smoke
+    status: blocked # registered after #105/#106; NOT ready — hosted deployment credentials not provisioned; INTEGRITY_ERROR→unavailable residual blocks integrity-alert UI acceptance
+    credentials: hosted-required # override defaults.credentials mock-only; names only until lead provisions
+    allowed_paths:
+      - evals/** # hosted-smoke harness + evidence capture
+      - apps/web/** # drive real HttpEvidenceSource/reader only; product defects → stop and escalate
+      - apps/api/**
+      - workers/**
+      - .github/** # gated hosted-smoke workflow; shared — integration-lead authorization required
   - id: INFRA-WORKER-DEPLOY # Railway worker startCommand -> consumer mode (issue #84)
     issue: 84
     tasks: []
@@ -242,7 +256,7 @@ packages:
     depends_on: [READER-CONTRACT, M1-CORPUS-QA]
     team: contracts
     branch: agent/m2-retrieval-contract-v0.3
-    status: active # dispatched 2026-07-16 from main @ 6c28a57; exclusive contracts/migrations; never concurrent with #101
+    status: merged # PR #106 @ f34f5ec (2026-07-17); OpenAPI v0.3.0 + migration 0003; never was concurrent with #101
     allowed_paths:
       - db/migrations/**
       - packages/contracts/**
@@ -250,9 +264,10 @@ packages:
   - id: M2-RETRIEVAL-BACKEND # indexes + retrieval trace (trace schema owner)
     issue: 57
     tasks: [T0201, T0202, T0203, T0204, T0205, T0206]
-    depends_on: [M2-CONTRACT, READER-CROSS-STACK] # issues #100 and #96
+    depends_on: [M2-CONTRACT, READER-CROSS-STACK] # packages merged via #105+#106; does NOT depend on READER-PROD-SMOKE
     team: retrieval
     branch: agent/m2-retrieval-backend
+    status: ready # post-#105/#106; mock-first; parallel-safe with #101 (no path overlap)
     allowed_paths: [packages/retrieval/**, apps/api/**]
   - id: M2-CLAIMS-VERIFICATION # claims pipeline + smoke benchmark + retrieval/perf suite (no Atlas)
     issue: 58
@@ -280,6 +295,7 @@ packages:
     depends_on: [M2-CONTRACT]
     team: contracts
     branch: agent/m3-extraction-contract-v0.4
+    status: ready # post-#106; never concurrent with another contracts/migrations owner
     allowed_paths:
       - db/migrations/**
       - packages/contracts/**
