@@ -22,6 +22,18 @@ from fel_retrieval.index_version import (
     make_index_version_spec,
 )
 from fel_retrieval.item_builder import build_items, effective_chunker_config
+from fel_retrieval.lanes import (
+    LANE_DENSE,
+    LANE_FACTS,
+    LANE_LEXICAL,
+    LANE_TABLES,
+    LaneCandidate,
+    LaneQuery,
+    dense_lane,
+    facts_lane,
+    lexical_lane,
+    tables_lane,
+)
 from fel_retrieval.models import BuildResult, Rejection, RetrievalItemDraft
 from fel_retrieval.oracle import cosine_distance, exact_knn, recall_at_k
 
@@ -30,11 +42,17 @@ __all__ = [
     "DIMENSIONS",
     "DISTANCE",
     "ID_NAMESPACE",
+    "LANE_DENSE",
+    "LANE_FACTS",
+    "LANE_LEXICAL",
+    "LANE_TABLES",
     "BuildOutcome",
     "BuildResult",
     "DBConnection",
     "IndexBuildError",
     "IndexVersionSpec",
+    "LaneCandidate",
+    "LaneQuery",
     "Rejection",
     "RetrievalItemDraft",
     "build_and_publish",
@@ -43,16 +61,20 @@ __all__ = [
     "config_hash",
     "content_sha256",
     "cosine_distance",
+    "dense_lane",
     "effective_chunker_config",
     "embed_drafts",
     "exact_knn",
+    "facts_lane",
     "format_halfvec",
     "hnsw_search",
     "index_version_id",
     "item_id",
+    "lexical_lane",
     "make_index_version_spec",
     "publish_index_version",
     "recall_at_k",
     "source_anchor",
+    "tables_lane",
     "verify_span_slice",
 ]
