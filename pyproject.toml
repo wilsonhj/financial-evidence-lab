@@ -1,7 +1,7 @@
 [tool.ruff]
 line-length = 100
 target-version = "py311"
-src = ["apps/api", "workers/src", "evals", "packages/providers"]
+src = ["apps/api", "workers/src", "evals", "packages/providers", "packages/retrieval"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
@@ -14,11 +14,17 @@ target-version = ["py311"]
 python_version = "3.11"
 strict = true
 # per-module overrides preferred; global escape hatch removed
-mypy_path = "apps/api:workers/src:evals:packages/providers"
+mypy_path = "apps/api:workers/src:evals:packages/providers:packages/retrieval"
 
 [tool.pytest.ini_options]
-pythonpath = ["apps/api", "workers/src", "evals", "packages/providers"]
-testpaths = ["apps/api/tests", "workers/tests", "evals/tests", "packages/providers/tests"]
+pythonpath = ["apps/api", "workers/src", "evals", "packages/providers", "packages/retrieval"]
+testpaths = [
+    "apps/api/tests",
+    "workers/tests",
+    "evals/tests",
+    "packages/providers/tests",
+    "packages/retrieval/tests",
+]
 addopts = "-q --import-mode=importlib"
 
 [tool.bandit]
