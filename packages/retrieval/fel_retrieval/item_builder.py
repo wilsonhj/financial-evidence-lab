@@ -17,6 +17,17 @@ _DEFAULT_CONFIG = {
 }
 
 
+def effective_chunker_config(
+    chunker_config: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Merge caller overrides onto the frozen defaults; single source of truth
+    for both the builder and the index-version config hash (M2-011)."""
+    config = dict(_DEFAULT_CONFIG)
+    if chunker_config:
+        config.update(dict(chunker_config))
+    return config
+
+
 def _approx_tokens(text: str) -> int:
     # Deterministic stand-in until a tokenizer is authorized (no new deps).
     parts = text.split()
@@ -30,9 +41,7 @@ def build_items(
     chunker_config: Mapping[str, Any] | None = None,
 ) -> BuildResult:
     """Return accepted drafts + rejection diagnostics; identical inputs → identical IDs."""
-    config = dict(_DEFAULT_CONFIG)
-    if chunker_config:
-        config.update(dict(chunker_config))
+    config = effective_chunker_config(chunker_config)
     cfg_hash = config_hash(config)
 
     entity_id = str(corpus["entity_id"])
