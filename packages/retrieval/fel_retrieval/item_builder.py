@@ -85,6 +85,25 @@ def build_items(
             )
         )
 
+    # Facts must anchor to a returned span; a dangling source_span_id is
+    # rejected with a diagnostic (fail closed), mirroring UNANCHORED_TABLE_ROW.
+    known_span_ids = {str(s["id"]) for s in corpus.get("source_spans", [])}
+    for raw_fact in corpus.get("financial_facts", []):
+        fact_span_id = str(raw_fact["source_span_id"])
+        if fact_span_id not in known_span_ids:
+            rejections.append(
+                Rejection(
+                    code="UNANCHORED_FACT",
+                    reason=(
+                        f"fact {raw_fact['id']} references span {fact_span_id} "
+                        "not present in source_spans"
+                    ),
+                    kind="fact",
+                    source_span_id=fact_span_id,
+                    financial_fact_id=str(raw_fact["id"]),
+                )
+            )
+
     for fact in fact_candidates(corpus):
         code = verify_span_slice(
             canonical_text,

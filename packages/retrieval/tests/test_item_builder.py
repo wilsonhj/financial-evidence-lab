@@ -121,3 +121,23 @@ def test_idempotent_rebuild() -> None:
     assert first.counts == second.counts
     assert first.config_hash == second.config_hash
     assert [r.code for r in first.rejections] == [r.code for r in second.rejections]
+
+
+def test_dangling_fact_span_rejected_with_diagnostic() -> None:
+    corpus = mini_corpus()
+    corpus["financial_facts"].append(
+        {
+            "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            "source_span_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+            "period": "FY2025",
+        }
+    )
+    result = build_items(corpus, index_version_id=INDEX)
+    dangling = [r for r in result.rejections if r.code == "UNANCHORED_FACT"]
+    assert len(dangling) == 1
+    assert dangling[0].financial_fact_id == "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+    assert dangling[0].source_span_id == "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+    # The dangling fact never becomes an item; the anchored fact still does.
+    fact_items = [i for i in result.items if i.kind == "fact"]
+    assert len(fact_items) == 1
+    assert fact_items[0].financial_fact_id == "77777777-7777-4777-8777-777777777777"
