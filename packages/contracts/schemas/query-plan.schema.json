@@ -30,7 +30,8 @@
         "driver_analysis",
         "contradiction",
         "general"
-      ]
+      ],
+      "x-fel-open-enum": true
     },
     "entity_ids": {
       "type": "array",
@@ -43,7 +44,10 @@
     "lanes": {
       "type": "array",
       "uniqueItems": true,
-      "items": { "enum": ["dense", "lexical", "facts", "tables"] }
+      "items": {
+        "enum": ["dense", "lexical", "facts", "tables"],
+        "x-fel-open-enum": true
+      }
     },
     "variants": {
       "type": "array",

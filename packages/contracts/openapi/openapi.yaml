@@ -1,15 +1,16 @@
 openapi: 3.1.0
 info:
   title: Financial Evidence Lab API
-  version: 0.3.0
+  version: 0.4.0
   description: >-
     Frozen v1 contract surface (ADR-0001). This file seeds the M0 freeze:
     conventions (error envelope, idempotency, optimistic concurrency,
     run-ID pattern), identity/workspace resources, evidence reads, and
-    ingestion jobs. v0.3.0 adds observable hybrid retrieval (ADR-0006):
-    immutable query creation with optional index pin, resumable typed SSE,
-    rerun, trace read, and evidence feedback. Extraction, modeling, and
-    forecasting paths are added by later minor versions under VERSIONING.md.
+    ingestion jobs. v0.3.0 adds observable hybrid retrieval (ADR-0006).
+    v0.4.0 adds bounded agentic extraction (ADR-0007): extraction runs,
+    typed resumable SSE, proposals/review, approved versions, plus a
+    compatible open-enum loosening for volatile M2 planner/lane/event
+    labels. Modeling and forecasting paths arrive in later minors.
 servers:
   - url: /
 paths:
@@ -473,6 +474,315 @@ paths:
           description: Feedback recorded.
         default:
           $ref: "#/components/responses/Error"
+  /v1/workspaces/{workspaceId}/extraction-runs:
+    post:
+      operationId: createExtractionRun
+      summary: Create a bounded extraction run
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/WorkspaceId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExtractionRunCreate"
+      responses:
+        "202":
+          description: Extraction run accepted.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExtractionRun"
+        default:
+          $ref: "#/components/responses/Error"
+    get:
+      operationId: listExtractionRuns
+      summary: List extraction runs for a workspace
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/WorkspaceId"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Extraction runs.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ExtractionRun"
+                  next_cursor:
+                    type: ["string", "null"]
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/extraction-runs/{runId}:
+    parameters:
+      - $ref: "#/components/parameters/RunId"
+    get:
+      operationId: getExtractionRun
+      summary: Read one extraction run
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Extraction run.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExtractionRun"
+        default:
+          $ref: "#/components/responses/Error"
+    delete:
+      operationId: cancelExtractionRun
+      summary: Cancel an extraction run
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/IfMatch"
+      responses:
+        "200":
+          description: Cancel requested.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExtractionRun"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/extraction-runs/{runId}/events:
+    parameters:
+      - $ref: "#/components/parameters/RunId"
+    get:
+      operationId: streamExtractionRunEvents
+      summary: Stream one run's persisted events; Last-Event-ID resumes
+      description: >-
+        text/event-stream. Each SSE `data:` payload is JSON ExtractionEvent
+        (schema_version extraction-event/v1). Events are committed before
+        emission. Heartbeat every 15–30s. Last-Event-ID resumes after that
+        identity id.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: Last-Event-ID
+          in: header
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+      responses:
+        "200":
+          description: >-
+            text/event-stream of ExtractionEvent JSON payloads.
+          content:
+            text/event-stream:
+              schema:
+                $ref: "#/components/schemas/ExtractionEvent"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/extraction-runs/{runId}/rerun:
+    post:
+      operationId: rerunExtraction
+      summary: Create a child extraction run from a parent
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [reason]
+              properties:
+                reason:
+                  type: string
+                  minLength: 1
+      responses:
+        "202":
+          description: Child run accepted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExtractionRun"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/workspaces/{workspaceId}/extractions:
+    get:
+      operationId: listExtractions
+      summary: List extraction proposals for a workspace
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/WorkspaceId"
+        - $ref: "#/components/parameters/Cursor"
+        - name: state
+          in: query
+          schema:
+            $ref: "#/components/schemas/ProposalState"
+      responses:
+        "200":
+          description: Extraction proposals.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ExtractionProposal"
+                  next_cursor:
+                    type: ["string", "null"]
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/extractions/{extractionId}:
+    parameters:
+      - $ref: "#/components/parameters/ExtractionId"
+    get:
+      operationId: getExtraction
+      summary: Read one extraction proposal
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Extraction proposal.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExtractionProposal"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/extractions/review:
+    post:
+      operationId: reviewExtractions
+      summary: Apply an atomic review command
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReviewCommand"
+      responses:
+        "200":
+          description: Atomic review result.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReviewResult"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/approved-extractions/{recordId}:
+    get:
+      operationId: getApprovedExtraction
+      summary: Read the current approved extraction version
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: recordId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Current approved version.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApprovedExtraction"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/approved-extractions/{recordId}/versions:
+    get:
+      operationId: listApprovedExtractionVersions
+      summary: List immutable approved extraction versions
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: recordId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Immutable history.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ApprovedExtraction"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/approved-extractions/{recordId}/corrections:
+    post:
+      operationId: correctApprovedExtraction
+      summary: Append an immutable corrected approved version
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: recordId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CorrectionCommand"
+      responses:
+        "201":
+          description: Immutable child version.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApprovedExtraction"
+        default:
+          $ref: "#/components/responses/Error"
+
 components:
   securitySchemes:
     bearerAuth:
@@ -529,6 +839,19 @@ components:
       schema:
         type: string
         format: uuid
+    ExtractionId:
+      name: extractionId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      schema:
+        type: string
   headers:
     ETag:
       description: Version tag for optimistic concurrency.
@@ -1035,6 +1358,7 @@ components:
               contradiction,
               general,
             ]
+          x-fel-open-enum: true
         entity_ids:
           type: array
           minItems: 1
@@ -1060,6 +1384,7 @@ components:
           items:
             type: string
             enum: [dense, lexical, facts, tables]
+            x-fel-open-enum: true
         variants:
           type: array
           minItems: 1
@@ -1107,6 +1432,7 @@ components:
         lane:
           type: string
           enum: [dense, lexical, facts, tables]
+          x-fel-open-enum: true
         variant_index:
           type: integer
           minimum: 0
@@ -1186,6 +1512,7 @@ components:
         stage:
           type: string
           enum: [filter, dedupe, fusion, rerank, context, verification, abstention]
+          x-fel-open-enum: true
         code:
           type: string
         item_ids:
@@ -1281,6 +1608,7 @@ components:
               run_cancelled,
               heartbeat,
             ]
+          x-fel-open-enum: true
         occurred_at:
           type: string
           format: date-time
@@ -1484,3 +1812,411 @@ components:
           type: string
           format: uuid
           description: Earlier append-only feedback record corrected by this record.
+
+    RunStatus:
+      type: string
+      enum: [queued, running, waiting_review, succeeded, failed, cancelled]
+      x-fel-open-enum: false
+    ProposalState:
+      type: string
+      enum: [proposed, needs_review, accepted, rejected, superseded]
+      x-fel-open-enum: false
+    ExtractionRunCreate:
+      type: object
+      additionalProperties: false
+      required: [entity_id, as_of, modes, source_span_ids]
+      properties:
+        entity_id:
+          type: string
+          format: uuid
+        as_of:
+          type: string
+          format: date-time
+          description: >-
+            Run cutoff. Effective cutoff is min(workspace.as_of, requested as_of);
+            request cannot widen workspace scope.
+        modes:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            type: string
+            enum: [kpi, guidance, revenue_driver]
+        source_span_ids:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            type: string
+            format: uuid
+        claim_ids:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+            format: uuid
+        corpus_version_id:
+          type: ["string", "null"]
+          format: uuid
+        limits:
+          $ref: "#/components/schemas/RunLimits"
+    RunLimits:
+      type: object
+      additionalProperties: false
+      properties:
+        max_calls:
+          type: integer
+          minimum: 1
+          maximum: 10
+        max_input_tokens:
+          type: integer
+          minimum: 1
+          maximum: 100000
+        max_output_tokens:
+          type: integer
+          minimum: 1
+          maximum: 20000
+        max_cost_usd:
+          type: string
+          pattern: "^(0(\\.\\d{1,6})?|1(\\.\\d{1,6})?|2(\\.0{1,6})?)$"
+          description: >-
+            Decimal USD. Request may only lower relative to active policy.
+            Absolute M3 v0.4.0 schema ceiling equals ADR-0007 default 2.00.
+        max_wall_seconds:
+          type: integer
+          minimum: 1
+          maximum: 600
+    ExtractionRun:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          id,
+          workspace_id,
+          entity_id,
+          status,
+          modes,
+          as_of,
+          ontology_version,
+          workflow_version,
+          provider,
+          model,
+          limits,
+          usage,
+          version,
+          created_at,
+        ]
+      properties:
+        id:
+          type: string
+          format: uuid
+        workspace_id:
+          type: string
+          format: uuid
+        entity_id:
+          type: string
+          format: uuid
+        parent_run_id:
+          type: ["string", "null"]
+          format: uuid
+        status:
+          $ref: "#/components/schemas/RunStatus"
+        modes:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            type: string
+            enum: [kpi, guidance, revenue_driver]
+        as_of:
+          type: string
+          format: date-time
+        corpus_version_id:
+          type: string
+          format: uuid
+        ontology_version:
+          type: string
+        workflow_version:
+          type: string
+        provider:
+          type: string
+        model:
+          type: string
+        limits:
+          $ref: "#/components/schemas/RunLimits"
+        usage:
+          type: object
+          additionalProperties: false
+          required: [calls, input_tokens, output_tokens, cost_usd]
+          properties:
+            calls:
+              type: integer
+            input_tokens:
+              type: integer
+            output_tokens:
+              type: integer
+            cost_usd:
+              type: string
+        version:
+          type: integer
+          minimum: 1
+        error:
+          anyOf:
+            - $ref: "#/components/schemas/Error"
+            - type: "null"
+        created_at:
+          type: string
+          format: date-time
+    ExtractionEvent:
+      type: object
+      additionalProperties: false
+      description: >-
+        Persisted extraction run event; SSE `data:` payload. Schema:
+        https://contracts.fel.dev/schemas/extraction-event/v1.
+      required: [schema_version, id, run_id, type, occurred_at, payload]
+      properties:
+        schema_version:
+          const: extraction-event/v1
+        id:
+          type: integer
+          minimum: 1
+        run_id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum:
+            [
+              run_queued,
+              run_started,
+              step_started,
+              step_completed,
+              step_failed,
+              budget_updated,
+              proposals_persisted,
+              review_waiting,
+              review_completed,
+              run_succeeded,
+              run_failed,
+              run_cancelled,
+              heartbeat,
+            ]
+          x-fel-open-enum: false
+        occurred_at:
+          type: string
+          format: date-time
+        payload:
+          type: object
+          additionalProperties: true
+          description: >-
+            IDs, counts, states and redacted errors only; no source or prompt text.
+    ExtractionPayload:
+      # Single source of truth: the frozen extraction-payload/v1 JSON Schema.
+      # direction is required on revenue_driver as the design schema specifies.
+      $ref: "../schemas/extraction-payload.schema.json"
+    ExtractionProposal:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          id,
+          run_id,
+          kind,
+          metric_id,
+          payload,
+          evidence,
+          record_confidence,
+          field_confidences,
+          validations,
+          state,
+          review_priority,
+          version,
+        ]
+      properties:
+        id:
+          type: string
+          format: uuid
+        run_id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum: [kpi, guidance, revenue_driver]
+        metric_id:
+          type: string
+        payload:
+          $ref: "#/components/schemas/ExtractionPayload"
+        evidence:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/EvidenceEdge"
+        record_confidence:
+          type: string
+          pattern: "^(0(\\.\\d{1,3})?|1(\\.0{1,3})?)$"
+        field_confidences:
+          type: object
+          additionalProperties:
+            type: string
+        validations:
+          type: array
+          items:
+            type: object
+            required: [code, status]
+            properties:
+              code:
+                type: string
+              status:
+                type: string
+                enum: [pass, warning, fail]
+              detail:
+                type: object
+                additionalProperties: true
+        state:
+          $ref: "#/components/schemas/ProposalState"
+        review_priority:
+          type: string
+          enum: [normal, high]
+        version:
+          type: integer
+          minimum: 1
+    EvidenceEdge:
+      type: object
+      additionalProperties: false
+      required: [source_span_id, document_version_id, role, citation_status]
+      properties:
+        source_span_id:
+          type: string
+          format: uuid
+        document_version_id:
+          type: string
+          format: uuid
+        role:
+          type: string
+          enum: [supports, definition, conflicts, derivation_input]
+        citation_status:
+          type: string
+          enum: [verified, partial, contradictory, invalid]
+    ReviewCommand:
+      type: object
+      additionalProperties: false
+      required: [action, extraction_ids, expected_versions, reason]
+      properties:
+        action:
+          type: string
+          enum: [accept, edit, reject, merge]
+        extraction_ids:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            type: string
+            format: uuid
+        expected_versions:
+          type: object
+          minProperties: 1
+          propertyNames:
+            format: uuid
+          additionalProperties:
+            type: integer
+            minimum: 1
+          description: >-
+            Must contain exactly one key for every extraction_id; any mismatch
+            fails the entire transaction with 412.
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 2000
+        patch:
+          type: ["object", "null"]
+          additionalProperties: true
+        conflict_resolution:
+          type: ["object", "null"]
+          additionalProperties: true
+    ReviewResult:
+      type: object
+      required: [review_id, action, proposal_states, approved_record_ids]
+      properties:
+        review_id:
+          type: string
+          format: uuid
+        action:
+          type: string
+        proposal_states:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/ProposalState"
+        approved_record_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+    CorrectionCommand:
+      type: object
+      additionalProperties: false
+      required: [reason, payload, evidence]
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 2000
+        payload:
+          $ref: "#/components/schemas/ExtractionPayload"
+        evidence:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/EvidenceEdge"
+    ApprovedExtraction:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          record_id,
+          version_id,
+          version,
+          kind,
+          metric_id,
+          payload,
+          evidence,
+          evidence_manifest_hash,
+          ontology_version,
+          approved_by,
+          created_at,
+        ]
+      properties:
+        record_id:
+          type: string
+          format: uuid
+        version_id:
+          type: string
+          format: uuid
+        parent_version_id:
+          type: ["string", "null"]
+          format: uuid
+        version:
+          type: integer
+          minimum: 1
+        kind:
+          type: string
+          enum: [kpi, guidance, revenue_driver]
+        metric_id:
+          type: string
+        payload:
+          $ref: "#/components/schemas/ExtractionPayload"
+        evidence:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/EvidenceEdge"
+        evidence_manifest_hash:
+          type: string
+          pattern: "^sha256:[0-9a-f]{64}$"
+        ontology_version:
+          type: string
+        approved_by:
+          type: string
+          format: uuid
+        created_at:
+          type: string
+          format: date-time

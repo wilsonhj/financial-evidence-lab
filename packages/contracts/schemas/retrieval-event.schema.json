@@ -28,7 +28,8 @@
         "run_failed",
         "run_cancelled",
         "heartbeat"
-      ]
+      ],
+      "x-fel-open-enum": true
     },
     "occurred_at": { "type": "string", "format": "date-time" },
     "payload": { "type": "object", "additionalProperties": true }
