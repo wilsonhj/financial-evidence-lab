@@ -78,11 +78,11 @@ jobs:
           for f in db/migrations/*.sql; do
             PGPASSWORD=fel-ci-only psql --set ON_ERROR_STOP=1 -h localhost -U fel -d fel_test -f "$f"
           done
-      - run: black --check apps workers evals packages/providers
-      - run: ruff check apps workers evals packages/providers
-      - run: mypy apps/api/app workers/src evals/graders packages/providers/fel_providers
+      - run: black --check apps workers evals packages/providers packages/retrieval
+      - run: ruff check apps workers evals packages/providers packages/retrieval
+      - run: mypy apps/api/app workers/src evals/graders packages/providers/fel_providers packages/retrieval/fel_retrieval
       - run: pytest
-      - run: bandit -q -r apps workers evals packages/providers -c pyproject.toml
+      - run: bandit -q -r apps workers evals packages/providers packages/retrieval -c pyproject.toml
       - run: pip-audit -r requirements-dev.txt
 
   database:
