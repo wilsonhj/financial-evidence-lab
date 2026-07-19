@@ -233,6 +233,12 @@ SELECT pg_temp.expect_rejection('step run tenant', $sql$
         'workflow-v1', 'extraction-payload/v1', 'prompt-v1'
     )
 $sql$);
+-- G3: demoting a succeeded step (run still open) frees the success-uniqueness
+-- index; the step guard freezes 'succeeded' and rejects the transition.
+SELECT pg_temp.expect_rejection('step demote from succeeded', $sql$
+    UPDATE extraction_run_steps SET status = 'failed'
+    WHERE id = '70000000-0000-0000-0000-000000000001'
+$sql$, ARRAY['P0001']);
 
 INSERT INTO extraction_run_events (org_id, run_id, event_type, payload)
 VALUES (
@@ -295,6 +301,27 @@ SELECT pg_temp.expect_rejection('evidence span/version mismatch', $sql$
         'definition', 'partial'
     )
 $sql$);
+
+INSERT INTO extraction_conflicts (
+    id, org_id, workspace_id, conflict_key
+) VALUES (
+    'd0000000-0000-0000-0000-000000000001',
+    '00000000-0000-0000-0000-000000000101',
+    '00000000-0000-0000-0000-000000000301',
+    'arr:2024Q4'
+);
+-- Resolution lifecycle updates are allowed.
+UPDATE extraction_conflicts
+SET status = 'resolved',
+    resolved_by = '00000000-0000-0000-0000-000000000201',
+    resolved_at = now(),
+    resolution_note = 'merged'
+WHERE id = 'd0000000-0000-0000-0000-000000000001';
+-- G1: rewriting a conflict's identity/provenance is rejected by the guard.
+SELECT pg_temp.expect_rejection('conflict identity rewrite', $sql$
+    UPDATE extraction_conflicts SET conflict_key = 'arr:2025Q1'
+    WHERE id = 'd0000000-0000-0000-0000-000000000001'
+$sql$, ARRAY['P0001']);
 
 INSERT INTO extraction_reviews (
     id, org_id, workspace_id, action, actor_user_id, reason, idempotency_key,
@@ -392,6 +419,12 @@ SELECT pg_temp.expect_rejection('terminal run mutation', $sql$
     UPDATE extraction_runs SET cost_usd = 1
     WHERE id = '60000000-0000-0000-0000-000000000001'
 $sql$);
+-- G2: proposal 80..01 belongs to run 1, now terminal; the review lifecycle
+-- can no longer advance the proposal's state/version.
+SELECT pg_temp.expect_rejection('proposal update after terminal run', $sql$
+    UPDATE extraction_proposals SET state = 'accepted', version = 3
+    WHERE id = '80000000-0000-0000-0000-000000000001'
+$sql$, ARRAY['P0001']);
 
 SET LOCAL ROLE fel_app;
 SELECT set_config(

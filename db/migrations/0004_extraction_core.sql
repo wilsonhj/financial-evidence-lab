@@ -501,6 +501,12 @@ BEGIN
            OR NEW.prompt_version IS DISTINCT FROM OLD.prompt_version THEN
             RAISE EXCEPTION 'extraction_run_steps identity pins are immutable';
         END IF;
+        -- A succeeded step is a stable replay key; forbid leaving 'succeeded'
+        -- so the partial success-uniqueness index cannot be freed and reused.
+        IF OLD.status = 'succeeded'
+           AND NEW.status IS DISTINCT FROM OLD.status THEN
+            RAISE EXCEPTION 'succeeded extraction_run_steps cannot change status';
+        END IF;
         PERFORM fel_assert_extraction_run_open(NEW.run_id, NEW.org_id);
         RETURN NEW;
     END IF;
@@ -530,6 +536,9 @@ BEGIN
         PERFORM fel_assert_extraction_run_open(NEW.run_id, NEW.org_id);
         RETURN NEW;
     END IF;
+    -- Proposals freeze once their parent run reaches a terminal state; the
+    -- review lifecycle (state/version) may only advance while the run is open.
+    PERFORM fel_assert_extraction_run_open(NEW.run_id, NEW.org_id);
     IF NEW.id IS DISTINCT FROM OLD.id
        OR NEW.org_id IS DISTINCT FROM OLD.org_id
        OR NEW.workspace_id IS DISTINCT FROM OLD.workspace_id
@@ -583,6 +592,31 @@ CREATE TRIGGER extraction_proposal_evidence_guard
     BEFORE INSERT OR UPDATE OR DELETE ON extraction_proposal_evidence
     FOR EACH ROW EXECUTE FUNCTION fel_guard_extraction_proposal_evidence();
 
+CREATE FUNCTION fel_guard_extraction_conflict() RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = pg_catalog, public
+AS $$
+BEGIN
+    IF TG_OP = 'DELETE' THEN
+        RAISE EXCEPTION 'extraction_conflicts cannot be deleted';
+    END IF;
+    -- Only the resolution lifecycle (status/resolved_by/resolved_at/
+    -- resolution_note) may change; identity and provenance are pinned.
+    IF NEW.id IS DISTINCT FROM OLD.id
+       OR NEW.org_id IS DISTINCT FROM OLD.org_id
+       OR NEW.workspace_id IS DISTINCT FROM OLD.workspace_id
+       OR NEW.conflict_key IS DISTINCT FROM OLD.conflict_key
+       OR NEW.reason_codes IS DISTINCT FROM OLD.reason_codes
+       OR NEW.created_at IS DISTINCT FROM OLD.created_at THEN
+        RAISE EXCEPTION 'extraction conflict identity pins are immutable';
+    END IF;
+    RETURN NEW;
+END
+$$;
+CREATE TRIGGER extraction_conflicts_guard
+    BEFORE UPDATE OR DELETE ON extraction_conflicts
+    FOR EACH ROW EXECUTE FUNCTION fel_guard_extraction_conflict();
+
 CREATE FUNCTION fel_reject_append_only_extraction() RETURNS trigger
 LANGUAGE plpgsql
 AS $$
@@ -629,7 +663,9 @@ GRANT SELECT, INSERT, UPDATE (
     state, review_priority, version
 ) ON extraction_proposals TO fel_app;
 GRANT SELECT, INSERT ON extraction_proposal_evidence TO fel_app;
-GRANT SELECT, INSERT, UPDATE ON extraction_conflicts TO fel_app;
+GRANT SELECT, INSERT, UPDATE (
+    status, resolved_by, resolved_at, resolution_note
+) ON extraction_conflicts TO fel_app;
 GRANT SELECT, INSERT ON extraction_conflict_members TO fel_app;
 GRANT SELECT, INSERT ON extraction_reviews TO fel_app;
 GRANT SELECT, INSERT, UPDATE (
