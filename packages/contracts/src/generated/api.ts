@@ -1039,7 +1039,7 @@ export interface components {
         cost_usd: string;
       };
       version: number;
-      error?: Record<string, never> | null;
+      error?: components["schemas"]["Error"] | null;
       /** Format: date-time */
       created_at: string;
     };
@@ -1091,7 +1091,9 @@ export interface components {
         code: string;
         /** @enum {string} */
         status: "pass" | "warning" | "fail";
-        detail?: Record<string, never>;
+        detail?: {
+          [key: string]: unknown;
+        };
       }[];
       state: components["schemas"]["ProposalState"];
       /** @enum {string} */
@@ -1117,14 +1119,20 @@ export interface components {
         [key: string]: number;
       };
       reason: string;
-      patch?: Record<string, never> | null;
-      conflict_resolution?: Record<string, never> | null;
+      patch?: {
+        [key: string]: unknown;
+      } | null;
+      conflict_resolution?: {
+        [key: string]: unknown;
+      } | null;
     };
     ReviewResult: {
       /** Format: uuid */
       review_id: string;
       action: string;
-      proposal_states: Record<string, never>;
+      proposal_states: {
+        [key: string]: components["schemas"]["ProposalState"];
+      };
       approved_record_ids: string[];
     };
     CorrectionCommand: {
@@ -1214,7 +1222,9 @@ export interface components {
         [key: string]: string;
       };
       definition?: string | null;
-      qualifiers: Record<string, never>;
+      qualifiers: {
+        [key: string]: unknown;
+      };
       /** @constant */
       reported_or_derived: "management_assertion";
     };
@@ -1239,7 +1249,9 @@ export interface components {
         [key: string]: string;
       };
       definition?: string | null;
-      qualifiers: Record<string, never>;
+      qualifiers: {
+        [key: string]: unknown;
+      };
       /** @enum {unknown} */
       reported_or_derived: "reported" | "derived";
     };
@@ -1372,7 +1384,9 @@ export interface components {
         [key: string]: string;
       };
       definition?: string | null;
-      qualifiers: Record<string, never>;
+      qualifiers: {
+        [key: string]: unknown;
+      };
       /** @constant */
       reported_or_derived: "management_assertion";
     };
@@ -1419,7 +1433,9 @@ export interface components {
             [key: string]: string;
           };
           definition?: string | null;
-          qualifiers: Record<string, never>;
+          qualifiers: {
+            [key: string]: unknown;
+          };
           /** @enum {unknown} */
           reported_or_derived: "reported" | "derived";
         };
@@ -1443,7 +1459,9 @@ export interface components {
             [key: string]: string;
           };
           definition?: string | null;
-          qualifiers: Record<string, never>;
+          qualifiers: {
+            [key: string]: unknown;
+          };
           /** @constant */
           reported_or_derived: "management_assertion";
         };
@@ -1576,7 +1594,9 @@ export interface components {
             [key: string]: string;
           };
           definition?: string | null;
-          qualifiers: Record<string, never>;
+          qualifiers: {
+            [key: string]: unknown;
+          };
           /** @constant */
           reported_or_derived: "management_assertion";
         };

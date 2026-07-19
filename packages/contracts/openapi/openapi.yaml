@@ -1961,7 +1961,9 @@ components:
           type: integer
           minimum: 1
         error:
-          type: ["object", "null"]
+          anyOf:
+            - $ref: "#/components/schemas/Error"
+            - type: "null"
         created_at:
           type: string
           format: date-time
@@ -2069,6 +2071,7 @@ components:
                 enum: [pass, warning, fail]
               detail:
                 type: object
+                additionalProperties: true
         state:
           $ref: "#/components/schemas/ProposalState"
         review_priority:
@@ -2126,8 +2129,10 @@ components:
           maxLength: 2000
         patch:
           type: ["object", "null"]
+          additionalProperties: true
         conflict_resolution:
           type: ["object", "null"]
+          additionalProperties: true
     ReviewResult:
       type: object
       required: [review_id, action, proposal_states, approved_record_ids]
@@ -2139,6 +2144,8 @@ components:
           type: string
         proposal_states:
           type: object
+          additionalProperties:
+            $ref: "#/components/schemas/ProposalState"
         approved_record_ids:
           type: array
           items:

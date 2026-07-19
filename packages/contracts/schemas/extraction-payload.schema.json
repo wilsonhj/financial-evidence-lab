@@ -103,7 +103,8 @@
         "type": ["string", "null"]
       },
       "qualifiers": {
-        "type": "object"
+        "type": "object",
+        "additionalProperties": true
       },
       "reported_or_derived": {
         "enum": ["reported", "derived", "management_assertion"]
@@ -181,7 +182,8 @@
           "type": ["string", "null"]
         },
         "qualifiers": {
-          "type": "object"
+          "type": "object",
+          "additionalProperties": true
         },
         "reported_or_derived": {
           "enum": ["reported", "derived"]
@@ -239,7 +241,8 @@
           "type": ["string", "null"]
         },
         "qualifiers": {
-          "type": "object"
+          "type": "object",
+          "additionalProperties": true
         },
         "reported_or_derived": {
           "const": "management_assertion"
@@ -524,7 +527,8 @@
           "type": ["string", "null"]
         },
         "qualifiers": {
-          "type": "object"
+          "type": "object",
+          "additionalProperties": true
         },
         "reported_or_derived": {
           "const": "management_assertion"
