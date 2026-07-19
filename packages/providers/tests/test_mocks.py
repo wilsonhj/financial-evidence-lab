@@ -14,6 +14,8 @@ from fel_providers import (
     MockMarketDataProvider,
     MockSecClient,
     MockStorageProvider,
+    MockStructuredLLMProvider,
+    StructuredGenerationRequest,
 )
 
 
@@ -53,3 +55,39 @@ def test_sec_and_fred_mock_shapes() -> None:
     assert MockSecClient().submissions("0001108524")["mock"] is True
     points = MockFredClient().series_vintage("GDP", as_of=datetime(2026, 7, 1))
     assert len(points) == 4 and isinstance(points[0][1], Decimal)
+
+
+def _structured_request(*, content: str = "extract kpi") -> StructuredGenerationRequest:
+    return StructuredGenerationRequest(
+        schema_name="extraction-payload",
+        schema_version="v1",
+        json_schema={"type": "object", "properties": {"kind": {"const": "kpi"}}},
+        messages=[{"role": "user", "content": content}],
+        max_output_tokens=64,
+    )
+
+
+def test_structured_llm_deterministic_and_records_metadata() -> None:
+    provider = MockStructuredLLMProvider()
+    first = provider.generate_structured(_structured_request())
+    second = provider.generate_structured(_structured_request())
+    assert first == second
+    assert first.provider == "mock"
+    assert first.model == "mock-structured-v1"
+    assert first.response_id.startswith("mockresp_")
+    assert first.refused is False
+    assert first.refusal is None
+    assert first.parsed is not None
+    assert first.parsed["mock"] is True
+    assert first.input_tokens >= 1
+    assert first.output_tokens >= 1
+    assert first.estimated_cost_usd == Decimal("0")
+    assert first.raw["digest"]
+
+
+def test_structured_llm_refusal_path() -> None:
+    provider = MockStructuredLLMProvider()
+    result = provider.generate_structured(_structured_request(content="REFUSE this"))
+    assert result.refused is True
+    assert result.parsed is None
+    assert result.refusal is not None and result.refusal.startswith("mock-refusal:")

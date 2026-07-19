@@ -14,6 +14,8 @@ export const SCHEMA_IDS = {
   retrievalEvent: "https://contracts.fel.dev/schemas/retrieval-event/v1",
   retrievalTrace: "https://contracts.fel.dev/schemas/retrieval-trace/v1",
   evidenceFeedback: "https://contracts.fel.dev/schemas/evidence-feedback/v1",
+  extractionEvent: "https://contracts.fel.dev/schemas/extraction-event/v1",
+  extractionPayload: "https://contracts.fel.dev/schemas/extraction-payload/v1",
 } as const;
 
-export const CONTRACT_VERSION = "0.3.0" as const;
+export const CONTRACT_VERSION = "0.4.0" as const;

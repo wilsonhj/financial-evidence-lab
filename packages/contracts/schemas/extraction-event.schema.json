@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.fel.dev/schemas/extraction-event/v1",
+  "x-fel-version": "1.0.0",
+  "title": "ExtractionEvent",
+  "description": "Persisted extraction run event; SSE data payload (ADR-0007). Event id is the table identity; Last-Event-ID resumes after that id.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "id", "run_id", "type", "occurred_at", "payload"],
+  "properties": {
+    "schema_version": { "const": "extraction-event/v1" },
+    "id": { "type": "integer", "minimum": 1 },
+    "run_id": { "type": "string", "format": "uuid" },
+    "type": {
+      "type": "string",
+      "enum": [
+        "run_queued",
+        "run_started",
+        "step_started",
+        "step_completed",
+        "step_failed",
+        "budget_updated",
+        "proposals_persisted",
+        "review_waiting",
+        "review_completed",
+        "run_succeeded",
+        "run_failed",
+        "run_cancelled",
+        "heartbeat"
+      ],
+      "x-fel-open-enum": false
+    },
+    "occurred_at": { "type": "string", "format": "date-time" },
+    "payload": {
+      "type": "object",
+      "description": "IDs, counts, states and redacted errors only; no source or prompt text",
+      "additionalProperties": true
+    }
+  }
+}

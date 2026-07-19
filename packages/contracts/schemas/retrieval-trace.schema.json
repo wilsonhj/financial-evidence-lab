@@ -110,7 +110,10 @@
         "timing_ms"
       ],
       "properties": {
-        "lane": { "enum": ["dense", "lexical", "facts", "tables"] },
+        "lane": {
+          "enum": ["dense", "lexical", "facts", "tables"],
+          "x-fel-open-enum": true
+        },
         "variant_index": { "type": "integer", "minimum": 0, "maximum": 3 },
         "lane_rank": { "type": "integer", "minimum": 1 },
         "raw_score": { "type": "string", "pattern": "^-?[0-9]+(\\.[0-9]+)?$" },
@@ -164,7 +167,8 @@
       "required": ["stage", "code", "item_ids", "occurred_at"],
       "properties": {
         "stage": {
-          "enum": ["filter", "dedupe", "fusion", "rerank", "context", "verification", "abstention"]
+          "enum": ["filter", "dedupe", "fusion", "rerank", "context", "verification", "abstention"],
+          "x-fel-open-enum": true
         },
         "code": { "type": "string" },
         "item_ids": {

@@ -329,6 +329,187 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/workspaces/{workspaceId}/extraction-runs": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List extraction runs for a workspace */
+    get: operations["listExtractionRuns"];
+    put?: never;
+    /** Create a bounded extraction run */
+    post: operations["createExtractionRun"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/extraction-runs/{runId}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        runId: components["parameters"]["RunId"];
+      };
+      cookie?: never;
+    };
+    /** Read one extraction run */
+    get: operations["getExtractionRun"];
+    put?: never;
+    post?: never;
+    /** Cancel an extraction run */
+    delete: operations["cancelExtractionRun"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/extraction-runs/{runId}/events": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        runId: components["parameters"]["RunId"];
+      };
+      cookie?: never;
+    };
+    /**
+     * Stream one run's persisted events; Last-Event-ID resumes
+     * @description text/event-stream. Each SSE `data:` payload is JSON ExtractionEvent (schema_version extraction-event/v1). Events are committed before emission. Heartbeat every 15–30s. Last-Event-ID resumes after that identity id.
+     */
+    get: operations["streamExtractionRunEvents"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/extraction-runs/{runId}/rerun": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Create a child extraction run from a parent */
+    post: operations["rerunExtraction"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/workspaces/{workspaceId}/extractions": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List extraction proposals for a workspace */
+    get: operations["listExtractions"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/extractions/{extractionId}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        extractionId: components["parameters"]["ExtractionId"];
+      };
+      cookie?: never;
+    };
+    /** Read one extraction proposal */
+    get: operations["getExtraction"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/extractions/review": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Apply an atomic review command */
+    post: operations["reviewExtractions"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/approved-extractions/{recordId}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read the current approved extraction version */
+    get: operations["getApprovedExtraction"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/approved-extractions/{recordId}/versions": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List immutable approved extraction versions */
+    get: operations["listApprovedExtractionVersions"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/approved-extractions/{recordId}/corrections": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Append an immutable corrected approved version */
+    post: operations["correctApprovedExtraction"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -804,6 +985,173 @@ export interface components {
        */
       supersedes_feedback_id?: string;
     };
+    /** @enum {string} */
+    RunStatus: "queued" | "running" | "waiting_review" | "succeeded" | "failed" | "cancelled";
+    /** @enum {string} */
+    ProposalState: "proposed" | "needs_review" | "accepted" | "rejected" | "superseded";
+    ExtractionRunCreate: {
+      /** Format: uuid */
+      entity_id: string;
+      /**
+       * Format: date-time
+       * @description Run cutoff. Effective cutoff is min(workspace.as_of, requested as_of); request cannot widen workspace scope.
+       */
+      as_of: string;
+      modes: ("kpi" | "guidance" | "revenue_driver")[];
+      source_span_ids: string[];
+      claim_ids?: string[];
+      /** Format: uuid */
+      corpus_version_id?: string | null;
+      limits?: components["schemas"]["RunLimits"];
+    };
+    RunLimits: {
+      max_calls?: number;
+      max_input_tokens?: number;
+      max_output_tokens?: number;
+      /** @description Decimal USD. Request may only lower relative to active policy. Absolute M3 v0.4.0 schema ceiling equals ADR-0007 default 2.00. */
+      max_cost_usd?: string;
+      max_wall_seconds?: number;
+    };
+    ExtractionRun: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      workspace_id: string;
+      /** Format: uuid */
+      entity_id: string;
+      /** Format: uuid */
+      parent_run_id?: string | null;
+      status: components["schemas"]["RunStatus"];
+      modes: ("kpi" | "guidance" | "revenue_driver")[];
+      /** Format: date-time */
+      as_of: string;
+      /** Format: uuid */
+      corpus_version_id?: string;
+      ontology_version: string;
+      workflow_version: string;
+      provider: string;
+      model: string;
+      limits: components["schemas"]["RunLimits"];
+      usage: {
+        calls: number;
+        input_tokens: number;
+        output_tokens: number;
+        cost_usd: string;
+      };
+      version: number;
+      error?: Record<string, never> | null;
+      /** Format: date-time */
+      created_at: string;
+    };
+    /** @description Persisted extraction run event; SSE `data:` payload. Schema: https://contracts.fel.dev/schemas/extraction-event/v1. */
+    ExtractionEvent: {
+      /** @constant */
+      schema_version: "extraction-event/v1";
+      id: number;
+      /** Format: uuid */
+      run_id: string;
+      /** @enum {string} */
+      type:
+        | "run_queued"
+        | "run_started"
+        | "step_started"
+        | "step_completed"
+        | "step_failed"
+        | "budget_updated"
+        | "proposals_persisted"
+        | "review_waiting"
+        | "review_completed"
+        | "run_succeeded"
+        | "run_failed"
+        | "run_cancelled"
+        | "heartbeat";
+      /** Format: date-time */
+      occurred_at: string;
+      /** @description IDs, counts, states and redacted errors only; no source or prompt text. */
+      payload: {
+        [key: string]: unknown;
+      };
+    };
+    ExtractionPayload: components["schemas"]["extraction-payload.schema"];
+    ExtractionProposal: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      run_id: string;
+      /** @enum {string} */
+      kind: "kpi" | "guidance" | "revenue_driver";
+      metric_id: string;
+      payload: components["schemas"]["extraction-payload.schema"];
+      evidence: components["schemas"]["EvidenceEdge"][];
+      record_confidence: string;
+      field_confidences: {
+        [key: string]: string;
+      };
+      validations: {
+        code: string;
+        /** @enum {string} */
+        status: "pass" | "warning" | "fail";
+        detail?: Record<string, never>;
+      }[];
+      state: components["schemas"]["ProposalState"];
+      /** @enum {string} */
+      review_priority: "normal" | "high";
+      version: number;
+    };
+    EvidenceEdge: {
+      /** Format: uuid */
+      source_span_id: string;
+      /** Format: uuid */
+      document_version_id: string;
+      /** @enum {string} */
+      role: "supports" | "definition" | "conflicts" | "derivation_input";
+      /** @enum {string} */
+      citation_status: "verified" | "partial" | "contradictory" | "invalid";
+    };
+    ReviewCommand: {
+      /** @enum {string} */
+      action: "accept" | "edit" | "reject" | "merge";
+      extraction_ids: string[];
+      /** @description Must contain exactly one key for every extraction_id; any mismatch fails the entire transaction with 412. */
+      expected_versions: {
+        [key: string]: number;
+      };
+      reason: string;
+      patch?: Record<string, never> | null;
+      conflict_resolution?: Record<string, never> | null;
+    };
+    ReviewResult: {
+      /** Format: uuid */
+      review_id: string;
+      action: string;
+      proposal_states: Record<string, never>;
+      approved_record_ids: string[];
+    };
+    CorrectionCommand: {
+      reason: string;
+      payload: components["schemas"]["extraction-payload.schema"];
+      evidence: components["schemas"]["EvidenceEdge"][];
+    };
+    ApprovedExtraction: {
+      /** Format: uuid */
+      record_id: string;
+      /** Format: uuid */
+      version_id: string;
+      /** Format: uuid */
+      parent_version_id?: string | null;
+      version: number;
+      /** @enum {string} */
+      kind: "kpi" | "guidance" | "revenue_driver";
+      metric_id: string;
+      payload: components["schemas"]["extraction-payload.schema"];
+      evidence: components["schemas"]["EvidenceEdge"][];
+      evidence_manifest_hash: string;
+      ontology_version: string;
+      /** Format: uuid */
+      approved_by: string;
+      /** Format: date-time */
+      created_at: string;
+    };
     /**
      * NormalizedFinancialFact
      * @description Monetary values are decimal strings, never binary floats (spec 11.4).
@@ -835,6 +1183,413 @@ export interface components {
       reported_or_derived: "reported" | "derived";
       confidence?: number;
     };
+    period: {
+      /** @enum {unknown} */
+      type: "instant" | "duration" | "trailing_window" | "forecast";
+      /** Format: date */
+      instant?: string;
+      /** Format: date */
+      start?: string;
+      /** Format: date */
+      end?: string;
+      fiscal_period?: string | null;
+    };
+    guidanceBase: {
+      /** @constant */
+      schema_version: "extraction-payload/v1";
+      /** @constant */
+      kind: "guidance";
+      /** Format: uuid */
+      entity_id: string;
+      issuer_label: string;
+      metric_id: string;
+      raw_value: string;
+      unit?: string;
+      currency?: string | null;
+      scale?: number;
+      /** @enum {unknown} */
+      sign?: "positive" | "negative" | "zero";
+      period: components["schemas"]["period"];
+      dimensions: {
+        [key: string]: string;
+      };
+      definition?: string | null;
+      qualifiers: Record<string, never>;
+      /** @constant */
+      reported_or_derived: "management_assertion";
+    };
+    kpi: {
+      /** @constant */
+      schema_version: "extraction-payload/v1";
+      /** @constant */
+      kind: "kpi";
+      /** Format: uuid */
+      entity_id: string;
+      issuer_label: string;
+      metric_id: string;
+      raw_value: string;
+      value: string;
+      unit: string;
+      currency?: string | null;
+      scale: number;
+      /** @enum {unknown} */
+      sign: "positive" | "negative" | "zero";
+      period: components["schemas"]["period"];
+      dimensions: {
+        [key: string]: string;
+      };
+      definition?: string | null;
+      qualifiers: Record<string, never>;
+      /** @enum {unknown} */
+      reported_or_derived: "reported" | "derived";
+    };
+    guidancePoint: components["schemas"]["guidanceBase"] & {
+      schema_version?: unknown;
+      kind?: unknown;
+      entity_id?: unknown;
+      issuer_label?: unknown;
+      metric_id?: unknown;
+      raw_value?: unknown;
+      /** @constant */
+      shape?: "point";
+      value: string;
+      unit: unknown;
+      currency?: unknown;
+      scale: unknown;
+      sign: unknown;
+      period?: unknown;
+      dimensions?: unknown;
+      definition?: unknown;
+      qualifiers?: unknown;
+      reported_or_derived?: unknown;
+    };
+    guidanceRange: components["schemas"]["guidanceBase"] & {
+      schema_version?: unknown;
+      kind?: unknown;
+      entity_id?: unknown;
+      issuer_label?: unknown;
+      metric_id?: unknown;
+      raw_value?: unknown;
+      /** @constant */
+      shape?: "range";
+      low: string;
+      high: string;
+      unit: unknown;
+      currency?: unknown;
+      scale: unknown;
+      sign: unknown;
+      period?: unknown;
+      dimensions?: unknown;
+      definition?: unknown;
+      qualifiers?: unknown;
+      reported_or_derived?: unknown;
+    };
+    guidanceFloor: components["schemas"]["guidanceBase"] & {
+      schema_version?: unknown;
+      kind?: unknown;
+      entity_id?: unknown;
+      issuer_label?: unknown;
+      metric_id?: unknown;
+      raw_value?: unknown;
+      /** @constant */
+      shape?: "floor";
+      low: string;
+      unit: unknown;
+      currency?: unknown;
+      scale: unknown;
+      sign: unknown;
+      period?: unknown;
+      dimensions?: unknown;
+      definition?: unknown;
+      qualifiers?: unknown;
+      reported_or_derived?: unknown;
+    };
+    guidanceCeiling: components["schemas"]["guidanceBase"] & {
+      schema_version?: unknown;
+      kind?: unknown;
+      entity_id?: unknown;
+      issuer_label?: unknown;
+      metric_id?: unknown;
+      raw_value?: unknown;
+      /** @constant */
+      shape?: "ceiling";
+      high: string;
+      unit: unknown;
+      currency?: unknown;
+      scale: unknown;
+      sign: unknown;
+      period?: unknown;
+      dimensions?: unknown;
+      definition?: unknown;
+      qualifiers?: unknown;
+      reported_or_derived?: unknown;
+    };
+    guidanceQualitative: components["schemas"]["guidanceBase"] & {
+      schema_version?: unknown;
+      kind?: unknown;
+      entity_id?: unknown;
+      issuer_label?: unknown;
+      metric_id?: unknown;
+      raw_value?: unknown;
+      /** @constant */
+      shape?: "qualitative";
+      text: string;
+      period?: unknown;
+      dimensions?: unknown;
+      definition?: unknown;
+      qualifiers?: unknown;
+      reported_or_derived?: unknown;
+    };
+    revenueDriver: {
+      /** @constant */
+      schema_version: "extraction-payload/v1";
+      /** @constant */
+      kind: "revenue_driver";
+      /** Format: uuid */
+      entity_id: string;
+      issuer_label: string;
+      metric_id: string;
+      raw_value: string;
+      /** @enum {string} */
+      category:
+        | "price"
+        | "volume"
+        | "mix"
+        | "acquisition"
+        | "retention"
+        | "usage"
+        | "seats"
+        | "fx"
+        | "services"
+        | "cost"
+        | "other";
+      description: string;
+      /** @enum {unknown} */
+      direction: "positive" | "negative" | "mixed" | "unknown";
+      target_metric_ids: string[];
+      period: components["schemas"]["period"];
+      dimensions: {
+        [key: string]: string;
+      };
+      definition?: string | null;
+      qualifiers: Record<string, never>;
+      /** @constant */
+      reported_or_derived: "management_assertion";
+    };
+    /** ExtractionPayload */
+    "extraction-payload.schema": {
+      $defs: {
+        period: {
+          /** @enum {unknown} */
+          type: "instant" | "duration" | "trailing_window" | "forecast";
+          /** Format: date */
+          instant?: string;
+          /** Format: date */
+          start?: string;
+          /** Format: date */
+          end?: string;
+          fiscal_period?: string | null;
+        };
+        numericFields: {
+          unit: string;
+          currency?: string | null;
+          scale: number;
+          /** @enum {unknown} */
+          sign: "positive" | "negative" | "zero";
+        };
+        commonProperties: unknown;
+        kpi: {
+          /** @constant */
+          schema_version: "extraction-payload/v1";
+          /** @constant */
+          kind: "kpi";
+          /** Format: uuid */
+          entity_id: string;
+          issuer_label: string;
+          metric_id: string;
+          raw_value: string;
+          value: string;
+          unit: string;
+          currency?: string | null;
+          scale: number;
+          /** @enum {unknown} */
+          sign: "positive" | "negative" | "zero";
+          period: components["schemas"]["period"];
+          dimensions: {
+            [key: string]: string;
+          };
+          definition?: string | null;
+          qualifiers: Record<string, never>;
+          /** @enum {unknown} */
+          reported_or_derived: "reported" | "derived";
+        };
+        guidanceBase: {
+          /** @constant */
+          schema_version: "extraction-payload/v1";
+          /** @constant */
+          kind: "guidance";
+          /** Format: uuid */
+          entity_id: string;
+          issuer_label: string;
+          metric_id: string;
+          raw_value: string;
+          unit?: string;
+          currency?: string | null;
+          scale?: number;
+          /** @enum {unknown} */
+          sign?: "positive" | "negative" | "zero";
+          period: components["schemas"]["period"];
+          dimensions: {
+            [key: string]: string;
+          };
+          definition?: string | null;
+          qualifiers: Record<string, never>;
+          /** @constant */
+          reported_or_derived: "management_assertion";
+        };
+        guidancePoint: components["schemas"]["guidanceBase"] & {
+          schema_version?: unknown;
+          kind?: unknown;
+          entity_id?: unknown;
+          issuer_label?: unknown;
+          metric_id?: unknown;
+          raw_value?: unknown;
+          /** @constant */
+          shape?: "point";
+          value: string;
+          unit: unknown;
+          currency?: unknown;
+          scale: unknown;
+          sign: unknown;
+          period?: unknown;
+          dimensions?: unknown;
+          definition?: unknown;
+          qualifiers?: unknown;
+          reported_or_derived?: unknown;
+        };
+        guidanceRange: components["schemas"]["guidanceBase"] & {
+          schema_version?: unknown;
+          kind?: unknown;
+          entity_id?: unknown;
+          issuer_label?: unknown;
+          metric_id?: unknown;
+          raw_value?: unknown;
+          /** @constant */
+          shape?: "range";
+          low: string;
+          high: string;
+          unit: unknown;
+          currency?: unknown;
+          scale: unknown;
+          sign: unknown;
+          period?: unknown;
+          dimensions?: unknown;
+          definition?: unknown;
+          qualifiers?: unknown;
+          reported_or_derived?: unknown;
+        };
+        guidanceFloor: components["schemas"]["guidanceBase"] & {
+          schema_version?: unknown;
+          kind?: unknown;
+          entity_id?: unknown;
+          issuer_label?: unknown;
+          metric_id?: unknown;
+          raw_value?: unknown;
+          /** @constant */
+          shape?: "floor";
+          low: string;
+          unit: unknown;
+          currency?: unknown;
+          scale: unknown;
+          sign: unknown;
+          period?: unknown;
+          dimensions?: unknown;
+          definition?: unknown;
+          qualifiers?: unknown;
+          reported_or_derived?: unknown;
+        };
+        guidanceCeiling: components["schemas"]["guidanceBase"] & {
+          schema_version?: unknown;
+          kind?: unknown;
+          entity_id?: unknown;
+          issuer_label?: unknown;
+          metric_id?: unknown;
+          raw_value?: unknown;
+          /** @constant */
+          shape?: "ceiling";
+          high: string;
+          unit: unknown;
+          currency?: unknown;
+          scale: unknown;
+          sign: unknown;
+          period?: unknown;
+          dimensions?: unknown;
+          definition?: unknown;
+          qualifiers?: unknown;
+          reported_or_derived?: unknown;
+        };
+        guidanceQualitative: components["schemas"]["guidanceBase"] & {
+          schema_version?: unknown;
+          kind?: unknown;
+          entity_id?: unknown;
+          issuer_label?: unknown;
+          metric_id?: unknown;
+          raw_value?: unknown;
+          /** @constant */
+          shape?: "qualitative";
+          text: string;
+          period?: unknown;
+          dimensions?: unknown;
+          definition?: unknown;
+          qualifiers?: unknown;
+          reported_or_derived?: unknown;
+        };
+        revenueDriver: {
+          /** @constant */
+          schema_version: "extraction-payload/v1";
+          /** @constant */
+          kind: "revenue_driver";
+          /** Format: uuid */
+          entity_id: string;
+          issuer_label: string;
+          metric_id: string;
+          raw_value: string;
+          /** @enum {string} */
+          category:
+            | "price"
+            | "volume"
+            | "mix"
+            | "acquisition"
+            | "retention"
+            | "usage"
+            | "seats"
+            | "fx"
+            | "services"
+            | "cost"
+            | "other";
+          description: string;
+          /** @enum {unknown} */
+          direction: "positive" | "negative" | "mixed" | "unknown";
+          target_metric_ids: string[];
+          period: components["schemas"]["period"];
+          dimensions: {
+            [key: string]: string;
+          };
+          definition?: string | null;
+          qualifiers: Record<string, never>;
+          /** @constant */
+          reported_or_derived: "management_assertion";
+        };
+      };
+    } & (
+      | components["schemas"]["kpi"]
+      | components["schemas"]["guidancePoint"]
+      | components["schemas"]["guidanceRange"]
+      | components["schemas"]["guidanceFloor"]
+      | components["schemas"]["guidanceCeiling"]
+      | components["schemas"]["guidanceQualitative"]
+      | components["schemas"]["revenueDriver"]
+    );
   };
   responses: {
     /** @description Error envelope (all non-2xx responses use this shape). */
@@ -856,6 +1611,8 @@ export interface components {
     EntityId: string;
     QueryId: string;
     RunId: string;
+    ExtractionId: string;
+    Cursor: string;
   };
   requestBodies: never;
   headers: {
@@ -1365,6 +2122,339 @@ export interface operations {
           [name: string]: unknown;
         };
         content?: never;
+      };
+      default: components["responses"]["Error"];
+    };
+  };
+  listExtractionRuns: {
+    parameters: {
+      query?: {
+        cursor?: components["parameters"]["Cursor"];
+      };
+      header?: never;
+      path: {
+        workspaceId: components["parameters"]["WorkspaceId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Extraction runs. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            items: components["schemas"]["ExtractionRun"][];
+            next_cursor?: string | null;
+          };
+        };
+      };
+      default: components["responses"]["Error"];
+    };
+  };
+  createExtractionRun: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Client-chosen key; retries with the same key return the original result and never duplicate work. */
+        "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+      };
+      path: {
+        workspaceId: components["parameters"]["WorkspaceId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ExtractionRunCreate"];
+      };
+    };
+    responses: {
+      /** @description Extraction run accepted. */
+      202: {
+        headers: {
+          ETag: components["headers"]["ETag"];
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ExtractionRun"];
+        };
+      };
+      default: components["responses"]["Error"];
+    };
+  };
+  getExtractionRun: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        runId: components["parameters"]["RunId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Extraction run. */
+      200: {
+        headers: {
+          ETag: components["headers"]["ETag"];
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ExtractionRun"];
+        };
+      };
+      default: components["responses"]["Error"];
+    };
+  };
+  cancelExtractionRun: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Client-chosen key; retries with the same key return the original result and never duplicate work. */
+        "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+        /** @description ETag of the version being updated. */
+        "If-Match": components["parameters"]["IfMatch"];
+      };
+      path: {
+        runId: components["parameters"]["RunId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Cancel requested. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ExtractionRun"];
+        };
+      };
+      default: components["responses"]["Error"];
+    };
+  };
+  streamExtractionRunEvents: {
+    parameters: {
+      query?: never;
+      header?: {
+        "Last-Event-ID"?: number;
+      };
+      path: {
+        runId: components["parameters"]["RunId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description text/event-stream of ExtractionEvent JSON payloads. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "text/event-stream": components["schemas"]["ExtractionEvent"];
+        };
+      };
+      401: components["responses"]["Error"];
+      403: components["responses"]["Error"];
+      404: components["responses"]["Error"];
+      default: components["responses"]["Error"];
+    };
+  };
+  rerunExtraction: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Client-chosen key; retries with the same key return the original result and never duplicate work. */
+        "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+      };
+      path: {
+        runId: components["parameters"]["RunId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": {
+          reason: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Child run accepted. */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ExtractionRun"];
+        };
+      };
+      default: components["responses"]["Error"];
+    };
+  };
+  listExtractions: {
+    parameters: {
+      query?: {
+        cursor?: components["parameters"]["Cursor"];
+        state?: components["schemas"]["ProposalState"];
+      };
+      header?: never;
+      path: {
+        workspaceId: components["parameters"]["WorkspaceId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Extraction proposals. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            items: components["schemas"]["ExtractionProposal"][];
+            next_cursor?: string | null;
+          };
+        };
+      };
+      default: components["responses"]["Error"];
+    };
+  };
+  getExtraction: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        extractionId: components["parameters"]["ExtractionId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Extraction proposal. */
+      200: {
+        headers: {
+          ETag: components["headers"]["ETag"];
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ExtractionProposal"];
+        };
+      };
+      default: components["responses"]["Error"];
+    };
+  };
+  reviewExtractions: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Client-chosen key; retries with the same key return the original result and never duplicate work. */
+        "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ReviewCommand"];
+      };
+    };
+    responses: {
+      /** @description Atomic review result. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ReviewResult"];
+        };
+      };
+      default: components["responses"]["Error"];
+    };
+  };
+  getApprovedExtraction: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        recordId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Current approved version. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApprovedExtraction"];
+        };
+      };
+      default: components["responses"]["Error"];
+    };
+  };
+  listApprovedExtractionVersions: {
+    parameters: {
+      query?: {
+        cursor?: components["parameters"]["Cursor"];
+      };
+      header?: never;
+      path: {
+        recordId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Immutable history. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApprovedExtraction"][];
+        };
+      };
+      default: components["responses"]["Error"];
+    };
+  };
+  correctApprovedExtraction: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Client-chosen key; retries with the same key return the original result and never duplicate work. */
+        "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+        /** @description ETag of the version being updated. */
+        "If-Match": components["parameters"]["IfMatch"];
+      };
+      path: {
+        recordId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["CorrectionCommand"];
+      };
+    };
+    responses: {
+      /** @description Immutable child version. */
+      201: {
+        headers: {
+          ETag: components["headers"]["ETag"];
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApprovedExtraction"];
+        };
       };
       default: components["responses"]["Error"];
     };
