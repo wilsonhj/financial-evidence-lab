@@ -301,7 +301,7 @@ packages:
     depends_on: [M2-CONTRACT]
     team: contracts
     branch: agent/m3-extraction-contract-v0.4
-    status: active # dispatched 2026-07-19 from main @ 2f4a513; exclusive contracts/migrations/providers; parallel with #57; never concurrent with another contracts owner
+    status: merged # PR #112 @ 0290446 (2026-07-19); v0.4.0 + migration 0004 frozen; issue #101 closed
     allowed_paths:
       - db/migrations/**
       - packages/contracts/**
