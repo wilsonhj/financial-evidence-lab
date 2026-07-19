@@ -267,7 +267,7 @@ packages:
     depends_on: [M2-CONTRACT, READER-CROSS-STACK] # packages merged via #105+#106; does NOT depend on READER-PROD-SMOKE
     team: retrieval
     branch: agent/m2-retrieval-backend
-    status: ready # post-#105/#106; mock-first; parallel-safe with #101 (no path overlap)
+    status: active # dispatched 2026-07-19 from main @ e9b511e; exclusive packages/retrieval + apps/api; parallel with #101; scaffold grant on #57 for pyproject/Makefile/ci.yml dir lists
     allowed_paths: [packages/retrieval/**, apps/api/**]
   - id: M2-CLAIMS-VERIFICATION # claims pipeline + smoke benchmark + retrieval/perf suite (no Atlas)
     issue: 58
