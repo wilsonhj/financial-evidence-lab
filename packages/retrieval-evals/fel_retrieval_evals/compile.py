@@ -133,6 +133,7 @@ class _RecordCompiler:
         expected = self._compile_expected(answerable, record["expected_answer"])
         evidence = self._compile_evidence(answerable, record["evidence"])
         self._check_documents_reviewed(answerable, record["documents_reviewed"])
+        future_revisions = self._compile_future_revisions(record)
         if self._corpus is not None:
             self._check_temporal(record["as_of"], record)
 
@@ -148,7 +149,36 @@ class _RecordCompiler:
             expected_answer=expected,
             evidence=tuple(evidence),
             documents_reviewed=tuple(str(a) for a in record["documents_reviewed"]),
+            future_revisions=future_revisions,
         )
+
+    def _compile_future_revisions(self, record: dict[str, Any]) -> tuple[str, ...]:
+        """Validate the optional post-cutoff revisions a temporal trap references.
+
+        These are filings issued *after* ``as_of`` that the correct answer must
+        ignore; they are excluded from the temporal-leakage check. Each must be a
+        well-formed accession and must NOT also appear in the cutoff-visible
+        ``evidence`` / ``documents_reviewed`` (a filing cannot be both reviewed at
+        the cutoff and a future revision). When a corpus is pinned, each is
+        additionally required to be accepted strictly after ``as_of`` — a
+        "future revision" that isn't actually future is malformed.
+        """
+        raw = record.get("future_revisions", [])
+        revisions = tuple(str(a) for a in raw)
+        cited = {e["accession"] for e in record["evidence"]} | set(
+            str(a) for a in record["documents_reviewed"]
+        )
+        for accession in revisions:
+            if not _ACCESSION_RE.match(accession):
+                self._fail(
+                    "MALFORMED_RECORD", f"malformed future_revisions accession {accession!r}"
+                )
+            if accession in cited:
+                self._fail(
+                    "MALFORMED_RECORD",
+                    f"{accession} is both cutoff-visible and a future_revision",
+                )
+        return revisions
 
     # --- expected answer ---------------------------------------------------
     def _compile_expected(
@@ -286,6 +316,9 @@ class _RecordCompiler:
             0,
             0,
         )
+        # Cutoff-visible set: cited evidence + reviewed corpus. future_revisions
+        # are deliberately excluded — they are the post-cutoff filings a trap
+        # references and the answer must ignore.
         cited = {e["accession"] for e in record["evidence"]} | set(record["documents_reviewed"])
         for accession in sorted(cited):
             ts = corpus.acceptance_timestamp(accession)
@@ -302,11 +335,48 @@ class _RecordCompiler:
                     "TEMPORAL_LEAKAGE",
                     f"{accession} accepted on the cutoff day under a provisional midnight cutoff",
                 )
+        # A declared future revision must actually be future: present in the
+        # corpus and accepted strictly after the cutoff. Otherwise the field is a
+        # loophole for smuggling a pre-cutoff doc out of the temporal check.
+        for accession in sorted(set(str(a) for a in record.get("future_revisions", []))):
+            ts = corpus.acceptance_timestamp(accession)
+            if ts is None:
+                self._fail("UNRESOLVED_ANCHOR", f"{accession} is absent from the pinned corpus")
+            elif ts <= as_of:
+                self._fail(
+                    "FUTURE_REVISION_NOT_FUTURE",
+                    f"future_revision {accession} accepted {ts.isoformat()} "
+                    f"not after cutoff {as_of.isoformat()}",
+                )
 
 
 def _checksum(body: dict[str, Any]) -> str:
     canonical = json.dumps(body, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
     return "sha256:" + hashlib.sha256(canonical.encode()).hexdigest()
+
+
+class ChecksumMismatch(RuntimeError):
+    """A committed manifest's stored checksum does not match its body."""
+
+
+def load_and_verify_manifest(path: str | Path) -> dict[str, Any]:
+    """Load a committed manifest and verify its checksum before use.
+
+    The compile-time checksum is only meaningful if something re-verifies it on
+    load — otherwise a hand-edit to the pinned artifact (e.g. tweaking an expected
+    answer to make a benchmark pass) is caught by nothing. Recomputes the sha256
+    over the canonical body and raises :class:`ChecksumMismatch` on any drift.
+    """
+    data: dict[str, Any] = json.loads(Path(path).read_text())
+    stored = data.get("checksum")
+    body = {k: v for k, v in data.items() if k != "checksum"}
+    recomputed = _checksum(body)
+    if stored != recomputed:
+        raise ChecksumMismatch(
+            f"{path}: stored checksum {stored!r} != recomputed {recomputed!r} "
+            "(the pinned manifest was edited without recompiling)"
+        )
+    return data
 
 
 def compile_manifest(

@@ -12,6 +12,7 @@ from fel_retrieval_evals.metrics import (
     aggregate_metrics,
     build_gate_report,
     hnsw_recall_at_k,
+    metric_supports,
     question_recall_at_k,
     rate,
     reranker_triggered,
@@ -55,7 +56,7 @@ def test_aggregate_metrics_all_pass() -> None:
     assert metrics["recall_at_10"] == Decimal(1)
     assert metrics["temporal_validity"] == Decimal(1)
     assert metrics["numeric_accuracy"] == Decimal(1)
-    report = build_gate_report(metrics)
+    report = build_gate_report(metrics, supports=metric_supports(outcomes))
     assert report.passed is True
     assert report.reranker_triggered is False
 
@@ -103,6 +104,24 @@ def test_numeric_accuracy_only_over_numeric_questions() -> None:
     assert aggregate_metrics(outcomes)["numeric_accuracy"] == Decimal(0)
 
 
-def test_empty_outcomes_are_vacuously_perfect() -> None:
+def test_empty_outcomes_fail_the_gate_when_supports_supplied() -> None:
+    # Per-question rates are still vacuously 1 (a negative case has no gold)...
     metrics = aggregate_metrics([])
     assert all(v == Decimal(1) for v in metrics.values())
+    supports = metric_supports([])
+    assert all(s == 0 for s in supports.values())
+    # ...but a *release gate* must not PASS on data that was never measured.
+    report = build_gate_report(metrics, supports=supports)
+    assert report.passed is False
+    assert all(r.passed is False for r in report.results)
+    # Legacy threshold-only grading (no supports) still reports the vacuous pass.
+    assert build_gate_report(metrics).passed is True
+
+
+def test_gate_fails_metric_with_zero_support() -> None:
+    # All rates 1.0, but zero numeric questions were graded -> numeric fails closed.
+    outcomes = [QuestionOutcome(recall_at_10=Decimal(1), temporal_ok=True, numeric_expected=False)]
+    report = build_gate_report(aggregate_metrics(outcomes), supports=metric_supports(outcomes))
+    numeric = next(r for r in report.results if r.name == "numeric_accuracy")
+    assert numeric.passed is False
+    assert report.passed is False

@@ -38,6 +38,7 @@ __all__ = [
     "aggregate_metrics",
     "build_gate_report",
     "hnsw_recall_at_k",
+    "metric_supports",
     "question_recall_at_k",
     "rate",
     "reranker_triggered",
@@ -121,6 +122,24 @@ def aggregate_metrics(outcomes: Sequence[QuestionOutcome]) -> dict[str, Decimal]
     }
 
 
+def metric_supports(outcomes: Sequence[QuestionOutcome]) -> dict[str, int]:
+    """Denominator (populated sample size) behind each aggregate metric.
+
+    A release gate must not PASS on absent data: a metric whose denominator is
+    zero was never measured. ``rate`` returns a vacuous 1 for an empty
+    denominator (correct per-question — a negative case has no gold), but the
+    *gate* uses these supports to fail closed when nothing was actually graded.
+    """
+    n = len(outcomes)
+    return {
+        "temporal_validity": n,
+        "recall_at_10": n,
+        "numeric_accuracy": sum(1 for o in outcomes if o.numeric_expected),
+        "entailment_precision": sum(o.supporting_citations for o in outcomes),
+        "citation_completeness": sum(o.rendered_claims for o in outcomes),
+    }
+
+
 @dataclass(frozen=True)
 class GateResult:
     """One metric graded against its threshold."""
@@ -173,16 +192,27 @@ def reranker_triggered(recall_at_10: Decimal) -> bool:
 
 
 def build_gate_report(
-    metrics: dict[str, Decimal], *, thresholds: dict[str, Decimal] | None = None
+    metrics: dict[str, Decimal],
+    *,
+    supports: dict[str, int] | None = None,
+    thresholds: dict[str, Decimal] | None = None,
 ) -> GateReport:
-    """Grade every metric against its threshold and decide the reranker trigger."""
+    """Grade every metric against its threshold and decide the reranker trigger.
+
+    Pass ``supports`` (from :func:`metric_supports`) to make the gate fail closed:
+    a metric whose denominator is zero was never measured and cannot PASS,
+    regardless of the vacuous ``1.0`` its rate reports. Omitting ``supports``
+    preserves the legacy threshold-only grading.
+    """
     active = thresholds if thresholds is not None else SMOKE_THRESHOLDS
     results = tuple(
         GateResult(
             name=name,
             value=metrics[name],
             threshold=active[name],
-            passed=metrics[name] >= active[name],
+            passed=(
+                metrics[name] >= active[name] and (supports is None or supports.get(name, 0) > 0)
+            ),
         )
         for name in sorted(active)
     )

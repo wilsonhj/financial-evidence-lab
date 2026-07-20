@@ -2,15 +2,24 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
 import pytest
 
-from fel_retrieval_evals.compile import CompilationError, compile_manifest, load_seed
+from fel_retrieval_evals.compile import (
+    ChecksumMismatch,
+    CompilationError,
+    compile_manifest,
+    load_and_verify_manifest,
+    load_seed,
+)
 from fel_retrieval_evals.corpus import JsonCorpus
 
 ACC = "0001628280-26-038798"
+FUTURE_ACC = "0001628280-26-999999"
+_REPO_ROOT = Path(__file__).resolve().parents[3]
 SECTION = "Financial Highlights - Revenue"
 QUOTE = "Total revenue was $687.6 million for the first quarter of fiscal 2027."
 
@@ -188,3 +197,76 @@ def test_real_seed_structural_compile() -> None:
     assert compile_manifest(load_seed(seed_path)).checksum == manifest.checksum
     negatives = [e for e in manifest.entries if not e.answerable]
     assert negatives and all(e.documents_reviewed for e in negatives)
+
+
+# --- future_revisions (temporal-cutoff traps; #58 review) ------------------
+def _corpus2(
+    *, cited_ts: str = "2026-05-27T20:05:00Z", future_ts: str = "2026-06-15T12:00:00Z"
+) -> JsonCorpus:
+    """Two-doc corpus: ACC is the pre-cutoff cited filing, FUTURE_ACC a revision."""
+    span = [{"section": SECTION, "span_id": "span-0", "text": f"... {QUOTE} ..."}]
+    return JsonCorpus(
+        {
+            ACC: {"acceptance_timestamp": cited_ts, "spans": span},
+            FUTURE_ACC: {"acceptance_timestamp": future_ts, "spans": span},
+        }
+    )
+
+
+def test_future_revision_excluded_from_temporal_and_compiles() -> None:
+    # A trap cites the pre-cutoff filing and lists the later revision in
+    # future_revisions (NOT documents_reviewed) -> compiles under a corpus.
+    record = _record(future_revisions=[FUTURE_ACC])
+    manifest = compile_manifest([record], corpus=_corpus2(), corpus_version_id="cv-1")
+    assert manifest.entries[0].future_revisions == (FUTURE_ACC,)
+    assert manifest.entries[0].to_dict()["future_revisions"] == [FUTURE_ACC]
+
+
+def test_future_filing_in_documents_reviewed_still_leaks() -> None:
+    # The exact conflict Option B resolves: the same post-cutoff filing placed in
+    # documents_reviewed must still fail TEMPORAL_LEAKAGE.
+    record = _record(documents_reviewed=[ACC, FUTURE_ACC])
+    assert "TEMPORAL_LEAKAGE" in _codes([record], corpus=_corpus2())
+
+
+def test_future_revision_not_actually_future_fails() -> None:
+    # A declared future_revision accepted at/before the cutoff is malformed.
+    record = _record(future_revisions=[FUTURE_ACC])
+    corpus = _corpus2(future_ts="2026-05-01T00:00:00Z")  # before the 2026-05-28 cutoff
+    assert "FUTURE_REVISION_NOT_FUTURE" in _codes([record], corpus=corpus)
+
+
+def test_future_revision_also_cited_is_malformed() -> None:
+    # A filing cannot be both cutoff-visible evidence and a future revision.
+    assert "MALFORMED_RECORD" in _codes([_record(future_revisions=[ACC])])
+
+
+def test_seed_traps_carry_future_revisions() -> None:
+    seed = load_seed(_REPO_ROOT / "evals" / "datasets" / "benchmark-seed" / "questions.jsonl")
+    traps = [r for r in seed if r.get("category") == "temporal_cutoff_trap"]
+    assert traps and all(r.get("future_revisions") for r in traps)
+    for r in traps:  # a trap's future revision is never also a reviewed/cited doc
+        cited = {e["accession"] for e in r["evidence"]} | set(r["documents_reviewed"])
+        assert not (set(r["future_revisions"]) & cited)
+
+
+# --- committed-manifest checksum is verified on load (#58 review) ----------
+_COMMITTED_MANIFEST = _REPO_ROOT / "evals" / "datasets" / "m2-smoke" / "manifest.json"
+
+
+def test_committed_manifest_checksum_verifies_and_matches_seed() -> None:
+    data = load_and_verify_manifest(_COMMITTED_MANIFEST)  # raises ChecksumMismatch on drift
+    assert data["question_count"] == 65
+    fresh = compile_manifest(
+        load_seed(_REPO_ROOT / "evals" / "datasets" / "benchmark-seed" / "questions.jsonl")
+    )
+    assert data["checksum"] == fresh.checksum
+
+
+def test_tampered_manifest_fails_verification(tmp_path: Path) -> None:
+    data = json.loads(_COMMITTED_MANIFEST.read_text())
+    data["entries"][0]["question"] = "TAMPERED to pass a benchmark"
+    target = tmp_path / "manifest.json"
+    target.write_text(json.dumps(data))
+    with pytest.raises(ChecksumMismatch):
+        load_and_verify_manifest(target)

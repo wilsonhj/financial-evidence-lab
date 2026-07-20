@@ -89,6 +89,10 @@ class ManifestEntry:
     expected_answer: ExpectedAnswer | None
     evidence: tuple[Evidence, ...]
     documents_reviewed: tuple[str, ...]
+    # Filings issued *after* ``as_of`` that a temporal-cutoff trap deliberately
+    # references (the later revision the correct answer must ignore). Excluded
+    # from the temporal-leakage check; ``documents_reviewed`` stays <= ``as_of``.
+    future_revisions: tuple[str, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -103,6 +107,7 @@ class ManifestEntry:
             ),
             "evidence": [e.to_dict() for e in self.evidence],
             "documents_reviewed": list(self.documents_reviewed),
+            "future_revisions": list(self.future_revisions),
         }
 
 
