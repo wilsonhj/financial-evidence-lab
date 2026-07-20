@@ -334,6 +334,28 @@ export const MOCK_TRACE: RetrievalTrace = {
   finished_at: "2026-07-01T12:00:04Z",
 };
 
+export const MOCK_ABSTAINED_RUN_ID = "ffffffff-0000-4000-8000-000000000003";
+
+/** An abstained run: candidates retrieved but none met the support threshold. */
+export const MOCK_ABSTAINED_TRACE: RetrievalTrace = {
+  ...MOCK_TRACE,
+  run_id: MOCK_ABSTAINED_RUN_ID,
+  status: "abstained",
+  claims: [],
+  decisions: [
+    ...MOCK_TRACE.decisions,
+    {
+      stage: "abstention",
+      code: "insufficient_support",
+      item_ids: [],
+      detail: { threshold: 0.6 },
+      occurred_at: "2026-07-01T12:00:04Z",
+    },
+  ],
+  events: [...MOCK_EVENTS.slice(0, 10), { ...MOCK_EVENTS[10]!, seq: 11, type: "run_abstained" }],
+  finished_at: "2026-07-01T12:00:04Z",
+};
+
 export const MOCK_QUERY_SNAPSHOT: QuerySnapshot = {
   query_id: MOCK_QUERY_ID,
   parent_query_id: null,

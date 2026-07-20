@@ -9,6 +9,7 @@ import type {
 import {
   claimViews,
   decisionTimeline,
+  describeRunState,
   laneColumns,
   LANES,
   partitionCandidates,
@@ -325,11 +326,22 @@ export function ObservatoryTrace({
   snapshot?: QuerySnapshot;
   documentIdByVersionId: Readonly<Record<string, string>>;
 }) {
+  const runState = describeRunState(trace.status);
   return (
     <div className="obs-trace">
       <p className="obs-status">
         Run status: <span className="badge badge-info">{trace.status}</span>
       </p>
+      {runState && (
+        <section
+          className={`reader-banner ${runState.tone === "warning" ? "citation-error" : ""}`}
+          role={runState.tone === "warning" ? "alert" : "status"}
+          aria-labelledby="obs-runstate-heading"
+        >
+          <h2 id="obs-runstate-heading">{runState.heading}</h2>
+          <p>{runState.description}</p>
+        </section>
+      )}
       <PlanSection snapshot={snapshot} trace={trace} />
       <LaneSection trace={trace} documentIdByVersionId={documentIdByVersionId} />
       <TimelineSection trace={trace} />

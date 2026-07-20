@@ -10,6 +10,46 @@ import type {
 export const LANES = ["dense", "lexical", "facts", "tables"] as const;
 export type Lane = (typeof LANES)[number];
 
+export type RunStatus = RetrievalTrace["status"];
+
+export interface RunStateNotice {
+  tone: "ok" | "warning" | "info";
+  heading: string;
+  description: string;
+}
+
+/**
+ * Distinct, typed run-state notice. Abstention, failure and cancellation are
+ * each their own state — never conflated with a contradiction (a claim-level
+ * outcome) or with a transport/auth error. Returns null for an in-flight or
+ * plainly-succeeded run, which needs no banner.
+ */
+export function describeRunState(status: RunStatus): RunStateNotice | null {
+  switch (status) {
+    case "abstained":
+      return {
+        tone: "warning",
+        heading: "Run abstained",
+        description:
+          "The retriever declined to answer: no candidate set met the support threshold under the effective cutoff.",
+      };
+    case "failed":
+      return {
+        tone: "warning",
+        heading: "Run failed",
+        description: "The run ended before producing a complete, verified answer.",
+      };
+    case "cancelled":
+      return {
+        tone: "info",
+        heading: "Run cancelled",
+        description: "This run was cancelled before completion.",
+      };
+    default:
+      return null;
+  }
+}
+
 /**
  * Independent client-side integrity guard. A candidate may be shown as
  * supported/context evidence ONLY when the server accepted it AND it is not

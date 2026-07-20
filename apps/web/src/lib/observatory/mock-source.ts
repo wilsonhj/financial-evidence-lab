@@ -7,6 +7,8 @@ import type {
 } from "./query-source";
 import { serializeEventFrame, type RetrievalStreamOpener } from "./sse";
 import {
+  MOCK_ABSTAINED_RUN_ID,
+  MOCK_ABSTAINED_TRACE,
   MOCK_EVENTS,
   MOCK_QUERY_ID,
   MOCK_QUERY_SNAPSHOT,
@@ -58,6 +60,9 @@ export class MockObservatorySource implements ObservatoryQuerySource {
   }
 
   getRun(runId: string): Promise<RetrievalTrace> {
+    if (runId === MOCK_ABSTAINED_RUN_ID) {
+      return Promise.resolve(structuredClone(MOCK_ABSTAINED_TRACE));
+    }
     if (runId !== MOCK_RUN_ID && runId !== MOCK_RERUN_ID) {
       return Promise.reject(
         new ObservatoryApiError(404, `/v1/retrieval-runs/${runId}`, "unavailable"),
