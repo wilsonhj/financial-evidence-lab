@@ -278,7 +278,38 @@ def test_create_read_trace_happy_path(
         "input_tokens",
         "output_tokens",
     }
-    assert tj["claims"] == []
+
+
+def test_claims_generated_and_persisted(
+    client: TestClient, org: tuple[str, str], seeded: dict[str, str]
+) -> None:
+    """M2-020: the run decomposes selected context into atomic claims that are
+    persisted with their citation edges and surfaced in the trace."""
+    created = _create(client, org, seeded["workspace_id"])
+    trace = client.get(f"/v1/retrieval-runs/{created['run_id']}", headers=_headers(*org)).json()
+
+    claims = trace["claims"]
+    assert claims, "expected generated claims"
+    # One atomic claim per accepted context item, all in the closed status set.
+    accepted_items = {c["item_id"] for c in trace["candidates"] if c["accepted"]}
+    cited_items = {cit["item_id"] for cl in claims for cit in cl["citations"]}
+    assert cited_items, "expected citation edges"
+    assert cited_items <= accepted_items, "citations must target accepted candidates"
+    for claim in claims:
+        assert claim["status"] in {
+            "supported",
+            "partially_supported",
+            "contradicted",
+            "derived",
+            "unsupported",
+        }
+        for citation in claim["citations"]:
+            assert citation["status"] in {"entailed", "partial", "contradictory", "irrelevant"}
+            assert isinstance(citation["numeric_checks"], dict)
+
+    # claim_generated events are traced; budget records generation usage.
+    assert any(e["type"] == "claim_generated" for e in trace["events"])
+    assert trace["budget_usage"]["output_tokens"] >= 1
 
 
 def test_trace_replay_byte_stable(
