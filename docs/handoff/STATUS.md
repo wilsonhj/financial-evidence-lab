@@ -25,7 +25,7 @@ Last updated: 2026-07-20
 - M2-RETRIEVAL-BACKEND full package: PRs #114 + #119 / issue #57 (closed) — item builder, versioned index publish + exact-vs-HNSW oracle, cutoff-safe lanes, deterministic planner, RRF k=60 fusion, query/trace/SSE/rerun/feedback API with persisted byte-stable replay; acceptance report at `packages/retrieval/ACCEPTANCE.md`.
 - Migration `0005` query-guard role fix (fel_guard_query FOR SHARE vs SELECT-only fel_app): PR #118, with as-fel_app harness regression.
 - Retrieval integration suites isolated in a dedicated `<db>_retrieval` test database (cross-suite FK isolation defect found by first CI exposure): PR #119.
-- CI migration-harness gate (`db/migrations/tests/*.test.sql` run in the database job): PR #115; database job now logs `OK: 2 migration harness(es) run` (0003 + 0004).
+- CI migration-harness gate (`db/migrations/tests/*.test.sql` run in the database job): PR #115; database job now logs `OK: 3 migration harness(es) run` (0003 + 0004 + 0005 from #118).
 - External benchmark and ontology research recovered from PRs #74/#75 onto the M2/M3 design branch without merging retired `integration/m0` history.
 - Issues #57–#62 refreshed to current `main`, concrete dependencies, bounded paths, and implementation acceptance gates.
 - Contract-change issues #100 (M2 v0.3.0) and #101 (M3 v0.4.0) created with serialized shared-path ownership.
@@ -50,7 +50,7 @@ None. No package currently `active`.
 1. **Ready:** M2-CLAIMS-VERIFICATION (#58) — `packages/retrieval/**`, `packages/retrieval-evals/**`, `apps/api/**`, `evals/**`; deps satisfied (M2-RETRIEVAL-BACKEND merged via #119). New-package scaffold registration for `packages/retrieval-evals` covered by ADR-0008.
 2. **Ready:** M2-OBSERVATORY-UI (#59) — `apps/web/**`, `packages/ui/**`; deps satisfied (retrieval trace schema live via #119; reader gate merged via #105).
 
-Dispatch **#58 and #59 in parallel** (disjoint paths). Serialization notes: blocked #108 also lists `apps/api/**` and `apps/web/**` — if #108 unblocks, do not run it concurrently with an in-flight #58/#59. #60 (M3-EXTRACTION-CORE) still waits on #58 and must serialize with any contracts/migrations owner.
+Dispatch **#58 and #59 in parallel** (disjoint paths). Serialization notes: blocked #108 overlaps `#58` on `apps/api/**` + `evals/**` and `#59` on `apps/web/**` — if #108 unblocks, do not run it concurrently with an in-flight #58/#59. #60 (M3-EXTRACTION-CORE) still waits on #58 and must serialize with any contracts/migrations owner.
 
 ## Blocked (registered, not dispatchable)
 
