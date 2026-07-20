@@ -5,7 +5,7 @@ Last updated: 2026-07-19
 ## Repository
 
 - Default and implementation base: `main`.
-- Current main tip: `0290446` (PR #112 M3-CONTRACT merge; prior tip PR #115 harness gate @ `cfd8991`).
+- Current main tip: `c546ec2` (PR #119 M2-RETRIEVAL-BACKEND merge; prior notable tips PR #118 query-guard fix @ `be2af18`, PR #116 @ `407f34f`).
 - Canonical product spec: `specs/001-financial-evidence-lab/spec.md` v1.2.
 - M2 implementation design: `specs/002-observable-hybrid-retrieval/` plus ADR-0006 (live on main).
 - M3 implementation design: `specs/003-agentic-extraction/` plus ADR-0007 (live on main).
@@ -22,6 +22,9 @@ Last updated: 2026-07-19
 - READER-CROSS-STACK mock-first + CI stack path: PR #105 / package issue #96 (criteria 1–10).
 - M2-CONTRACT OpenAPI v0.3.0 + migration `0003_retrieval_core.sql` + pgvector CI image: PR #106 / issue #100 (closed).
 - M3-CONTRACT OpenAPI v0.4.0 + migration `0004_extraction_core.sql` + `StructuredLLMProvider` mocks: PR #112 / issue #101 (closed); review fixes included typed records, conflict identity pin, terminal-run proposal freeze, step success-demotion guard.
+- M2-RETRIEVAL-BACKEND full package: PRs #114 + #119 / issue #57 (closed) — item builder, versioned index publish + exact-vs-HNSW oracle, cutoff-safe lanes, deterministic planner, RRF k=60 fusion, query/trace/SSE/rerun/feedback API with persisted byte-stable replay; acceptance report at `packages/retrieval/ACCEPTANCE.md`.
+- Migration `0005` query-guard role fix (fel_guard_query FOR SHARE vs SELECT-only fel_app): PR #118, with as-fel_app harness regression.
+- Retrieval integration suites isolated in a dedicated `<db>_retrieval` test database (cross-suite FK isolation defect found by first CI exposure): PR #119.
 - CI migration-harness gate (`db/migrations/tests/*.test.sql` run in the database job): PR #115; database job now logs `OK: 2 migration harness(es) run` (0003 + 0004).
 - External benchmark and ontology research recovered from PRs #74/#75 onto the M2/M3 design branch without merging retired `integration/m0` history.
 - Issues #57–#62 refreshed to current `main`, concrete dependencies, bounded paths, and implementation acceptance gates.
@@ -40,13 +43,14 @@ Still research-draft (not a dispatch blocker): recovered benchmark needs SEC tim
 
 ## Active
 
-1. **Active:** M2-RETRIEVAL-BACKEND (#57) — `packages/retrieval/**`, `apps/api/**`; mock-first; branch `agent/m2-retrieval-backend`. Dispatched 2026-07-19 from main @ `e9b511e` (post-#110). First slice: M2-010 item builder. Parallel-safe with #101. Scaffold dir-list grant recorded on #57.
+None. No package currently `active`.
 
-## Ready (post-#105/#106 reconciliation)
+## Ready (post-#119 reconciliation)
 
-None. Both ready packages are now active.
+1. **Ready:** M2-CLAIMS-VERIFICATION (#58) — `packages/retrieval/**`, `packages/retrieval-evals/**`, `apps/api/**`, `evals/**`; deps satisfied (M2-RETRIEVAL-BACKEND merged via #119). New-package scaffold registration for `packages/retrieval-evals` covered by ADR-0008.
+2. **Ready:** M2-OBSERVATORY-UI (#59) — `apps/web/**`, `packages/ui/**`; deps satisfied (retrieval trace schema live via #119; reader gate merged via #105).
 
-Dispatch note: #101 is merged; #57 continues alone. Next contract owner (#60 M3-EXTRACTION-CORE chain) must serialize with any other contracts/migrations owner.
+Dispatch **#58 and #59 in parallel** (disjoint paths). Serialization notes: blocked #108 also lists `apps/api/**` and `apps/web/**` — if #108 unblocks, do not run it concurrently with an in-flight #58/#59. #60 (M3-EXTRACTION-CORE) still waits on #58 and must serialize with any contracts/migrations owner.
 
 ## Blocked (registered, not dispatchable)
 
