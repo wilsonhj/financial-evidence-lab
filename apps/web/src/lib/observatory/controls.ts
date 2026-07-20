@@ -31,6 +31,22 @@ function splitList(raw: string | undefined): string[] {
 }
 
 /**
+ * Normalises a cutoff to an RFC3339 aware datetime. A `datetime-local` picker
+ * emits an OFFSET-LESS `YYYY-MM-DDTHH:mm`; the API's `as_of` is an
+ * AwareDatetime and rejects a naive value with 422. An offset-less value is
+ * interpreted as UTC (matching the UTC as_of/cutoff semantics used elsewhere)
+ * and emitted as `YYYY-MM-DDTHH:mm:00Z`; a value that already carries a zone is
+ * kept as-is. Returns null when the value cannot be parsed.
+ */
+function toAwareCutoff(raw: string): string | null {
+  const hasZone = /[Zz]$|[+-]\d{2}:\d{2}$/.test(raw);
+  const candidate = hasZone
+    ? raw
+    : `${/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(raw) ? `${raw}:00` : raw}Z`;
+  return Number.isNaN(Date.parse(candidate)) ? null : candidate;
+}
+
+/**
  * Validates and normalises raw control input against the frozen contract
  * bounds, producing a CreateQuery only when every field is in range. Lanes
  * outside the enum, a top_k off the 1..100 range, an unparseable cutoff, or
@@ -62,11 +78,8 @@ export function validateControls(input: ControlsInput): ControlsResult {
 
   let asOf: string | undefined;
   if (input.asOf !== undefined && input.asOf.trim() !== "") {
-    asOf = input.asOf.trim();
-    if (Number.isNaN(Date.parse(asOf))) {
-      errors.push("Cutoff must be a valid date-time.");
-      asOf = undefined;
-    }
+    asOf = toAwareCutoff(input.asOf.trim()) ?? undefined;
+    if (asOf === undefined) errors.push("Cutoff must be a valid date-time.");
   }
 
   const forms = splitList(input.forms);

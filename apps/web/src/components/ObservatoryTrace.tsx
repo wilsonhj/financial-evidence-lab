@@ -40,11 +40,14 @@ function citationBadgeClass(status: RetrievalCitation["status"]): string {
 function CandidateRef({
   candidate,
   documentIdByVersionId,
+  spanId,
 }: {
   candidate: Candidate;
   documentIdByVersionId: Readonly<Record<string, string>>;
+  /** Span to deep-link; defaults to the candidate's own span. Citations pass their own span. */
+  spanId?: string;
 }) {
-  const href = readerHref(candidate, documentIdByVersionId);
+  const href = readerHref(candidate, documentIdByVersionId, spanId);
   const label = `${candidate.kind} ${candidate.item_id.slice(0, 8)}`;
   if (!href) {
     return (
@@ -296,6 +299,7 @@ function ClaimsSection({
                         <CandidateRef
                           candidate={candidate}
                           documentIdByVersionId={documentIdByVersionId}
+                          spanId={citation.source_span_id}
                         />
                       ) : (
                         <span className="obs-muted">item {citation.item_id.slice(0, 8)}</span>

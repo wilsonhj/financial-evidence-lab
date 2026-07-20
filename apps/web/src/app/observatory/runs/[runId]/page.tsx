@@ -13,6 +13,18 @@ import { getObservatorySource } from "../../../../lib/observatory/server";
 
 export const dynamic = "force-dynamic";
 
+// Only these action-failure slugs (written by the server actions via
+// observatoryFailureState) may be reflected back from ?error=; any other
+// searchParam value is ignored rather than rendered verbatim.
+const KNOWN_RUN_ERRORS: ReadonlySet<string> = new Set([
+  "authentication",
+  "forbidden",
+  "conflict",
+  "invalid_scope",
+  "unavailable",
+  "integrity",
+]);
+
 export default async function ObservatoryRunPage({
   params,
   searchParams,
@@ -59,7 +71,7 @@ export default async function ObservatoryRunPage({
       </p>
       <h1>Retrieval run</h1>
 
-      {error && (
+      {error && KNOWN_RUN_ERRORS.has(error) && (
         <p className="reader-banner citation-error" role="alert">
           Action failed: {error}
         </p>

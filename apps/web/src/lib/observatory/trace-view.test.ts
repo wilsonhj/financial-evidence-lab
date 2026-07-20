@@ -99,6 +99,32 @@ describe("claimViews", () => {
     expect(claimViews(local)[0]!.downgraded).toBe(true);
   });
 
+  it("downgrades a supported claim whose citation matches the item but not the span", () => {
+    const accepted = candidate({ item_id: "10101010-0000-4000-8000-000000000001" });
+    const local: RetrievalTrace = {
+      ...trace,
+      candidates: [accepted],
+      claims: [
+        {
+          id: "20202020-0000-4000-8000-0000000000b1",
+          text: "right item, wrong span",
+          status: "supported",
+          citations: [
+            {
+              item_id: accepted.item_id,
+              // Correct item, but a different span than the accepted candidate's.
+              source_span_id: "cccccccc-0000-4000-8000-0000000000ff",
+              status: "entailed",
+              numeric_checks: {},
+            },
+          ],
+        },
+      ],
+    };
+    expect(claimViews(local)[0]!.displayStatus).toBe("unverifiable");
+    expect(claimViews(local)[0]!.downgraded).toBe(true);
+  });
+
   it("passes a supported claim through when its citations are all supported", () => {
     const views = claimViews(trace);
     const supported = views.find((v) => v.claim.status === "supported");
@@ -136,5 +162,16 @@ describe("readerHref", () => {
       "/reader/aaaaaaaa-0000-4000-8000-000000000001?span=cccccccc-0000-4000-8000-000000000001",
     );
     expect(readerHref(candidate({ document_version_id: "unknown" }), map)).toBeNull();
+  });
+
+  it("deep-links to the citation's span when overridden, not the candidate's", () => {
+    const map = { "aaaaaaaa-0000-4000-8000-000000001001": "aaaaaaaa-0000-4000-8000-000000000001" };
+    const citationSpan = "cccccccc-0000-4000-8000-0000000000ff";
+    const href = readerHref(candidate({}), map, citationSpan);
+    expect(href).toBe(
+      "/reader/aaaaaaaa-0000-4000-8000-000000000001?span=cccccccc-0000-4000-8000-0000000000ff",
+    );
+    // Never the candidate's own (different) span.
+    expect(href).not.toContain("cccccccc-0000-4000-8000-000000000001");
   });
 });

@@ -36,10 +36,16 @@ describe("validateControls", () => {
     expect(validateControls({ ...base, periods: many }).query).toBeUndefined();
   });
 
-  it("rejects an unparseable cutoff and accepts a valid one", () => {
+  it("normalises an offset-less datetime-local cutoff to an aware UTC datetime", () => {
     expect(validateControls({ ...base, asOf: "not-a-date" }).query).toBeUndefined();
-    const ok = validateControls({ ...base, asOf: "2026-06-30T23:59:59Z" });
-    expect(ok.query?.as_of).toBe("2026-06-30T23:59:59Z");
+    // A <input type="datetime-local"> emits an OFFSET-LESS value; it must be
+    // forwarded as an aware RFC3339 datetime (UTC) or the API rejects it 422.
+    const local = validateControls({ ...base, asOf: "2026-06-30T23:59" });
+    expect(local.query?.as_of).toBe("2026-06-30T23:59:00Z");
+    expect(local.query?.as_of).toMatch(/Z$/);
+    // An already-aware value is preserved.
+    const aware = validateControls({ ...base, asOf: "2026-06-30T23:59:59Z" });
+    expect(aware.query?.as_of).toBe("2026-06-30T23:59:59Z");
   });
 
   it("omits lanes entirely when none are selected (server default applies)", () => {

@@ -19,6 +19,7 @@ import type {
   RetrievalTrace,
 } from "./query-source";
 import type { RetrievalStreamOpener } from "./sse";
+import { LANES } from "./trace-view";
 
 export type BearerTokenProvider = string | (() => string | Promise<string>);
 
@@ -43,6 +44,11 @@ function string(value: unknown, path: string): string {
 
 function array(value: unknown, path: string): unknown[] {
   if (!Array.isArray(value)) throw new ObservatoryContractError(`${path} must be an array`);
+  return value;
+}
+
+function number(value: unknown, path: string): number {
+  if (typeof value !== "number") throw new ObservatoryContractError(`${path} must be a number`);
   return value;
 }
 
@@ -94,6 +100,12 @@ function validateTrace(value: unknown, path: string): RetrievalTrace {
   const lineage = object(trace.lineage, `${path}.lineage`);
   string(lineage.corpus_version_id, `${path}.lineage.corpus_version_id`);
   string(lineage.index_version_id, `${path}.lineage.index_version_id`);
+  for (const [index, raw] of array(trace.events, `${path}.events`).entries()) {
+    const event = object(raw, `${path}.events[${index}]`);
+    number(event.seq, `${path}.events[${index}].seq`);
+    string(event.type, `${path}.events[${index}].type`);
+    string(event.occurred_at, `${path}.events[${index}].occurred_at`);
+  }
   for (const [index, raw] of array(trace.candidates, `${path}.candidates`).entries()) {
     const candidate = object(raw, `${path}.candidates[${index}]`);
     string(candidate.item_id, `${path}.candidates[${index}].item_id`);
@@ -104,7 +116,19 @@ function validateTrace(value: unknown, path: string): RetrievalTrace {
     if (typeof candidate.accepted !== "boolean") {
       throw new ObservatoryContractError(`${path}.candidates[${index}].accepted must be a boolean`);
     }
-    array(candidate.contributions, `${path}.candidates[${index}].contributions`);
+    const contributions = array(
+      candidate.contributions,
+      `${path}.candidates[${index}].contributions`,
+    );
+    for (const [cIndex, rawContribution] of contributions.entries()) {
+      const cPath = `${path}.candidates[${index}].contributions[${cIndex}]`;
+      const contribution = object(rawContribution, cPath);
+      const lane = string(contribution.lane, `${cPath}.lane`);
+      if (!(LANES as readonly string[]).includes(lane)) {
+        throw new ObservatoryContractError(`${cPath}.lane must be a known retrieval lane`);
+      }
+      number(contribution.lane_rank, `${cPath}.lane_rank`);
+    }
   }
   array(trace.decisions, `${path}.decisions`);
   for (const [index, raw] of array(trace.claims, `${path}.claims`).entries()) {
@@ -113,6 +137,10 @@ function validateTrace(value: unknown, path: string): RetrievalTrace {
     string(claim.text, `${path}.claims[${index}].text`);
     string(claim.status, `${path}.claims[${index}].status`);
     array(claim.citations, `${path}.claims[${index}].citations`);
+  }
+  const timings = object(trace.timings_ms, `${path}.timings_ms`);
+  for (const [stage, ms] of Object.entries(timings)) {
+    number(ms, `${path}.timings_ms.${stage}`);
   }
   object(trace.budget_usage, `${path}.budget_usage`);
   string(trace.cost_usd, `${path}.cost_usd`);

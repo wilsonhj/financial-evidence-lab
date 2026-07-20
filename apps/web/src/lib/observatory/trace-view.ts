@@ -52,11 +52,13 @@ export function describeRunState(status: RunStatus): RunStateNotice | null {
 
 /**
  * Independent client-side integrity guard. A candidate may be shown as
- * supported/context evidence ONLY when the server accepted it AND it is not
+ * supported/context evidence ONLY when the server accepted it AND it was not
  * published after the run's effective cutoff. Trusting `accepted` alone is not
- * enough: a future-dated or cross-version item that slips through with
- * accepted=true must still never render as supported. Reclassification here is
- * the last line of defence behind server filtering.
+ * enough: a future-dated item that slips through with accepted=true must still
+ * never render as supported. This is a temporal last line of defence only —
+ * candidates carry no per-candidate corpus/index version, so cross-version
+ * exclusion cannot be re-derived here and remains the server's responsibility
+ * (surfaced via each candidate's own rejection_code).
  */
 export function isRenderableAsSupported(candidate: Candidate, plan: QueryPlan): boolean {
   if (!candidate.accepted) return false;
@@ -133,18 +135,28 @@ export type ClaimDisplayStatus = RetrievalClaim["status"] | "unverifiable";
 export interface ClaimView {
   claim: RetrievalClaim;
   /**
-   * Status actually shown. A "supported" claim whose citations reference a
-   * non-supported (future/cross-version/rejected) item is downgraded to
-   * "unverifiable" so unsupported evidence can never masquerade as supported.
+   * Status actually shown. A "supported" claim is downgraded to "unverifiable"
+   * unless every citation's (item_id, source_span_id) pair matches an accepted
+   * candidate's span — a citation naming a supported item but the WRONG span is
+   * still unsupported, so unsupported evidence can never masquerade as supported.
    */
   displayStatus: ClaimDisplayStatus;
   downgraded: boolean;
 }
 
+/** Composite key: a citation supports a claim only when BOTH the item and its span match an accepted candidate. */
+function spanKey(itemId: string, spanId: string): string {
+  return `${itemId}|${spanId}`;
+}
+
 export function claimViews(trace: RetrievalTrace): ClaimView[] {
-  const supportedItemIds = new Set(partitionCandidates(trace).supported.map((c) => c.item_id));
+  const supportedSpans = new Set(
+    partitionCandidates(trace).supported.map((c) => spanKey(c.item_id, c.source_span_id)),
+  );
   return trace.claims.map((claim) => {
-    const citesUnsupported = claim.citations.some((c) => !supportedItemIds.has(c.item_id));
+    const citesUnsupported = claim.citations.some(
+      (c) => !supportedSpans.has(spanKey(c.item_id, c.source_span_id)),
+    );
     const downgraded =
       (claim.status === "supported" || claim.status === "partially_supported") && citesUnsupported;
     return {
@@ -176,13 +188,18 @@ export function decisionTimeline(trace: RetrievalTrace): TimelineEntry[] {
     .sort((a, b) => Date.parse(a.occurredAt) - Date.parse(b.occurredAt));
 }
 
-/** Builds a candidate item_id -> reader href resolver from a version->document map. */
+/**
+ * Reader deep link for a candidate's document, targeting `spanId` (defaults to
+ * the candidate's own span). A citation MUST pass its own `source_span_id` so
+ * the link opens the cited span, never the candidate's — the two can differ.
+ */
 export function readerHref(
   candidate: Candidate,
   documentIdByVersionId: Readonly<Record<string, string>>,
+  spanId: string = candidate.source_span_id,
 ): string | null {
   const documentId = documentIdByVersionId[candidate.document_version_id];
   if (!documentId) return null;
-  const params = new URLSearchParams({ span: candidate.source_span_id });
+  const params = new URLSearchParams({ span: spanId });
   return `/reader/${encodeURIComponent(documentId)}?${params.toString()}`;
 }

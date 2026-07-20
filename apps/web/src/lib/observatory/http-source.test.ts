@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { ObservatoryApiError, ObservatoryContractError } from "./errors";
 import { HttpObservatorySource } from "./http-source";
-import type { CreateQuery } from "./query-source";
+import type { CreateQuery, RetrievalTrace } from "./query-source";
 import {
   MOCK_QUERY_ID,
   MOCK_QUERY_SNAPSHOT,
@@ -113,6 +113,30 @@ describe("HttpObservatorySource requests", () => {
     await expect(
       makeSource(fetchImpl as unknown as typeof fetch).getRun(MOCK_RUN_ID),
     ).rejects.toBeInstanceOf(ObservatoryContractError);
+  });
+
+  it("rejects a trace whose events, timings_ms or contribution shape is malformed", async () => {
+    const cases: ((t: RetrievalTrace) => void)[] = [
+      // events must be a present array of well-shaped events.
+      (t) => ((t as unknown as { events: unknown }).events = "nope"),
+      (t) => delete (t.events[0] as unknown as { seq?: number }).seq,
+      (t) => ((t.events[0] as unknown as { type: unknown }).type = 7),
+      // timings_ms must be an object of numeric stage timings.
+      (t) => ((t as unknown as { timings_ms: unknown }).timings_ms = 5),
+      (t) => ((t.timings_ms as Record<string, unknown>).plan = "fast"),
+      // contributions must carry a known lane enum and a numeric lane_rank.
+      (t) => ((t.candidates[0]!.contributions[0] as unknown as { lane: string }).lane = "bogus"),
+      (t) =>
+        ((t.candidates[0]!.contributions[0] as unknown as { lane_rank: unknown }).lane_rank = "1"),
+    ];
+    for (const mutate of cases) {
+      const broken = structuredClone(MOCK_TRACE) as RetrievalTrace;
+      mutate(broken);
+      const fetchImpl = vi.fn(async () => jsonResponse(broken));
+      await expect(
+        makeSource(fetchImpl as unknown as typeof fetch).getRun(MOCK_RUN_ID),
+      ).rejects.toBeInstanceOf(ObservatoryContractError);
+    }
   });
 
   it("records feedback with Idempotency-Key and treats non-201 as an error", async () => {
