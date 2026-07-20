@@ -4,6 +4,7 @@ and versioned index build/publish with an exact-vs-HNSW recall oracle."""
 from fel_retrieval.config import CHUNKER_VERSION, config_hash
 from fel_retrieval.embeddings import embed_drafts, format_halfvec
 from fel_retrieval.fusion import (
+    LANE_ORDER,
     RRF_K,
     Contribution,
     FusedCandidate,
@@ -69,6 +70,7 @@ __all__ = [
     "LANE_DENSE",
     "LANE_FACTS",
     "LANE_LEXICAL",
+    "LANE_ORDER",
     "LANE_TABLES",
     "RRF_K",
     "BuildOutcome",

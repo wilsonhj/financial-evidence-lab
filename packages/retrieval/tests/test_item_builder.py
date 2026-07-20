@@ -1,15 +1,10 @@
 from __future__ import annotations
 
-import hashlib
 from typing import Any
 
-from fel_retrieval import build_items
+from fel_retrieval import build_items, content_sha256
 
 INDEX = "99999999-9999-4999-8999-999999999999"
-
-
-def _sha(text: str) -> str:
-    return "sha256:" + hashlib.sha256(text.encode()).hexdigest()
 
 
 def mini_corpus(*, corrupt_passage_hash: bool = False) -> dict[str, Any]:
@@ -25,9 +20,9 @@ def mini_corpus(*, corrupt_passage_hash: bool = False) -> dict[str, Any]:
     rev_end = rev_start + len(revenue)
     cost_start = canonical.index(cost)
     cost_end = cost_start + len(cost)
-    rev_hash = _sha(revenue)
+    rev_hash = content_sha256(revenue)
     if corrupt_passage_hash:
-        rev_hash = _sha("tampered")
+        rev_hash = content_sha256("tampered")
     return {
         "entity_id": "11111111-1111-4111-8111-111111111111",
         "document_id": "22222222-2222-4222-8222-222222222222",
@@ -50,7 +45,7 @@ def mini_corpus(*, corrupt_passage_hash: bool = False) -> dict[str, Any]:
                 "start_char": cost_start,
                 "end_char": cost_end,
                 "text": cost,
-                "text_hash": _sha(cost),
+                "text_hash": content_sha256(cost),
                 "heading_path": ["ITEM 8", "FINANCIAL STATEMENTS"],
             },
         ],
