@@ -201,6 +201,36 @@ const CANDIDATES: Candidate[] = [
   },
 ];
 
+const event = (
+  seq: number,
+  type: RetrievalEvent["type"],
+  payload: Record<string, unknown> = {},
+): RetrievalEvent => ({
+  schema_version: "retrieval-event/v1",
+  run_id: MOCK_RUN_ID,
+  seq,
+  type,
+  occurred_at: new Date(Date.parse("2026-07-01T12:00:00Z") + seq * 100).toISOString(),
+  payload,
+});
+
+/** Ordered persisted event log the mock stream replays (seq ascending). */
+export const MOCK_EVENTS: RetrievalEvent[] = [
+  event(1, "run_started"),
+  event(2, "plan_ready", { lanes: MOCK_PLAN.lanes }),
+  event(3, "lane_started", { lane: "dense" }),
+  event(4, "candidate_batch", { lane: "dense", count: 8 }),
+  event(5, "lane_completed", { lane: "dense" }),
+  event(6, "lane_started", { lane: "lexical" }),
+  event(7, "lane_completed", { lane: "lexical" }),
+  event(8, "fusion_completed", { fused: 6 }),
+  event(9, "rerank_completed", { reranked: 3 }),
+  event(10, "context_selected", { context_items: 3 }),
+  event(11, "claim_generated", { claim_id: "20202020-0000-4000-8000-000000000001" }),
+  event(12, "citation_verified", { item_id: ITEM_REVENUE, status: "entailed" }),
+  event(13, "run_completed", { status: "succeeded" }),
+];
+
 export const MOCK_TRACE: RetrievalTrace = {
   run_id: MOCK_RUN_ID,
   query_id: MOCK_QUERY_ID,
@@ -217,7 +247,7 @@ export const MOCK_TRACE: RetrievalTrace = {
     generation_provider: "anthropic",
     generation_model: "claude-opus-4-8",
   },
-  events: [],
+  events: MOCK_EVENTS,
   candidates: CANDIDATES,
   decisions: [
     {
@@ -317,36 +347,13 @@ export const MOCK_QUERY_SNAPSHOT: QuerySnapshot = {
       mode: "execute",
       created_at: "2026-07-01T12:00:00Z",
     },
+    {
+      run_id: MOCK_RERUN_ID,
+      parent_run_id: MOCK_RUN_ID,
+      status: "succeeded",
+      mode: "rerun",
+      created_at: "2026-07-01T12:05:00Z",
+    },
   ],
   created_at: "2026-07-01T12:00:00Z",
 };
-
-const event = (
-  seq: number,
-  type: RetrievalEvent["type"],
-  payload: Record<string, unknown> = {},
-): RetrievalEvent => ({
-  schema_version: "retrieval-event/v1",
-  run_id: MOCK_RUN_ID,
-  seq,
-  type,
-  occurred_at: new Date(Date.parse("2026-07-01T12:00:00Z") + seq * 100).toISOString(),
-  payload,
-});
-
-/** Ordered persisted event log the mock stream replays (seq ascending). */
-export const MOCK_EVENTS: RetrievalEvent[] = [
-  event(1, "run_started"),
-  event(2, "plan_ready", { lanes: MOCK_PLAN.lanes }),
-  event(3, "lane_started", { lane: "dense" }),
-  event(4, "candidate_batch", { lane: "dense", count: 8 }),
-  event(5, "lane_completed", { lane: "dense" }),
-  event(6, "lane_started", { lane: "lexical" }),
-  event(7, "lane_completed", { lane: "lexical" }),
-  event(8, "fusion_completed", { fused: 6 }),
-  event(9, "rerank_completed", { reranked: 3 }),
-  event(10, "context_selected", { context_items: 3 }),
-  event(11, "claim_generated", { claim_id: "20202020-0000-4000-8000-000000000001" }),
-  event(12, "citation_verified", { item_id: ITEM_REVENUE, status: "entailed" }),
-  event(13, "run_completed", { status: "succeeded" }),
-];
