@@ -8,8 +8,16 @@ import { loadReaderData } from "../../../lib/reader-loader";
 
 export const dynamic = "force-dynamic";
 
-export default async function ReaderPage({ params }: { params: Promise<{ documentId: string }> }) {
+export default async function ReaderPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ documentId: string }>;
+  searchParams?: Promise<{ span?: string | string[] }>;
+}) {
   const { documentId } = await params;
+  const { span } = (await searchParams) ?? {};
+  const initialSpanId = Array.isArray(span) ? span[0] : span;
   let result;
   try {
     result = await loadReaderData(getEvidenceSource(), documentId);
@@ -34,6 +42,7 @@ export default async function ReaderPage({ params }: { params: Promise<{ documen
       documentIdBySectionId={data.documentIdBySectionId}
       documentIdBySpanId={data.documentIdBySpanId}
       integrityFailures={data.integrityFailures}
+      initialSpanId={initialSpanId}
     />
   );
 }
