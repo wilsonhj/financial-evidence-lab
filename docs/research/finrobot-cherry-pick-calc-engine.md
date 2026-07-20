@@ -1,7 +1,7 @@
 # Cherry-pick study: FinRobot valuation engine → FEL calculation-engine
 
 **Status:** Proposal / research draft (NOT an accepted ADR)
-**Date:** 2026-07-20 (rev 5 — second PR re-review: None-vs-sentinel unit collision, in-sketch derived-cutoff resolver)
+**Date:** 2026-07-20 (rev 6 — identity encoding decision: out-of-alphabet None marker in sketch; typed canonical JSON mandatory for real port)
 **Author:** multi-agent analysis session (`claude/finrobot-multi-agent-analysis-fd6byx`)
 **Scope guard:** Illustrative code only — no source is added under `packages/calculation-engine/**`.
 `packages/calculation-engine/**` is the `M4-MODEL-CALC` package's `allowed_path`
@@ -64,7 +64,7 @@ The real value of the study: what "FEL-compliant" costs relative to the donor.
 | G4 | `confidence=0.7` hard-coded, then used as blend weight in `synthesize_valuation` | Deterministic, versioned formulas | Rejected outright (§2); calibrated confidence only via `isotonic-v1` (ADR-0007) |
 | G5 | No temporal stamping; reads "latest" column blindly | Constitution I: a calc at cutoff T sees only evidence public ≤ T (backtests too) | Every input carries `as_of`; engine refuses any input newer than the run cutoff |
 | G6 | `except:` swallow-all returning `0` | Test-first / fail-closed | Typed errors; a missing required input raises, never silently `0` |
-| G7 | No result identity | Deterministic content-addressed IDs (cf. `packages/retrieval/fel_retrieval/ids.py`) | `result_id = UUIDv5(formula_version | canonical(pinned inputs))` covering *every* output-affecting input, with slug-validated components so joins are injective |
+| G7 | No result identity | Deterministic content-addressed IDs (cf. `packages/retrieval/fel_retrieval/ids.py`) | Sketch: `result_id = UUIDv5(formula_version \| joined SAFE_ID inputs)` with an out-of-alphabet None marker so joins stay injective. **Real port MUST** hash typed canonical JSON (`null` ≠ `"-"`; enums for unit axes) and carry adversarial collision tests — string joins are illustrative only |
 | G8 | Mutable `self.valuation_results` accumulator | Immutable, reproducible artifacts | Pure functions returning frozen dataclasses |
 | G9 | Terminal value `fcf·(1+g)/(wacc−g)` with no guard | Fail-closed math | P1 DCF must reject `wacc ≤ terminal_growth` (incl. the ±1% band shifts) before dividing |
 | G10 | No fiscal-period typing — values are addressed by spreadsheet-style year columns (`'2024A'`, `'2025E'`) | Constitution II: **explicit fiscal periods**; publication time (`as_of`) and measured period are different timelines | Every quantity carries a `FiscalPeriod(start, end)`; formulas validate period consistency *between* inputs and derive output periods, never leaving them implicit in a metric name |
@@ -116,6 +116,8 @@ MONEY_SCALE = Decimal("0.01")
 # Lineage ids and formula versions must be slugs/UUIDs so joined identity keys are injective.
 # This is WHY fel_retrieval/ids.py can join with "|": its components are UUIDs/hashes and
 # cannot contain delimiters. Free-form ids would let "a;b" forge a boundary.
+# Keep "-" in the alphabet: UUID lineage ids are hyphenated. Do NOT "fix" None-collisions
+# by banning "-" from SAFE_ID — encode absent Unit fields with a marker OUTSIDE this set.
 SAFE_ID = re.compile(r"^[A-Za-z0-9._@-]+$")
 
 
@@ -166,9 +168,10 @@ class Unit:
             raise ValueError("currency amounts must not also declare a measure")
 
     def key(self) -> str:
-        # None gets a marker containing a byte OUTSIDE the SAFE_ID alphabet (NUL is not in
-        # [A-Za-z0-9._@-]), so an absent field can never collide with a present "-":
-        # Unit(None,None,None) != Unit("-","-","-"). (A real port hashes typed canonical JSON.)
+        # Option A (sketch): None → marker OUTSIDE SAFE_ID (NUL). A present "-" is still a
+        # legal token (UUIDs need hyphens in SAFE_ID), so encoding None as "-" would collide
+        # Unit(None,None,None) with Unit("-","-","-"). Option C (real port MUST): do not join —
+        # hash typed canonical JSON where missing axes are JSON null, not a sentinel string.
         parts = (self.currency, self.per_period, self.measure)
         return "/".join(p if p is not None else "\x00" for p in parts)
 
@@ -321,10 +324,15 @@ ID_NAMESPACE = uuid.uuid5(uuid.NAMESPACE_URL, "https://financial-evidence-lab.de
 
 
 def result_id(formula_version: str, inputs: dict[str, Quantity], cutoff: datetime) -> str:
-    """Content address over EVERY output-affecting input. Injective because every joined
-    component — formula version, input names, unit fields, lineage ids — is validated to a
-    delimiter-free token charset (a real port may instead hash typed canonical JSON, and
-    MUST carry adversarial collision tests either way)."""
+    """Content address over EVERY output-affecting input.
+
+    Illustrative join (Option A): injective only while every joined component is SAFE_ID-
+    validated and Unit None uses an out-of-alphabet marker. A real M4 port MUST NOT ship
+    this join as the production identity — it MUST hash typed canonical JSON of the pinned
+    inputs (sorted keys; Decimal/_utc_key canonicalization; JSON null for absent unit axes;
+    enums for per_period/measure) and MUST carry adversarial collision tests (delimiter
+    forgery, None-vs-sentinel, Decimal rescaling, tz-equivalent as_of).
+    """
     _require_safe_id(formula_version, "formula_version")
     for name in inputs:
         _require_safe_id(name, "input name")
@@ -444,17 +452,20 @@ def revenue_next_quarter(
     )
 ```
 
-**Derived-lineage cutoff resolution (real-port requirement, added in rev 4).** In this
-sketch a `DERIVED` `Quantity` carries a caller-supplied `as_of` and syntax-only
-`derived_from` ids, and `_require_available` trusts that claimed timestamp — so a
-post-cutoff result could be relabeled with an earlier `as_of` and pass the temporal guard.
-That is acceptable only because the sketch has no store to resolve against. A real port
-MUST NOT trust a caller-claimed `as_of` for derived inputs: it must resolve `derived_from`
-to immutable parent `CalcResult`/source artifacts under the run's tenant and corpus pin,
-derive availability as the maximum over the resolved parents' availabilities, and reject a
-derived input whose claimed `as_of` disagrees with the resolved value. The §5 graph
-evaluator makes this natural — derived quantities are produced *by* the evaluator from
-in-graph parents, never accepted from outside it.
+**Derived-lineage cutoff resolution (rev 4 note; sketch hardened in rev 5).** The leaf API
+no longer trusts a `DERIVED` input's claimed `as_of`: `_require_available` requires an
+injected `resolve_availability` callback and fails closed without one. A real port must
+still resolve `derived_from` to immutable parent `CalcResult`/source artifacts under the
+run's tenant and corpus pin, derive availability as the maximum over those parents, and
+reject a derived input whose claimed `as_of` disagrees with the resolved value. The §5
+graph evaluator makes this natural — derived quantities are produced *by* the evaluator
+from in-graph parents, never accepted from outside it.
+
+**Identity encoding (rev 6 decision).** Sketch joins use Option A (SAFE_ID tokens + NUL for
+absent `Unit` axes) because `SAFE_ID` must keep `"-"` for UUID lineage ids — banning the
+hyphen would break `source_span_id` / `assumption_id` validation. Production `result_id`
+(Option C) MUST hash typed canonical JSON instead of joining strings; the illustrative
+`ids.py` fence is not the M4 contract.
 
 ## 5. M4 adaptation: a driver-graph evaluator, not a function library
 
@@ -643,6 +654,20 @@ A re-review of the rev-4 head found both high-severity fixes were only partially
   `DERIVED` input with no resolver fails closed, and its claimed `as_of` is never used for
   the cutoff; the "closes G5" comment is reworded accordingly.
 
+### Identity encoding decision (rev 5 → rev 6)
+
+Chose **Option A in the sketch + Option C as the mandatory real-port rule** (not length-
+prefix TLV):
+
+- **Why not ban `"-"` from `SAFE_ID`:** the same charset validates UUID lineage ids, which
+  are hyphenated. Narrowing the alphabet would reject valid `source_span_id` values.
+- **Why NUL for absent `Unit` axes (A):** sentinel ∉ token alphabet ⇒
+  `Unit(None,…)` cannot collide with `Unit("-",…)`; keeps the retrieval-style join readable
+  for the research fence.
+- **Why typed canonical JSON is MUST for M4 (C):** production identity must not depend on
+  delimiter folklore; JSON `null` is the typed stand-in for absent axes, and enums lock
+  `per_period` / `measure`. Adversarial collision tests remain required either way.
+
 ### Executed verification
 
 The §4 code blocks were extracted verbatim into a standalone package and executed. All checks
@@ -671,4 +696,5 @@ From the repo root, standard library only:
    raising its typed error (float/non-finite values, look-ahead `as_of`, missing or extra
    lineage fields, delimiter-bearing ids or unit components, unit/period mismatches,
    negative sensitivity, negative low band, non-monotonic `Range`, unsorted or mis-keyed
-   `AssumptionSet`).
+   `AssumptionSet`); `Unit(None,None,None).key() != Unit("-","-","-").key()` (None-vs-
+   sentinel non-collision under the NUL marker).
