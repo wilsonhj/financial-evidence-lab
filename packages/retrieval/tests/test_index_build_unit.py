@@ -5,7 +5,6 @@ Postgres in test_index_build_integration.py."""
 from __future__ import annotations
 
 import contextlib
-import hashlib
 from typing import Any
 
 import pytest
@@ -14,13 +13,10 @@ from fel_providers import MockEmbeddingProvider
 from fel_retrieval import (
     IndexBuildError,
     build_index,
+    content_sha256,
     make_index_version_spec,
     publish_index_version,
 )
-
-
-def _sha(text: str) -> str:
-    return "sha256:" + hashlib.sha256(text.encode()).hexdigest()
 
 
 def tiny_corpus() -> dict[str, Any]:
@@ -38,7 +34,7 @@ def tiny_corpus() -> dict[str, Any]:
                 "start_char": 0,
                 "end_char": len(canonical),
                 "text": canonical,
-                "text_hash": _sha(canonical),
+                "text_hash": content_sha256(canonical),
                 "heading_path": ["ITEM 8"],
             }
         ],
