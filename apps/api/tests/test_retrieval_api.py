@@ -341,6 +341,26 @@ def test_citations_verified_with_numeric_checks(
     assert numeric_seen, "expected a fact-backed claim with numeric checks"
 
 
+def test_provider_refusal_abstains(
+    client: TestClient, org: tuple[str, str], seeded: dict[str, str], db_url: str
+) -> None:
+    """M2-022: when the provider refuses, no claim is supported so the run
+    abstains (verifying -> abstained, terminal run_abstained)."""
+    # The mock structured provider refuses when the prompt contains "REFUSE".
+    created = _create(client, org, seeded["workspace_id"], question="REFUSE this revenue question")
+    trace = client.get(f"/v1/retrieval-runs/{created['run_id']}", headers=_headers(*org)).json()
+
+    assert trace["status"] == "abstained"
+    assert trace["claims"] == []
+    assert trace["events"][-1]["type"] == "run_abstained"
+    # Retrieval still ran: context was selected before the abstention.
+    assert trace["candidates"], "expected candidates even when abstaining"
+
+    row = _run_row(db_url, created["run_id"])
+    assert row["status"] == "abstained"
+    assert row["last_event"] == "run_abstained"
+
+
 def test_trace_replay_byte_stable(
     client: TestClient, org: tuple[str, str], seeded: dict[str, str]
 ) -> None:

@@ -12,6 +12,7 @@ from fel_retrieval.verification import (
     MockCitationVerifier,
     assert_citation_integrity,
     classify_claim,
+    should_abstain,
     validate_numeric,
     verify_claims,
 )
@@ -147,6 +148,48 @@ def test_verify_claims_derived_preserved() -> None:
     )
     verified = verify_claims([claim], [item], MockCitationVerifier())
     assert verified[0].status == "derived"
+
+
+# --- abstention (M2-022) ----------------------------------------------------
+def _claim(status: str) -> GeneratedClaim:
+    return GeneratedClaim(
+        ord=0,
+        text="x",
+        status=status,
+        citations=(ClaimCitation(item_id="a", source_span_id="s", status="entailed"),),
+    )
+
+
+def test_should_abstain_on_no_claims() -> None:
+    assert should_abstain([]) is True
+
+
+def test_should_abstain_when_all_unsupported() -> None:
+    assert should_abstain([_claim("unsupported"), _claim("unsupported")]) is True
+
+
+def test_no_abstain_when_any_support_or_contradiction() -> None:
+    assert should_abstain([_claim("unsupported"), _claim("supported")]) is False
+    # A contradicted claim is preserved and displayed, not abstained.
+    assert should_abstain([_claim("contradicted")]) is False
+
+
+def test_contradiction_preserves_all_spans() -> None:
+    good = _item("a", "Revenue was 100", numeric=_num("100"))
+    bad = _item("b", "Revenue was 100", span="span-2", numeric=_num("999"))
+    claim = GeneratedClaim(
+        ord=0,
+        text="Revenue was 100",
+        status="unsupported",
+        citations=(
+            ClaimCitation(item_id="a", source_span_id="span-1"),
+            ClaimCitation(item_id="b", source_span_id="span-2"),
+        ),
+    )
+    verified = verify_claims([claim], [good, bad], MockCitationVerifier())
+    assert verified[0].status == "contradicted"
+    # Both material spans are preserved on the contradicted claim.
+    assert {c.item_id for c in verified[0].citations} == {"a", "b"}
 
 
 def test_verify_claims_dangling_raises() -> None:

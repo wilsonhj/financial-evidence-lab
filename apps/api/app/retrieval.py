@@ -28,9 +28,11 @@ consumes positional rows. Org isolation is unaffected: every org-scoped write
 stays on the RLS-bound tenant connection.
 
 Generation (M2-020) decomposes the selected context into atomic claims via the
-pinned structured provider and persists them with their citation edges before
-the run goes terminal; the status still walks the full machine (``generating ->
-verifying -> succeeded``).
+pinned structured provider; verification (M2-021) re-derives every citation edge
+from the evidence and persists claims with their edges before the run goes
+terminal. When no claim is supported (e.g. the provider refused), the run
+abstains — ``verifying -> abstained`` with a terminal ``run_abstained`` event —
+otherwise it succeeds (a contradicted claim is preserved and displayed, M2-022).
 """
 
 from __future__ import annotations
@@ -80,6 +82,7 @@ from fel_retrieval.lanes import LaneCandidate
 from fel_retrieval.verification import (
     CitationIntegrityError,
     MockCitationVerifier,
+    should_abstain,
     verify_claims,
 )
 
@@ -258,6 +261,15 @@ class _RunWriter:
         # column-scoped grant, and run_completed is already the latest event.
         self._conn.execute(
             "UPDATE retrieval_runs SET status = 'succeeded', finished_at = now(),"
+            " budget_usage = %s::jsonb, timings_ms = %s::jsonb WHERE id = %s",
+            (json.dumps(budget_usage), json.dumps(timings_ms), self._run_id),
+        )
+
+    def finish_abstained(self, *, budget_usage: dict[str, int], timings_ms: dict[str, int]) -> None:
+        # verifying -> abstained; run_abstained is already the latest event so the
+        # terminal-event guard passes. Only column-scoped grant fields are written.
+        self._conn.execute(
+            "UPDATE retrieval_runs SET status = 'abstained', finished_at = now(),"
             " budget_usage = %s::jsonb, timings_ms = %s::jsonb WHERE id = %s",
             (json.dumps(budget_usage), json.dumps(timings_ms), self._run_id),
         )
@@ -464,8 +476,14 @@ def _execute_pipeline(
         "verifying": verifying_ms,
         "total": planning_ms + retrieving_ms + fusing_ms + generating_ms + verifying_ms,
     }
-    writer.emit("run_completed", {"status": "succeeded"})
-    writer.finish_succeeded(budget_usage=budget_usage, timings_ms=timings_ms)
+    # Missing supporting evidence yields abstention; a contradicted claim is
+    # preserved and displayed (the run still succeeds).
+    if should_abstain(claims):
+        writer.emit("run_abstained", {"reason": "insufficient_evidence"})
+        writer.finish_abstained(budget_usage=budget_usage, timings_ms=timings_ms)
+    else:
+        writer.emit("run_completed", {"status": "succeeded"})
+        writer.finish_succeeded(budget_usage=budget_usage, timings_ms=timings_ms)
 
 
 def _decision_dict(decision: Any, stamp: str) -> dict[str, Any]:

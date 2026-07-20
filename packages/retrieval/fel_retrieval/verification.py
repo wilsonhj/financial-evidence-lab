@@ -193,6 +193,20 @@ def classify_claim(edges: Sequence[str]) -> str:
     return "partially_supported"
 
 
+def should_abstain(claims: Sequence[GeneratedClaim]) -> bool:
+    """Whether the run must abstain for want of supporting evidence (M2-022).
+
+    Missing evidence yields abstention: a run with no claims, or whose every
+    claim is ``unsupported``, abstains. Contradictory evidence is *not*
+    abstention — a ``contradicted`` claim is preserved and displayed (the run
+    succeeds), so any claim that is supported/partially_supported/derived/
+    contradicted keeps the run out of abstention.
+    """
+    if not claims:
+        return True
+    return all(claim.status == "unsupported" for claim in claims)
+
+
 def verify_claims(
     claims: Sequence[GeneratedClaim],
     context: Sequence[ContextItem],
@@ -259,6 +273,7 @@ __all__ = [
     "MockCitationVerifier",
     "assert_citation_integrity",
     "classify_claim",
+    "should_abstain",
     "validate_numeric",
     "verify_claims",
 ]
