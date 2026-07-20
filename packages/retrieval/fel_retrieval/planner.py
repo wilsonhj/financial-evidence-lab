@@ -16,6 +16,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 
+from fel_retrieval.fusion import LANE_ORDER
+
 SCHEMA_VERSION = "query-plan/v1"
 
 MIN_TOP_K = 1
@@ -28,7 +30,9 @@ DEFAULT_TIMEOUT_MS = 15000
 MAX_VARIANTS = 4
 MAX_FILTER_ITEMS = 20
 
-DEFAULT_LANES: tuple[str, ...] = ("dense", "lexical", "facts", "tables")
+# Default/valid lane set is the fusion lane order, single-sourced from
+# ``fusion.LANE_ORDER`` (itself built from the ``lanes.py`` name constants).
+DEFAULT_LANES: tuple[str, ...] = LANE_ORDER
 VALID_LANES: frozenset[str] = frozenset(DEFAULT_LANES)
 
 DEFAULT_INTENT = "general"

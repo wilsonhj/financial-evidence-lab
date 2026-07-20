@@ -59,6 +59,7 @@ from fel_providers import EmbeddingProvider, MockEmbeddingProvider
 from fel_providers.interfaces import StructuredLLMProvider
 from fel_providers.mocks import MockStructuredLLMProvider
 from fel_retrieval import (
+    LANE_ORDER,
     LaneCall,
     LaneExecutionError,
     LaneQuery,
@@ -100,9 +101,8 @@ GENERATION_MODEL = "mock-structured-v1"
 
 EVENT_SCHEMA_VERSION = "retrieval-event/v1"
 
-# Fixed lane fusion order (mirrors fel_retrieval.fusion.LANE_ORDER); lanes are
-# executed and emitted in this order so a trace is deterministic.
-_LANE_ORDER: tuple[str, ...] = ("dense", "lexical", "facts", "tables")
+# Lanes are executed and emitted in the shared fusion order (``LANE_ORDER``) so
+# a trace is deterministic.
 _LANE_FUNCS: dict[str, Callable[[Any, LaneQuery], list[LaneCandidate]]] = {
     "dense": dense_lane,
     "lexical": lexical_lane,
@@ -351,7 +351,7 @@ def _execute_pipeline(
     embedder = _resolve_embedding_provider(embedding_provider, embedding_model)
     effective_as_of = _parse_iso(plan["effective_as_of"])
     budgets = plan["budgets"]
-    lanes = [lane for lane in _LANE_ORDER if lane in plan["lanes"]]
+    lanes = [lane for lane in LANE_ORDER if lane in plan["lanes"]]
 
     writer.set_status("planning")
     t0 = time.monotonic()
@@ -1120,7 +1120,7 @@ def _group_candidates(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     for candidate in grouped.values():
         candidate["contributions"].sort(
             key=lambda c: (
-                _LANE_ORDER.index(c["lane"]) if c["lane"] in _LANE_ORDER else 99,
+                LANE_ORDER.index(c["lane"]) if c["lane"] in LANE_ORDER else 99,
                 c["variant_index"],
             )
         )

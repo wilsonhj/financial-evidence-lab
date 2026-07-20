@@ -34,7 +34,7 @@ yield identical candidate lists.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
@@ -88,7 +88,6 @@ class LaneCandidate:
     financial_fact_id: str | None = None
     table_id: str | None = None
     table_row_index: int | None = None
-    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 # Provenance columns selected by every lane, in a fixed order the row mapper
