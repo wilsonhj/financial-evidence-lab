@@ -18,19 +18,19 @@ install-py: ## Create .venv and install the Python toolchain
 
 format: ## Auto-format all sources
 	pnpm run format
-	$(PY)/black apps workers evals packages/providers packages/retrieval
+	$(PY)/black apps workers evals packages/providers packages/retrieval packages/retrieval-evals
 
 format-check: ## Verify formatting without writing
 	pnpm run format:check
-	$(PY)/black --check apps workers evals packages/providers packages/retrieval
+	$(PY)/black --check apps workers evals packages/providers packages/retrieval packages/retrieval-evals
 
 lint: ## Lint all sources
 	pnpm run lint
-	$(PY)/ruff check apps workers evals packages/providers packages/retrieval
+	$(PY)/ruff check apps workers evals packages/providers packages/retrieval packages/retrieval-evals
 
 typecheck: ## Run static type checks
 	pnpm run typecheck
-	$(PY)/mypy apps/api/app workers/src evals/graders packages/providers/fel_providers packages/retrieval/fel_retrieval
+	$(PY)/mypy apps/api/app workers/src evals/graders packages/providers/fel_providers packages/retrieval/fel_retrieval packages/retrieval-evals/fel_retrieval_evals
 
 test: test-js test-py ## Run all unit tests
 
@@ -41,7 +41,7 @@ test-py: ## Run Python unit tests
 	$(PY)/pytest
 
 security: ## Run static + dependency security scans
-	$(PY)/bandit -q -r apps workers evals packages/providers packages/retrieval -c pyproject.toml
+	$(PY)/bandit -q -r apps workers evals packages/providers packages/retrieval packages/retrieval-evals -c pyproject.toml
 	$(PY)/pip-audit -r requirements-dev.txt
 	node scripts/audit-bulk.mjs
 
