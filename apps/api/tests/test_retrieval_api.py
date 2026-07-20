@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import time
 import uuid
 from datetime import UTC, datetime
 from typing import Any
@@ -24,6 +25,7 @@ from tests.conftest import requires_db
 
 pytestmark = requires_db
 
+import app.retrieval as retrieval  # noqa: E402
 from fel_providers import MockEmbeddingProvider  # noqa: E402
 from fel_retrieval import build_and_publish, make_index_version_spec  # noqa: E402
 
@@ -50,8 +52,15 @@ def _headers(org_id: str, user_id: str, role: str = "owner") -> dict[str, str]:
     return {"Authorization": f"Bearer {make_mock_token(org_id, user_id, role)}"}
 
 
-def _seed_indexed_workspace(conn: Any, org_id: str) -> dict[str, str]:
-    """Seed one entity's corpus, publish an active index, create a workspace."""
+def _seed_indexed_workspace(
+    conn: Any, org_id: str, *, embedding_provider: str = _PROVIDER
+) -> dict[str, str]:
+    """Seed one entity's corpus, publish an active index, create a workspace.
+
+    ``embedding_provider`` pins the published index's provider column; it defaults
+    to the mock. A non-mock pin still builds with the mock embedder (512-dim
+    vectors) so the run's pin resolves to an unavailable provider at query time.
+    """
     entity_id = str(uuid.uuid4())
     document_id = str(uuid.uuid4())
     document_version_id = str(uuid.uuid4())
@@ -169,7 +178,9 @@ def _seed_indexed_workspace(conn: Any, org_id: str) -> dict[str, str]:
         ],
     }
     spec = make_index_version_spec(
-        corpus_version_id=corpus_version_id, embedding_provider=_PROVIDER, embedding_model=_MODEL
+        corpus_version_id=corpus_version_id,
+        embedding_provider=embedding_provider,
+        embedding_model=_MODEL,
     )
     build_and_publish(
         conn, spec=spec, corpus=corpus, provider=MockEmbeddingProvider(512), activate=True
@@ -391,6 +402,115 @@ def test_idempotent_create_returns_same_run(
             (first.json()["query_id"],),
         ).fetchone()
         assert count is not None and count[0] == 1
+
+
+def _run_row(db_url: str, run_id: str) -> dict[str, Any]:
+    with psycopg.connect(db_url, autocommit=True) as conn:
+        run = conn.execute(
+            "SELECT status, error FROM retrieval_runs WHERE id = %s", (run_id,)
+        ).fetchone()
+        assert run is not None
+        last_event = conn.execute(
+            "SELECT event_type FROM retrieval_events WHERE run_id = %s ORDER BY seq DESC LIMIT 1",
+            (run_id,),
+        ).fetchone()
+        candidate_count = conn.execute(
+            "SELECT count(*) FROM retrieval_candidates WHERE run_id = %s", (run_id,)
+        ).fetchone()
+    return {
+        "status": run[0],
+        "error": run[1],
+        "last_event": last_event[0] if last_event else None,
+        "candidate_count": candidate_count[0] if candidate_count else 0,
+    }
+
+
+def test_unknown_pinned_provider_persists_failed_run(
+    client: TestClient, org: tuple[str, str], db_url: str
+) -> None:
+    with psycopg.connect(db_url, autocommit=True) as conn:
+        seeded = _seed_indexed_workspace(conn, org[0], embedding_provider="openai")
+
+    created = _create(client, org, seeded["workspace_id"])
+
+    row = _run_row(db_url, created["run_id"])
+    assert row["status"] == "failed"
+    assert row["last_event"] == "run_failed"
+    assert row["error"]["code"] == "EMBEDDING_PROVIDER_UNAVAILABLE"
+    assert row["candidate_count"] == 0
+
+    trace = client.get(f"/v1/retrieval-runs/{created['run_id']}", headers=_headers(*org))
+    assert trace.status_code == 200, trace.text
+    assert trace.json()["status"] == "failed"
+
+
+def test_lane_failure_persists_failed_run(
+    client: TestClient,
+    org: tuple[str, str],
+    seeded: dict[str, str],
+    db_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _boom(_conn: Any, _query: Any) -> list[Any]:
+        raise RuntimeError("lane exploded")
+
+    monkeypatch.setitem(retrieval._LANE_FUNCS, "dense", _boom)
+
+    created = _create(client, org, seeded["workspace_id"])
+
+    row = _run_row(db_url, created["run_id"])
+    assert row["status"] == "failed"
+    assert row["last_event"] == "run_failed"
+    assert row["error"]["code"] == "LANE_EXECUTION_FAILED"
+    assert row["candidate_count"] == 0
+
+
+def test_feedback_non_candidate_item_is_422(
+    client: TestClient, org: tuple[str, str], seeded: dict[str, str]
+) -> None:
+    created = _create(client, org, seeded["workspace_id"])
+
+    bad = client.post(
+        f"/v1/retrieval-runs/{created['run_id']}/feedback",
+        json={"item_id": str(uuid.uuid4()), "label": "relevant"},
+        headers={**_headers(*org), "Idempotency-Key": "fb-bad-123456"},
+    )
+    assert bad.status_code == 422, bad.text
+    assert bad.json()["error"]["code"] == "INVALID_FEEDBACK_ITEM"
+
+    trace = client.get(f"/v1/retrieval-runs/{created['run_id']}", headers=_headers(*org)).json()
+    item_id = trace["candidates"][0]["item_id"]
+    good = client.post(
+        f"/v1/retrieval-runs/{created['run_id']}/feedback",
+        json={"item_id": item_id, "label": "relevant"},
+        headers={**_headers(*org), "Idempotency-Key": "fb-good-123456"},
+    )
+    assert good.status_code == 201, good.text
+
+
+def test_create_query_p95_smoke(
+    client: TestClient, org: tuple[str, str], seeded: dict[str, str]
+) -> None:
+    """Smoke-level p95 gate over the seeded corpus (mock providers).
+
+    Not a benchmark: a generous budget that will not flake on CI runners, sized
+    ~4x locally observed latency. Guards against gross regressions only.
+    """
+    n = 20
+    durations: list[float] = []
+    for _ in range(n):
+        start = time.perf_counter()
+        resp = client.post(
+            f"/v1/workspaces/{seeded['workspace_id']}/queries",
+            json={"question": "What was revenue in fiscal 2025?"},
+            headers={**_headers(*org), "Idempotency-Key": str(uuid.uuid4())},
+        )
+        durations.append(time.perf_counter() - start)
+        assert resp.status_code == 202, resp.text
+
+    durations.sort()
+    p95 = durations[-2]  # nearest-rank p95 of 20 samples (ceil(0.95*20) = 19th)
+    assert p95 < 2.0, f"p95 create-query latency {p95:.3f}s exceeded smoke budget"
 
 
 def test_rls_cross_org_is_404(

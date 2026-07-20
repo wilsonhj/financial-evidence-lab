@@ -51,12 +51,15 @@ from app.config import settings
 from app.db import tenant_connection
 from app.dependencies import get_tenant_context
 from app.errors import api_error
-from fel_providers import MockEmbeddingProvider
+from fel_providers import EmbeddingProvider, MockEmbeddingProvider
 from fel_retrieval import (
+    LaneCall,
+    LaneExecutionError,
     LaneQuery,
     PlannerValidationError,
     QueryRequest,
     dense_lane,
+    execute_lanes,
     facts_lane,
     fuse,
     lexical_lane,
@@ -86,6 +89,35 @@ _LANE_FUNCS: dict[str, Callable[[Any, LaneQuery], list[LaneCandidate]]] = {
 # SSE keep-alive comment. Emitted at stream open (and, for a still-open run,
 # between polls) so a client sees liveness within the contract's 15-30s window.
 _HEARTBEAT = ": keep-alive\n\n"
+
+# Statement-timeout applied to every retrieval connection (tenant writes and the
+# per-lane corpus reads) so a pathological query can never wedge a request.
+_STATEMENT_TIMEOUT = "15s"
+
+
+class UnsupportedEmbeddingProvider(RuntimeError):
+    """The pinned embedding provider has no wired implementation.
+
+    Only the deterministic mock exists today; any other pin fails closed here so
+    a run records a typed failure rather than silently using the wrong embedder.
+    """
+
+    def __init__(self, provider: str, model: str) -> None:
+        super().__init__(f"embedding provider {provider!r} (model {model!r}) is not available")
+        self.provider = provider
+        self.model = model
+
+
+def _resolve_embedding_provider(provider: str, model: str) -> EmbeddingProvider:
+    """Resolve the index's pinned embedder. Makes the persisted pin load-bearing.
+
+    ``('mock', ...)`` -> the 512-dim deterministic mock. No live provider is
+    wired yet, so every other pin raises ``UnsupportedEmbeddingProvider`` (caught
+    by the pipeline-failure path and recorded as a ``failed`` run).
+    """
+    if provider == "mock":
+        return MockEmbeddingProvider(512)
+    raise UnsupportedEmbeddingProvider(provider, model)
 
 
 class CreateQuery(BaseModel):
@@ -189,15 +221,29 @@ class _RunWriter:
             (json.dumps(budget_usage), json.dumps(timings_ms), self._run_id),
         )
 
+    def fail(self, error: dict[str, str]) -> None:
+        # Append the terminal ``run_failed`` event, then move the run to the
+        # terminal ``failed`` status. ``fel_guard_retrieval_run`` allows a
+        # transition to ``failed`` from any open status once ``run_failed`` is the
+        # latest event; only column-scoped grant fields are written.
+        self.emit("run_failed", {"error": error})
+        self._conn.execute(
+            "UPDATE retrieval_runs SET status = 'failed', finished_at = now(),"
+            " error = %s::jsonb WHERE id = %s",
+            (json.dumps(error), self._run_id),
+        )
 
-def _lane_query(plan: dict[str, Any], *, effective_as_of: datetime) -> LaneQuery:
+
+def _lane_query(
+    plan: dict[str, Any], *, embedder: EmbeddingProvider, effective_as_of: datetime
+) -> LaneQuery:
     filters = plan.get("filters", {})
     forms = filters.get("forms") or None
     periods = filters.get("periods") or None
     query_text = plan["variants"][0]
     query_vector = None
     if "dense" in plan["lanes"]:
-        query_vector = MockEmbeddingProvider(512).embed([query_text])[0]
+        query_vector = embedder.embed([query_text])[0]
     return LaneQuery(
         index_version_id=plan["index_version_id"],
         as_of=effective_as_of,
@@ -211,22 +257,45 @@ def _lane_query(plan: dict[str, Any], *, effective_as_of: datetime) -> LaneQuery
     )
 
 
+def _lane_call(lane: str, lane_query: LaneQuery, timings: dict[str, int]) -> LaneCall:
+    """Bind one lane to its own corpus connection so lanes run concurrently.
+
+    Each lane opens a dedicated read connection (psycopg connections are not
+    thread-safe) and records its own wall time into the pre-populated ``timings``
+    dict (only existing keys are assigned, so no concurrent resize occurs).
+    """
+
+    def _call() -> list[LaneCandidate]:
+        with _corpus_read_connection() as read_conn:
+            started = time.monotonic()
+            candidates = _LANE_FUNCS[lane](read_conn, lane_query)
+            timings[lane] = int((time.monotonic() - started) * 1000)
+            return candidates
+
+    return _call
+
+
 def _execute_pipeline(
     conn: psycopg.Connection[Any],
-    read_conn: psycopg.Connection[Any],
     *,
     run_id: str,
     org_id: str,
     plan: dict[str, Any],
     mode: str,
+    embedding_provider: str,
+    embedding_model: str,
 ) -> None:
     """Run lanes -> fusion once and persist the full ordered trace.
 
-    All writes are on ``conn`` (tenant/RLS); lane SELECTs use ``read_conn``
-    (public corpus, tuple rows). Everything runs inside the caller's single
-    transaction, so the run either materialises fully succeeded or not at all.
+    All writes are on ``conn`` (tenant/RLS); each lane SELECTs over its own
+    dedicated public-corpus connection via ``execute_lanes``. Everything runs
+    inside the caller's single transaction, so the run either materialises fully
+    succeeded or not at all — a raised ``UnsupportedEmbeddingProvider`` or
+    ``LaneExecutionError`` propagates to the failure path, which records a
+    ``failed`` run in a fresh transaction.
     """
     writer = _RunWriter(conn, run_id=run_id, org_id=org_id)
+    embedder = _resolve_embedding_provider(embedding_provider, embedding_model)
     effective_as_of = _parse_iso(plan["effective_as_of"])
     budgets = plan["budgets"]
     lanes = [lane for lane in _LANE_ORDER if lane in plan["lanes"]]
@@ -242,18 +311,23 @@ def _execute_pipeline(
 
     writer.set_status("retrieving")
     t0 = time.monotonic()
-    lane_query = _lane_query(plan, effective_as_of=effective_as_of)
-    lane_results: dict[str, list[LaneCandidate]] = {}
-    lane_timings: dict[str, int] = {}
+    lane_query = _lane_query(plan, embedder=embedder, effective_as_of=effective_as_of)
     for lane in lanes:
         writer.emit("lane_started", {"lane": lane})
-        started = time.monotonic()
-        candidates = _LANE_FUNCS[lane](read_conn, lane_query)
-        elapsed = int((time.monotonic() - started) * 1000)
-        lane_results[lane] = candidates
-        lane_timings[lane] = elapsed
+    # Fixed-order timings dict, pre-populated so concurrent writes only touch
+    # existing keys. execute_lanes fails closed (LaneExecutionError) on any lane.
+    lane_timings: dict[str, int] = {lane: 0 for lane in lanes}
+    lane_results = execute_lanes(
+        [(lane, _lane_call(lane, lane_query, lane_timings)) for lane in lanes]
+    )
+    for lane in lanes:
         writer.emit(
-            "lane_completed", {"lane": lane, "candidates": len(candidates), "timing_ms": elapsed}
+            "lane_completed",
+            {
+                "lane": lane,
+                "candidates": len(lane_results[lane]),
+                "timing_ms": lane_timings[lane],
+            },
         )
     retrieving_ms = int((time.monotonic() - t0) * 1000)
 
@@ -386,7 +460,9 @@ def _corpus_read_connection() -> psycopg.Connection[Any]:
     url = settings().database_url
     if url is None:
         raise RuntimeError("FEL_DATABASE_URL is not configured")
-    return psycopg.connect(url, autocommit=True)
+    conn = psycopg.connect(url, autocommit=True)
+    conn.execute("SELECT set_config('statement_timeout', %s, false)", (_STATEMENT_TIMEOUT,))
+    return conn
 
 
 # --- Query / run resolution -------------------------------------------------
@@ -495,6 +571,55 @@ def _accepted_body(query_id: str, run_id: str) -> dict[str, Any]:
     }
 
 
+def _failure_envelope(exc: Exception) -> dict[str, str]:
+    """Map a pipeline exception to the run's stored error envelope."""
+    if isinstance(exc, UnsupportedEmbeddingProvider):
+        return {"code": "EMBEDDING_PROVIDER_UNAVAILABLE", "message": str(exc)}
+    if isinstance(exc, LaneExecutionError):
+        return {"code": "LANE_EXECUTION_FAILED", "message": str(exc)}
+    return {"code": "PIPELINE_FAILED", "message": str(exc)}
+
+
+def _run_pipeline_or_fail(
+    ctx: TenantContext,
+    *,
+    run_id: str,
+    plan: dict[str, Any],
+    mode: str,
+    embedding_provider: str,
+    embedding_model: str,
+) -> None:
+    """Execute the pipeline for an already-persisted run, recording durable failure.
+
+    The query/run were committed by the caller; the pipeline runs here in its own
+    tenant transaction. A pipeline exception rolls that transaction back (no
+    partial trace) and is then recorded as a terminal ``failed`` run in a fresh
+    transaction, so a failure is always durably observable.
+    """
+    try:
+        with tenant_connection(ctx) as conn:
+            conn.execute("SELECT set_config('statement_timeout', %s, true)", (_STATEMENT_TIMEOUT,))
+            _execute_pipeline(
+                conn,
+                run_id=run_id,
+                org_id=ctx.org_id,
+                plan=plan,
+                mode=mode,
+                embedding_provider=embedding_provider,
+                embedding_model=embedding_model,
+            )
+    except Exception as exc:
+        _record_run_failure(ctx, run_id=run_id, exc=exc)
+
+
+def _record_run_failure(ctx: TenantContext, *, run_id: str, exc: Exception) -> None:
+    """Append ``run_failed`` and move the run to ``failed`` in a fresh transaction."""
+    error = _failure_envelope(exc)
+    with tenant_connection(ctx) as conn:
+        conn.execute("SELECT set_config('statement_timeout', %s, true)", (_STATEMENT_TIMEOUT,))
+        _RunWriter(conn, run_id=run_id, org_id=ctx.org_id).fail(error)
+
+
 # --- Endpoints --------------------------------------------------------------
 @router.post("/workspaces/{workspace_id}/queries", status_code=202)
 def create_query(
@@ -504,7 +629,7 @@ def create_query(
     idempotency_key: Annotated[str, Header(alias="Idempotency-Key", min_length=8, max_length=128)],
     response: Response,
 ) -> dict[str, Any]:
-    with _corpus_read_connection() as read_conn, tenant_connection(ctx) as conn:
+    with tenant_connection(ctx) as conn:
         replay = _idempotent_replay(conn, ctx, "createQuery", idempotency_key)
         if replay is not None:
             return replay
@@ -552,12 +677,19 @@ def create_query(
         run_id = _insert_run(
             conn, ctx, query_id=query_id, index=index, mode="execute", parent_run_id=None
         )
-        _execute_pipeline(
-            conn, read_conn, run_id=run_id, org_id=ctx.org_id, plan=plan_dict, mode="execute"
-        )
-
         accepted = _accepted_body(query_id, run_id)
         _idempotent_store(conn, ctx, "createQuery", idempotency_key, 202, accepted)
+
+    # Query + run are committed (status queued); execute the pipeline in its own
+    # transaction so a pipeline failure is recorded as a durable ``failed`` run.
+    _run_pipeline_or_fail(
+        ctx,
+        run_id=run_id,
+        plan=plan_dict,
+        mode="execute",
+        embedding_provider=index["embedding_provider"],
+        embedding_model=index["embedding_model"],
+    )
     response.status_code = 202
     return accepted
 
@@ -569,7 +701,7 @@ def create_query_rerun(
     idempotency_key: Annotated[str, Header(alias="Idempotency-Key", min_length=8, max_length=128)],
     response: Response,
 ) -> dict[str, Any]:
-    with _corpus_read_connection() as read_conn, tenant_connection(ctx) as conn:
+    with tenant_connection(ctx) as conn:
         replay = _idempotent_replay(conn, ctx, "createQueryRerun", idempotency_key)
         if replay is not None:
             return replay
@@ -602,16 +734,20 @@ def create_query_rerun(
             mode="rerun",
             parent_run_id=str(parent["id"]),
         )
-        _execute_pipeline(
-            conn,
-            read_conn,
-            run_id=run_id,
-            org_id=ctx.org_id,
-            plan=dict(query["plan"]),
-            mode="rerun",
-        )
         accepted = _accepted_body(str(query_id), run_id)
         _idempotent_store(conn, ctx, "createQueryRerun", idempotency_key, 202, accepted)
+        plan_dict = dict(query["plan"])
+        embedding_provider = index["embedding_provider"]
+        embedding_model = index["embedding_model"]
+
+    _run_pipeline_or_fail(
+        ctx,
+        run_id=run_id,
+        plan=plan_dict,
+        mode="rerun",
+        embedding_provider=embedding_provider,
+        embedding_model=embedding_model,
+    )
     response.status_code = 202
     return accepted
 
@@ -838,21 +974,29 @@ def create_retrieval_feedback(
         run = conn.execute("SELECT id FROM retrieval_runs WHERE id = %s", (str(run_id),)).fetchone()
         if run is None:
             raise api_error(404, "NOT_FOUND", "Retrieval run not found.")
-        conn.execute(
-            "INSERT INTO retrieval_feedback ("
-            " id, org_id, run_id, retrieval_item_id, label, actor_user_id,"
-            " supersedes_feedback_id, reason"
-            ") VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
-            (
-                str(uuid.uuid4()),
-                ctx.org_id,
-                str(run_id),
-                str(body.item_id),
-                body.label,
-                ctx.user_id,
-                str(body.supersedes_feedback_id) if body.supersedes_feedback_id else None,
-                body.reason,
-            ),
-        )
+        try:
+            conn.execute(
+                "INSERT INTO retrieval_feedback ("
+                " id, org_id, run_id, retrieval_item_id, label, actor_user_id,"
+                " supersedes_feedback_id, reason"
+                ") VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+                (
+                    str(uuid.uuid4()),
+                    ctx.org_id,
+                    str(run_id),
+                    str(body.item_id),
+                    body.label,
+                    ctx.user_id,
+                    str(body.supersedes_feedback_id) if body.supersedes_feedback_id else None,
+                    body.reason,
+                ),
+            )
+        except (psycopg.errors.RaiseException, psycopg.errors.ForeignKeyViolation) as exc:
+            # The DB guard rejects an item that is not a candidate of this run
+            # (P0001), and an item that does not exist at all trips the item FK
+            # (23503); both are caller errors, not server faults.
+            raise api_error(
+                422, "INVALID_FEEDBACK_ITEM", "Feedback item must be a candidate of this run."
+            ) from exc
         _idempotent_store(conn, ctx, "createRetrievalFeedback", idempotency_key, 201, {})
     return Response(status_code=201)
