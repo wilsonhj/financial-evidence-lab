@@ -65,9 +65,8 @@ def _build_query(conn: Any, seed_corpus: Callable[[], Any]) -> LaneQuery:
     )
 
 
-def _run_pipeline(query: LaneQuery) -> FusionResult:
+def _run_pipeline(query: LaneQuery, url: str) -> FusionResult:
     """Run the four lanes concurrently, each on its own connection, then fuse."""
-    url = os.environ["TEST_DATABASE_URL"]
 
     def make_call(lane_fn: LaneFn) -> LaneCall:
         def call() -> list[LaneCandidate]:
@@ -92,12 +91,12 @@ def _run_pipeline(query: LaneQuery) -> FusionResult:
     reason="TEST_DATABASE_URL not configured (needs pgvector Postgres)",
 )
 def test_full_pipeline_is_deterministic_and_traceable(
-    pg_conn: Any, seed_corpus: Callable[[], Any]
+    pg_conn: Any, seed_corpus: Callable[[], Any], retrieval_db_url: str
 ) -> None:
     query = _build_query(pg_conn, seed_corpus)
 
-    first = _run_pipeline(query)
-    second = _run_pipeline(query)
+    first = _run_pipeline(query, retrieval_db_url)
+    second = _run_pipeline(query, retrieval_db_url)
 
     assert first.candidates, "fusion returned no candidates"
     # Deterministic across two independent concurrent runs.

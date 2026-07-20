@@ -21,13 +21,28 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.auth import make_mock_token
-from tests.conftest import requires_db
+from tests.conftest import TEST_DATABASE_URL, ensure_retrieval_database, requires_db
 
 pytestmark = requires_db
 
 import app.retrieval as retrieval  # noqa: E402
 from fel_providers import MockEmbeddingProvider  # noqa: E402
 from fel_retrieval import build_and_publish, make_index_version_spec  # noqa: E402
+
+
+@pytest.fixture()
+def db_url(monkeypatch: pytest.MonkeyPatch) -> str:
+    """Point the retrieval suite (and the app) at the isolated retrieval DB.
+
+    Overrides the shared conftest ``db_url`` for this module only: these tests
+    commit into delete-immutable tables, so they must not touch the base DB the
+    workers/ingestion suites clean between runs.
+    """
+    assert TEST_DATABASE_URL is not None
+    url = ensure_retrieval_database(TEST_DATABASE_URL)
+    monkeypatch.setenv("FEL_DATABASE_URL", url)
+    return url
+
 
 _PROVIDER = "mock"
 _MODEL = "mock-embed-v1"
@@ -338,7 +353,7 @@ def test_rerun_parent_linked_and_parent_frozen(
 
     rerun = client.post(
         f"/v1/queries/{created['query_id']}/reruns",
-        headers={**_headers(*org), "Idempotency-Key": "rerun-key-1234"},
+        headers={**_headers(*org), "Idempotency-Key": "idempotency-test-rerun-key"},
     )
     assert rerun.status_code == 202, rerun.text
     child_run_id = rerun.json()["run_id"]
@@ -365,7 +380,7 @@ def test_feedback_append(client: TestClient, org: tuple[str, str], seeded: dict[
     resp = client.post(
         f"/v1/retrieval-runs/{created['run_id']}/feedback",
         json={"item_id": item_id, "label": "relevant", "reason": "on point"},
-        headers={**_headers(*org), "Idempotency-Key": "fb-key-123456"},
+        headers={**_headers(*org), "Idempotency-Key": "idempotency-test-feedback-key"},
     )
     assert resp.status_code == 201, resp.text
 
@@ -376,7 +391,7 @@ def test_planner_validation_returns_422(
     resp = client.post(
         f"/v1/workspaces/{seeded['workspace_id']}/queries",
         json={"question": "revenue?", "periods": ["not-a-period"]},
-        headers={**_headers(*org), "Idempotency-Key": "bad-plan-1234"},
+        headers={**_headers(*org), "Idempotency-Key": "idempotency-test-badplan-key"},
     )
     assert resp.status_code == 422, resp.text
     assert resp.json()["error"]["code"] == "INVALID_PERIOD"
@@ -385,7 +400,7 @@ def test_planner_validation_returns_422(
 def test_idempotent_create_returns_same_run(
     client: TestClient, org: tuple[str, str], seeded: dict[str, str], db_url: str
 ) -> None:
-    key = "idem-same-1234"
+    key = "idempotency-test-idem-key"
     headers = {**_headers(*org), "Idempotency-Key": key}
     payload = {"question": "What was revenue in fiscal 2025?"}
     first = client.post(
@@ -473,7 +488,7 @@ def test_feedback_non_candidate_item_is_422(
     bad = client.post(
         f"/v1/retrieval-runs/{created['run_id']}/feedback",
         json={"item_id": str(uuid.uuid4()), "label": "relevant"},
-        headers={**_headers(*org), "Idempotency-Key": "fb-bad-123456"},
+        headers={**_headers(*org), "Idempotency-Key": "idempotency-test-feedback-bad-key"},
     )
     assert bad.status_code == 422, bad.text
     assert bad.json()["error"]["code"] == "INVALID_FEEDBACK_ITEM"
@@ -483,7 +498,7 @@ def test_feedback_non_candidate_item_is_422(
     good = client.post(
         f"/v1/retrieval-runs/{created['run_id']}/feedback",
         json={"item_id": item_id, "label": "relevant"},
-        headers={**_headers(*org), "Idempotency-Key": "fb-good-123456"},
+        headers={**_headers(*org), "Idempotency-Key": "idempotency-test-feedback-good-key"},
     )
     assert good.status_code == 201, good.text
 

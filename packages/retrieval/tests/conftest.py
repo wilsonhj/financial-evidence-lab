@@ -20,7 +20,9 @@ import os
 import uuid
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit, urlunsplit
 
 import pytest
 
@@ -30,6 +32,42 @@ except ModuleNotFoundError:  # pragma: no cover - psycopg is in requirements-dev
     psycopg = None  # type: ignore[assignment]
 
 TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL")
+
+
+def ensure_retrieval_database(base_url: str) -> str:
+    """Create and migrate a dedicated ``<db>_retrieval`` sibling; return its URL.
+
+    Retrieval integration tests commit into delete-immutable shared tables
+    (``retrieval_index_versions``/``retrieval_items``/``retrieval_embeddings``,
+    guarded by BEFORE DELETE triggers and an FK to ``corpus_versions``). Running
+    them against the base ``TEST_DATABASE_URL`` permanently blocks the
+    workers/ingestion suites' ``DELETE FROM corpus_versions`` cleanup, so they
+    run against an isolated sibling database instead. Roles (``fel_app``) are
+    cluster-level, so grants inside the migrations resolve there too.
+
+    Idempotent: the database is created once (``DuplicateDatabase`` swallowed)
+    and the non-idempotent migrations are applied only when the marker table is
+    absent.
+    """
+    parsed = urlsplit(base_url)
+    retrieval_db = parsed.path.lstrip("/") + "_retrieval"
+    retrieval_url = urlunsplit(parsed._replace(path="/" + retrieval_db))
+
+    with psycopg.connect(base_url, autocommit=True) as conn:
+        try:
+            conn.execute(f'CREATE DATABASE "{retrieval_db}"')  # noqa: S608 — derived name
+        except psycopg.errors.DuplicateDatabase:
+            pass
+
+    repo_root = Path(__file__).resolve().parents[3]
+    migrations = sorted(repo_root.glob("db/migrations/*.sql"))
+    with psycopg.connect(retrieval_url, autocommit=True) as conn:
+        marker = conn.execute("SELECT to_regclass('public.retrieval_index_versions')").fetchone()
+        if marker is None or marker[0] is None:
+            for path in migrations:
+                conn.execute(path.read_text())
+    return retrieval_url
+
 
 _SENTENCES = [
     "Revenue was $100 million in fiscal 2025.",
@@ -175,11 +213,16 @@ def _seed_corpus(conn: Any) -> SeededCorpus:
     return SeededCorpus(corpus_version_id=corpus_version_id, corpus=corpus)
 
 
-@pytest.fixture()
-def pg_conn() -> Iterator[Any]:
+@pytest.fixture(scope="session")
+def retrieval_db_url() -> str:
     if TEST_DATABASE_URL is None or psycopg is None:
         pytest.skip("TEST_DATABASE_URL not configured (needs pgvector Postgres)")
-    with psycopg.connect(TEST_DATABASE_URL, autocommit=True) as conn:
+    return ensure_retrieval_database(TEST_DATABASE_URL)
+
+
+@pytest.fixture()
+def pg_conn(retrieval_db_url: str) -> Iterator[Any]:
+    with psycopg.connect(retrieval_db_url, autocommit=True) as conn:
         yield conn
 
 
