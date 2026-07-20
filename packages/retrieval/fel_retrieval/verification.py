@@ -221,11 +221,13 @@ def verify_claims(
     accepted = {item.item_id: item for item in context}
     verified: list[GeneratedClaim] = []
     for claim in claims:
-        claim_numeric = _claim_numeric(claim, accepted)
         new_citations: list[ClaimCitation] = []
         for citation in claim.citations:
             item = assert_citation_integrity(citation, accepted)
-            edge = verifier.verify(claim.text, item, claim_numeric=claim_numeric)
+            # The claim asserts its own numeric; every edge checks that assertion
+            # against its OWN cited evidence, so a second correctly-cited fact is
+            # never mis-flagged by the value of an earlier one.
+            edge = verifier.verify(claim.text, item, claim_numeric=claim.numeric)
             new_citations.append(
                 ClaimCitation(
                     item_id=citation.item_id,
@@ -249,20 +251,10 @@ def verify_claims(
                 citations=tuple(new_citations),
                 confidence=claim.confidence,
                 calculation_lineage=claim.calculation_lineage,
+                numeric=claim.numeric,
             )
         )
     return tuple(verified)
-
-
-def _claim_numeric(
-    claim: GeneratedClaim, accepted: Mapping[str, ContextItem]
-) -> NumericTuple | None:
-    """The numeric tuple a claim asserts, taken from the fact it cites (if any)."""
-    for citation in claim.citations:
-        item = accepted.get(citation.item_id)
-        if item is not None and item.numeric is not None:
-            return item.numeric
-    return None
 
 
 __all__ = [

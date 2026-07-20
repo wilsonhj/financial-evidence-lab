@@ -128,6 +128,7 @@ def test_verify_claims_supported_and_numeric_checked() -> None:
         text="Revenue was 100",
         status="unsupported",
         citations=(ClaimCitation(item_id="a", source_span_id="span-1"),),
+        numeric=_num("100"),
     )
     verified = verify_claims([claim], [item], MockCitationVerifier())
     assert verified[0].status == "supported"
@@ -185,11 +186,36 @@ def test_contradiction_preserves_all_spans() -> None:
             ClaimCitation(item_id="a", source_span_id="span-1"),
             ClaimCitation(item_id="b", source_span_id="span-2"),
         ),
+        numeric=_num("100"),
     )
     verified = verify_claims([claim], [good, bad], MockCitationVerifier())
     assert verified[0].status == "contradicted"
     # Both material spans are preserved on the contradicted claim.
     assert {c.item_id for c in verified[0].citations} == {"a", "b"}
+
+
+def test_multi_citation_each_edge_checked_against_own_evidence() -> None:
+    """A claim citing two different, individually-correct facts must not be
+    contradicted: each edge is numeric-checked against its OWN cited evidence, not
+    against the value of an arbitrary earlier citation."""
+    a = _item("a", "revenue was reported", numeric=_num("100"))
+    b = _item("b", "revenue was reported", span="span-2", numeric=_num("250"))
+    claim = GeneratedClaim(
+        ord=0,
+        text="revenue was reported",
+        status="unsupported",
+        # Aggregate claim: it lists two operand facts and asserts no single scalar.
+        citations=(
+            ClaimCitation(item_id="a", source_span_id="span-1"),
+            ClaimCitation(item_id="b", source_span_id="span-2"),
+        ),
+        calculation_lineage={"op": "sum", "operands": ["a", "b"]},
+        numeric=None,
+    )
+    verified = verify_claims([claim], [a, b], MockCitationVerifier())
+    assert verified[0].status != "contradicted"
+    assert verified[0].status in {"supported", "derived"}
+    assert all(c.status in {"entailed", "partial"} for c in verified[0].citations)
 
 
 def test_verify_claims_dangling_raises() -> None:

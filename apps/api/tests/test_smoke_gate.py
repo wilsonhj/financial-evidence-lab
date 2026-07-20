@@ -10,6 +10,7 @@ TEST_DATABASE_URL is unset.
 
 from __future__ import annotations
 
+import re
 import time
 import uuid
 from decimal import Decimal
@@ -26,10 +27,12 @@ pytestmark = requires_db
 from fel_providers import MockEmbeddingProvider  # noqa: E402
 from fel_retrieval import exact_knn, hnsw_search  # noqa: E402
 from fel_retrieval_evals.metrics import (  # noqa: E402
+    SMOKE_THRESHOLDS,
     QuestionOutcome,
     aggregate_metrics,
     build_gate_report,
     hnsw_recall_at_k,
+    metric_supports,
     question_recall_at_k,
 )
 from tests.test_retrieval_api import (  # noqa: E402
@@ -83,6 +86,32 @@ def _top_items(trace: dict[str, Any], k: int) -> list[str]:
     return [c["item_id"] for c in ordered[:k]]
 
 
+def _content_by_item(db_url: str, index_version_id: str) -> dict[str, str]:
+    """The persisted span text of every retrieval item in the index, by item id."""
+    with psycopg.connect(db_url, autocommit=True) as conn:
+        rows = conn.execute(
+            "SELECT id, content FROM retrieval_items WHERE index_version_id = %s",
+            (index_version_id,),
+        ).fetchall()
+    return {str(r[0]): r[1] for r in rows}
+
+
+def _tokens(text: str) -> set[str]:
+    return set(re.findall(r"[a-z0-9]+", text.lower()))
+
+
+def _grounded(claim_text: str, span_text: str) -> bool:
+    """Whether a claim is truly supported by a cited span's persisted text.
+
+    A supporting edge is only *correct* if the claim it grounds is covered by the
+    span the pipeline actually persisted for that citation. This is the honest
+    entailment check the smoke grades against, so a hallucinated supporting edge
+    (a claim citing a span whose text does not support it) is not counted.
+    """
+    claim = _tokens(claim_text)
+    return bool(claim) and claim <= _tokens(span_text)
+
+
 def _trace(client: TestClient, org: tuple[str, str], run_id: str) -> dict[str, Any]:
     return client.get(f"/v1/retrieval-runs/{run_id}", headers=_headers(*org)).json()
 
@@ -98,8 +127,11 @@ def test_smoke_gate_passes_and_reranker_disabled(
     assert gold, "expected revenue-bearing gold evidence"
     recall = question_recall_at_k(_top_items(trace, 10), gold, 10)
 
-    # Grade the run's claims/citations. On this controlled corpus every entailed
-    # edge is a true supporting edge and every numeric check passes.
+    # Grade the run's claims/citations. A supporting edge only counts as correct
+    # when the claim it grounds is actually covered by the span the pipeline
+    # persisted for that citation -- so a hallucinated supporting edge would drop
+    # entailment precision rather than be waved through.
+    content_by_item = _content_by_item(db_url, seeded["index_version_id"])
     as_of_iso = _AS_OF.isoformat()
     temporal_ok = all(c["published_at"] <= as_of_iso for c in trace["candidates"])
     supporting = correct = rendered = cited = 0
@@ -112,11 +144,13 @@ def test_smoke_gate_passes_and_reranker_disabled(
         for citation in claim["citations"]:
             if citation["status"] in {"entailed", "partial"}:
                 supporting += 1
-                correct += 1  # verbatim-grounded on the seeded corpus
+                if _grounded(claim["text"], content_by_item.get(citation["item_id"], "")):
+                    correct += 1
             if citation["numeric_checks"]:
                 numeric_expected = True
                 numeric_correct = all(citation["numeric_checks"].values())
 
+    assert supporting > 0 and correct == supporting, "seeded edges must all be grounded"
     outcome = QuestionOutcome(
         recall_at_10=recall,
         temporal_ok=temporal_ok,
@@ -127,10 +161,66 @@ def test_smoke_gate_passes_and_reranker_disabled(
         rendered_claims=rendered,
         cited_rendered_claims=cited,
     )
-    report = build_gate_report(aggregate_metrics([outcome]))
+    report = build_gate_report(aggregate_metrics([outcome]), supports=metric_supports([outcome]))
     assert report.passed, report.to_dict()
     assert report.reranker_triggered is False
     assert numeric_expected, "expected a fact-backed numeric claim on the seed corpus"
+
+
+def test_smoke_entailment_catches_hallucinated_supporting_edge(
+    client: TestClient, org: tuple[str, str], seeded: dict[str, str], db_url: str
+) -> None:
+    """Inject a supporting edge whose cited span does NOT support the claim and
+    confirm the smoke's entailment grading catches it: precision drops below the
+    0.95 threshold and the gate fails closed. Guards against a tautological
+    ``correct += 1`` that could never see a hallucination."""
+    created = _create(client, org, seeded["workspace_id"])
+    trace = _trace(client, org, created["run_id"])
+    content_by_item = _content_by_item(db_url, seeded["index_version_id"])
+
+    # A real supported claim and a span from a DIFFERENT sentence that cannot
+    # ground it (persisted corpus text, not a synthetic string). The span is
+    # chosen by raw token overlap so this selection never depends on the grading
+    # function under test.
+    claim = next(c for c in trace["claims"] if c["status"] in {"supported", "derived"})
+    cited_ids = {cit["item_id"] for cit in claim["citations"]}
+    claim_tokens = _tokens(claim["text"])
+    bogus_item, bogus_text = min(
+        ((iid, text) for iid, text in content_by_item.items() if iid not in cited_ids),
+        key=lambda it: len(claim_tokens & _tokens(it[1])),
+    )
+    # Precondition: the claim really is not covered by this span (uncounted edge).
+    assert claim_tokens - _tokens(bogus_text), "chosen span unexpectedly grounds the claim"
+
+    # Grade the genuine edges, then add one hallucinated supporting edge.
+    supporting = correct = rendered = cited = 0
+    for c in trace["claims"]:
+        if c["status"] in {"supported", "derived"}:
+            rendered += 1
+            if c["citations"]:
+                cited += 1
+        for citation in c["citations"]:
+            if citation["status"] in {"entailed", "partial"}:
+                supporting += 1
+                if _grounded(c["text"], content_by_item.get(citation["item_id"], "")):
+                    correct += 1
+    supporting += 1  # hallucinated supporting edge asserted by the run
+    if _grounded(claim["text"], bogus_text):  # must NOT count -- span cannot ground it
+        correct += 1
+    assert bogus_item  # a non-supporting span existed to inject
+
+    outcome = QuestionOutcome(
+        recall_at_10=Decimal(1),
+        temporal_ok=True,
+        supporting_citations=supporting,
+        correct_supporting_citations=correct,
+        rendered_claims=rendered,
+        cited_rendered_claims=cited,
+    )
+    report = build_gate_report(aggregate_metrics([outcome]), supports=metric_supports([outcome]))
+    entailment = next(r for r in report.results if r.name == "entailment_precision")
+    assert entailment.value < SMOKE_THRESHOLDS["entailment_precision"]
+    assert not report.passed
 
 
 def test_per_lane_ablation(
@@ -138,16 +228,26 @@ def test_per_lane_ablation(
 ) -> None:
     gold = _gold_revenue_items(db_url, seeded["index_version_id"])
 
-    def recall_for(lanes: list[str]) -> Decimal:
+    def run(lanes: list[str]) -> tuple[set[str], Decimal]:
         created = _create(client, org, seeded["workspace_id"], lanes=lanes)
         trace = _trace(client, org, created["run_id"])
-        return question_recall_at_k(_top_items(trace, 10), gold, 10)
+        candidates = {c["item_id"] for c in trace["candidates"]}
+        return candidates, question_recall_at_k(_top_items(trace, 10), gold, 10)
 
-    full = recall_for(_LANES)
-    ablations = {lane: recall_for([x for x in _LANES if x != lane]) for lane in _LANES}
-    # Dropping a lane can only remove candidates, never improve recall.
-    for lane, value in ablations.items():
-        assert value <= full, f"ablating {lane} raised recall ({value} > {full})"
+    full_candidates, full_recall = run(_LANES)
+    shrunk = False
+    for lane in _LANES:
+        candidates, recall = run([x for x in _LANES if x != lane])
+        # Dropping a lane can only remove candidates, never add or improve recall.
+        assert recall <= full_recall, f"ablating {lane} raised recall ({recall} > {full_recall})"
+        assert candidates <= full_candidates, f"ablating {lane} introduced new candidates"
+        if candidates < full_candidates:
+            shrunk = True
+    # Isolation, not mere monotonicity: at least one lane must contribute
+    # candidates no other lane does, so dropping it strictly shrinks the set. If
+    # lane selection were a silent no-op every ablation would return the full set
+    # and this would fail.
+    assert shrunk, "no lane ablation reduced the candidate set; lane selection may be a no-op"
 
 
 def test_exact_vs_hnsw_recall_reuses_oracle(seeded: dict[str, str], db_url: str) -> None:

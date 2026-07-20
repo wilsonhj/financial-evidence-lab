@@ -140,7 +140,14 @@ class ClaimCitation:
 
 @dataclass(frozen=True)
 class GeneratedClaim:
-    """An atomic claim in the closed status set with its candidate citations."""
+    """An atomic claim in the closed status set with its candidate citations.
+
+    ``numeric`` is the single value the claim itself asserts (an atomic claim
+    asserts one quantity). Verification checks it against each cited item's own
+    evidence, so a corroborating fact passes and a disagreeing one contradicts.
+    It is ``None`` for a claim that asserts no single checkable scalar (a passage
+    claim, or an aggregate that only lists its operands).
+    """
 
     ord: int
     text: str
@@ -148,6 +155,7 @@ class GeneratedClaim:
     citations: tuple[ClaimCitation, ...]
     confidence: Decimal | None = None
     calculation_lineage: dict[str, Any] = field(default_factory=dict)
+    numeric: NumericTuple | None = None
 
     def __post_init__(self) -> None:
         if self.status not in CLAIM_STATUSES:
@@ -254,6 +262,7 @@ def _decompose(context: Sequence[ContextItem]) -> tuple[GeneratedClaim, ...]:
                 status="supported",
                 citations=(citation,),
                 confidence=Decimal("1"),
+                numeric=item.numeric,
             )
         )
     return tuple(claims)
