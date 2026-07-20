@@ -309,6 +309,16 @@ packages:
       - packages/contracts/**
       - packages/providers/**
       - docs/handoff/CONTRACTS.md
+  - id: DB-GUARD-HARDENING # retroactive 0005 record + as-fel_app guard-harness pass (issue #125)
+    issue: 125
+    tasks: []
+    depends_on: [M2-CONTRACT, M3-CONTRACT] # hardens the 0003/0004 harnesses; both merged
+    team: trust
+    branch: chore/db-guard-harness-hardening
+    status: active # dispatched 2026-07-20 by integration lead; scope = db/migrations/tests/** + README only (authorization on #125; no numbered-migration edits)
+    allowed_paths:
+      - db/migrations/tests/**
+      - db/migrations/README.md
   - id: M3-EXTRACTION-CORE # ontology, agent runtime, normalization
     issue: 60
     tasks: [T0301, T0302, T0303, T0304, T0305]
