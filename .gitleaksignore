@@ -1,0 +1,6 @@
+# False positive: test-only Idempotency-Key literal ("fb-key-123456") in a
+# historical commit on the M2 retrieval branch. The literal was replaced with
+# non-flagging values in af4679e; this fingerprint suppresses the finding in
+# the already-pushed commit 39baeb6, which cannot be rewritten on a shared
+# branch. No real credential existed at any point.
+39baeb68e0b96acd1bda4d771c568e53dd74fecb:apps/api/tests/test_retrieval_api.py:generic-api-key:357

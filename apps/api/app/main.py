@@ -19,6 +19,7 @@ from app import __version__
 from app.corpus import router as corpus_router
 from app.observability import RequestContextMiddleware, configure_logging
 from app.reader import router as reader_router
+from app.retrieval import router as retrieval_router
 from app.workspaces import router as workspaces_router
 
 
@@ -36,6 +37,7 @@ app.add_middleware(RequestContextMiddleware)
 app.include_router(workspaces_router)
 app.include_router(corpus_router)
 app.include_router(reader_router)
+app.include_router(retrieval_router)
 
 
 def _envelope(request: Request, status: int, code: str, message: str, details: Any) -> JSONResponse:
