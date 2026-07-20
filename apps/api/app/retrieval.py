@@ -77,6 +77,11 @@ from fel_retrieval.generation import (
     StructuredClaimGenerator,
 )
 from fel_retrieval.lanes import LaneCandidate
+from fel_retrieval.verification import (
+    CitationIntegrityError,
+    MockCitationVerifier,
+    verify_claims,
+)
 
 router = APIRouter(prefix="/v1", tags=["retrieval"])
 
@@ -421,13 +426,27 @@ def _execute_pipeline(
     for claim in generation.claims:
         writer.emit(
             "claim_generated",
-            {"ord": claim.ord, "status": claim.status, "citations": len(claim.citations)},
+            {"ord": claim.ord, "citations": len(claim.citations)},
         )
     generating_ms = int((time.monotonic() - t0) * 1000)
 
     writer.set_status("verifying")
     t0 = time.monotonic()
-    _persist_claims(conn, run_id=run_id, org_id=org_id, claims=generation.claims)
+    # Re-derive every citation edge and support status from the evidence; a
+    # dangling/cross-version citation raises CitationIntegrityError (fail closed).
+    claims = verify_claims(generation.claims, context, MockCitationVerifier())
+    for claim in claims:
+        for citation in claim.citations:
+            writer.emit(
+                "citation_verified",
+                {
+                    "claim_ord": claim.ord,
+                    "item_id": citation.item_id,
+                    "status": citation.status,
+                    "numeric_checks": citation.numeric_checks,
+                },
+            )
+    _persist_claims(conn, run_id=run_id, org_id=org_id, claims=claims)
     verifying_ms = int((time.monotonic() - t0) * 1000)
 
     context_tokens = _context_tokens(conn, accepted)
@@ -734,6 +753,8 @@ def _failure_envelope(exc: Exception) -> dict[str, str]:
         return {"code": "EMBEDDING_PROVIDER_UNAVAILABLE", "message": str(exc)}
     if isinstance(exc, LaneExecutionError):
         return {"code": "LANE_EXECUTION_FAILED", "message": str(exc)}
+    if isinstance(exc, CitationIntegrityError):
+        return {"code": exc.code, "message": str(exc)}
     return {"code": "PIPELINE_FAILED", "message": str(exc)}
 
 

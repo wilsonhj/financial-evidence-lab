@@ -312,6 +312,35 @@ def test_claims_generated_and_persisted(
     assert trace["budget_usage"]["output_tokens"] >= 1
 
 
+def test_citations_verified_with_numeric_checks(
+    client: TestClient, org: tuple[str, str], seeded: dict[str, str]
+) -> None:
+    """M2-021: citation edges are verified (entailed) and the fact-backed claim
+    carries a full deterministic numeric check."""
+    created = _create(client, org, seeded["workspace_id"])
+    trace = client.get(f"/v1/retrieval-runs/{created['run_id']}", headers=_headers(*org)).json()
+
+    assert any(e["type"] == "citation_verified" for e in trace["events"])
+
+    # Every citation is classified; at least one fact claim carries the full
+    # value/unit/period/sign/scale numeric check, all passing on the seed corpus.
+    numeric_seen = False
+    for claim in trace["claims"]:
+        for citation in claim["citations"]:
+            assert citation["status"] in {"entailed", "partial", "contradictory", "irrelevant"}
+            if citation["numeric_checks"]:
+                assert set(citation["numeric_checks"]) == {
+                    "value",
+                    "unit",
+                    "period",
+                    "sign",
+                    "scale",
+                }
+                assert all(citation["numeric_checks"].values())
+                numeric_seen = True
+    assert numeric_seen, "expected a fact-backed claim with numeric checks"
+
+
 def test_trace_replay_byte_stable(
     client: TestClient, org: tuple[str, str], seeded: dict[str, str]
 ) -> None:

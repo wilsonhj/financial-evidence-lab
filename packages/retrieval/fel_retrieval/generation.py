@@ -137,14 +137,6 @@ class ClaimCitation:
     model: str | None = None
     version: str | None = None
 
-    def to_trace_dict(self) -> dict[str, Any]:
-        return {
-            "item_id": self.item_id,
-            "source_span_id": self.source_span_id,
-            "status": self.status,
-            "numeric_checks": dict(self.numeric_checks),
-        }
-
 
 @dataclass(frozen=True)
 class GeneratedClaim:
