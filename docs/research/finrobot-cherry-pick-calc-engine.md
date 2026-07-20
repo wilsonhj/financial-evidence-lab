@@ -1,7 +1,7 @@
 # Cherry-pick study: FinRobot valuation engine → FEL calculation-engine
 
 **Status:** Proposal / research draft (NOT an accepted ADR)
-**Date:** 2026-07-20 (rev 4 — external PR review pass: id injectivity, derived-lineage cutoff resolution)
+**Date:** 2026-07-20 (rev 5 — second PR re-review: None-vs-sentinel unit collision, in-sketch derived-cutoff resolver)
 **Author:** multi-agent analysis session (`claude/finrobot-multi-agent-analysis-fd6byx`)
 **Scope guard:** Illustrative code only — no source is added under `packages/calculation-engine/**`.
 `packages/calculation-engine/**` is the `M4-MODEL-CALC` package's `allowed_path`
@@ -166,8 +166,11 @@ class Unit:
             raise ValueError("currency amounts must not also declare a measure")
 
     def key(self) -> str:
+        # None gets a marker containing a byte OUTSIDE the SAFE_ID alphabet (NUL is not in
+        # [A-Za-z0-9._@-]), so an absent field can never collide with a present "-":
+        # Unit(None,None,None) != Unit("-","-","-"). (A real port hashes typed canonical JSON.)
         parts = (self.currency, self.per_period, self.measure)
-        return "/".join(p if p is not None else "-" for p in parts)
+        return "/".join(p if p is not None else "\x00" for p in parts)
 
 
 RATIO = Unit(measure="ratio")
@@ -211,7 +214,9 @@ class Quantity:
     unit: Unit
     period: FiscalPeriod               # what the value measures (closes G10)
     provenance: Provenance
-    as_of: datetime                    # public-availability timestamp; tz-aware (closes G5)
+    as_of: datetime                    # public-availability (REPORTED/ASSUMPTION); tz-aware. For
+                                       # DERIVED this is advisory only — availability is resolved
+                                       # from parents at compute time, not trusted here (G5)
     source_span_id: str | None = None      # required iff REPORTED
     assumption_id: str | None = None       # required iff ASSUMPTION
     derived_from: tuple[str, ...] = ()     # required iff DERIVED: parent result_ids/span_ids
@@ -333,16 +338,32 @@ from __future__ import annotations
 
 from datetime import datetime
 from decimal import ROUND_HALF_EVEN, Decimal
+from typing import Callable
 
 from .ids import result_id
 from .models import (
     MONEY_SCALE, RATIO, CalcResult, Provenance, Quantity, Range,
 )
 
+# For DERIVED inputs the caller-claimed as_of is NOT trusted (Constitution I): availability
+# must be resolved from the immutable parents. The leaf API takes an injected resolver that
+# maps a DERIVED quantity to its parents' effective availability under the run's tenant/
+# corpus pin; the §5 graph evaluator supplies this from in-graph parents by construction.
+ResolveAvailability = Callable[[Quantity], datetime]
 
-def _require_available(q: Quantity, cutoff: datetime, name: str) -> None:
-    if q.as_of > cutoff:                       # no look-ahead (closes G5)
-        raise ValueError(f"input {name!r} as_of {q.as_of} is after cutoff {cutoff}")
+
+def _require_available(
+    q: Quantity, cutoff: datetime, name: str, resolve: ResolveAvailability | None
+) -> None:
+    if q.provenance is Provenance.DERIVED:
+        if resolve is None:   # fail closed: a derived input's own as_of proves nothing
+            raise ValueError(
+                f"derived input {name!r} needs a parent resolver; caller as_of is untrusted")
+        available_at = resolve(q)                        # max over resolved parents
+    else:
+        available_at = q.as_of                           # REPORTED/ASSUMPTION carry their own
+    if available_at > cutoff:                             # no look-ahead
+        raise ValueError(f"input {name!r} available {available_at} is after cutoff {cutoff}")
 
 
 def _money(value: Decimal) -> Decimal:
@@ -355,13 +376,15 @@ def revenue_next_quarter(
     qoq_growth: Quantity,         # ASSUMPTION or DERIVED, ratio, measured over the base quarter
     growth_sensitivity: Quantity,  # ASSUMPTION, ratio, value >= 0 — the ± band half-width
     cutoff: datetime,
+    resolve_availability: ResolveAvailability | None = None,  # required iff a DERIVED input
     formula_version: str = "revenue-driver-v1",
 ) -> CalcResult:
     """In-scope M4 driver: next-quarter revenue = prior * (1 + qoq_growth).
 
     Pure, decimal, deterministic, fail-closed. All financial math lives here, never in a
     prompt. `inputs` is the single source of truth for temporal check, lineage, AND the
-    result id — "checked", "pinned", and "traced" are the same set by construction.
+    result id — "checked", "pinned", and "traced" are the same set by construction. A DERIVED
+    input's availability is resolved from its parents, never taken from its claimed as_of.
     """
     if cutoff.tzinfo is None:
         raise ValueError("cutoff must be timezone-aware")
@@ -372,7 +395,7 @@ def revenue_next_quarter(
         "growth_sensitivity": growth_sensitivity,
     }
     for name, q in inputs.items():
-        _require_available(q, cutoff, name)
+        _require_available(q, cutoff, name, resolve_availability)
 
     # Typed-unit + provenance + period-consistency enforcement (Constitution II). The unit
     # check is structural AND semantic: per_period must be "quarter", or the derived "next
@@ -603,6 +626,22 @@ verified against the code before fixing:
   by construction.
 - **Provenance/process items:** FinRobot pinned to commit `297a8d2` with Apache-2.0 license
   provenance (§1); reproduction appendix added (§11).
+
+### Second PR re-review (rev 4 → rev 5)
+
+A re-review of the rev-4 head found both high-severity fixes were only partially closed:
+
+- **Unit-key None-vs-sentinel collision (confirmed):** rev 4 closed the `/`-collision but
+  still encoded `None` as `"-"`, and `SAFE_ID` admits `"-"`, so `Unit(None,None,None)`
+  collided with `Unit("-","-","-")` — the same identity-corruption class. Fixed: absent
+  fields are encoded with a marker byte OUTSIDE the `SAFE_ID` alphabet (NUL), which a
+  present, validated token can never contain; collision tests extended to None-vs-sentinel.
+- **Derived cutoff still trusted in the fenced sketch (confirmed):** rev 4 made parent
+  resolution a §4 prose requirement but the *copy-pasteable* `_require_available` still
+  trusted a `DERIVED` input's own `as_of` while its comment claimed "closes G5". Fixed in
+  the code itself: the leaf API takes an injected `resolve_availability` resolver, a
+  `DERIVED` input with no resolver fails closed, and its claimed `as_of` is never used for
+  the cutoff; the "closes G5" comment is reworded accordingly.
 
 ### Executed verification
 

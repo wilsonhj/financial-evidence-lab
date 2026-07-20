@@ -1,7 +1,7 @@
 # Cherry-pick study: FinRobot section agents → FEL M3 extraction roles
 
 **Status:** Proposal / research draft (NOT an accepted ADR)
-**Date:** 2026-07-20 (rev 3 — external PR review pass: frozen-schema fidelity, replay identity, budget/port requirements)
+**Date:** 2026-07-20 (rev 4 — second PR re-review: run-pinned provider in request identity)
 **Author:** multi-agent analysis session (`claude/finrobot-multi-agent-analysis-fd6byx`)
 **Companion:** `finrobot-cherry-pick-calc-engine.md` (same treatment for the M4 calc engine).
 **Scope guard:** Illustrative code only — nothing is added under `workers/**` or
@@ -322,12 +322,15 @@ class StepResult:
     instructions_hash: str
 
 
-def _request_hash(request: StructuredGenerationRequest, model_ref: str) -> str:
-    """Hash the FULL request plus the run-pinned model — a schema revision, parameter
-    change, or model re-pin is a different input even under an identical prompt."""
+def _request_hash(
+    request: StructuredGenerationRequest, provider_ref: str, model_ref: str
+) -> str:
+    """Hash the FULL request plus the run-pinned provider AND model — `0004` pins both on
+    extraction_runs, so a re-pin of either is a different input even under an identical
+    prompt (a schema/parameter change is too)."""
     material = json.dumps(
-        [model_ref, request.schema_name, request.schema_version, request.json_schema,
-         request.messages, request.max_output_tokens, request.temperature],
+        [provider_ref, model_ref, request.schema_name, request.schema_version,
+         request.json_schema, request.messages, request.max_output_tokens, request.temperature],
         sort_keys=True, default=str,
     )
     return "sha256:" + hashlib.sha256(material.encode()).hexdigest()
@@ -356,6 +359,7 @@ def run_model_step(
     run_id: str,
     step_name: str,
     workflow_version: str,
+    provider_ref: str,                   # run-pinned provider (0004 extraction_runs pin)
     model_ref: str,                      # run-pinned model (0004 extraction_runs pin)
     max_output_tokens: int = 4096,
 ) -> StepResult:
@@ -373,7 +377,7 @@ def run_model_step(
             temperature=0.0,
         )
 
-    root_input_hash = _request_hash(request_for(messages), model_ref)
+    root_input_hash = _request_hash(request_for(messages), provider_ref, model_ref)
     key = step_key(run_id, step_name, root_input_hash, workflow_version)
 
     response_ids: list[str] = []
@@ -382,7 +386,7 @@ def run_model_step(
     prov = model = "unknown"
     for attempt in range(1, MAX_ATTEMPTS + 1):
         request = request_for(messages)
-        attempt_hashes.append(_request_hash(request, model_ref))
+        attempt_hashes.append(_request_hash(request, provider_ref, model_ref))
         budget.precheck(reserve_output_tokens=max_output_tokens)   # E5: refuse before calling
         try:
             result = provider.generate_structured(request)
@@ -393,9 +397,10 @@ def run_model_step(
         prov, model = result.provider, result.model
         response_ids.append(result.response_id)
         budget.record(result)
-        if result.model != model_ref:                              # E3: enforce the pin
+        if result.provider != provider_ref or result.model != model_ref:   # E3: enforce both pins
             raise ProviderError(
-                f"response model {result.model!r} violates run pin {model_ref!r}")
+                f"response {result.provider!r}/{result.model!r} violates run pin "
+                f"{provider_ref!r}/{model_ref!r}")
 
         if result.refused:                                         # failure, NOT abstention
             raise ProviderRefused(result.refusal or "provider refusal")
@@ -517,6 +522,17 @@ verified against the repo before fixing:
   reproduction appendix added (§8); executable harness deferred to the M3 package's own
   tests (§6); research-issue linkage and branch refresh handled at the PR level.
 
+### Second PR re-review (rev 3 → rev 4)
+
+A re-review of the rev-3 head flagged one item the first pass had only half-closed:
+
+- **Run-pinned provider absent from identity/enforcement (confirmed):** rev 3 put
+  `model_ref` in the request hash and asserted it, but `0004` pins BOTH `provider` and
+  `model` on `extraction_runs`. Fixed: `_request_hash` now includes `provider_ref`, and the
+  runner rejects any response whose `provider` **or** `model` differs from the run pin
+  (`ProviderError`). Prior blockers 1–2 (schema/ADR boundary, replay root hash) were
+  confirmed fixed; the budget-atomicity item stands as a documented real-port requirement.
+
 ### Executed verification
 
 The §5 code blocks were extracted verbatim and run against the **repo's real**
@@ -544,7 +560,7 @@ From the repo root, with no dependencies beyond the standard library and the in-
    `from .roles import` to the package-local absolute import.
 2. Add `packages/providers` and the scratch directory to `sys.path`.
 3. Drive `run_model_step` with `fel_providers.mocks.MockStructuredLLMProvider`
-   (`model_ref="mock-structured-v1"`) across: an envelope schema whose `required` ⊆
+   (`provider_ref="mock"`, `model_ref="mock-structured-v1"`) across: an envelope schema whose `required` ⊆
    `{schema_name, schema_version}` (happy path), a schema requiring an absent key
    (two-attempt boundary → `SchemaInvalid` after exactly 2 calls), evidence text containing
    `REFUSE` (→ `ProviderRefused`), and `RunBudget` variants (call caps 0/1, small
