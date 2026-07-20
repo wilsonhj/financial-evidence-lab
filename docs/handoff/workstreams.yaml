@@ -273,7 +273,7 @@ packages:
     depends_on: [M2-CONTRACT, READER-CROSS-STACK] # packages merged via #105+#106; does NOT depend on READER-PROD-SMOKE
     team: retrieval
     branch: agent/m2-retrieval-backend
-    status: active # dispatched 2026-07-19 from main @ e9b511e; exclusive packages/retrieval + apps/api; parallel with #101; scaffold grant on #57 for pyproject/Makefile/ci.yml dir lists
+    status: merged # PRs #114 + #119 @ c546ec2 (2026-07-20); issue #57 closed; acceptance report in packages/retrieval/ACCEPTANCE.md
     allowed_paths: [packages/retrieval/**, apps/api/**]
   - id: M2-CLAIMS-VERIFICATION # claims pipeline + smoke benchmark + retrieval/perf suite (no Atlas)
     issue: 58
@@ -281,6 +281,7 @@ packages:
     depends_on: [M2-RETRIEVAL-BACKEND]
     team: retrieval
     branch: agent/m2-claims-verification
+    status: ready # post-#119; parallel with M2-OBSERVATORY-UI (disjoint paths); serialize vs blocked #108 (apps/api overlap)
     allowed_paths:
       - packages/retrieval/**
       - packages/retrieval-evals/**
@@ -292,6 +293,7 @@ packages:
     depends_on: [M2-RETRIEVAL-BACKEND, READER-CROSS-STACK] # contract inherited; #96 is reader gate
     team: experience
     branch: agent/m2-observatory-ui
+    status: ready # post-#119; parallel with M2-CLAIMS-VERIFICATION; serialize vs blocked #108 (apps/web overlap)
     allowed_paths: [apps/web/**, packages/ui/**]
 
   # M3 — extraction.
