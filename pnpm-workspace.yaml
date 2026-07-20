@@ -2,9 +2,11 @@ packages:
   - "apps/*"
   - "packages/*"
 
-# Security override (M1-EVIDENCE-UI): next@16.2.10 pins postcss 8.4.31, which
-# is affected by GHSA-qx2v-qp2m-jg93; force the patched line so `pnpm audit`
-# in `make ci` stays green. Scoped to next's own dependency so every other
-# consumer (e.g. vite) keeps its declared postcss resolution.
+# Security overrides so `node scripts/audit-bulk.mjs` in CI stays green.
+# - next>postcss (M1-EVIDENCE-UI): next@16.2.10 pins postcss 8.4.31 (GHSA-qx2v-qp2m-jg93);
+#   scoped to next so other consumers (e.g. vite) keep their declared resolution.
+# - js-yaml (GHSA-52cp-r559-cp3m / CVE-2026-59869): @redocly/openapi-core@1.34.17
+#   (via openapi-typescript in @fel/contracts) pins js-yaml@4.2.0; force >=4.3.0.
 overrides:
   "next>postcss": "^8.5.10"
+  "js-yaml": "^4.3.0"
