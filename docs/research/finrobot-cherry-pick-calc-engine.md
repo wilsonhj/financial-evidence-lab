@@ -1,7 +1,7 @@
 # Cherry-pick study: FinRobot valuation engine → FEL calculation-engine
 
 **Status:** Proposal / research draft (NOT an accepted ADR)
-**Date:** 2026-07-19 (rev 3 — second adversarial pass + fact-check + executed verification)
+**Date:** 2026-07-20 (rev 4 — external PR review pass: id injectivity, derived-lineage cutoff resolution)
 **Author:** multi-agent analysis session (`claude/finrobot-multi-agent-analysis-fd6byx`)
 **Scope guard:** Illustrative code only — no source is added under `packages/calculation-engine/**`.
 `packages/calculation-engine/**` is the `M4-MODEL-CALC` package's `allowed_path`
@@ -15,7 +15,9 @@ path) precisely so it needs neither.
 
 ## 1. What was studied
 
-Source: `AI4Finance-Foundation/FinRobot`,
+Source: `AI4Finance-Foundation/FinRobot` at commit
+`297a8d28d099be328c8a8eb658b4f782b93f3651` (Apache-2.0 per the repository LICENSE; its
+`setup.py` inconsistently says MIT),
 `finrobot_equity/core/src/modules/valuation_engine.py` (420 lines) — a pure-Python, LLM-free
 `ValuationEngine` computing EV/EBITDA, peer-comparison, and simplified DCF valuations, then
 exposing `generate_football_field_data()` (per-method `{low, mid, high}` ranges),
@@ -153,9 +155,13 @@ class Unit:
     measure: str | None = None       # "ratio" | "count" | None (currency amounts)
 
     def __post_init__(self) -> None:
+        # Components enter joined identity keys, so they must be delimiter-free tokens —
+        # otherwise Unit(None, "A/B", "C") and Unit(None, "A", "B/C") collide to one key
+        # and memoization can return the wrong financial result (verified collision).
         for f in ("currency", "per_period", "measure"):
-            if getattr(self, f) == "":
-                raise ValueError(f"Unit.{f} must be None or non-empty")
+            v = getattr(self, f)
+            if v is not None and not SAFE_ID.fullmatch(v):
+                raise ValueError(f"Unit.{f} must match {SAFE_ID.pattern!r}, got {v!r}")
         if self.currency is not None and self.measure is not None:
             raise ValueError("currency amounts must not also declare a measure")
 
@@ -311,8 +317,12 @@ ID_NAMESPACE = uuid.uuid5(uuid.NAMESPACE_URL, "https://financial-evidence-lab.de
 
 def result_id(formula_version: str, inputs: dict[str, Quantity], cutoff: datetime) -> str:
     """Content address over EVERY output-affecting input. Injective because every joined
-    component is slug-validated or canonically formatted (no component can contain '|'/'=')."""
+    component — formula version, input names, unit fields, lineage ids — is validated to a
+    delimiter-free token charset (a real port may instead hash typed canonical JSON, and
+    MUST carry adversarial collision tests either way)."""
     _require_safe_id(formula_version, "formula_version")
+    for name in inputs:
+        _require_safe_id(name, "input name")
     pinned = "|".join(f"{name}={q.lineage_key()}" for name, q in sorted(inputs.items()))
     return str(uuid.uuid5(ID_NAMESPACE, f"{formula_version}|{_utc_key(cutoff)}|{pinned}"))
 ```
@@ -410,6 +420,18 @@ def revenue_next_quarter(
         computed_at_cutoff=cutoff,
     )
 ```
+
+**Derived-lineage cutoff resolution (real-port requirement, added in rev 4).** In this
+sketch a `DERIVED` `Quantity` carries a caller-supplied `as_of` and syntax-only
+`derived_from` ids, and `_require_available` trusts that claimed timestamp — so a
+post-cutoff result could be relabeled with an earlier `as_of` and pass the temporal guard.
+That is acceptable only because the sketch has no store to resolve against. A real port
+MUST NOT trust a caller-claimed `as_of` for derived inputs: it must resolve `derived_from`
+to immutable parent `CalcResult`/source artifacts under the run's tenant and corpus pin,
+derive availability as the maximum over the resolved parents' availabilities, and reject a
+derived input whose claimed `as_of` disagrees with the resolved value. The §5 graph
+evaluator makes this natural — derived quantities are produced *by* the evaluator from
+in-graph parents, never accepted from outside it.
 
 ## 5. M4 adaptation: a driver-graph evaluator, not a function library
 
@@ -561,6 +583,27 @@ to spec §10.1 + constitution rather than §8 (§5); ADR-0007 cites now say "dec
 shared-path governance, milestone numbering (M4-MODEL-CALC tasks T0401–T0410, calc engine
 T0403; M5 = Forecast Lab), and the absence of a football-field chart from spec §8.5.
 
+### External PR review pass (rev 3 → rev 4)
+
+An independent three-stream review on PR #117 found two genuine rev-3 defects, both
+verified against the code before fixing:
+
+- **Unit-key collision breaking id injectivity (high, confirmed by probe):** rev 3
+  validated `Unit` fields only as non-empty, so `Unit(None, "A/B", "C")` and
+  `Unit(None, "A", "B/C")` both keyed to `-/A/B/C` — a collision in the content address
+  that backs memoization, i.e. the wrong financial result returned as a "cache hit". Fixed:
+  every `Unit` component must match the same delimiter-free token charset as lineage ids,
+  input names entering `result_id` are validated too, and the doc now requires adversarial
+  collision tests (with typed-canonical-JSON hashing noted as the sturdier alternative).
+- **Derived-lineage cutoff bypass (high, accepted as real-port requirement):** a `DERIVED`
+  quantity's caller-claimed `as_of` could relabel post-cutoff data as available. The sketch
+  cannot resolve parents without a store; the §4 note now makes parent resolution under the
+  run's tenant/corpus pin — with availability derived from resolved parents, never
+  claimed — a mandatory port requirement, and observes the §5 evaluator dissolves the issue
+  by construction.
+- **Provenance/process items:** FinRobot pinned to commit `297a8d2` with Apache-2.0 license
+  provenance (§1); reproduction appendix added (§11).
+
 ### Executed verification
 
 The §4 code blocks were extracted verbatim into a standalone package and executed. All checks
@@ -570,3 +613,23 @@ every fail-closed guard (float and non-finite rejection, temporal cutoff, missin
 lineage, naive datetimes, unit and period mismatches, negative sensitivity, negative low band,
 inverted periods, unsafe ids). The rev-2 `next_quarter` drift was *measured* by this suite
 (Q1 2026 + 4 quarters → Dec 27) before being fixed in rev 3.
+
+## 11. Reproduction
+
+From the repo root, standard library only:
+
+1. Extract the three fenced Python blocks from §4 into `models.py`, `ids.py`, `engine.py`
+   in a scratch package directory (doc order = file order), rewriting the relative
+   `from .` imports to package-local absolute imports.
+2. Drive `revenue_next_quarter` with: a REPORTED quarterly `prior_revenue`
+   (`Unit(currency="USD", per_period="quarter")`), an ASSUMPTION or DERIVED `qoq_growth`
+   and ASSUMPTION `growth_sensitivity` (both `RATIO`, same `FiscalPeriod` as the base),
+   and a tz-aware cutoff after every `as_of`.
+3. Expected: exact decimal band (`1,000,000 × 1.05 = 1,050,000.00` to the cent, monotonic);
+   `result_id` stable under Decimal re-scaling (`0.05` ≡ `0.0500`) and timezone-offset
+   changes, different under any band-affecting input change; derived output period exact
+   over 8 successive quarters (incl. year rollover and leap year); every fail-closed guard
+   raising its typed error (float/non-finite values, look-ahead `as_of`, missing or extra
+   lineage fields, delimiter-bearing ids or unit components, unit/period mismatches,
+   negative sensitivity, negative low band, non-monotonic `Range`, unsorted or mis-keyed
+   `AssumptionSet`).
