@@ -281,7 +281,7 @@ packages:
     depends_on: [M2-RETRIEVAL-BACKEND]
     team: retrieval
     branch: agent/m2-claims-verification
-    status: ready # post-#119; parallel with M2-OBSERVATORY-UI (disjoint paths); serialize vs blocked #108 (apps/api overlap)
+    status: ready # post-#119; parallel with M2-OBSERVATORY-UI (disjoint paths); serialize vs blocked #108 (apps/api + evals overlap)
     allowed_paths:
       - packages/retrieval/**
       - packages/retrieval-evals/**
@@ -309,6 +309,16 @@ packages:
       - packages/contracts/**
       - packages/providers/**
       - docs/handoff/CONTRACTS.md
+  - id: DB-GUARD-HARDENING # retroactive 0005 record + as-fel_app guard-harness pass (issue #125)
+    issue: 125
+    tasks: []
+    depends_on: [M2-CONTRACT, M3-CONTRACT] # hardens the 0003/0004 harnesses; both merged
+    team: trust
+    branch: chore/db-guard-harness-hardening
+    status: merged # PR #127 @ e55eea8 (2026-07-21); 67 harness ok-cases; pin-proofs verified; issue #125 closed by merge
+    allowed_paths:
+      - db/migrations/tests/**
+      - db/migrations/README.md
   - id: M3-EXTRACTION-CORE # ontology, agent runtime, normalization
     issue: 60
     tasks: [T0301, T0302, T0303, T0304, T0305]
