@@ -112,9 +112,7 @@ describe("action field bounds and failure redirects", () => {
 
   it("UUID-validates parentQueryId and rejects a non-UUID before the API call", async () => {
     const url = await redirectUrl(() =>
-      submitQueryAction(
-        feedbackForm({ question: "What changed?", parentQueryId: "not-a-uuid" }),
-      ),
+      submitQueryAction(feedbackForm({ question: "What changed?", parentQueryId: "not-a-uuid" })),
     );
     expect(url).toBe("/observatory?error=invalid_scope");
     expect(createQuery).not.toHaveBeenCalled();
@@ -122,17 +120,13 @@ describe("action field bounds and failure redirects", () => {
 
   it("threads a UUID parentQueryId onto the createQuery request", async () => {
     await run(() =>
-      submitQueryAction(
-        feedbackForm({ question: "What changed?", parentQueryId: PARENT_UUID }),
-      ),
+      submitQueryAction(feedbackForm({ question: "What changed?", parentQueryId: PARENT_UUID })),
     );
     expect(createQuery.mock.calls[0]![0]).toMatchObject({ parent_query_id: PARENT_UUID });
   });
 
   it("rejects empty queryId before createRerun", async () => {
-    const url = await redirectUrl(() =>
-      rerunAction(feedbackForm({ queryId: "", runId: "run-1" })),
-    );
+    const url = await redirectUrl(() => rerunAction(feedbackForm({ queryId: "", runId: "run-1" })));
     expect(url).toBe("/observatory/runs/run-1?error=invalid_scope");
     expect(createRerun).not.toHaveBeenCalled();
   });
@@ -159,26 +153,20 @@ describe("action field bounds and failure redirects", () => {
   });
 
   it("maps API failures to typed error slugs on landing and run pages", async () => {
-    createQuery.mockRejectedValueOnce(
-      new ObservatoryApiError(401, "/q", "authentication"),
-    );
+    createQuery.mockRejectedValueOnce(new ObservatoryApiError(401, "/q", "authentication"));
     expect(await redirectUrl(() => submitQueryAction(feedbackForm({ question: "Q?" })))).toBe(
       "/observatory?error=authentication",
     );
 
     createRerun.mockRejectedValueOnce(new ObservatoryApiError(503, "/r", "unavailable"));
     expect(
-      await redirectUrl(() =>
-        rerunAction(feedbackForm({ queryId: "query-1", runId: "run-9" })),
-      ),
+      await redirectUrl(() => rerunAction(feedbackForm({ queryId: "query-1", runId: "run-9" }))),
     ).toBe("/observatory/runs/run-9?error=unavailable");
 
     submitFeedback.mockRejectedValueOnce(new ObservatoryContractError("bad body"));
     expect(
       await redirectUrl(() =>
-        sendFeedbackAction(
-          feedbackForm({ runId: "run-2", itemId: "item-1", label: "relevant" }),
-        ),
+        sendFeedbackAction(feedbackForm({ runId: "run-2", itemId: "item-1", label: "relevant" })),
       ),
     ).toBe("/observatory/runs/run-2?error=integrity");
   });

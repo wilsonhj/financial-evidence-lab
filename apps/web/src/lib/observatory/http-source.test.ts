@@ -134,8 +134,7 @@ describe("HttpObservatorySource requests", () => {
       (t) => ((t.candidates[0]!.contributions[0] as unknown as { lane: string }).lane = "bogus"),
       (t) =>
         ((t.candidates[0]!.contributions[0] as unknown as { lane_rank: unknown }).lane_rank = "1"),
-      (t) =>
-        ((t.candidates[0] as unknown as { contributions: unknown }).contributions = "nope"),
+      (t) => ((t.candidates[0] as unknown as { contributions: unknown }).contributions = "nope"),
     ];
     for (const mutate of cases) {
       const broken = structuredClone(MOCK_TRACE) as RetrievalTrace;
