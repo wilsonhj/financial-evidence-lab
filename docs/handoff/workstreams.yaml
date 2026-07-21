@@ -315,7 +315,7 @@ packages:
     depends_on: [M2-CONTRACT, M3-CONTRACT] # hardens the 0003/0004 harnesses; both merged
     team: trust
     branch: chore/db-guard-harness-hardening
-    status: active # dispatched 2026-07-20 by integration lead; scope = db/migrations/tests/** + README only (authorization on #125; no numbered-migration edits)
+    status: merged # PR #127 @ e55eea8 (2026-07-21); 67 harness ok-cases; pin-proofs verified; issue #125 closed by merge
     allowed_paths:
       - db/migrations/tests/**
       - db/migrations/README.md
