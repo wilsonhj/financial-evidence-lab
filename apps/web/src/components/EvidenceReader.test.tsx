@@ -158,4 +158,44 @@ describe("EvidenceReader rendering", () => {
     expect(markup).toContain("Citation integrity error:");
     expect(markup).toContain("does not match its recorded hash");
   });
+
+  // Observatory candidate deep link: `?span=` pre-selects the exact cited span
+  // (aria-pressed) when it belongs to this document, and is ignored otherwise.
+  it("pre-selects a deep-linked span belonging to the document", async () => {
+    const data = await readyData(DOC_10Q_ID);
+    const spanId = "cccccccc-0000-4000-8000-000000000001";
+    const markup = renderToStaticMarkup(
+      <EvidenceReader
+        documentId={DOC_10Q_ID}
+        documents={data.documents}
+        sections={data.sections}
+        spans={data.spans}
+        facts={data.facts}
+        documentIdBySectionId={data.documentIdBySectionId}
+        documentIdBySpanId={data.documentIdBySpanId}
+        integrityFailures={data.integrityFailures}
+        initialSpanId={spanId}
+      />,
+    );
+    expect(markup).toContain('aria-pressed="true"');
+  });
+
+  it("ignores a deep-linked span id that does not belong to the document", async () => {
+    const data = await readyData(DOC_10Q_ID);
+    const foreignSpanId = "cccccccc-0000-4000-8000-000000000007"; // a 10-Q/A span
+    const markup = renderToStaticMarkup(
+      <EvidenceReader
+        documentId={DOC_10Q_ID}
+        documents={data.documents}
+        sections={data.sections}
+        spans={data.spans}
+        facts={data.facts}
+        documentIdBySectionId={data.documentIdBySectionId}
+        documentIdBySpanId={data.documentIdBySpanId}
+        integrityFailures={data.integrityFailures}
+        initialSpanId={foreignSpanId}
+      />,
+    );
+    expect(markup).not.toContain('aria-pressed="true"');
+  });
 });
