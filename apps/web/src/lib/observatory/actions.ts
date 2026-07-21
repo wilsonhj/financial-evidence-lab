@@ -16,6 +16,12 @@ const FEEDBACK_LABELS: ReadonlySet<EvidenceFeedback["label"]> = new Set([
   "temporally_invalid",
 ]);
 
+/** Matches runtime-config / OpenAPI UUID constraints for parent_query_id. */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+/** Contract maxLength for EvidenceFeedback.reason. */
+const REASON_MAX = 2000;
+
 function str(formData: FormData, key: string): string {
   const value = formData.get(key);
   return typeof value === "string" ? value : "";
@@ -34,7 +40,7 @@ function feedbackIdempotencyKey(runId: string, itemId: string, label: string): s
 
 /** Create a new (optionally parent-linked) query from bounded controls. */
 export async function submitQueryAction(formData: FormData): Promise<void> {
-  const { errors, query } = validateControls({
+  const { query } = validateControls({
     question: str(formData, "question"),
     lanes: formData.getAll("lanes").map(String),
     topK: str(formData, "topK"),
@@ -43,7 +49,9 @@ export async function submitQueryAction(formData: FormData): Promise<void> {
     periods: str(formData, "periods"),
   });
   const parentQueryId = str(formData, "parentQueryId");
-  if (!query) redirect(`/observatory?error=${encodeURIComponent(errors.join(" "))}`);
+  if (!query || (parentQueryId && !UUID.test(parentQueryId))) {
+    redirect(`/observatory?error=invalid_scope`);
+  }
 
   const request = parentQueryId ? { ...query, parent_query_id: parentQueryId } : query;
   let runId: string;
@@ -59,13 +67,17 @@ export async function submitQueryAction(formData: FormData): Promise<void> {
 /** Unchanged, parent-linked rerun of an existing query. */
 export async function rerunAction(formData: FormData): Promise<void> {
   const queryId = str(formData, "queryId");
+  const runIdHint = str(formData, "runId");
+  if (!queryId) {
+    redirect(`/observatory/runs/${runIdHint}?error=invalid_scope`);
+  }
   let runId: string;
   try {
     const accepted = await getObservatorySource().createRerun(queryId, randomUUID());
     runId = accepted.run_id;
   } catch (error) {
     redirect(
-      `/observatory/runs/${str(formData, "runId")}?error=${observatoryFailureState(error) ?? "unavailable"}`,
+      `/observatory/runs/${runIdHint}?error=${observatoryFailureState(error) ?? "unavailable"}`,
     );
   }
   redirect(`/observatory/runs/${runId}`);
@@ -77,7 +89,7 @@ export async function sendFeedbackAction(formData: FormData): Promise<void> {
   const itemId = str(formData, "itemId");
   const label = str(formData, "label") as EvidenceFeedback["label"];
   const reason = str(formData, "reason").trim();
-  if (!FEEDBACK_LABELS.has(label)) {
+  if (!FEEDBACK_LABELS.has(label) || !itemId || reason.length > REASON_MAX) {
     redirect(`/observatory/runs/${runId}?error=invalid_scope`);
   }
   const feedback: EvidenceFeedback = { item_id: itemId, label, ...(reason ? { reason } : {}) };

@@ -142,12 +142,15 @@ function validateTrace(value: unknown, path: string): RetrievalTrace {
   for (const [stage, ms] of Object.entries(timings)) {
     number(ms, `${path}.timings_ms.${stage}`);
   }
-  object(trace.budget_usage, `${path}.budget_usage`);
+  const budget = object(trace.budget_usage, `${path}.budget_usage`);
+  number(budget.context_items, `${path}.budget_usage.context_items`);
+  number(budget.context_tokens, `${path}.budget_usage.context_tokens`);
+  number(budget.input_tokens, `${path}.budget_usage.input_tokens`);
+  number(budget.output_tokens, `${path}.budget_usage.output_tokens`);
   string(trace.cost_usd, `${path}.cost_usd`);
   string(trace.started_at, `${path}.started_at`);
   return value as RetrievalTrace;
 }
-
 export class HttpObservatorySource implements ObservatoryQuerySource {
   private readonly baseUrl: string;
   private readonly workspaceId: string;

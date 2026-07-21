@@ -11,30 +11,34 @@ import {
   decisionTimeline,
   describeRunState,
   laneColumns,
+  LANE_LABELS,
   LANES,
   partitionCandidates,
   readerHref,
   type ClaimDisplayStatus,
-  type Lane,
 } from "../lib/observatory/trace-view";
 
-const LANE_LABELS: Record<Lane, string> = {
-  dense: "Dense",
-  lexical: "Lexical",
-  facts: "Facts",
-  tables: "Tables",
-};
+const CLAIM_OK: ReadonlySet<string> = new Set(["supported"]);
+const CLAIM_WARNING: ReadonlySet<string> = new Set(["contradicted", "unverifiable"]);
+const CITATION_OK: ReadonlySet<string> = new Set(["entailed"]);
+const CITATION_WARNING: ReadonlySet<string> = new Set(["contradictory", "irrelevant"]);
 
-function claimBadgeClass(status: ClaimDisplayStatus): string {
-  if (status === "supported") return "badge badge-ok";
-  if (status === "contradicted" || status === "unverifiable") return "badge badge-warning";
+function statusBadgeClass(
+  status: string,
+  ok: ReadonlySet<string>,
+  warning: ReadonlySet<string>,
+): string {
+  if (ok.has(status)) return "badge badge-ok";
+  if (warning.has(status)) return "badge badge-warning";
   return "badge badge-info";
 }
 
+function claimBadgeClass(status: ClaimDisplayStatus): string {
+  return statusBadgeClass(status, CLAIM_OK, CLAIM_WARNING);
+}
+
 function citationBadgeClass(status: RetrievalCitation["status"]): string {
-  if (status === "entailed") return "badge badge-ok";
-  if (status === "contradictory" || status === "irrelevant") return "badge badge-warning";
-  return "badge badge-info";
+  return statusBadgeClass(status, CITATION_OK, CITATION_WARNING);
 }
 
 function CandidateRef({

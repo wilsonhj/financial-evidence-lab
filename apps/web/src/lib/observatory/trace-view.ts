@@ -10,6 +10,13 @@ import type {
 export const LANES = ["dense", "lexical", "facts", "tables"] as const;
 export type Lane = (typeof LANES)[number];
 
+export const LANE_LABELS: Record<Lane, string> = {
+  dense: "Dense",
+  lexical: "Lexical",
+  facts: "Facts",
+  tables: "Tables",
+};
+
 export type RunStatus = RetrievalTrace["status"];
 
 export interface RunStateNotice {
@@ -135,10 +142,11 @@ export type ClaimDisplayStatus = RetrievalClaim["status"] | "unverifiable";
 export interface ClaimView {
   claim: RetrievalClaim;
   /**
-   * Status actually shown. A "supported" claim is downgraded to "unverifiable"
-   * unless every citation's (item_id, source_span_id) pair matches an accepted
-   * candidate's span — a citation naming a supported item but the WRONG span is
-   * still unsupported, so unsupported evidence can never masquerade as supported.
+   * Status actually shown. A "supported" / "partially_supported" claim is
+   * downgraded to "unverifiable" when it has no citations, or when any
+   * citation's (item_id, source_span_id) pair fails to match an accepted
+   * candidate's span — empty or wrong-span evidence must never masquerade as
+   * supported.
    */
   displayStatus: ClaimDisplayStatus;
   downgraded: boolean;
@@ -157,8 +165,10 @@ export function claimViews(trace: RetrievalTrace): ClaimView[] {
     const citesUnsupported = claim.citations.some(
       (c) => !supportedSpans.has(spanKey(c.item_id, c.source_span_id)),
     );
+    const emptyOrBadCitations = claim.citations.length === 0 || citesUnsupported;
     const downgraded =
-      (claim.status === "supported" || claim.status === "partially_supported") && citesUnsupported;
+      (claim.status === "supported" || claim.status === "partially_supported") &&
+      emptyOrBadCitations;
     return {
       claim,
       displayStatus: downgraded ? "unverifiable" : claim.status,
@@ -166,7 +176,6 @@ export function claimViews(trace: RetrievalTrace): ClaimView[] {
     };
   });
 }
-
 export interface TimelineEntry {
   stage: RetrievalDecision["stage"];
   code: string;

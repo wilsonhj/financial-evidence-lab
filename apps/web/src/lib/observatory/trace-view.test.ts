@@ -131,6 +131,25 @@ describe("claimViews", () => {
     expect(supported?.displayStatus).toBe("supported");
     expect(supported?.downgraded).toBe(false);
   });
+
+  it("downgrades supported/partially_supported claims with empty citations to unverifiable", () => {
+    for (const status of ["supported", "partially_supported"] as const) {
+      const local: RetrievalTrace = {
+        ...trace,
+        candidates: [candidate({ item_id: "10101010-0000-4000-8000-000000000001" })],
+        claims: [
+          {
+            id: "20202020-0000-4000-8000-0000000000c1",
+            text: "claims support with no citations",
+            status,
+            citations: [],
+          },
+        ],
+      };
+      expect(claimViews(local)[0]!.displayStatus).toBe("unverifiable");
+      expect(claimViews(local)[0]!.downgraded).toBe(true);
+    }
+  });
 });
 
 describe("laneColumns", () => {

@@ -1,13 +1,6 @@
 import { submitQueryAction } from "../lib/observatory/actions";
 import { FILTER_MAX_ITEMS, QUESTION_MAX, TOP_K_MAX, TOP_K_MIN } from "../lib/observatory/controls";
-import { LANES } from "../lib/observatory/trace-view";
-
-const LANE_LABELS: Record<(typeof LANES)[number], string> = {
-  dense: "Dense",
-  lexical: "Lexical",
-  facts: "Facts",
-  tables: "Tables",
-};
+import { LANE_LABELS, LANES } from "../lib/observatory/trace-view";
 
 /**
  * Bounded query controls. Native input constraints keep values within the
@@ -33,7 +26,7 @@ export function ObservatoryControls({
       </h2>
       {error && (
         <p className="reader-banner citation-error" role="alert">
-          {error}
+          Action failed: {error}
         </p>
       )}
       {parentQueryId && <input type="hidden" name="parentQueryId" value={parentQueryId} />}

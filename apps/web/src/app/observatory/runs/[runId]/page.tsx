@@ -7,23 +7,12 @@ import { ObservatoryTrace } from "../../../../components/ObservatoryTrace";
 import { RerunButton } from "../../../../components/RerunButton";
 import { getEvidenceSource } from "../../../../lib/data/server";
 import { observatoryFailureState } from "../../../../lib/observatory/errors";
+import { sanitizeObservatoryError } from "../../../../lib/observatory/known-errors";
 import type { QuerySnapshot } from "../../../../lib/observatory/query-source";
 import { buildDocumentIdByVersionId } from "../../../../lib/observatory/reader-links";
 import { getObservatorySource } from "../../../../lib/observatory/server";
 
 export const dynamic = "force-dynamic";
-
-// Only these action-failure slugs (written by the server actions via
-// observatoryFailureState) may be reflected back from ?error=; any other
-// searchParam value is ignored rather than rendered verbatim.
-const KNOWN_RUN_ERRORS: ReadonlySet<string> = new Set([
-  "authentication",
-  "forbidden",
-  "conflict",
-  "invalid_scope",
-  "unavailable",
-  "integrity",
-]);
 
 export default async function ObservatoryRunPage({
   params,
@@ -34,6 +23,7 @@ export default async function ObservatoryRunPage({
 }) {
   const { runId } = await params;
   const { error, feedback } = (await searchParams) ?? {};
+  const safeError = sanitizeObservatoryError(error);
   const source = getObservatorySource();
 
   let trace;
@@ -71,9 +61,9 @@ export default async function ObservatoryRunPage({
       </p>
       <h1>Retrieval run</h1>
 
-      {error && KNOWN_RUN_ERRORS.has(error) && (
+      {safeError && (
         <p className="reader-banner citation-error" role="alert">
-          Action failed: {error}
+          Action failed: {safeError}
         </p>
       )}
       {feedback === "recorded" && (

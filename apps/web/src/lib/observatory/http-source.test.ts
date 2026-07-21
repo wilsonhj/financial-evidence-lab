@@ -115,7 +115,7 @@ describe("HttpObservatorySource requests", () => {
     ).rejects.toBeInstanceOf(ObservatoryContractError);
   });
 
-  it("rejects a trace whose events, timings_ms or contribution shape is malformed", async () => {
+  it("rejects a trace whose events, timings_ms, budget_usage or contribution shape is malformed", async () => {
     const cases: ((t: RetrievalTrace) => void)[] = [
       // events must be a present array of well-shaped events.
       (t) => ((t as unknown as { events: unknown }).events = "nope"),
@@ -124,10 +124,18 @@ describe("HttpObservatorySource requests", () => {
       // timings_ms must be an object of numeric stage timings.
       (t) => ((t as unknown as { timings_ms: unknown }).timings_ms = 5),
       (t) => ((t.timings_ms as Record<string, unknown>).plan = "fast"),
+      // budget_usage fields are dereferenced by BudgetSection / compare — must be numbers.
+      (t) => ((t as unknown as { budget_usage: unknown }).budget_usage = null),
+      (t) => ((t.budget_usage as Record<string, unknown>).context_items = "3"),
+      (t) => delete (t.budget_usage as { context_tokens?: number }).context_tokens,
+      (t) => ((t.budget_usage as Record<string, unknown>).input_tokens = undefined),
+      (t) => ((t.budget_usage as Record<string, unknown>).output_tokens = true),
       // contributions must carry a known lane enum and a numeric lane_rank.
       (t) => ((t.candidates[0]!.contributions[0] as unknown as { lane: string }).lane = "bogus"),
       (t) =>
         ((t.candidates[0]!.contributions[0] as unknown as { lane_rank: unknown }).lane_rank = "1"),
+      (t) =>
+        ((t.candidates[0] as unknown as { contributions: unknown }).contributions = "nope"),
     ];
     for (const mutate of cases) {
       const broken = structuredClone(MOCK_TRACE) as RetrievalTrace;

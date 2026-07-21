@@ -70,6 +70,19 @@ describe("parseRetrievalEventStream", () => {
       ObservatoryContractError,
     );
   });
+
+  it("parses CRLF-framed blocks mid-stream across chunk boundaries", async () => {
+    // Proxies and some servers emit \r\n line endings; block framing must
+    // split on \r\n\r\n (and bare \r\r), not only \n\n.
+    const crlfFrame = (e: RetrievalEvent) =>
+      `id: ${e.seq}\r\ndata: ${JSON.stringify(e)}\r\n\r\n`;
+    const text = [event(1), event(2), event(3)].map(crlfFrame).join("");
+    for (const chunkSize of [1, 5, 11, text.length]) {
+      const parsed = await collect(parseRetrievalEventStream(byteStream(text, chunkSize)));
+      const seqs = parsed.flatMap((frame) => (frame.kind === "event" ? [frame.event.seq] : []));
+      expect(seqs).toEqual([1, 2, 3]);
+    }
+  });
 });
 
 describe("SeqDeduper", () => {

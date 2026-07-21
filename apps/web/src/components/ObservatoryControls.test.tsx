@@ -21,15 +21,12 @@ describe("ObservatoryControls", () => {
     }
   });
 
-  it("shows a validation error and threads a parent query id", () => {
+  it("shows a typed action-failure slug and threads a parent query id", () => {
     const markup = renderToStaticMarkup(
-      <ObservatoryControls
-        parentQueryId="q-1"
-        error="Top-k must be an integer between 1 and 100."
-      />,
+      <ObservatoryControls parentQueryId="q-1" error="invalid_scope" />,
     );
     expect(markup).toContain('role="alert"');
-    expect(markup).toContain("Top-k must be an integer");
+    expect(markup).toContain("Action failed: invalid_scope");
     expect(markup).toContain('name="parentQueryId"');
     expect(markup).toContain('value="q-1"');
   });

@@ -139,11 +139,8 @@ export async function* parseRetrievalEventStream(
   let buffer = "";
 
   const flush = function* (block: string): Generator<RetrievalFrame> {
-    if (block.trim() === "") {
-      // Whitespace-only separator run: nothing to emit.
-      if (block.includes(":")) yield { kind: "heartbeat" };
-      return;
-    }
+    // Whitespace-only separator run: nothing to emit.
+    if (block.trim() === "") return;
     const { id, data, comment } = parseBlock(block);
     if (data === undefined) {
       if (comment) yield { kind: "heartbeat", ...(id !== undefined ? { id } : {}) };
@@ -165,16 +162,36 @@ export async function* parseRetrievalEventStream(
 
   for await (const chunk of iterateBytes(source)) {
     buffer += decoder.decode(chunk, { stream: true });
-    let boundary = buffer.indexOf("\n\n");
-    while (boundary !== -1) {
-      const block = buffer.slice(0, boundary);
-      buffer = buffer.slice(boundary + 2);
+    let boundary = findSseBlockBoundary(buffer);
+    while (boundary !== null) {
+      const block = buffer.slice(0, boundary.index);
+      buffer = buffer.slice(boundary.index + boundary.length);
       yield* flush(block);
-      boundary = buffer.indexOf("\n\n");
+      boundary = findSseBlockBoundary(buffer);
     }
   }
   buffer += decoder.decode();
   if (buffer.trim() !== "") yield* flush(buffer);
+}
+
+/**
+ * Locate the next SSE event-block terminator. Spec blank lines are `\n\n`;
+ * CRLF streams use `\r\n\r\n`; some peers emit bare `\r\r`. Prefer the earliest
+ * match so mixed framing still splits mid-stream.
+ */
+function findSseBlockBoundary(buffer: string): { index: number; length: number } | null {
+  let best: { index: number; length: number } | null = null;
+  for (const [sep, length] of [
+    ["\r\n\r\n", 4],
+    ["\n\n", 2],
+    ["\r\r", 2],
+  ] as const) {
+    const index = buffer.indexOf(sep);
+    if (index !== -1 && (best === null || index < best.index)) {
+      best = { index, length };
+    }
+  }
+  return best;
 }
 
 /** Opens the upstream event stream resuming after `lastEventId` (null = from start). */
