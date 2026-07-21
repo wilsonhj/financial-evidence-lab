@@ -2,29 +2,7 @@
 
 BEGIN;
 
-CREATE FUNCTION pg_temp.expect_rejection(
-    test_name text,
-    statement text,
-    expected_states text[] DEFAULT ARRAY['23503', '23514', 'P0001', '23505']
-) RETURNS void
-LANGUAGE plpgsql
-AS $$
-DECLARE
-    actual_state text;
-BEGIN
-    BEGIN
-        EXECUTE statement;
-    EXCEPTION WHEN OTHERS THEN
-        GET STACKED DIAGNOSTICS actual_state = RETURNED_SQLSTATE;
-        IF actual_state = ANY(expected_states) THEN
-            RAISE NOTICE 'ok - % rejected with %', test_name, actual_state;
-            RETURN;
-        END IF;
-        RAISE;
-    END;
-    RAISE EXCEPTION 'not ok - % was accepted', test_name;
-END
-$$;
+\ir _helpers.sql
 
 INSERT INTO organizations (id, name) VALUES
     ('00000000-0000-0000-0000-000000000101', 'Org 1'),
@@ -68,11 +46,11 @@ INSERT INTO extraction_policies (
 SELECT pg_temp.expect_rejection('policy immutability', $sql$
     UPDATE extraction_policies SET max_calls = 5
     WHERE id = '50000000-0000-0000-0000-000000000001'
-$sql$);
+$sql$, ARRAY['P0001']);
 SELECT pg_temp.expect_rejection('policy tenant membership', $sql$
     INSERT INTO extraction_policies (id, org_id, version, created_by)
     VALUES ('50000000-0000-0000-0000-000000000011', '00000000-0000-0000-0000-000000000101', 2, '00000000-0000-0000-0000-000000000202')
-$sql$);
+$sql$, ARRAY['23503']);
 
 INSERT INTO extraction_runs (
     id, org_id, workspace_id, entity_id, modes, as_of, corpus_version_id,
@@ -133,7 +111,7 @@ SELECT pg_temp.expect_rejection('run idempotency', $sql$
         'sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd',
         'idem-run-1', '00000000-0000-0000-0000-000000000201'
     )
-$sql$);
+$sql$, ARRAY['23505']);
 SELECT pg_temp.expect_rejection('run workspace tenant', $sql$
     INSERT INTO extraction_runs (
         id, org_id, workspace_id, entity_id, modes, as_of, corpus_version_id,
@@ -151,7 +129,7 @@ SELECT pg_temp.expect_rejection('run workspace tenant', $sql$
         'sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',
         'idem-run-bad-ws', '00000000-0000-0000-0000-000000000201'
     )
-$sql$);
+$sql$, ARRAY['23503']);
 SELECT pg_temp.expect_rejection('run invalid mode', $sql$
     INSERT INTO extraction_runs (
         id, org_id, workspace_id, entity_id, modes, as_of, corpus_version_id,
@@ -169,7 +147,7 @@ SELECT pg_temp.expect_rejection('run invalid mode', $sql$
         'sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff',
         'idem-run-bad-mode', '00000000-0000-0000-0000-000000000201'
     )
-$sql$);
+$sql$, ARRAY['23514']);
 SELECT pg_temp.expect_rejection('run policy tenant', $sql$
     INSERT INTO extraction_runs (
         id, org_id, workspace_id, entity_id, modes, as_of, corpus_version_id,
@@ -187,14 +165,14 @@ SELECT pg_temp.expect_rejection('run policy tenant', $sql$
         'sha256:1111111111111111111111111111111111111111111111111111111111111111',
         'idem-run-bad-policy', '00000000-0000-0000-0000-000000000201'
     )
-$sql$);
+$sql$, ARRAY['23503']);
 
 UPDATE extraction_runs SET status = 'running', started_at = now()
 WHERE id = '60000000-0000-0000-0000-000000000001';
 SELECT pg_temp.expect_rejection('illegal run transition', $sql$
     UPDATE extraction_runs SET status = 'succeeded', finished_at = now()
     WHERE id = '60000000-0000-0000-0000-000000000003'
-$sql$);
+$sql$, ARRAY['P0001']);
 
 INSERT INTO extraction_run_steps (
     id, org_id, run_id, step_name, attempt, status, input_hash,
@@ -219,7 +197,7 @@ SELECT pg_temp.expect_rejection('step success idempotency', $sql$
         'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
         'workflow-v1', 'extraction-payload/v1', 'prompt-v1'
     )
-$sql$);
+$sql$, ARRAY['23505']);
 SELECT pg_temp.expect_rejection('step run tenant', $sql$
     INSERT INTO extraction_run_steps (
         id, org_id, run_id, step_name, attempt, status, input_hash,
@@ -232,7 +210,7 @@ SELECT pg_temp.expect_rejection('step run tenant', $sql$
         'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
         'workflow-v1', 'extraction-payload/v1', 'prompt-v1'
     )
-$sql$);
+$sql$, ARRAY['P0001']);
 -- G3: demoting a succeeded step (run still open) frees the success-uniqueness
 -- index; the step guard freezes 'succeeded' and rejects the transition.
 SELECT pg_temp.expect_rejection('step demote from succeeded', $sql$
@@ -253,11 +231,11 @@ SELECT pg_temp.expect_rejection('event run tenant', $sql$
         '60000000-0000-0000-0000-000000000002',
         'heartbeat'
     )
-$sql$);
+$sql$, ARRAY['P0001']);
 SELECT pg_temp.expect_rejection('event append-only update', $sql$
     UPDATE extraction_run_events SET event_type = 'heartbeat'
     WHERE run_id = '60000000-0000-0000-0000-000000000001'
-$sql$);
+$sql$, ARRAY['P0001']);
 
 INSERT INTO extraction_proposals (
     id, org_id, workspace_id, run_id, kind, metric_id, payload,
@@ -276,7 +254,7 @@ SELECT pg_temp.expect_rejection('proposal payload immutability', $sql$
     UPDATE extraction_proposals
     SET payload = '{"kind":"mutated"}'::jsonb
     WHERE id = '80000000-0000-0000-0000-000000000001'
-$sql$);
+$sql$, ARRAY['P0001']);
 UPDATE extraction_proposals
 SET state = 'needs_review', version = 2
 WHERE id = '80000000-0000-0000-0000-000000000001';
@@ -300,7 +278,7 @@ SELECT pg_temp.expect_rejection('evidence span/version mismatch', $sql$
         '00000000-0000-0000-0000-000000000602',
         'definition', 'partial'
     )
-$sql$);
+$sql$, ARRAY['23503']);
 
 INSERT INTO extraction_conflicts (
     id, org_id, workspace_id, conflict_key
@@ -349,11 +327,11 @@ SELECT pg_temp.expect_rejection('review idempotency', $sql$
         '{"80000000-0000-0000-0000-000000000001": 2}'::jsonb,
         ARRAY['80000000-0000-0000-0000-000000000001']::uuid[]
     )
-$sql$);
+$sql$, ARRAY['23505']);
 SELECT pg_temp.expect_rejection('review append-only', $sql$
     UPDATE extraction_reviews SET reason = 'mutated'
     WHERE id = '90000000-0000-0000-0000-000000000001'
-$sql$);
+$sql$, ARRAY['P0001']);
 
 INSERT INTO approved_extraction_records (
     id, org_id, workspace_id, kind, metric_id, entity_id, version
@@ -384,7 +362,7 @@ WHERE id = 'a0000000-0000-0000-0000-000000000001';
 SELECT pg_temp.expect_rejection('approved version immutability', $sql$
     UPDATE approved_extraction_versions SET approval_reason = 'mutated'
     WHERE id = 'b0000000-0000-0000-0000-000000000001'
-$sql$);
+$sql$, ARRAY['P0001']);
 
 INSERT INTO confidence_calibrators (
     id, output_family, version, dataset_id, dataset_hash, breakpoints,
@@ -399,7 +377,7 @@ INSERT INTO confidence_calibrators (
 SELECT pg_temp.expect_rejection('calibrator immutability', $sql$
     UPDATE confidence_calibrators SET sample_count = 11
     WHERE id = 'c0000000-0000-0000-0000-000000000001'
-$sql$);
+$sql$, ARRAY['P0001']);
 
 UPDATE extraction_runs
 SET status = 'waiting_review'
@@ -414,11 +392,11 @@ SELECT pg_temp.expect_rejection('event after terminal', $sql$
         '60000000-0000-0000-0000-000000000001',
         'heartbeat'
     )
-$sql$);
+$sql$, ARRAY['P0001']);
 SELECT pg_temp.expect_rejection('terminal run mutation', $sql$
     UPDATE extraction_runs SET cost_usd = 1
     WHERE id = '60000000-0000-0000-0000-000000000001'
-$sql$);
+$sql$, ARRAY['P0001']);
 -- G2: proposal 80..01 belongs to run 1, now terminal; the review lifecycle
 -- can no longer advance the proposal's state/version.
 SELECT pg_temp.expect_rejection('proposal update after terminal run', $sql$
@@ -471,6 +449,183 @@ SELECT pg_temp.expect_rejection(
     $sql$,
     ARRAY['42501']
 );
+
+-- As-fel_app happy path: every fel_app-granted DML path in 0004 must succeed
+-- under the API role, not just as the migration superuser (the 0005 bug class:
+-- a guard that row-locks a table the role cannot lock passes superuser
+-- harnesses and fails in production). The child-table inserts/updates below
+-- go through fel_assert_extraction_run_open, whose FOR SHARE on
+-- extraction_runs is only legal for fel_app because of
+-- GRANT UPDATE (status, ...) ON extraction_runs — revoking that grant must
+-- turn them into 42501s.
+INSERT INTO extraction_policies (id, org_id, version, created_by)
+VALUES (
+    '50000000-0000-0000-0000-0000000000a1',
+    '00000000-0000-0000-0000-000000000101', 2,
+    '00000000-0000-0000-0000-000000000201'
+);
+INSERT INTO extraction_runs (
+    id, org_id, workspace_id, entity_id, modes, as_of, corpus_version_id,
+    ontology_version, workflow_version, provider, model, policy_id,
+    input_hash, idempotency_key, created_by
+) VALUES (
+    '60000000-0000-0000-0000-0000000000a1',
+    '00000000-0000-0000-0000-000000000101',
+    '00000000-0000-0000-0000-000000000301',
+    '00000000-0000-0000-0000-000000000401',
+    ARRAY['kpi']::text[], now(),
+    '00000000-0000-0000-0000-000000000b01',
+    'ontology-v1', 'workflow-v1', 'mock', 'mock-structured-v1',
+    '50000000-0000-0000-0000-0000000000a1',
+    'sha256:5555555555555555555555555555555555555555555555555555555555555555',
+    'idem-run-felapp', '00000000-0000-0000-0000-000000000201'
+);
+UPDATE extraction_runs SET status = 'running', started_at = now()
+WHERE id = '60000000-0000-0000-0000-0000000000a1';
+UPDATE extraction_runs
+SET calls_used = 1, input_tokens_used = 10, output_tokens_used = 5,
+    cost_usd = 0.01
+WHERE id = '60000000-0000-0000-0000-0000000000a1';
+INSERT INTO extraction_run_steps (
+    id, org_id, run_id, step_name, attempt, status, input_hash,
+    workflow_version, schema_version, prompt_version, started_at
+) VALUES (
+    '70000000-0000-0000-0000-0000000000a1',
+    '00000000-0000-0000-0000-000000000101',
+    '60000000-0000-0000-0000-0000000000a1',
+    'kpi_extractor', 1, 'running',
+    'sha256:5555555555555555555555555555555555555555555555555555555555555555',
+    'workflow-v1', 'extraction-payload/v1', 'prompt-v1', now()
+);
+UPDATE extraction_run_steps
+SET status = 'succeeded',
+    output_hash = 'sha256:6666666666666666666666666666666666666666666666666666666666666666',
+    finished_at = now()
+WHERE id = '70000000-0000-0000-0000-0000000000a1';
+INSERT INTO extraction_run_events (org_id, run_id, event_type, payload)
+VALUES (
+    '00000000-0000-0000-0000-000000000101',
+    '60000000-0000-0000-0000-0000000000a1',
+    'step_completed', '{}'::jsonb
+);
+INSERT INTO extraction_proposals (
+    id, org_id, workspace_id, run_id, kind, metric_id, payload,
+    raw_payload_hash, definition_hash, record_confidence
+) VALUES (
+    '80000000-0000-0000-0000-0000000000a1',
+    '00000000-0000-0000-0000-000000000101',
+    '00000000-0000-0000-0000-000000000301',
+    '60000000-0000-0000-0000-0000000000a1',
+    'kpi', 'nrr', '{"kind":"kpi"}'::jsonb,
+    'sha256:7777777777777777777777777777777777777777777777777777777777777777',
+    'sha256:8888888888888888888888888888888888888888888888888888888888888888',
+    0.950
+);
+UPDATE extraction_proposals
+SET state = 'needs_review', review_priority = 'high', version = 2
+WHERE id = '80000000-0000-0000-0000-0000000000a1';
+INSERT INTO extraction_proposal_evidence (
+    org_id, proposal_id, source_span_id, document_version_id, role, citation_status
+) VALUES (
+    '00000000-0000-0000-0000-000000000101',
+    '80000000-0000-0000-0000-0000000000a1',
+    '00000000-0000-0000-0000-000000000801',
+    '00000000-0000-0000-0000-000000000601',
+    'supports', 'verified'
+);
+INSERT INTO extraction_conflicts (id, org_id, workspace_id, conflict_key)
+VALUES (
+    'd0000000-0000-0000-0000-0000000000a1',
+    '00000000-0000-0000-0000-000000000101',
+    '00000000-0000-0000-0000-000000000301',
+    'arr:2025Q1'
+);
+INSERT INTO extraction_conflict_members (conflict_id, proposal_id, org_id)
+VALUES (
+    'd0000000-0000-0000-0000-0000000000a1',
+    '80000000-0000-0000-0000-0000000000a1',
+    '00000000-0000-0000-0000-000000000101'
+);
+UPDATE extraction_conflicts
+SET status = 'resolved',
+    resolved_by = '00000000-0000-0000-0000-000000000201',
+    resolved_at = now(),
+    resolution_note = 'kept nrr proposal'
+WHERE id = 'd0000000-0000-0000-0000-0000000000a1';
+INSERT INTO extraction_reviews (
+    id, org_id, workspace_id, action, actor_user_id, reason, idempotency_key,
+    expected_versions, input_ids, result_ids
+) VALUES (
+    '90000000-0000-0000-0000-0000000000a1',
+    '00000000-0000-0000-0000-000000000101',
+    '00000000-0000-0000-0000-000000000301',
+    'accept', '00000000-0000-0000-0000-000000000201', 'looks right',
+    'idem-review-felapp',
+    '{"80000000-0000-0000-0000-0000000000a1": 2}'::jsonb,
+    ARRAY['80000000-0000-0000-0000-0000000000a1']::uuid[],
+    ARRAY['a0000000-0000-0000-0000-0000000000a1']::uuid[]
+);
+INSERT INTO approved_extraction_records (
+    id, org_id, workspace_id, kind, metric_id, entity_id, version
+) VALUES (
+    'a0000000-0000-0000-0000-0000000000a1',
+    '00000000-0000-0000-0000-000000000101',
+    '00000000-0000-0000-0000-000000000301',
+    'kpi', 'nrr', '00000000-0000-0000-0000-000000000401', 0
+);
+INSERT INTO approved_extraction_versions (
+    id, org_id, record_id, version, origin_proposal_id, payload,
+    evidence_manifest, evidence_manifest_hash, ontology_version,
+    normalizer_version, validator_version, approved_by, approval_reason
+) VALUES (
+    'b0000000-0000-0000-0000-0000000000a1',
+    '00000000-0000-0000-0000-000000000101',
+    'a0000000-0000-0000-0000-0000000000a1',
+    1, '80000000-0000-0000-0000-0000000000a1',
+    '{"kind":"kpi"}'::jsonb,
+    '[{"source_span_id":"00000000-0000-0000-0000-000000000801"}]'::jsonb,
+    'sha256:9999999999999999999999999999999999999999999999999999999999999999',
+    'ontology-v1', 'norm-v1', 'val-v1',
+    '00000000-0000-0000-0000-000000000201', 'accepted under fel_app'
+);
+UPDATE approved_extraction_records
+SET current_version_id = 'b0000000-0000-0000-0000-0000000000a1', version = 1
+WHERE id = 'a0000000-0000-0000-0000-0000000000a1';
+UPDATE extraction_runs SET status = 'waiting_review'
+WHERE id = '60000000-0000-0000-0000-0000000000a1';
+UPDATE extraction_runs SET status = 'succeeded', finished_at = now()
+WHERE id = '60000000-0000-0000-0000-0000000000a1';
+DO $$
+BEGIN
+    IF (SELECT status FROM extraction_runs
+        WHERE id = '60000000-0000-0000-0000-0000000000a1') <> 'succeeded'
+       OR (SELECT status FROM extraction_run_steps
+           WHERE id = '70000000-0000-0000-0000-0000000000a1') <> 'succeeded'
+       OR (SELECT count(*) FROM extraction_run_events
+           WHERE run_id = '60000000-0000-0000-0000-0000000000a1') <> 1
+       OR (SELECT state FROM extraction_proposals
+           WHERE id = '80000000-0000-0000-0000-0000000000a1') <> 'needs_review'
+       OR (SELECT count(*) FROM extraction_proposal_evidence
+           WHERE proposal_id = '80000000-0000-0000-0000-0000000000a1') <> 1
+       OR (SELECT status FROM extraction_conflicts
+           WHERE id = 'd0000000-0000-0000-0000-0000000000a1') <> 'resolved'
+       OR (SELECT count(*) FROM extraction_conflict_members
+           WHERE conflict_id = 'd0000000-0000-0000-0000-0000000000a1') <> 1
+       OR (SELECT count(*) FROM extraction_reviews
+           WHERE id = '90000000-0000-0000-0000-0000000000a1') <> 1
+       OR (SELECT version FROM approved_extraction_records
+           WHERE id = 'a0000000-0000-0000-0000-0000000000a1') <> 1
+       OR (SELECT count(*) FROM approved_extraction_versions
+           WHERE id = 'b0000000-0000-0000-0000-0000000000a1') <> 1
+       OR (SELECT count(*) FROM extraction_policies
+           WHERE id = '50000000-0000-0000-0000-0000000000a1') <> 1 THEN
+        RAISE EXCEPTION 'not ok - fel_app extraction write path did not persist';
+    END IF;
+    RAISE NOTICE 'ok - fel_app policy/run inserts + run status walk (queued -> succeeded)';
+    RAISE NOTICE 'ok - fel_app step/event/proposal/evidence writes (lock run FOR SHARE)';
+    RAISE NOTICE 'ok - fel_app conflict/member/review/approved-record writes';
+END
+$$;
 RESET ROLE;
 
 DO $$

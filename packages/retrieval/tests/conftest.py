@@ -14,12 +14,12 @@ rather than colliding, and no teardown is possible or attempted.
 
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import uuid
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit, urlunsplit
@@ -30,6 +30,8 @@ try:  # driver is a dev dependency; integration tests require it
     import psycopg
 except ModuleNotFoundError:  # pragma: no cover - psycopg is in requirements-dev
     psycopg = None  # type: ignore[assignment]
+
+from fel_retrieval import content_sha256
 
 TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL")
 
@@ -79,25 +81,40 @@ _SENTENCES = [
 ]
 
 
-def _sha(text: str) -> str:
-    return "sha256:" + hashlib.sha256(text.encode()).hexdigest()
-
-
 @dataclass(frozen=True)
-class SeededCorpus:
+class SeededDocument:
     corpus_version_id: str
+    document_id: str
+    document_version_id: str
+    fact_id: str
+    table_id: str
     corpus: dict[str, Any]
 
 
-def _seed_corpus(conn: Any) -> SeededCorpus:
-    """Insert a small immutable corpus and return the matching builder view."""
+def _seed_document(
+    conn: Any,
+    *,
+    corpus_version_id: str | None = None,
+    published_at: datetime | None = None,
+) -> SeededDocument:
+    """Insert a small immutable document and return the matching builder view.
+
+    With both keyword arguments omitted the seeder mints its own draft
+    ``corpus_versions`` row and stamps ``published_at`` with the current time —
+    the original single-document corpus. Passing ``corpus_version_id`` links the
+    document into an existing corpus instead (so callers can straddle several
+    documents across one corpus), and ``published_at`` pins an explicit cutoff.
+    """
+    own_corpus = corpus_version_id is None
+    if corpus_version_id is None:
+        corpus_version_id = str(uuid.uuid4())
+    published = published_at if published_at is not None else datetime.now(UTC)
     entity_id = str(uuid.uuid4())
     document_id = str(uuid.uuid4())
     document_version_id = str(uuid.uuid4())
     section_id = str(uuid.uuid4())
     table_id = str(uuid.uuid4())
     fact_id = str(uuid.uuid4())
-    corpus_version_id = str(uuid.uuid4())
     heading_path = ["ITEM 8", "FINANCIAL STATEMENTS"]
 
     canonical = "\n".join(_SENTENCES)
@@ -113,7 +130,7 @@ def _seed_corpus(conn: Any) -> SeededCorpus:
                 "start_char": start,
                 "end_char": end,
                 "text": sentence,
-                "text_hash": _sha(sentence),
+                "text_hash": content_sha256(sentence),
                 "heading_path": heading_path,
             }
         )
@@ -121,14 +138,15 @@ def _seed_corpus(conn: Any) -> SeededCorpus:
 
     conn.execute(
         "INSERT INTO documents (id, entity_id, accession, source_url, content_hash, "
-        "storage_key, published_at) VALUES (%s, %s, %s, %s, %s, %s, now())",
+        "storage_key, published_at) VALUES (%s, %s, %s, %s, %s, %s, %s)",
         (
             document_id,
             entity_id,
             f"acc-{uuid.uuid4()}",
             "https://example.test/doc",
-            _sha(canonical),
+            content_sha256(canonical),
             f"raw/{document_id}",
+            published,
         ),
     )
     conn.execute(
@@ -166,7 +184,7 @@ def _seed_corpus(conn: Any) -> SeededCorpus:
             "100000000",
             "USD",
             spans[0]["id"],
-            "revenues:FY2025:USD",
+            f"revenues:{document_id[:8]}:USD",
         ),
     )
     conn.execute(
@@ -180,10 +198,11 @@ def _seed_corpus(conn: Any) -> SeededCorpus:
             json.dumps([{"source_span_id": spans[1]["id"]}, {"source_span_id": None}]),
         ),
     )
-    conn.execute(
-        "INSERT INTO corpus_versions (id, label, status) VALUES (%s, %s, 'draft')",
-        (corpus_version_id, f"corpus-{corpus_version_id[:8]}"),
-    )
+    if own_corpus:
+        conn.execute(
+            "INSERT INTO corpus_versions (id, label, status) VALUES (%s, %s, 'draft')",
+            (corpus_version_id, f"corpus-{corpus_version_id[:8]}"),
+        )
     conn.execute(
         "INSERT INTO corpus_version_documents (corpus_version_id, document_version_id) "
         "VALUES (%s, %s)",
@@ -210,7 +229,14 @@ def _seed_corpus(conn: Any) -> SeededCorpus:
             }
         ],
     }
-    return SeededCorpus(corpus_version_id=corpus_version_id, corpus=corpus)
+    return SeededDocument(
+        corpus_version_id=corpus_version_id,
+        document_id=document_id,
+        document_version_id=document_version_id,
+        fact_id=fact_id,
+        table_id=table_id,
+        corpus=corpus,
+    )
 
 
 @pytest.fixture(scope="session")
@@ -227,10 +253,25 @@ def pg_conn(retrieval_db_url: str) -> Iterator[Any]:
 
 
 @pytest.fixture()
-def seed_corpus(pg_conn: Any) -> Callable[[], SeededCorpus]:
-    """Factory: seed a fresh immutable corpus (call again for a second one)."""
+def seed_corpus(pg_conn: Any) -> Callable[[], SeededDocument]:
+    """Factory: seed a fresh single-document corpus (call again for a second one)."""
 
-    def factory() -> SeededCorpus:
-        return _seed_corpus(pg_conn)
+    def factory() -> SeededDocument:
+        return _seed_document(pg_conn)
+
+    return factory
+
+
+@pytest.fixture()
+def seed_document(pg_conn: Any) -> Callable[..., SeededDocument]:
+    """Factory: seed one document, optionally into an existing corpus at a pinned
+    ``published_at`` (call again to straddle several documents across one corpus)."""
+
+    def factory(
+        *, corpus_version_id: str | None = None, published_at: datetime | None = None
+    ) -> SeededDocument:
+        return _seed_document(
+            pg_conn, corpus_version_id=corpus_version_id, published_at=published_at
+        )
 
     return factory

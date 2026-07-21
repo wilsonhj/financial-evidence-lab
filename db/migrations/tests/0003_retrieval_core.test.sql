@@ -2,29 +2,7 @@
 
 BEGIN;
 
-CREATE FUNCTION pg_temp.expect_rejection(
-    test_name text,
-    statement text,
-    expected_states text[] DEFAULT ARRAY['23503', '23514', 'P0001']
-) RETURNS void
-LANGUAGE plpgsql
-AS $$
-DECLARE
-    actual_state text;
-BEGIN
-    BEGIN
-        EXECUTE statement;
-    EXCEPTION WHEN OTHERS THEN
-        GET STACKED DIAGNOSTICS actual_state = RETURNED_SQLSTATE;
-        IF actual_state = ANY(expected_states) THEN
-            RAISE NOTICE 'ok - % rejected with %', test_name, actual_state;
-            RETURN;
-        END IF;
-        RAISE;
-    END;
-    RAISE EXCEPTION 'not ok - % was accepted', test_name;
-END
-$$;
+\ir _helpers.sql
 
 DO $$
 DECLARE
@@ -127,7 +105,7 @@ SELECT pg_temp.expect_rejection('cross-corpus item', $sql$
     ) VALUES (
         '00000000-0000-0000-0000-000000000d11', '00000000-0000-0000-0000-000000000c01', 'passage', '00000000-0000-0000-0000-000000000402', '00000000-0000-0000-0000-000000000502', '00000000-0000-0000-0000-000000000602', '00000000-0000-0000-0000-000000000702', '00000000-0000-0000-0000-000000000802', 'wrong corpus', 'sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd', 0, 100, 1
     )
-$sql$);
+$sql$, ARRAY['P0001']);
 SELECT pg_temp.expect_rejection('cross-fact provenance', $sql$
     INSERT INTO retrieval_items (
         id, index_version_id, kind, entity_id, document_id, document_version_id,
@@ -136,7 +114,7 @@ SELECT pg_temp.expect_rejection('cross-fact provenance', $sql$
     ) VALUES (
         '00000000-0000-0000-0000-000000000d12', '00000000-0000-0000-0000-000000000c01', 'fact', '00000000-0000-0000-0000-000000000401', '00000000-0000-0000-0000-000000000501', '00000000-0000-0000-0000-000000000601', '00000000-0000-0000-0000-000000000701', '00000000-0000-0000-0000-000000000801', '00000000-0000-0000-0000-000000000902', 'wrong fact', 'sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee', 0, 100, 1
     )
-$sql$);
+$sql$, ARRAY['23503']);
 SELECT pg_temp.expect_rejection('cross-table provenance', $sql$
     INSERT INTO retrieval_items (
         id, index_version_id, kind, entity_id, document_id, document_version_id,
@@ -145,7 +123,7 @@ SELECT pg_temp.expect_rejection('cross-table provenance', $sql$
     ) VALUES (
         '00000000-0000-0000-0000-000000000d13', '00000000-0000-0000-0000-000000000c01', 'table_row', '00000000-0000-0000-0000-000000000401', '00000000-0000-0000-0000-000000000501', '00000000-0000-0000-0000-000000000601', '00000000-0000-0000-0000-000000000701', '00000000-0000-0000-0000-000000000801', '00000000-0000-0000-0000-000000000a02', 0, 'wrong table', 'sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff', 0, 100, 1
     )
-$sql$);
+$sql$, ARRAY['P0001']);
 
 INSERT INTO retrieval_embeddings (
     retrieval_item_id, index_version_id, provider, model, dimensions,
@@ -165,7 +143,7 @@ SELECT pg_temp.expect_rejection('embedding hash/index/model mismatch', $sql$
         'other', 'wrong', 512, array_fill(0::real, ARRAY[512])::halfvec,
         'sha256:9999999999999999999999999999999999999999999999999999999999999999'
     )
-$sql$);
+$sql$, ARRAY['23503']);
 
 UPDATE retrieval_index_versions
 SET status = 'ready', published_at = now()
@@ -174,7 +152,7 @@ SELECT pg_temp.expect_rejection('published index rollback', $sql$
     UPDATE retrieval_index_versions
     SET status = 'draft', published_at = NULL
     WHERE id = '00000000-0000-0000-0000-000000000c01'
-$sql$);
+$sql$, ARRAY['P0001']);
 
 INSERT INTO queries (
     id, org_id, workspace_id, created_by, question, effective_as_of,
@@ -184,22 +162,22 @@ INSERT INTO queries (
     ('00000000-0000-0000-0000-000000000e02', '00000000-0000-0000-0000-000000000102', '00000000-0000-0000-0000-000000000302', '00000000-0000-0000-0000-000000000202', 'two?', now(), '00000000-0000-0000-0000-000000000b02', '00000000-0000-0000-0000-000000000c02', '{}'::jsonb, 'planner-v1');
 SELECT pg_temp.expect_rejection('query workspace tenant', $sql$
     INSERT INTO queries VALUES ('00000000-0000-0000-0000-000000000e11', '00000000-0000-0000-0000-000000000101', '00000000-0000-0000-0000-000000000302', '00000000-0000-0000-0000-000000000201', 'bad', now(), '00000000-0000-0000-0000-000000000b01', '00000000-0000-0000-0000-000000000c01', '{}'::jsonb, 'planner-v1', '{}'::jsonb, NULL, now())
-$sql$);
+$sql$, ARRAY['23503']);
 SELECT pg_temp.expect_rejection('query actor membership', $sql$
     INSERT INTO queries VALUES ('00000000-0000-0000-0000-000000000e12', '00000000-0000-0000-0000-000000000101', '00000000-0000-0000-0000-000000000301', '00000000-0000-0000-0000-000000000202', 'bad', now(), '00000000-0000-0000-0000-000000000b01', '00000000-0000-0000-0000-000000000c01', '{}'::jsonb, 'planner-v1', '{}'::jsonb, NULL, now())
-$sql$);
+$sql$, ARRAY['23503']);
 SELECT pg_temp.expect_rejection('query parent tenant', $sql$
     INSERT INTO queries VALUES ('00000000-0000-0000-0000-000000000e13', '00000000-0000-0000-0000-000000000101', '00000000-0000-0000-0000-000000000301', '00000000-0000-0000-0000-000000000201', 'bad', now(), '00000000-0000-0000-0000-000000000b01', '00000000-0000-0000-0000-000000000c01', '{}'::jsonb, 'planner-v1', '{}'::jsonb, '00000000-0000-0000-0000-000000000e02', now())
-$sql$);
+$sql$, ARRAY['23503']);
 SELECT pg_temp.expect_rejection('query corpus/index mismatch', $sql$
     INSERT INTO queries VALUES ('00000000-0000-0000-0000-000000000e14', '00000000-0000-0000-0000-000000000101', '00000000-0000-0000-0000-000000000301', '00000000-0000-0000-0000-000000000201', 'bad', now(), '00000000-0000-0000-0000-000000000b02', '00000000-0000-0000-0000-000000000c01', '{}'::jsonb, 'planner-v1', '{}'::jsonb, NULL, now())
-$sql$);
+$sql$, ARRAY['23503']);
 SELECT pg_temp.expect_rejection('query unpublished index', $sql$
     INSERT INTO queries VALUES ('00000000-0000-0000-0000-000000000e15', '00000000-0000-0000-0000-000000000101', '00000000-0000-0000-0000-000000000301', '00000000-0000-0000-0000-000000000201', 'bad', now(), '00000000-0000-0000-0000-000000000b01', '00000000-0000-0000-0000-000000000c03', '{}'::jsonb, 'planner-v1', '{}'::jsonb, NULL, now())
-$sql$);
+$sql$, ARRAY['P0001']);
 SELECT pg_temp.expect_rejection('query exceeds workspace cutoff', $sql$
     INSERT INTO queries VALUES ('00000000-0000-0000-0000-000000000e17', '00000000-0000-0000-0000-000000000101', '00000000-0000-0000-0000-000000000301', '00000000-0000-0000-0000-000000000201', 'future query', now() + interval '1 day', '00000000-0000-0000-0000-000000000b01', '00000000-0000-0000-0000-000000000c01', '{}'::jsonb, 'planner-v1', '{}'::jsonb, NULL, now())
-$sql$);
+$sql$, ARRAY['P0001']);
 
 INSERT INTO queries (
     id, org_id, workspace_id, created_by, question, effective_as_of,
@@ -234,21 +212,21 @@ INSERT INTO retrieval_runs (
 SELECT pg_temp.expect_rejection('run query tenant', $sql$
     INSERT INTO retrieval_runs (id, org_id, query_id, mode, config_hash, embedding_provider, embedding_model, planner_version)
     VALUES ('00000000-0000-0000-0000-000000000f11', '00000000-0000-0000-0000-000000000101', '00000000-0000-0000-0000-000000000e02', 'execute', 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'openai', 'text-embedding-3-small', 'planner-v1')
-$sql$);
+$sql$, ARRAY['P0001']);
 SELECT pg_temp.expect_rejection('run provider pin', $sql$
     INSERT INTO retrieval_runs (id, org_id, query_id, mode, config_hash, embedding_provider, embedding_model, planner_version)
     VALUES ('00000000-0000-0000-0000-000000000f12', '00000000-0000-0000-0000-000000000101', '00000000-0000-0000-0000-000000000e01', 'execute', 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'other', 'wrong', 'planner-v1')
-$sql$);
+$sql$, ARRAY['P0001']);
 SELECT pg_temp.expect_rejection('run parent tenant', $sql$
     INSERT INTO retrieval_runs (id, org_id, query_id, parent_run_id, mode, config_hash, embedding_provider, embedding_model, planner_version)
     VALUES ('00000000-0000-0000-0000-000000000f13', '00000000-0000-0000-0000-000000000101', '00000000-0000-0000-0000-000000000e01', '00000000-0000-0000-0000-000000000f02', 'rerun', 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'openai', 'text-embedding-3-small', 'planner-v1')
-$sql$);
+$sql$, ARRAY['23503']);
 SELECT pg_temp.expect_rejection('event run tenant', $sql$
     INSERT INTO retrieval_events VALUES ('00000000-0000-0000-0000-000000000f02', '00000000-0000-0000-0000-000000000101', 99, 'heartbeat', '{}'::jsonb, now())
-$sql$);
+$sql$, ARRAY['P0001']);
 SELECT pg_temp.expect_rejection('event sequence gap', $sql$
     INSERT INTO retrieval_events VALUES ('00000000-0000-0000-0000-000000000f01', '00000000-0000-0000-0000-000000000101', 2, 'heartbeat', '{}'::jsonb, now())
-$sql$);
+$sql$, ARRAY['P0001']);
 
 UPDATE retrieval_runs SET status = 'planning' WHERE id = '00000000-0000-0000-0000-000000000f01';
 UPDATE retrieval_runs SET status = 'retrieving' WHERE id = '00000000-0000-0000-0000-000000000f01';
@@ -262,19 +240,19 @@ INSERT INTO retrieval_candidates (
 SELECT pg_temp.expect_rejection('candidate run/item index mismatch', $sql$
     INSERT INTO retrieval_candidates (id, org_id, run_id, retrieval_item_id, lane, variant_index, lane_rank, raw_score, rrf_contribution, fused_score, accepted, timing_ms)
     VALUES ('10000000-0000-0000-0000-000000000011', '00000000-0000-0000-0000-000000000101', '00000000-0000-0000-0000-000000000f01', '00000000-0000-0000-0000-000000000d02', 'lexical', 0, 1, '1', '0.01', '0.01', false, 1)
-$sql$);
+$sql$, ARRAY['P0001']);
 SELECT pg_temp.expect_rejection('candidate decimal string', $sql$
     INSERT INTO retrieval_candidates (id, org_id, run_id, retrieval_item_id, lane, variant_index, lane_rank, raw_score, rrf_contribution, fused_score, accepted, timing_ms)
     VALUES ('10000000-0000-0000-0000-000000000012', '00000000-0000-0000-0000-000000000101', '00000000-0000-0000-0000-000000000f01', '00000000-0000-0000-0000-000000000d03', 'facts', 0, 1, 'NaN', '0.01', '0.01', false, 1)
-$sql$);
+$sql$, ARRAY['23514']);
 SELECT pg_temp.expect_rejection('candidate run tenant', $sql$
     INSERT INTO retrieval_candidates (id, org_id, run_id, retrieval_item_id, lane, variant_index, lane_rank, raw_score, rrf_contribution, fused_score, accepted, timing_ms)
     VALUES ('10000000-0000-0000-0000-000000000014', '00000000-0000-0000-0000-000000000101', '00000000-0000-0000-0000-000000000f02', '00000000-0000-0000-0000-000000000d02', 'dense', 0, 2, '1', '0.01', '0.01', false, 1)
-$sql$);
+$sql$, ARRAY['P0001']);
 SELECT pg_temp.expect_rejection('candidate published after query cutoff', $sql$
     INSERT INTO retrieval_candidates (id, org_id, run_id, retrieval_item_id, lane, variant_index, lane_rank, raw_score, rrf_contribution, fused_score, accepted, timing_ms)
     VALUES ('10000000-0000-0000-0000-000000000016', '00000000-0000-0000-0000-000000000101', '00000000-0000-0000-0000-000000000f16', '00000000-0000-0000-0000-000000000d01', 'dense', 0, 1, '1', '0.01', '0.01', false, 1)
-$sql$);
+$sql$, ARRAY['P0001']);
 
 INSERT INTO claims (id, org_id, run_id, ord, text, status, confidence)
 VALUES
@@ -282,7 +260,7 @@ VALUES
     ('20000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000102', '00000000-0000-0000-0000-000000000f02', 0, 'claim 2', 'supported', '1');
 SELECT pg_temp.expect_rejection('claim run tenant', $sql$
     INSERT INTO claims VALUES ('20000000-0000-0000-0000-000000000011', '00000000-0000-0000-0000-000000000101', '00000000-0000-0000-0000-000000000f02', 1, 'bad', 'unsupported', NULL, '{}'::jsonb, now())
-$sql$);
+$sql$, ARRAY['P0001']);
 INSERT INTO citations (
     id, org_id, run_id, claim_id, retrieval_item_id, source_span_id, status
 ) VALUES (
@@ -290,10 +268,10 @@ INSERT INTO citations (
 );
 SELECT pg_temp.expect_rejection('citation item/span mismatch', $sql$
     INSERT INTO citations VALUES ('30000000-0000-0000-0000-000000000011', '00000000-0000-0000-0000-000000000101', '00000000-0000-0000-0000-000000000f01', '20000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000d01', '00000000-0000-0000-0000-000000000802', 'entailed', NULL, NULL, NULL, '{}'::jsonb, NULL, now())
-$sql$);
+$sql$, ARRAY['23503']);
 SELECT pg_temp.expect_rejection('citation claim/run tenant', $sql$
     INSERT INTO citations VALUES ('30000000-0000-0000-0000-000000000012', '00000000-0000-0000-0000-000000000101', '00000000-0000-0000-0000-000000000f01', '20000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000d01', '00000000-0000-0000-0000-000000000801', 'entailed', NULL, NULL, NULL, '{}'::jsonb, NULL, now())
-$sql$);
+$sql$, ARRAY['23503']);
 
 INSERT INTO retrieval_feedback (
     id, org_id, run_id, retrieval_item_id, label, actor_user_id
@@ -309,11 +287,11 @@ INSERT INTO retrieval_feedback (
 SELECT pg_temp.expect_rejection('feedback supersession run/org mismatch', $sql$
     INSERT INTO retrieval_feedback (id, org_id, run_id, retrieval_item_id, label, actor_user_id, supersedes_feedback_id)
     VALUES ('40000000-0000-0000-0000-000000000011', '00000000-0000-0000-0000-000000000101', '00000000-0000-0000-0000-000000000f01', '00000000-0000-0000-0000-000000000d01', 'irrelevant', '00000000-0000-0000-0000-000000000201', '40000000-0000-0000-0000-000000000002')
-$sql$);
+$sql$, ARRAY['23503']);
 SELECT pg_temp.expect_rejection('feedback actor membership', $sql$
     INSERT INTO retrieval_feedback (id, org_id, run_id, retrieval_item_id, label, actor_user_id)
     VALUES ('40000000-0000-0000-0000-000000000012', '00000000-0000-0000-0000-000000000101', '00000000-0000-0000-0000-000000000f01', '00000000-0000-0000-0000-000000000d01', 'irrelevant', '00000000-0000-0000-0000-000000000202')
-$sql$);
+$sql$, ARRAY['23503']);
 
 UPDATE retrieval_runs SET status = 'fusing' WHERE id = '00000000-0000-0000-0000-000000000f01';
 UPDATE retrieval_runs SET status = 'generating' WHERE id = '00000000-0000-0000-0000-000000000f01';
@@ -324,14 +302,14 @@ UPDATE retrieval_runs SET status = 'succeeded', finished_at = now()
 WHERE id = '00000000-0000-0000-0000-000000000f01';
 SELECT pg_temp.expect_rejection('event after terminal', $sql$
     INSERT INTO retrieval_events VALUES ('00000000-0000-0000-0000-000000000f01', '00000000-0000-0000-0000-000000000101', 2, 'heartbeat', '{}'::jsonb, now())
-$sql$);
+$sql$, ARRAY['P0001']);
 SELECT pg_temp.expect_rejection('candidate after terminal', $sql$
     INSERT INTO retrieval_candidates (id, org_id, run_id, retrieval_item_id, lane, variant_index, lane_rank, raw_score, rrf_contribution, fused_score, accepted, timing_ms)
     VALUES ('10000000-0000-0000-0000-000000000013', '00000000-0000-0000-0000-000000000101', '00000000-0000-0000-0000-000000000f01', '00000000-0000-0000-0000-000000000d03', 'facts', 0, 1, '1', '0.01', '0.01', false, 1)
-$sql$);
+$sql$, ARRAY['P0001']);
 SELECT pg_temp.expect_rejection('terminal run mutation', $sql$
     UPDATE retrieval_runs SET cost_usd = 1 WHERE id = '00000000-0000-0000-0000-000000000f01'
-$sql$);
+$sql$, ARRAY['P0001']);
 
 INSERT INTO retrieval_events (run_id, org_id, seq, event_type)
 VALUES ('00000000-0000-0000-0000-000000000f03', '00000000-0000-0000-0000-000000000101', 1, 'run_cancelled');
@@ -343,7 +321,7 @@ VALUES ('00000000-0000-0000-0000-000000000f02', '00000000-0000-0000-0000-0000000
 SELECT pg_temp.expect_rejection('terminal status/event mismatch', $sql$
     UPDATE retrieval_runs SET status = 'cancelled', finished_at = now()
     WHERE id = '00000000-0000-0000-0000-000000000f02'
-$sql$);
+$sql$, ARRAY['P0001']);
 
 SET LOCAL ROLE fel_app;
 SELECT set_config(
@@ -368,6 +346,92 @@ SELECT pg_temp.expect_rejection(
     $sql$,
     ARRAY['42501']
 );
+
+-- As-fel_app happy path: every fel_app-granted DML path on the tenant
+-- retrieval tables must succeed under the API role, not just as the
+-- migration superuser. This pins the incidental grant coupling: the
+-- fel_assert_run_open FOR SHARE and fel_guard_retrieval_event FOR UPDATE
+-- row locks on retrieval_runs are only legal for fel_app because of
+-- GRANT UPDATE (status, ...) ON retrieval_runs — revoking that grant must
+-- turn every statement below into a 42501.
+INSERT INTO retrieval_runs (
+    id, org_id, query_id, mode, config_hash, embedding_provider,
+    embedding_model, planner_version
+) VALUES (
+    'f0000000-0000-0000-0000-0000000000a1',
+    '00000000-0000-0000-0000-000000000101',
+    '00000000-0000-0000-0000-000000000e01', 'execute',
+    'sha256:7777777777777777777777777777777777777777777777777777777777777777',
+    'openai', 'text-embedding-3-small', 'planner-v1'
+);
+INSERT INTO retrieval_events (run_id, org_id, seq, event_type)
+VALUES ('f0000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-000000000101', 1, 'run_started');
+UPDATE retrieval_runs SET status = 'planning'
+WHERE id = 'f0000000-0000-0000-0000-0000000000a1';
+UPDATE retrieval_runs SET status = 'retrieving'
+WHERE id = 'f0000000-0000-0000-0000-0000000000a1';
+INSERT INTO retrieval_candidates (
+    id, org_id, run_id, retrieval_item_id, lane, variant_index, lane_rank,
+    raw_score, normalized_score, rrf_contribution, fused_score, fused_rank,
+    accepted, timing_ms
+) VALUES (
+    '10000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-000000000101',
+    'f0000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-000000000d01',
+    'dense', 0, 1, '0.9', '0.9', '0.016', '0.016', 1, true, 1
+);
+INSERT INTO retrieval_feedback (
+    id, org_id, run_id, retrieval_item_id, label, actor_user_id
+) VALUES (
+    '40000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-000000000101',
+    'f0000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-000000000d01',
+    'relevant', '00000000-0000-0000-0000-000000000201'
+);
+UPDATE retrieval_runs SET status = 'fusing'
+WHERE id = 'f0000000-0000-0000-0000-0000000000a1';
+UPDATE retrieval_runs SET status = 'generating'
+WHERE id = 'f0000000-0000-0000-0000-0000000000a1';
+INSERT INTO claims (id, org_id, run_id, ord, text, status, confidence)
+VALUES (
+    '20000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-000000000101',
+    'f0000000-0000-0000-0000-0000000000a1', 0, 'fel_app claim', 'supported', '1'
+);
+UPDATE retrieval_runs SET status = 'verifying'
+WHERE id = 'f0000000-0000-0000-0000-0000000000a1';
+INSERT INTO citations (
+    id, org_id, run_id, claim_id, retrieval_item_id, source_span_id, status
+) VALUES (
+    '30000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-000000000101',
+    'f0000000-0000-0000-0000-0000000000a1', '20000000-0000-0000-0000-0000000000a1',
+    '00000000-0000-0000-0000-000000000d01', '00000000-0000-0000-0000-000000000801',
+    'entailed'
+);
+INSERT INTO retrieval_events (run_id, org_id, seq, event_type)
+VALUES ('f0000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-000000000101', 2, 'run_completed');
+UPDATE retrieval_runs
+SET status = 'succeeded', finished_at = now(),
+    cost_usd = 0.01, timings_ms = '{"total": 1}'::jsonb
+WHERE id = 'f0000000-0000-0000-0000-0000000000a1';
+DO $$
+BEGIN
+    IF (SELECT status FROM retrieval_runs
+        WHERE id = 'f0000000-0000-0000-0000-0000000000a1') <> 'succeeded'
+       OR (SELECT count(*) FROM retrieval_events
+           WHERE run_id = 'f0000000-0000-0000-0000-0000000000a1') <> 2
+       OR (SELECT count(*) FROM retrieval_candidates
+           WHERE run_id = 'f0000000-0000-0000-0000-0000000000a1') <> 1
+       OR (SELECT count(*) FROM retrieval_feedback
+           WHERE run_id = 'f0000000-0000-0000-0000-0000000000a1') <> 1
+       OR (SELECT count(*) FROM claims
+           WHERE run_id = 'f0000000-0000-0000-0000-0000000000a1') <> 1
+       OR (SELECT count(*) FROM citations
+           WHERE run_id = 'f0000000-0000-0000-0000-0000000000a1') <> 1 THEN
+        RAISE EXCEPTION 'not ok - fel_app retrieval write path did not persist';
+    END IF;
+    RAISE NOTICE 'ok - fel_app run insert + status walk (queued -> succeeded)';
+    RAISE NOTICE 'ok - fel_app retrieval_events append (locks run FOR UPDATE)';
+    RAISE NOTICE 'ok - fel_app candidate/feedback/claim/citation inserts (lock run FOR SHARE)';
+END
+$$;
 RESET ROLE;
 
 DO $$

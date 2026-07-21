@@ -2,29 +2,7 @@
 
 BEGIN;
 
-CREATE FUNCTION pg_temp.expect_rejection(
-    test_name text,
-    statement text,
-    expected_states text[] DEFAULT ARRAY['23503', '23514', 'P0001']
-) RETURNS void
-LANGUAGE plpgsql
-AS $$
-DECLARE
-    actual_state text;
-BEGIN
-    BEGIN
-        EXECUTE statement;
-    EXCEPTION WHEN OTHERS THEN
-        GET STACKED DIAGNOSTICS actual_state = RETURNED_SQLSTATE;
-        IF actual_state = ANY(expected_states) THEN
-            RAISE NOTICE 'ok - % rejected with %', test_name, actual_state;
-            RETURN;
-        END IF;
-        RAISE;
-    END;
-    RAISE EXCEPTION 'not ok - % was accepted', test_name;
-END
-$$;
+\ir _helpers.sql
 
 -- Minimal seed chain for a queries insert (org -> membership -> workspace,
 -- corpus version -> index version). Distinct 0x000d/0x000e id block to stay
@@ -48,13 +26,12 @@ INSERT INTO retrieval_index_versions (
     ('00000000-0000-0000-0000-00000000d602', '00000000-0000-0000-0000-00000000d501', 'v2',
      'sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',
      'mock', 'mock-512');
--- d601 becomes published (building -> ready); d602 stays building (unpublished).
+-- d601 becomes published (draft -> building -> ready); d602 stays a draft
+-- (unpublished).
 UPDATE retrieval_index_versions SET status = 'building'
     WHERE id = '00000000-0000-0000-0000-00000000d601';
 UPDATE retrieval_index_versions SET status = 'ready', published_at = now()
     WHERE id = '00000000-0000-0000-0000-00000000d601';
-UPDATE retrieval_index_versions SET status = 'building'
-    WHERE id = '00000000-0000-0000-0000-00000000d602';
 
 -- THE regression: the application role must be able to create a query
 -- against a published index. Before 0005 this raised 42501 (FOR SHARE on a
@@ -146,6 +123,45 @@ SELECT pg_temp.expect_rejection(
     $sql$,
     ARRAY['P0001']
 );
+
+-- Superseded-pin regression: ready -> superseded is a legal transition that
+-- KEEPS published_at, and the guard accepts ready OR superseded published
+-- indexes. A pin against the now-superseded d601 must still succeed for
+-- fel_app (a guard tightened to ready-only would break replay of older
+-- queries; the unpublished d602 rejection above stays the negative control).
+UPDATE retrieval_index_versions SET status = 'superseded'
+    WHERE id = '00000000-0000-0000-0000-00000000d601';
+SET LOCAL ROLE fel_app;
+SELECT set_config(
+    'request.jwt.claims',
+    '{"org_id":"00000000-0000-0000-0000-00000000d101"}',
+    true
+);
+INSERT INTO queries (
+    id, org_id, workspace_id, created_by, question, effective_as_of,
+    corpus_version_id, index_version_id, plan, planner_version
+) VALUES (
+    '00000000-0000-0000-0000-00000000d704',
+    '00000000-0000-0000-0000-00000000d101',
+    '00000000-0000-0000-0000-00000000d301',
+    '00000000-0000-0000-0000-00000000d201',
+    'superseded pin regression query',
+    '2026-01-01T00:00:00Z',
+    '00000000-0000-0000-0000-00000000d501',
+    '00000000-0000-0000-0000-00000000d601',
+    '{}'::jsonb,
+    'planner-v1'
+);
+DO $$
+BEGIN
+    IF (SELECT count(*) FROM queries
+        WHERE id = '00000000-0000-0000-0000-00000000d704') <> 1 THEN
+        RAISE EXCEPTION 'not ok - fel_app superseded-pin insert did not persist';
+    END IF;
+    RAISE NOTICE 'ok - fel_app can pin a superseded (still published) index';
+END
+$$;
+RESET ROLE;
 
 DO $$ BEGIN RAISE NOTICE 'ok - all 0005 query-guard regression cases passed'; END $$;
 
