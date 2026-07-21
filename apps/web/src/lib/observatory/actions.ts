@@ -1,6 +1,6 @@
 "use server";
 
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 
 import { redirect } from "next/navigation";
 
@@ -19,6 +19,17 @@ const FEEDBACK_LABELS: ReadonlySet<EvidenceFeedback["label"]> = new Set([
 function str(formData: FormData, key: string): string {
   const value = formData.get(key);
   return typeof value === "string" ? value : "";
+}
+
+/**
+ * Deterministic Idempotency-Key for evidence feedback. A feedback record's
+ * stable identity is (run_id, item_id, label): resubmitting the same verdict
+ * for the same item (e.g. a double-click) must reuse the key so the server
+ * dedupes the append-only append instead of writing a duplicate row. Query and
+ * rerun creation deliberately mint a fresh key per call — each is a new record.
+ */
+function feedbackIdempotencyKey(runId: string, itemId: string, label: string): string {
+  return createHash("sha256").update(`${runId}:${itemId}:${label}`, "utf8").digest("hex");
 }
 
 /** Create a new (optionally parent-linked) query from bounded controls. */
@@ -71,7 +82,8 @@ export async function sendFeedbackAction(formData: FormData): Promise<void> {
   }
   const feedback: EvidenceFeedback = { item_id: itemId, label, ...(reason ? { reason } : {}) };
   try {
-    await getObservatorySource().submitFeedback(runId, feedback, randomUUID());
+    const key = feedbackIdempotencyKey(runId, itemId, label);
+    await getObservatorySource().submitFeedback(runId, feedback, key);
   } catch (error) {
     redirect(`/observatory/runs/${runId}?error=${observatoryFailureState(error) ?? "unavailable"}`);
   }
