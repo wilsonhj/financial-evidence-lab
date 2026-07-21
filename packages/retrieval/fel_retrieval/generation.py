@@ -8,20 +8,22 @@ mock-first in CI and swap in a live model without any wiring change:
   ``StructuredLLMProvider`` protocol (``fel_providers``). The provider result
   supplies the usage/refusal metadata that the run's budget records; a refusal
   fails the answer closed (no claims), never a fabricated one.
-* The claim *decomposition* itself is deterministic: every selected context item
-  yields exactly one atomic claim grounded in that item, cited back to the item's
-  accepted evidence span. This is the property M2 verification (M2-021/022) then
-  classifies — the generator never asserts support it has not grounded, so a
-  claim can only cite evidence that fusion actually accepted.
+* Claim *decomposition* is intentionally mock-first identity: ``_decompose``
+  ignores the provider's structured JSON and yields one atomic claim per selected
+  context item, verbatim-grounded in that item. A live cutover that consumes
+  provider JSON is explicitly out of scope for this module until credentials and
+  structured-output wiring land.
 
 Claims carry the spec §11.3 closed status set
 (``supported|partially_supported|contradicted|derived|unsupported``). Because a
-mock claim is a verbatim span of the evidence it cites, the generator grounds it
+mock claim is a verbatim span of the evidence it cites, the generator proposes it
 as ``supported`` with an ``entailed`` citation edge. Formal citation
-classification, deterministic numeric-tuple checking and cross-version integrity
-are the verifier's job (M2-021), which re-derives every edge from the evidence;
-the generator only proposes atomic claims that cite accepted context. All
-arithmetic-bearing fields are ``Decimal`` end-to-end (house rule).
+classification (including numeric-tuple checking against *independently* asserted
+claim numbers) and cross-version integrity are the verifier's job (M2-021). Under
+the mock-first identity, ``claim.numeric`` is copied from the cited item, so the
+mock path cannot produce a numeric contradiction end-to-end — that discrimination
+requires a live generator. All arithmetic-bearing fields are ``Decimal``
+end-to-end (house rule).
 """
 
 from __future__ import annotations
@@ -90,8 +92,8 @@ _SYSTEM_PROMPT = (
 class NumericTuple:
     """A financial fact's checkable numeric tuple (spec §11.4 provenance).
 
-    ``value`` and ``scale`` are exact ``Decimal`` s; ``scale`` is the base-ten
-    exponent applied to ``value`` (``0`` for a plain number, ``6`` for millions).
+    ``value`` is an exact ``Decimal``; ``scale`` is an ``int`` base-ten exponent
+    applied to ``value`` (``0`` for a plain number, ``6`` for millions).
     ``sign`` is derived from ``value`` so it can be compared independently.
     """
 
@@ -194,9 +196,9 @@ def _render_prompt(question: str, context: Sequence[ContextItem], as_of: str) ->
 class StructuredClaimGenerator:
     """Generates atomic claims from selected context via a StructuredLLMProvider.
 
-    The provider call is load-bearing for the run's usage/refusal record; the
-    atomic decomposition is deterministic (one claim per selected item) so mock
-    and live runs persist the same shape and the same evidence linkage.
+    The provider call is load-bearing for the run's usage/refusal record. Claim
+    decomposition is mock-first identity (``_decompose``): one claim per selected
+    item, ignoring provider JSON until a live structured-output cutover.
     """
 
     def __init__(self, provider: StructuredLLMProvider, *, max_output_tokens: int = 1024) -> None:
@@ -219,34 +221,27 @@ class StructuredClaimGenerator:
             max_output_tokens=self._max_output_tokens,
         )
         result = self._provider.generate_structured(request)
-        if result.refused:
-            return GenerationResult(
-                claims=(),
-                provider=result.provider,
-                model=result.model,
-                input_tokens=result.input_tokens,
-                output_tokens=result.output_tokens,
-                refused=True,
-                refusal=result.refusal,
-            )
-        claims = _decompose(context)
+        claims: tuple[GeneratedClaim, ...] = () if result.refused else _decompose(context)
         return GenerationResult(
             claims=claims,
             provider=result.provider,
             model=result.model,
             input_tokens=result.input_tokens,
             output_tokens=result.output_tokens,
-            refused=False,
+            refused=result.refused,
+            refusal=result.refusal if result.refused else None,
         )
 
 
 def _decompose(context: Sequence[ContextItem]) -> tuple[GeneratedClaim, ...]:
-    """One atomic claim per selected item, verbatim-grounded in that item.
+    """Mock-first identity: one atomic claim per selected item, verbatim-grounded.
 
-    A mock claim is a verbatim span of its cited evidence, so the edge is
+    Intentionally ignores provider structured JSON (see module docstring). A mock
+    claim is a verbatim span of its cited evidence, so the proposed edge is
     trivially ``entailed`` and the claim ``supported``. Verification (M2-021)
-    re-derives every edge from the evidence (numeric checks, integrity) rather
-    than trusting this grounding.
+    re-derives every edge (lexical + integrity); under this identity,
+    ``claim.numeric`` equals the cited item's numeric, so numeric contradiction
+    cannot arise until a live generator asserts independent claim numbers.
     """
     claims: list[GeneratedClaim] = []
     for ord_, item in enumerate(context):

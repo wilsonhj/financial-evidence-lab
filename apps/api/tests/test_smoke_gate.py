@@ -135,7 +135,8 @@ def test_smoke_gate_passes_and_reranker_disabled(
     as_of_iso = _AS_OF.isoformat()
     temporal_ok = all(c["published_at"] <= as_of_iso for c in trace["candidates"])
     supporting = correct = rendered = cited = 0
-    numeric_expected = numeric_correct = False
+    numeric_expected = False
+    numeric_correct = True
     for claim in trace["claims"]:
         if claim["status"] in {"supported", "derived"}:
             rendered += 1
@@ -148,7 +149,8 @@ def test_smoke_gate_passes_and_reranker_disabled(
                     correct += 1
             if citation["numeric_checks"]:
                 numeric_expected = True
-                numeric_correct = all(citation["numeric_checks"].values())
+                # AND across citations — last-write-wins would drop earlier failures.
+                numeric_correct = numeric_correct and all(citation["numeric_checks"].values())
 
     assert supporting > 0 and correct == supporting, "seeded edges must all be grounded"
     outcome = QuestionOutcome(
@@ -161,10 +163,39 @@ def test_smoke_gate_passes_and_reranker_disabled(
         rendered_claims=rendered,
         cited_rendered_claims=cited,
     )
-    report = build_gate_report(aggregate_metrics([outcome]), supports=metric_supports([outcome]))
+    metrics = aggregate_metrics([outcome])
+    # Controlled smoke corpus: every gate metric is exact Decimal(1).
+    for name in SMOKE_THRESHOLDS:
+        assert metrics[name] == Decimal(1), f"{name}={metrics[name]}"
+    report = build_gate_report(metrics, supports=metric_supports([outcome]))
     assert report.passed, report.to_dict()
     assert report.reranker_triggered is False
     assert numeric_expected, "expected a fact-backed numeric claim on the seed corpus"
+
+
+def test_smoke_numeric_correct_ands_across_citations() -> None:
+    """Regression: an earlier failing numeric citation must not be overwritten by
+    a later passing one (last-write-wins would falsely report numeric_correct)."""
+    # Two numeric citations: first fails value, second passes all — AND is False.
+    citations = [
+        {"status": "entailed", "numeric_checks": {"value": False, "unit": True}},
+        {"status": "entailed", "numeric_checks": {"value": True, "unit": True}},
+    ]
+    numeric_expected = False
+    numeric_correct = True
+    for citation in citations:
+        if citation["numeric_checks"]:
+            numeric_expected = True
+            numeric_correct = numeric_correct and all(citation["numeric_checks"].values())
+    assert numeric_expected is True
+    assert numeric_correct is False
+
+    # Last-write-wins (the old bug) would have kept only the final True.
+    last_write = True
+    for citation in citations:
+        if citation["numeric_checks"]:
+            last_write = all(citation["numeric_checks"].values())
+    assert last_write is True, "precondition: last-write-wins would wrongly pass"
 
 
 def test_smoke_entailment_catches_hallucinated_supporting_edge(

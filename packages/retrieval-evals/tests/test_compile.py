@@ -162,8 +162,41 @@ def test_unknown_scale_and_invalid_range_and_bad_accession() -> None:
     )
 
 
-def test_duplicate_record_id_fails() -> None:
-    assert "MALFORMED_RECORD" in _codes([_record(), _record()])
+def test_blank_golden_quote_is_malformed() -> None:
+    """Empty quote must not compile green via ``"" in span_text`` (always True)."""
+    record = _record(evidence=[{"accession": ACC, "form": "8-K", "section": SECTION, "quote": ""}])
+    assert "MALFORMED_RECORD" in _codes([record], corpus=_corpus())
+
+
+@pytest.mark.parametrize(
+    ("overrides", "needle"),
+    [
+        (
+            {"answerable": False, "expected_answer": {"kind": "text", "text": "x"}, "evidence": []},
+            "null expected_answer",
+        ),
+        ({"expected_answer": None}, "must have an expected_answer"),
+        ({"expected_answer": {"kind": "text", "text": ""}}, "non-empty"),
+        ({"expected_answer": {"kind": "bogus"}}, "unknown expected_answer kind"),
+        (
+            {
+                "answerable": False,
+                "expected_answer": None,
+                "evidence": [{"accession": ACC, "form": "8-K", "section": SECTION, "quote": QUOTE}],
+                "documents_reviewed": [ACC],
+            },
+            "must have no evidence",
+        ),
+        ({"evidence": []}, "must cite evidence"),
+    ],
+)
+def test_expected_answer_shape_malformed_cluster(overrides: dict[str, Any], needle: str) -> None:
+    """Compiler MALFORMED_RECORD guards for expected_answer / evidence shape."""
+    with pytest.raises(CompilationError) as exc:
+        compile_manifest([_record(**overrides)])
+    codes = {v.code for v in exc.value.violations}
+    assert "MALFORMED_RECORD" in codes
+    assert any(needle in v.message for v in exc.value.violations)
 
 
 def test_all_violations_aggregated() -> None:

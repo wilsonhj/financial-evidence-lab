@@ -10,9 +10,13 @@ The evaluator turns per-question outcomes into the five exit-gate metrics (spec
     Recall@10           >= 90%
 
 Every rate is exact ``Decimal`` (no float drift can nudge a value across a
-threshold). ``recall_at_k`` for *exact-vs-HNSW* index quality is reused directly
-from ``fel_retrieval.oracle`` — the same oracle the index-build suite grades HNSW
-against — so there is one definition of recall in the codebase.
+threshold). Two recall helpers live here for distinct jobs:
+
+* ``question_recall_at_k`` — fraction of a *question's* gold evidence present in
+  the retrieved top-k (used by the smoke gate's ``recall_at_10`` metric).
+* ``hnsw_recall_at_k`` — re-exported from ``fel_retrieval.oracle`` for
+  *exact-vs-HNSW* index quality grading (same definition the index-build suite
+  uses).
 
 The release gate is *report-only* for the reranker decision (ADR-0002 / M2-FR-008):
 if the baseline Recall@10 is below 90% the report flags that a cross-encoder over
@@ -194,15 +198,14 @@ def reranker_triggered(recall_at_10: Decimal) -> bool:
 def build_gate_report(
     metrics: dict[str, Decimal],
     *,
-    supports: dict[str, int] | None = None,
+    supports: dict[str, int],
     thresholds: dict[str, Decimal] | None = None,
 ) -> GateReport:
     """Grade every metric against its threshold and decide the reranker trigger.
 
-    Pass ``supports`` (from :func:`metric_supports`) to make the gate fail closed:
-    a metric whose denominator is zero was never measured and cannot PASS,
-    regardless of the vacuous ``1.0`` its rate reports. Omitting ``supports``
-    preserves the legacy threshold-only grading.
+    ``supports`` (from :func:`metric_supports`) is required so the gate fails
+    closed: a metric whose denominator is zero was never measured and cannot
+    PASS, regardless of the vacuous ``1.0`` its rate reports.
     """
     active = thresholds if thresholds is not None else SMOKE_THRESHOLDS
     results = tuple(
@@ -210,9 +213,7 @@ def build_gate_report(
             name=name,
             value=metrics[name],
             threshold=active[name],
-            passed=(
-                metrics[name] >= active[name] and (supports is None or supports.get(name, 0) > 0)
-            ),
+            passed=metrics[name] >= active[name] and supports.get(name, 0) > 0,
         )
         for name in sorted(active)
     )

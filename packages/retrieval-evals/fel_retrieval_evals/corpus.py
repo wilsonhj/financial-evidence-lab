@@ -65,6 +65,9 @@ class JsonCorpus:
         return _parse_ts(str(raw)) if raw is not None else None
 
     def resolve_quote(self, accession: str, section: str, quote: str) -> list[str]:
+        # Empty quote would match every span via ``"" in text``; reject up-front.
+        if not quote:
+            return []
         doc = self._data.get(accession)
         if doc is None:
             return []

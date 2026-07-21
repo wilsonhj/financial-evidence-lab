@@ -112,12 +112,30 @@ def test_verifier_numeric_mismatch_is_contradictory() -> None:
     assert edge.numeric_checks["value"] is False
 
 
+def test_verifier_numeric_claim_without_evidence_numeric_is_non_supporting() -> None:
+    """A claim that asserts a number cited to numeric-less evidence must not be
+    graded entailed via lexical coverage alone (fail closed / non-supporting)."""
+    v = MockCitationVerifier()
+    # Full lexical coverage of the claim text — would be entailed if numeric were skipped.
+    item = _item("a", "Revenue was 100 million dollars")
+    edge = v.verify("Revenue was 100 million dollars", item, claim_numeric=_num("100"))
+    assert edge.status == "irrelevant"
+    assert edge.numeric_checks == {}
+    assert "no numeric" in edge.rationale
+
+
 def test_classify_claim_statuses() -> None:
     assert classify_claim(["entailed"]) == "supported"
     assert classify_claim(["entailed", "partial"]) == "partially_supported"
     assert classify_claim(["entailed", "contradictory"]) == "contradicted"
     assert classify_claim(["irrelevant"]) == "unsupported"
     assert classify_claim([]) == "unsupported"
+
+
+def test_classify_claim_entailed_plus_irrelevant_is_partially_supported() -> None:
+    """Load-bearing: an irrelevant companion must keep the claim from being
+    waved through as fully ``supported`` (guards the all-edges-entailed check)."""
+    assert classify_claim(["entailed", "irrelevant"]) == "partially_supported"
 
 
 # --- verify_claims end to end ----------------------------------------------

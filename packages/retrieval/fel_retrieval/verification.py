@@ -114,8 +114,9 @@ class MockCitationVerifier:
     """Deterministic entailment + numeric verifier (no network).
 
     Text entailment is lexical coverage of the claim by its evidence span. When a
-    numeric tuple is asserted, the numeric check is decisive: any failed dimension
-    makes the edge ``contradictory`` (the number is wrong), never merely partial.
+    numeric tuple is asserted, the numeric check is decisive: missing evidence
+    numeric fails closed as non-supporting (never lexical ``entailed``), and any
+    failed dimension makes the edge ``contradictory`` (the number is wrong).
     """
 
     name = "mock-entailment"
@@ -126,7 +127,15 @@ class MockCitationVerifier:
         self, claim_text: str, evidence: ContextItem, *, claim_numeric: NumericTuple | None
     ) -> CitationEdge:
         numeric_checks: dict[str, bool] = {}
-        if claim_numeric is not None and evidence.numeric is not None:
+        if claim_numeric is not None:
+            if evidence.numeric is None:
+                # Claim asserts a number but the cited evidence has none — fail
+                # closed as non-supporting; never grade entailed via lexical alone.
+                return CitationEdge(
+                    status="irrelevant",
+                    numeric_checks={},
+                    rationale="claim asserts numeric but evidence has no numeric tuple",
+                )
             numeric_checks = validate_numeric(claim_numeric, evidence.numeric)
             if not all(numeric_checks.values()):
                 failed = sorted(k for k, ok in numeric_checks.items() if not ok)
@@ -178,17 +187,17 @@ def classify_claim(edges: Sequence[str]) -> str:
 
     * any ``contradictory`` edge -> ``contradicted`` (conflict is preserved);
     * all ``entailed`` (>=1) -> ``supported``;
-    * any ``entailed``/``partial`` mix -> ``partially_supported``;
+    * any supporting edge with a non-entailed companion (``partial`` /
+      ``irrelevant``) -> ``partially_supported``;
     * otherwise (no supporting edge) -> ``unsupported``.
     """
     if not edges:
         return "unsupported"
     if any(status == "contradictory" for status in edges):
         return "contradicted"
-    supporting = [status for status in edges if status in {"entailed", "partial"}]
-    if not supporting:
+    if not any(status in {"entailed", "partial"} for status in edges):
         return "unsupported"
-    if all(status == "entailed" for status in supporting) and len(supporting) == len(edges):
+    if all(status == "entailed" for status in edges):
         return "supported"
     return "partially_supported"
 

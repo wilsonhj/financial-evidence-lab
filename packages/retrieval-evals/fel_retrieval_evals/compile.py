@@ -265,6 +265,9 @@ class _RecordCompiler:
             accession = str(raw.get("accession", ""))
             section = str(raw.get("section", ""))
             quote = str(raw.get("quote", ""))
+            if not quote:
+                self._fail("MALFORMED_RECORD", "evidence quote must be non-empty")
+                continue
             if not _ACCESSION_RE.match(accession):
                 self._fail("MALFORMED_RECORD", f"malformed accession {accession!r}")
                 continue

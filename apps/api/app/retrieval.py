@@ -40,7 +40,7 @@ from __future__ import annotations
 import json
 import time
 import uuid
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Mapping
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Annotated, Any
@@ -544,14 +544,18 @@ def _context_tokens(conn: psycopg.Connection[Any], item_ids: list[str]) -> int:
 def _load_context_items(conn: psycopg.Connection[Any], accepted: list[str]) -> list[ContextItem]:
     """Load the accepted context items (rank-ordered) for claim generation.
 
-    Fact-kind items carry their canonical numeric tuple (value/unit/period/scale)
-    from ``financial_facts`` so the verifier can check numbers deterministically.
+    Fact-kind items carry a checkable numeric tuple: ``value`` / ``unit`` /
+    ``scale`` from ``financial_facts``, and ``period`` from the denormalized
+    ``retrieval_items.period`` filter column (corpus period label; the facts
+    table stores period as typed date columns, not a text label). An incomplete
+    provenance tuple fails closed — never coerce NULL scale→0, drop numeric, or
+    invent empty unit/period.
     """
     if not accepted:
         return []
     rows = conn.execute(
         "SELECT ri.id, ri.kind, ri.content, ri.source_span_id, ri.document_version_id,"
-        " ri.financial_fact_id, ri.period, ff.value, ff.unit, ff.scale"
+        " ri.financial_fact_id, ri.period AS period, ff.value, ff.unit, ff.scale"
         " FROM retrieval_items ri"
         " LEFT JOIN financial_facts ff ON ff.id = ri.financial_fact_id"
         " WHERE ri.id = ANY(%s::uuid[])",
@@ -563,14 +567,7 @@ def _load_context_items(conn: psycopg.Connection[Any], accepted: list[str]) -> l
         row = by_id.get(item_id)
         if row is None:  # pragma: no cover - accepted ids are always persisted items
             continue
-        numeric = None
-        if row["financial_fact_id"] is not None and row["value"] is not None:
-            numeric = NumericTuple(
-                value=Decimal(row["value"]),
-                unit=row["unit"] or "",
-                period=row["period"] or "",
-                scale=int(row["scale"]) if row["scale"] is not None else 0,
-            )
+        numeric = _numeric_from_fact_row(row)
         items.append(
             ContextItem(
                 item_id=item_id,
@@ -585,6 +582,40 @@ def _load_context_items(conn: psycopg.Connection[Any], accepted: list[str]) -> l
             )
         )
     return items
+
+
+def _numeric_from_fact_row(row: Mapping[str, Any]) -> NumericTuple | None:
+    """Build a NumericTuple from a joined retrieval_items/financial_facts row.
+
+    Returns ``None`` for non-fact items. Raises when a fact link is present but
+    any provenance field is missing — silent coercion is a fail-open hazard.
+    """
+    if row["financial_fact_id"] is None:
+        return None
+    value = row["value"]
+    unit = row["unit"]
+    period = row["period"]
+    scale = row["scale"]
+    missing = [
+        name
+        for name, raw in (
+            ("value", value),
+            ("unit", unit),
+            ("period", period),
+            ("scale", scale),
+        )
+        if raw is None or (isinstance(raw, str) and not raw)
+    ]
+    if missing:
+        raise ValueError(
+            f"incomplete fact provenance for item {row['id']}: missing {', '.join(missing)}"
+        )
+    return NumericTuple(
+        value=Decimal(value),
+        unit=str(unit),
+        period=str(period),
+        scale=int(scale),
+    )
 
 
 def _persist_claims(

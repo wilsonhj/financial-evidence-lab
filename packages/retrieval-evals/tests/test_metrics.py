@@ -69,7 +69,8 @@ def test_gate_fails_below_threshold_and_triggers_reranker() -> None:
         "citation_completeness": Decimal(1),
         "recall_at_10": Decimal("0.80"),  # below 0.90
     }
-    report = build_gate_report(metrics)
+    supports = {name: 1 for name in SMOKE_THRESHOLDS}
+    report = build_gate_report(metrics, supports=supports)
     assert report.passed is False
     assert report.reranker_triggered is True
     recall_result = next(r for r in report.results if r.name == "recall_at_10")
@@ -104,7 +105,7 @@ def test_numeric_accuracy_only_over_numeric_questions() -> None:
     assert aggregate_metrics(outcomes)["numeric_accuracy"] == Decimal(0)
 
 
-def test_empty_outcomes_fail_the_gate_when_supports_supplied() -> None:
+def test_empty_outcomes_fail_the_gate() -> None:
     # Per-question rates are still vacuously 1 (a negative case has no gold)...
     metrics = aggregate_metrics([])
     assert all(v == Decimal(1) for v in metrics.values())
@@ -114,8 +115,6 @@ def test_empty_outcomes_fail_the_gate_when_supports_supplied() -> None:
     report = build_gate_report(metrics, supports=supports)
     assert report.passed is False
     assert all(r.passed is False for r in report.results)
-    # Legacy threshold-only grading (no supports) still reports the vacuous pass.
-    assert build_gate_report(metrics).passed is True
 
 
 def test_gate_fails_metric_with_zero_support() -> None:
