@@ -19,7 +19,7 @@ Line references below are to the head of this branch.
 | 4 | Candidate opens exact reader span; future/corrupt/cross-version never rendered as supported | ✅ | `trace-view.test.ts:40` temporal integrity guard, `:51` accepted-but-future reclassified rejected, `:64` future & cross-version never supported, `:78` claim citing a non-supported item downgraded, `:102` claim citing the right item but the WRONG span downgraded (review fix B2), `:158` candidate span deep link, `:167` citation deep-links the citation's span not the candidate's (review fix B2); `ObservatoryTrace.test.tsx:50` candidate links its exact reader span, `:57` future/cross-version render only as rejected; `reader-links.test.ts:13` version→DocumentMeta id resolution; fail-closed contract validation `http-source.test.ts:110` rejects a malformed trace and `:118` rejects malformed `events`/`timings_ms`/contribution lane+shape (review fix B3) → typed `integrity` state instead of a raw render crash |
 | 5 | 401/403/409/422/5xx, abstention and contradiction are distinct typed states | ✅ | `http-source.test.ts:77` 401/403/409/422/5xx → distinct typed kinds without leaking the body, `:100` transport/bad-token → `unavailable`/`authentication`; `errors.ts` `observatoryFailureKind`/`observatoryFailureState` map to the shared `EvidenceFailureState`; `observatory-a11y.test.tsx:30` abstained/failed/cancelled distinguished and silent for succeeded, `:40` abstention rendered as its own alert separate from contradiction and error; `ObservatoryTrace.test.tsx:66` contradiction rendered distinctly |
 | 6 | Keyboard operation, text/table alternatives, WCAG 2.2 AA, reduced motion, component tests, browser E2E | ⚠️ Partial | `observatory-a11y.test.tsx:67` every data table has a caption + row/column header scopes (table alternative), `:80` every control is labelled and status is conveyed by text not colour alone, `:100` reduced-motion rule shipped (`globals.css:442` `prefers-reduced-motion: reduce`); component tests: full `apps/web` vitest suite green; semantic HTML + focusable native controls give baseline keyboard operation. **Committed browser E2E and a full WCAG 2.2 AA / keyboard audit are deferred** — see below |
-| 7 | `make ci`, telemetry, docs and acceptance evidence | ✅ | Gates green at head: `vitest run apps/web` (195), repo `typecheck`, `lint`, `format:check`, `@fel/web build`; docs: `apps/web/README.md` + this report; telemetry: web-layer observability is at parity with the reader (see deferral) |
+| 7 | `make ci`, telemetry, docs and acceptance evidence | ✅ | Gates green at head: `vitest run apps/web` (231), repo `typecheck`, `lint`, `format:check`, `@fel/web build`; docs: `apps/web/README.md` + this report; telemetry: web-layer observability is at parity with the reader (see deferral) |
 
 ## Required-outcome line
 
@@ -54,11 +54,14 @@ reconnect/heartbeat/terminal parsing ✅.
 
 ## Known deferrals (tracked, non-blocking)
 
-- **Committed browser E2E** — the Playwright E2E is in-flight on a separate
-  branch (`feat/observatory-e2e`) to keep this branch's dependency/lockfile
-  untouched; it is not present here. Full keyboard-operation and WCAG 2.2 AA
-  audits ride on that E2E surface. Component-level a11y (labels, table
-  scopes/captions, text-not-colour status, reduced motion) is covered here.
+- **Browser E2E execution in CI** — the Playwright specs are committed here
+  (`apps/web/e2e/*`, `playwright.config.ts`, `test:e2e` script; this added the
+  `@playwright/test` dev-dependency and updated the lockfile) and run in fixture
+  mode (`next build && next start`). They are not yet executed in CI — no browser
+  stage is wired — so criterion 6 stays Partial: the full keyboard-operation and
+  WCAG 2.2 AA audits that ride on that surface remain deferred. Component-level
+  a11y (labels, table scopes/captions, text-not-colour status, reduced motion) is
+  covered here.
 - **Live same-origin SSE proxy** — M2 runs are synchronous-terminal: the UI
   renders the stored event log (`EventReplay`) and the SSE parser/reconnect
   logic is unit-tested against the mock stream, but no live same-origin SSE
