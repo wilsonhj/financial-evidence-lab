@@ -1,0 +1,2121 @@
+{
+  "checksum": "sha256:b139c5032d4b9a3ac6b6330799d16692d4b1658077a25fd9a00d84304846ca34",
+  "corpus_version_id": null,
+  "entries": [
+    {
+      "answerable": true,
+      "as_of": "2026-05-28T00:00:00Z",
+      "category": "exact_fact_lookup",
+      "documents_reviewed": [
+        "0001628280-26-038798"
+      ],
+      "evidence": [
+        {
+          "accession": "0001628280-26-038798",
+          "evidence_id": "8a0e1afc-f7c4-5eb6-97db-7a58aca3824a",
+          "form": "8-K",
+          "quote": "Total revenue was $687.6 million for the first quarter of fiscal 2027, an increase of 25% year-over-year.",
+          "section": "Financial Highlights - Revenue",
+          "span_id": null
+        }
+      ],
+      "expected_answer": {
+        "high": "687.6",
+        "kind": "numeric",
+        "low": "687.6",
+        "period": "Q1 FY2027",
+        "scale_exponent": 6,
+        "unit": "USD"
+      },
+      "future_revisions": [],
+      "id": "BM-0001",
+      "issuer": {
+        "cik": "0001441816",
+        "ticker": "MDB"
+      },
+      "question": "What was MongoDB's total revenue for the first quarter of fiscal 2027 (quarter ended April 30, 2026)?"
+    },
+    {
+      "answerable": true,
+      "as_of": "2026-05-27T00:00:00Z",
+      "category": "exact_fact_lookup",
+      "documents_reviewed": [
+        "0001108524-26-000125"
+      ],
+      "evidence": [
+        {
+          "accession": "0001108524-26-000125",
+          "evidence_id": "2570794b-8665-55f0-8b84-c440610edc15",
+          "form": "8-K",
+          "quote": "Current remaining performance obligation of $33.6 billion, up 14% year-over-year",
+          "section": "First Quarter Financial Highlights",
+          "span_id": null
+        }
+      ],
+      "expected_answer": {
+        "high": "33.6",
+        "kind": "numeric",
+        "low": "33.6",
+        "period": "Q1 FY2027",
+        "scale_exponent": 9,
+        "unit": "USD"
+      },
+      "future_revisions": [],
+      "id": "BM-0002",
+      "issuer": {
+        "cik": "0001108524",
+        "ticker": "CRM"
+      },
+      "question": "What was Salesforce's current remaining performance obligation (cRPO) as of the end of the first quarter of fiscal 2027?"
+    },
+    {
+      "answerable": true,
+      "as_of": "2026-04-22T00:00:00Z",
+      "category": "exact_fact_lookup",
+      "documents_reviewed": [
+        "0001373715-26-000054"
+      ],
+      "evidence": [
+        {
+          "accession": "0001373715-26-000054",
+          "evidence_id": "0e29f6b3-f4b4-5e0b-92ab-b52069a1f990",
+          "form": "8-K",
+          "quote": "Subscription revenues of $3,671 million in Q1 2026, representing 22% year-over-year growth, 19% in constant currency",
+          "section": "Financial highlights",
+          "span_id": null
+        }
+      ],
+      "expected_answer": {
+        "high": "3671",
+        "kind": "numeric",
+        "low": "3671",
+        "period": "Q1 2026",
+        "scale_exponent": 6,
+        "unit": "USD"
+      },
+      "future_revisions": [],
+      "id": "BM-0003",
+      "issuer": {
+        "cik": "0001373715",
+        "ticker": "NOW"
+      },
+      "question": "What were ServiceNow's subscription revenues in the first quarter of 2026?"
+    },
+    {
+      "answerable": true,
+      "as_of": "2026-05-07T00:00:00Z",
+      "category": "exact_fact_lookup",
+      "documents_reviewed": [
+        "0001628280-26-031677"
+      ],
+      "evidence": [
+        {
+          "accession": "0001628280-26-031677",
+          "evidence_id": "37e08883-ee8f-569c-9e1c-2873087d20ae",
+          "form": "8-K",
+          "quote": "First quarter revenue grew 32% year-over-year to $1,006 million",
+          "section": "Headline",
+          "span_id": null
+        }
+      ],
+      "expected_answer": {
+        "high": "1006",
+        "kind": "numeric",
+        "low": "1006",
+        "period": "Q1 2026",
+        "scale_exponent": 6,
+        "unit": "USD"
+      },
+      "future_revisions": [],
+      "id": "BM-0004",
+      "issuer": {
+        "cik": "0001561550",
+        "ticker": "DDOG"
+      },
+      "question": "What was Datadog's revenue in the first quarter of 2026 (quarter ended March 31, 2026)?"
+    },
+    {
+      "answerable": true,
+      "as_of": "2026-05-26T00:00:00Z",
+      "category": "exact_fact_lookup",
+      "documents_reviewed": [
+        "0001713683-26-000095"
+      ],
+      "evidence": [
+        {
+          "accession": "0001713683-26-000095",
+          "evidence_id": "c920349f-4dc4-510e-9e4d-99f0272afb9f",
+          "form": "8-K",
+          "quote": "Revenue grew 25% year-over-year to $850.5 million",
+          "section": "Third Quarter Highlights",
+          "span_id": null
+        }
+      ],
+      "expected_answer": {
+        "high": "850.5",
+        "kind": "numeric",
+        "low": "850.5",
+        "period": "Q3 FY2026",
+        "scale_exponent": 6,
+        "unit": "USD"
+      },
+      "future_revisions": [],
+      "id": "BM-0005",
+      "issuer": {
+        "cik": "0001713683",
+        "ticker": "ZS"
+      },
+      "question": "What was Zscaler's revenue in the third quarter of fiscal 2026?"
+    },
+    {
+      "answerable": true,
+      "as_of": "2026-05-27T00:00:00Z",
+      "category": "exact_fact_lookup",
+      "documents_reviewed": [
+        "0001640147-26-000027"
+      ],
+      "evidence": [
+        {
+          "accession": "0001640147-26-000027",
+          "evidence_id": "e5e67612-701b-5b6e-a5ac-e918ab180dce",
+          "form": "8-K",
+          "quote": "Net revenue retention rate of 126%",
+          "section": "Financial Highlights",
+          "span_id": null
+        }
+      ],
+      "expected_answer": {
+        "high": "126",
+        "kind": "numeric",
+        "low": "126",
+        "period": "Q1 FY2027",
+        "scale_exponent": 0,
+        "unit": "percent"
+      },
+      "future_revisions": [],
+      "id": "BM-0006",
+      "issuer": {
+        "cik": "0001640147",
+        "ticker": "SNOW"
+      },
+      "question": "What net revenue retention rate did Snowflake report for the first quarter of fiscal 2027?"
+    },
+    {
+      "answerable": true,
+      "as_of": "2026-05-28T00:00:00Z",
+      "category": "exact_fact_lookup",
+      "documents_reviewed": [
+        "0001707753-26-000008"
+      ],
+      "evidence": [
+        {
+          "accession": "0001707753-26-000008",
+          "evidence_id": "f25fd37c-ec5f-5302-9f2d-bcfa763d59b4",
+          "form": "8-K",
+          "quote": "Total revenue was $451 million, an increase of 16% year-over-year, or 14% on a constant currency basis",
+          "section": "Fourth Quarter Fiscal 2026 Financial Highlights",
+          "span_id": null
+        }
+      ],
+      "expected_answer": {
+        "high": "451",
+        "kind": "numeric",
+        "low": "451",
+        "period": "Q4 FY2026",
+        "scale_exponent": 6,
+        "unit": "USD"
+      },
+      "future_revisions": [],
+      "id": "BM-0007",
+      "issuer": {
+        "cik": "0001707753",
+        "ticker": "ESTC"
+      },
+      "question": "What was Elastic's total revenue for the fourth quarter of fiscal 2026?"
+    },
+    {
+      "answerable": true,
+      "as_of": "2026-05-21T00:00:00Z",
+      "category": "exact_fact_lookup",
+      "documents_reviewed": [
+        "0001327811-26-000024"
+      ],
+      "evidence": [
+        {
+          "accession": "0001327811-26-000024",
+          "evidence_id": "c6e58627-12e8-5516-9f35-fd7a1a6c0dd9",
+          "form": "8-K",
+          "quote": "Total revenues were $2.542 billion, an increase of 13.5% from the first quarter of fiscal 2026.",
+          "section": "Fiscal 2027 First Quarter Results",
+          "span_id": null
+        }
+      ],
+      "expected_answer": {
+        "high": "2.542",
+        "kind": "numeric",
+        "low": "2.542",
+        "period": "Q1 FY2027",
+        "scale_exponent": 9,
+        "unit": "USD"
+      },
+      "future_revisions": [],
+      "id": "BM-0008",
+      "issuer": {
+        "cik": "0001327811",
+        "ticker": "WDAY"
+      },
+      "question": "What were Workday's total revenues in the first quarter of fiscal 2027?"
+    },
+    {
+      "answerable": true,
+      "as_of": "2026-05-21T00:00:00Z",
+      "category": "exact_fact_lookup",
+      "documents_reviewed": [
+        "0001585521-26-000069"
+      ],
+      "evidence": [
+        {
+          "accession": "0001585521-26-000069",
+          "evidence_id": "fc503174-0e3e-57d0-9586-5ffcb675d098",
+          "form": "8-K",
+          "quote": "First quarter Enterprise revenue of $755.7 million, up 7.2% year over year",
+          "section": "Highlights",
+          "span_id": null
+        }
+      ],
+      "expected_answer": {
+        "high": "755.7",
+        "kind": "numeric",
+        "low": "755.7",
+        "period": "Q1 FY2027",
+        "scale_exponent": 6,
+        "unit": "USD"
+      },
+      "future_revisions": [],
+      "id": "BM-0009",
+      "issuer": {
+        "cik": "0001585521",
+        "ticker": "ZM"
+      },
+      "question": "What was Zoom's Enterprise revenue in the first quarter of fiscal year 2027?"
+    },
+    {
+      "answerable": true,
+      "as_of": "2026-05-28T00:00:00Z",
+      "category": "filing_section_retrieval",
+      "documents_reviewed": [
+        "0001628280-26-038798"
+      ],
+      "evidence": [
+        {
+          "accession": "0001628280-26-038798",
+          "evidence_id": "008cac5b-98b3-596c-b296-a4762eaae3f3",
+          "form": "8-K",
+          "quote": "Exhibit 99.1",
+          "section": "Exhibit cover",
+          "span_id": null
+        }
+      ],
+      "expected_answer": {
+        "kind": "text",
+        "text": "Exhibit 99.1"
+      },
+      "future_revisions": [],
+      "id": "BM-0010",
+      "issuer": {
+        "cik": "0001441816",
+        "ticker": "MDB"
+      },
+      "question": "In MongoDB's Form 8-K furnished on May 28, 2026, under which exhibit number is the first quarter fiscal 2027 earnings press release provided?"
+    },
+    {
+      "answerable": true,
+      "as_of": "2026-05-28T00:00:00Z",
+      "category": "filing_section_retrieval",
+      "documents_reviewed": [
+        "0001628280-26-038798"
+      ],
+      "evidence": [
+        {
+          "accession": "0001628280-26-038798",
+          "evidence_id": "360a38a7-e010-5a1f-915c-270f120fa9b1",
+          "form": "8-K",
+          "quote": "said CJ Desai, President and Chief Executive Officer of MongoDB",
+          "section": "Management commentary",
+          "span_id": null
+        }
+      ],
+      "expected_answer": {
+        "kind": "text",
+        "text": "CJ Desai, President and Chief Executive Officer of MongoDB"
+      },
+      "future_revisions": [],
+      "id": "BM-0011",
+      "issuer": {
+        "cik": "0001441816",
+        "ticker": "MDB"
+      },
+      "question": "According to MongoDB's first quarter fiscal 2027 earnings press release, who is quoted by name and title commenting on the results?"
+    },
+    {
+      "answerable": true,
+      "as_of": "2026-05-27T00:00:00Z",
+      "category": "filing_section_retrieval",
+      "documents_reviewed": [
+        "0001108524-26-000125"
+      ],
+      "evidence": [
+        {
+          "accession": "0001108524-26-000125",
+          "evidence_id": "e4b40d93-db5a-52e6-a36c-89d22e428b29",
+          "form": "8-K",
+          "quote": "Remaining performance obligation of $67.9 billion, up 11%",
+          "section": "First Quarter Financial Highlights",
+          "span_id": null
+        }
+      ],
+      "expected_answer": {
+        "high": "67.9",
+        "kind": "numeric",
+        "low": "67.9",
+        "period": "Q1 FY2027",
+        "scale_exponent": 9,
+        "unit": "USD"
+      },
+      "future_revisions": [],
+      "id": "BM-0012",
+      "issuer": {
+        "cik": "0001108524",
+        "ticker": "CRM"
+      },
+      "question": "What figure does Salesforce report for total remaining performance obligation (RPO) in its first quarter fiscal 2027 highlights?"
+    },
+    {
+      "answerable": true,
+      "as_of": "2026-05-26T00:00:00Z",
+      "category": "filing_section_retrieval",
+      "documents_reviewed": [
+        "0001713683-26-000095"
+      ],
+      "evidence": [
+        {
+          "accession": "0001713683-26-000095",
+          "evidence_id": "da4bb21d-babe-54a5-9a04-74a686e543e4",
+          "form": "8-K",
+          "quote": "We have not reconciled",
+          "section": "Guidance / non-GAAP reconciliation note",
+          "span_id": null
+        }
+      ],
+      "expected_answer": {
+        "kind": "text",
+        "text": "The company states it has not reconciled the forward-looking non-GAAP measures because certain reconciling items are not available without unreasonable efforts."
+      },
+      "future_revisions": [],
+      "id": "BM-0013",
+      "issuer": {
+        "cik": "0001713683",
+        "ticker": "ZS"
+      },
+      "question": "In Zscaler's third quarter fiscal 2026 press release, what reason does the company give for not reconciling forward-looking non-GAAP guidance to the comparable GAAP measures?"
+    },
+    {
+      "answerable": true,
+      "as_of": "2026-04-22T00:00:00Z",
+      "category": "filing_section_retrieval",
+      "documents_reviewed": [
+        "0001373715-26-000054"
+      ],
+      "evidence": [
+        {
+          "accession": "0001373715-26-000054",
+          "evidence_id": "0bb57cea-05fb-52b7-8694-bbb00249c6cb",
+          "form": "8-K",
+          "quote": "Current remaining performance obligations of $12.64 billion as of Q1 2026",
+          "section": "Financial highlights",
+          "span_id": null
+        }
+      ],
+      "expected_answer": {
+        "high": "12.64",
+        "kind": "numeric",
+        "low": "12.64",
+        "period": "Q1 2026",
+        "scale_exponent": 9,
+        "unit": "USD"
+      },
+      "future_revisions": [],
+      "id": "BM-0014",
+      "issuer": {
+        "cik": "0001373715",
+        "ticker": "NOW"
+      },
+      "question": "What does ServiceNow report for current remaining performance obligations (cRPO) as of the first quarter of 2026?"
+    },
+    {
+      "answerable": true,
+      "as_of": "2023-05-26T00:00:00Z",
+      "category": "filing_section_retrieval",
+      "documents_reviewed": [
+        "0001786352-23-000038"
+      ],
+      "evidence": [
+        {
+          "accession": "0001786352-23-000038",
+          "evidence_id": "d3246a1a-ec3a-5e9c-a94c-043aa85b6191",
+          "form": "10-Q/A",
+          "quote": "amend Part I, Item 4",
+          "section": "Explanatory Note",
+          "span_id": null
+        }
+      ],
+      "expected_answer": {
+        "kind": "text",
+        "text": "Part I, Item 4 - Controls and Procedures (and Part II, Item 6 - Exhibits)"
+      },
+      "future_revisions": [],
+      "id": "BM-0015",
+      "issuer": {
+        "cik": "0001786352",
+        "ticker": "BILL"
+      },
+      "question": "In BILL's Form 10-Q/A for the quarter ended September 30, 2022, which Part and Item does the Explanatory Note state the amendment revises?"
+    },
+    {
+      "answerable": true,
+      "as_of": "2026-05-28T00:00:00Z",
+      "category": "multi_period_comparison",
+      "documents_reviewed": [
+        "0001628280-26-013199",
+        "0001628280-26-038798"
+      ],
+      "evidence": [
+        {
+          "accession": "0001628280-26-013199",
+          "evidence_id": "29522f53-0b0e-5a99-9c02-ed3d877746d4",
+          "form": "8-K",
+          "quote": "Total Revenue of $695.1 million, up 27%",
+          "section": "Headline",
+          "span_id": null
+        },
+        {
+          "accession": "0001628280-26-038798",
+          "evidence_id": "8a0e1afc-f7c4-5eb6-97db-7a58aca3824a",
+          "form": "8-K",
+          "quote": "Total revenue was $687.6 million for the first quarter of fiscal 2027, an increase of 25% year-over-year.",
+          "section": "Financial Highlights - Revenue",
+          "span_id": null
+        }
+      ],
+      "expected_answer": {
+        "high": "-7.5",
+        "kind": "numeric",
+        "low": "-7.5",
+        "period": "Q4 FY2026 to Q1 FY2027",
+        "scale_exponent": 6,
+        "unit": "USD"
+      },
+      "future_revisions": [],
+      "id": "BM-0016",
+      "issuer": {
+        "cik": "0001441816",
+        "ticker": "MDB"
+      },
+      "question": "By how much did MongoDB's total revenue change sequentially from the fourth quarter of fiscal 2026 to the first quarter of fiscal 2027?"
+    },
+    {
+      "answerable": true,
+      "as_of": "2026-05-07T00:00:00Z",
+      "category": "multi_period_comparison",
+      "documents_reviewed": [
+        "0001628280-26-006645",
+        "0001628280-26-031677"
+      ],
+      "evidence": [
+        {
+          "accession": "0001628280-26-006645",
+          "evidence_id": "d2007109-e7fc-5230-9cc1-33187ff95c8f",
+          "form": "8-K",
+          "quote": "Fourth quarter revenue grew 29% year-over-year to $953 million",
+          "section": "Headline",
+          "span_id": null
+        },
+        {
+          "accession": "0001628280-26-031677",
+          "evidence_id": "37e08883-ee8f-569c-9e1c-2873087d20ae",
+          "form": "8-K",
+          "quote": "First quarter revenue grew 32% year-over-year to $1,006 million",
+          "section": "Headline",
+          "span_id": null
+        }
+      ],
+      "expected_answer": {
+        "high": "53",
+        "kind": "numeric",
+        "low": "53",
+        "period": "Q4 2025 to Q1 2026",
+        "scale_exponent": 6,
+        "unit": "USD"
+      },
+      "future_revisions": [],
+      "id": "BM-0017",
+      "issuer": {
+        "cik": "0001561550",
+        "ticker": "DDOG"
+      },
+      "question": "By how much did Datadog's quarterly revenue increase from the fourth quarter of 2025 to the first quarter of 2026?"
+    },
+    {
+      "answerable": true,
+      "as_of": "2026-04-22T00:00:00Z",
+      "category": "multi_period_comparison",
+      "documents_reviewed": [
+        "0001373715-26-000005",
+        "0001373715-26-000054"
+      ],
+      "evidence": [
+        {
+          "accession": "0001373715-26-000005",
+          "evidence_id": "bf5b57c3-1eb5-5c65-aaa6-77b164cce1e5",
+          "form": "8-K",
+          "quote": "Subscription revenues of $3,466 million in Q4 2025, representing 21% year-over-year growth",
+          "section": "Financial highlights",
+          "span_id": null
+        },
+        {
+          "accession": "0001373715-26-000054",
+          "evidence_id": "0e29f6b3-f4b4-5e0b-92ab-b52069a1f990",
+          "form": "8-K",
+          "quote": "Subscription revenues of $3,671 million in Q1 2026, representing 22% year-over-year growth, 19% in constant currency",
+          "section": "Financial highlights",
+          "span_id": null
+        }
+      ],
+      "expected_answer": {
+        "high": "205",
+        "kind": "numeric",
+        "low": "205",
+        "period": "Q4 2025 to Q1 2026",
+        "scale_exponent": 6,
+        "unit": "USD"
+      },
+      "future_revisions": [],
+      "id": "BM-0018",
+      "issuer": {
+        "cik": "0001373715",
+        "ticker": "NOW"
+      },
+      "question": "By how much did ServiceNow's subscription revenues grow sequentially from the fourth quarter of 2025 to the first quarter of 2026?"
+    },
+    {
+      "answerable": true,
+      "as_of": "2026-04-22T00:00:00Z",
+      "category": "multi_period_comparison",
+      "documents_reviewed": [
+        "0001373715-26-000005",
+        "0001373715-26-000054"
+      ],
+      "evidence": [
+        {
+          "accession": "0001373715-26-000005",
+          "evidence_id": "838c6dfc-0840-5577-b0a8-2c14a6a74cd8",
+          "form": "8-K",
+          "quote": "Current remaining performance obligations of $12.85 billion as of Q4 2025",
+          "section": "Financial highlights",
+          "span_id": null
+        },
+        {
+          "accession": "0001373715-26-000054",
+          "evidence_id": "0bb57cea-05fb-52b7-8694-bbb00249c6cb",
+          "form": "8-K",
+          "quote": "Current remaining performance obligations of $12.64 billion as of Q1 2026",
+          "section": "Financial highlights",
+          "span_id": null
+        }
+      ],
+      "expected_answer": {
+        "high": "-0.21",
+        "kind": "numeric",
+        "low": "-0.21",
+        "period": "Q4 2025 to Q1 2026",
+        "scale_exponent": 9,
+        "unit": "USD"
+      },
+      "future_revisions": [],
+      "id": "BM-0019",
+      "issuer": {
+        "cik": "0001373715",
+        "ticker": "NOW"
+      },
+      "question": "Did ServiceNow's current remaining performance obligations (cRPO) rise or fall sequentially from the fourth quarter of 2025 to the first quarter of 2026, and by how much?"
+    },
+    {
+      "answerable": true,
+      "as_of": "2026-05-21T00:00:00Z",
+      "category": "multi_period_comparison",
+      "documents_reviewed": [
+        "0001327811-26-000010",
+        "0001327811-26-000024"
+      ],
+      "evidence": [
+        {
+          "accession": "0001327811-26-000010",
+          "evidence_id": "c0b9b3a7-97e3-580c-a5f5-631768ad8755",
+          "form": "8-K",
+          "quote": "Total revenues were $2.532 billion, an increase of 14.5% from the fourth quarter of fiscal 2025.",
+          "section": "Fiscal 2026 Fourth Quarter Results",
+          "span_id": null
+        },
+        {
+          "accession": "0001327811-26-000024",
+          "evidence_id": "c6e58627-12e8-5516-9f35-fd7a1a6c0dd9",
+          "form": "8-K",
+          "quote": "Total revenues were $2.542 billion, an increase of 13.5% from the first quarter of fiscal 2026.",
+          "section": "Fiscal 2027 First Quarter Results",
+          "span_id": null
+        }
+      ],
+      "expected_answer": {
+        "high": "0.010",
+        "kind": "numeric",
+        "low": "0.010",
+        "period": "Q4 FY2026 to Q1 FY2027",
+        "scale_exponent": 9,
+        "unit": "USD"
+      },
+      "future_revisions": [],
+      "id": "BM-0020",
+      "issuer": {
+        "cik": "0001327811",
+        "ticker": "WDAY"
+      },
+      "question": "By how much did Workday's total revenues change from the fourth quarter of fiscal 2026 to the first quarter of fiscal 2027?"
+    },
+    {
+      "answerable": true,
+      "as_of": "2026-05-28T00:00:00Z",
+      "category": "table_reasoning",
+      "documents_reviewed": [
+        "0001628280-26-038798"
+      ],
+      "evidence": [
+        {
+          "accession": "0001628280-26-038798",
+          "evidence_id": "410b384b-bc43-5f2f-be19-68d6dab4bb8d",
+          "form": "8-K",
+          "quote": "Subscription revenue was $666.1 million, an increase of 25% year-over-year",
+          "section": "Financial Highlights - Revenue",
+          "span_id": null
+        },
+        {
+          "accession": "0001628280-26-038798",
+          "evidence_id": "8a0e1afc-f7c4-5eb6-97db-7a58aca3824a",
+          "form": "8-K",
+          "quote": "Total revenue was $687.6 million for the first quarter of fiscal 2027, an increase of 25% year-over-year.",
+          "section": "Financial Highlights - Revenue",
+          "span_id": null
+        }
+      ],
+      "expected_answer": {
+        "high": "96.9",
+        "kind": "numeric",
+        "low": "96.9",
+        "period": "Q1 FY2027",
+        "scale_exponent": 0,
+        "unit": "percent"
+      },
+      "future_revisions": [],
+      "id": "BM-0021",
+      "issuer": {
+        "cik": "0001441816",
+        "ticker": "MDB"
+      },
+      "question": "Using MongoDB's first quarter fiscal 2027 disclosures, what percentage of total revenue was subscription revenue (to the nearest tenth of a percent)?"
+    },
+    {
+      "answerable": true,
+      "as_of": "2026-05-27T00:00:00Z",
+      "category": "table_reasoning",
+      "documents_reviewed": [
+        "0001108524-26-000125"
+      ],
+      "evidence": [
+        {
+          "accession": "0001108524-26-000125",
+          "evidence_id": "e4b40d93-db5a-52e6-a36c-89d22e428b29",
+          "form": "8-K",
+          "quote": "Remaining performance obligation of $67.9 billion, up 11%",
+          "section": "First Quarter Financial Highlights",
+          "span_id": null
+        },
+        {
+          "accession": "0001108524-26-000125",
+          "evidence_id": "2570794b-8665-55f0-8b84-c440610edc15",
+          "form": "8-K",
+          "quote": "Current remaining performance obligation of $33.6 billion, up 14% year-over-year",
+          "section": "First Quarter Financial Highlights",
+          "span_id": null
+        }
+      ],
+      "expected_answer": {
+        "high": "34.3",
+        "kind": "numeric",
+        "low": "34.3",
+        "period": "Q1 FY2027",
+        "scale_exponent": 9,
+        "unit": "USD"
+      },
+      "future_revisions": [],
+      "id": "BM-0022",
+      "issuer": {
+        "cik": "0001108524",
+        "ticker": "CRM"
+      },
+      "question": "Based on Salesforce's first quarter fiscal 2027 highlights, what was the difference between total remaining performance obligation and current remaining performance obligation (i.e., the noncurrent portion)?"
+    },
+    {
+      "answerable": true,
+      "as_of": "2026-04-22T00:00:00Z",
+      "category": "table_reasoning",
+      "documents_reviewed": [
+        "0001373715-26-000054"
+      ],
+      "evidence": [
+        {
+          "accession": "0001373715-26-000054",
+          "evidence_id": "fe0694ec-9e9a-530e-99d6-a043946dcac5",
+          "form": "8-K",
+          "quote": "Total revenues of $3,770 million in Q1 2026, representing 22% year-over-year growth",
+          "section": "Financial highlights",
+          "span_id": null
+        },
+        {
+          "accession": "0001373715-26-000054",
+          "evidence_id": "0e29f6b3-f4b4-5e0b-92ab-b52069a1f990",
+          "form": "8-K",
+          "quote": "Subscription revenues of $3,671 million in Q1 2026, representing 22% year-over-year growth, 19% in constant currency",
+          "section": "Financial highlights",
+          "span_id": null
+        }
+      ],
+      "expected_answer": {
+        "high": "99",
+        "kind": "numeric",
+        "low": "99",
+        "period": "Q1 2026",
+        "scale_exponent": 6,
+        "unit": "USD"
+      },
+      "future_revisions": [],
+      "id": "BM-0023",
+      "issuer": {
+        "cik": "0001373715",
+        "ticker": "NOW"
+      },
+      "question": "Using ServiceNow's first quarter 2026 total revenues and subscription revenues, what was non-subscription (professional services and other) revenue?"
+    },
+    {
+      "answerable": true,
+      "as_of": "2026-05-21T00:00:00Z",
+      "category": "table_reasoning",
+      "documents_reviewed": [
+        "0001585521-26-000069"
+      ],
+      "evidence": [
+        {
+          "accession": "0001585521-26-000069",
+          "evidence_id": "31b1e7ec-4e2c-50d4-806b-bf77c2fa1469",
+          "form": "8-K",
+          "quote": "First quarter GAAP operating margin of 25.1%, up 450 bps year over year",
+          "section": "Highlights",
+          "span_id": null
+        }
+      ],
+      "expected_answer": {
+        "high": "20.6",
+        "kind": "numeric",
+        "low": "20.6",
+        "period": "Q1 FY2026",
+        "scale_exponent": 0,
+        "unit": "percent"
+      },
+      "future_revisions": [],
+      "id": "BM-0024",
+      "issuer": {
+        "cik": "0001585521",
+        "ticker": "ZM"
+      },
+      "question": "Zoom reported a first quarter fiscal 2027 GAAP operating margin of 25.1%, up 450 basis points year over year. What was the prior-year quarter's GAAP operating margin?"
+    },
+    {
+      "answerable": true,
+      "as_of": "2026-05-27T00:00:00Z",
+      "category": "table_reasoning",
+      "documents_reviewed": [
+        "0001640147-26-000027"
+      ],
+      "evidence": [
+        {
+          "accession": "0001640147-26-000027",
+          "evidence_id": "c989029c-12d3-5625-a607-3e6bd7bc443e",
+          "form": "8-K",
+          "quote": "1,390,951",
+          "section": "Condensed Consolidated Statements of Operations",
+          "span_id": null
+        },
+        {
+          "accession": "0001640147-26-000027",
+          "evidence_id": "2d42c055-ddde-58ec-a89d-b0422156088f",
+          "form": "8-K",
+          "quote": "1,334,329",
+          "section": "Condensed Consolidated Statements of Operations",
+          "span_id": null
+        }
+      ],
+      "expected_answer": {
+        "high": "56622",
+        "kind": "numeric",
+        "low": "56622",
+        "period": "Q1 FY2027",
+        "scale_exponent": 3,
+        "unit": "USD"
+      },
+      "future_revisions": [],
+      "id": "BM-0025",
+      "issuer": {
+        "cik": "0001640147",
+        "ticker": "SNOW"
+      },
+      "question": "From Snowflake's first quarter fiscal 2027 condensed consolidated statements of operations, revenue was 1,390,951 and product revenue was 1,334,329 (in thousands). What was professional services and other revenue?"
+    },
+    {
+      "answerable": true,
+      "as_of": "2026-05-07T00:00:00Z",
+      "category": "table_reasoning",
+      "documents_reviewed": [
+        "0001193125-26-211923"
+      ],
+      "evidence": [
+        {
+          "accession": "0001193125-26-211923",
+          "evidence_id": "5f63d2ed-9458-5d15-a338-34a95eefa052",
+          "form": "8-K",
+          "quote": "Total revenue is expected to be in the range of $897.0 million to $898.0 million, up 18% year over year on an as-reported basis and 16% in constant currency.",
+          "section": "Business Outlook - Second Quarter 2026",
+          "span_id": null
+        }
+      ],
+      "expected_answer": {
+        "high": "897.5",
+        "kind": "numeric",
+        "low": "897.5",
+        "period": "Q2 2026",
+        "scale_exponent": 6,
+        "unit": "USD"
+      },
+      "future_revisions": [],
+      "id": "BM-0026",
+      "issuer": {
+        "cik": "0001404655",
+        "ticker": "HUBS"
+      },
+      "question": "HubSpot guides second quarter 2026 total revenue to a range of $897.0 million to $898.0 million. What is the midpoint of that range?"
+    },
+    {
+      "answerable": true,
+      "as_of": "2026-05-28T00:00:00Z",
+      "category": "guidance_extraction",
+      "documents_reviewed": [
+        "0001628280-26-038798"
+      ],
+      "evidence": [
+        {
+          "accession": "0001628280-26-038798",
+          "evidence_id": "2cf77981-2b76-55e5-bb2f-5c90d95cbb06",
+          "form": "8-K",
+          "quote": "$2.92 billion to $2.96 billion",
+          "section": "Full Year Fiscal 2027 Guidance",
+          "span_id": null
+        }
+      ],
+      "expected_answer": {
+        "high": "2.96",
+        "kind": "numeric",
+        "low": "2.92",
+        "period": "FY2027",
+        "scale_exponent": 9,
+        "unit": "USD"
+      },
+      "future_revisions": [],
+      "id": "BM-0027",
+      "issuer": {
+        "cik": "0001441816",
+        "ticker": "MDB"
+      },
+      "question": "In its first quarter fiscal 2027 earnings release, what full-year fiscal 2027 revenue guidance range did MongoDB provide?"
+    },
+    {
+      "answerable": true,
+      "as_of": "2026-05-28T00:00:00Z",
+      "category": "guidance_extraction",
+      "documents_reviewed": [
+        "0001628280-26-038798"
+      ],
+      "evidence": [
+        {
+          "accession": "0001628280-26-038798",
+          "evidence_id": "69f37a6f-db01-5530-a2a4-261270cb877d",
+          "form": "8-K",
+          "quote": "$729 million to $734 million",
+          "section": "Second Quarter Fiscal 2027 Guidance",
+          "span_id": null
+        }
+      ],
+      "expected_answer": {
+        "high": "734",
+        "kind": "numeric",
+        "low": "729",
+        "period": "Q2 FY2027",
+        "scale_exponent": 6,
+        "unit": "USD"
+      },
+      "future_revisions": [],
+      "id": "BM-0028",
+      "issuer": {
+        "cik": "0001441816",
+        "ticker": "MDB"
+      },
+      "question": "What second quarter fiscal 2027 revenue guidance range did MongoDB issue in its first quarter fiscal 2027 release?"
+    },
+    {
+      "answerable": true,
+      "as_of": "2026-05-27T00:00:00Z",
+      "category": "guidance_extraction",
+      "documents_reviewed": [
+        "0001108524-26-000125"
+      ],
+      "evidence": [
+        {
+          "accession": "0001108524-26-000125",
+          "evidence_id": "f59f1806-6f34-59bf-bf93-72b010c26e06",
+          "form": "8-K",
+          "quote": "$11.27 billion to $11.35 billion",
+          "section": "Guidance",
+          "span_id": null
+        }
+      ],
+      "expected_answer": {
+        "high": "11.35",
+        "kind": "numeric",
+        "low": "11.27",
+        "period": "Q2 FY2027",
+        "scale_exponent": 9,
+        "unit": "USD"
+      },
+      "future_revisions": [],
+      "id": "BM-0029",
+      "issuer": {
+        "cik": "0001108524",
+        "ticker": "CRM"
+      },
+      "question": "In its first quarter fiscal 2027 release, what second quarter fiscal 2027 revenue guidance range did Salesforce initiate?"
+    },
+    {
+      "answerable": true,
+      "as_of": "2026-05-28T00:00:00Z",
+      "category": "guidance_extraction",
+      "documents_reviewed": [
+        "0001660134-26-000050"
+      ],
+      "evidence": [
+        {
+          "accession": "0001660134-26-000050",
+          "evidence_id": "cd9660c7-64c1-5139-9d20-c8acf90950ea",
+          "form": "8-K",
+          "quote": "Total revenue of $790 million to $794 million, representing a growth rate of 9% year-over-year",
+          "section": "Financial Outlook",
+          "span_id": null
+        }
+      ],
+      "expected_answer": {
+        "high": "794",
+        "kind": "numeric",
+        "low": "790",
+        "period": "Q2 FY2027",
+        "scale_exponent": 6,
+        "unit": "USD"
+      },
+      "future_revisions": [],
+      "id": "BM-0030",
+      "issuer": {
+        "cik": "0001660134",
+        "ticker": "OKTA"
+      },
+      "question": "What total revenue guidance range did Okta provide for the second quarter of fiscal 2027?"
+    },
+    {
+      "answerable": true,
+      "as_of": "2026-05-07T00:00:00Z",
+      "category": "guidance_extraction",
+      "documents_reviewed": [
+        "0001193125-26-211923"
+      ],
+      "evidence": [
+        {
+          "accession": "0001193125-26-211923",
+          "evidence_id": "5f63d2ed-9458-5d15-a338-34a95eefa052",
+          "form": "8-K",
+          "quote": "Total revenue is expected to be in the range of $897.0 million to $898.0 million, up 18% year over year on an as-reported basis and 16% in constant currency.",
+          "section": "Business Outlook - Second Quarter 2026",
+          "span_id": null
+        }
+      ],
+      "expected_answer": {
+        "high": "898.0",
+        "kind": "numeric",
+        "low": "897.0",
+        "period": "Q2 2026",
+        "scale_exponent": 6,
+        "unit": "USD"
+      },
+      "future_revisions": [],
+      "id": "BM-0031",
+      "issuer": {
+        "cik": "0001404655",
+        "ticker": "HUBS"
+      },
+      "question": "What total revenue guidance range did HubSpot provide for the second quarter of 2026?"
+    },
+    {
+      "answerable": true,
+      "as_of": "2026-05-28T00:00:00Z",
+      "category": "guidance_extraction",
+      "documents_reviewed": [
+        "0001707753-26-000008"
+      ],
+      "evidence": [
+        {
+          "accession": "0001707753-26-000008",
+          "evidence_id": "78356d24-e679-5dec-97fc-7c8faf5a9f27",
+          "form": "8-K",
+          "quote": "Total revenue is expected to be between $469 million and $470 million",
+          "section": "Financial Outlook",
+          "span_id": null
+        }
+      ],
+      "expected_answer": {
+        "high": "470",
+        "kind": "numeric",
+        "low": "469",
+        "period": "Q1 FY2027",
+        "scale_exponent": 6,
+        "unit": "USD"
+      },
+      "future_revisions": [],
+      "id": "BM-0032",
+      "issuer": {
+        "cik": "0001707753",
+        "ticker": "ESTC"
+      },
+      "question": "What total revenue guidance range did Elastic provide for the first quarter of fiscal 2027?"
+    },
+    {
+      "answerable": true,
+      "as_of": "2026-05-28T00:00:00Z",
+      "category": "guidance_extraction",
+      "documents_reviewed": [
+        "0001568100-26-000030"
+      ],
+      "evidence": [
+        {
+          "accession": "0001568100-26-000030",
+          "evidence_id": "efd79dd5-9279-59ac-9c06-5a9efab8a2ca",
+          "form": "8-K",
+          "quote": "Total revenue of $122.0 million - $124.0 million",
+          "section": "Financial Outlook",
+          "span_id": null
+        }
+      ],
+      "expected_answer": {
+        "high": "124.0",
+        "kind": "numeric",
+        "low": "122.0",
+        "period": "Q2 FY2027",
+        "scale_exponent": 6,
+        "unit": "USD"
+      },
+      "future_revisions": [],
+      "id": "BM-0033",
+      "issuer": {
+        "cik": "0001568100",
+        "ticker": "PD"
+      },
+      "question": "What total revenue guidance range did PagerDuty provide for the second quarter of fiscal 2027?"
+    },
+    {
+      "answerable": true,
+      "as_of": "2026-05-27T00:00:00Z",
+      "category": "guidance_extraction",
+      "documents_reviewed": [
+        "0001640147-26-000027"
+      ],
+      "evidence": [
+        {
+          "accession": "0001640147-26-000027",
+          "evidence_id": "c115bb65-7f26-5545-940e-5ff11f0eb21c",
+          "form": "8-K",
+          "quote": "Product revenue of $5,840 million, representing 31% year-over-year growth, up from previous guidance of $5,660 million",
+          "section": "Financial Outlook",
+          "span_id": null
+        }
+      ],
+      "expected_answer": {
+        "high": "5840",
+        "kind": "numeric",
+        "low": "5840",
+        "period": "FY2027",
+        "scale_exponent": 6,
+        "unit": "USD"
+      },
+      "future_revisions": [],
+      "id": "BM-0034",
+      "issuer": {
+        "cik": "0001640147",
+        "ticker": "SNOW"
+      },
+      "question": "What full-year fiscal 2027 product revenue guidance did Snowflake provide in its first quarter fiscal 2027 release?"
+    },
+    {
+      "answerable": true,
+      "as_of": "2026-05-28T00:00:00Z",
+      "category": "revenue_driver_extraction",
+      "documents_reviewed": [
+        "0001628280-26-038798"
+      ],
+      "evidence": [
+        {
+          "accession": "0001628280-26-038798",
+          "evidence_id": "023811c8-b671-5104-99a9-abec83193fb3",
+          "form": "8-K",
+          "quote": "Atlas revenue up more than 29% year-over-year in the first quarter fiscal 2027",
+          "section": "Headline / drivers",
+          "span_id": null
+        }
+      ],
+      "expected_answer": {
+        "kind": "text",
+        "text": "MongoDB Atlas; Atlas revenue grew more than 29% year-over-year in Q1 FY2027."
+      },
+      "future_revisions": [],
+      "id": "BM-0035",
+      "issuer": {
+        "cik": "0001441816",
+        "ticker": "MDB"
+      },
+      "question": "According to MongoDB's first quarter fiscal 2027 release, which product line does the company identify as the primary driver of its revenue growth and raised guidance?"
+    },
+    {
+      "answerable": true,
+      "as_of": "2026-05-07T00:00:00Z",
+      "category": "revenue_driver_extraction",
+      "documents_reviewed": [
+        "0001628280-26-031677"
+      ],
+      "evidence": [
+        {
+          "accession": "0001628280-26-031677",
+          "evidence_id": "cf7ea44c-e404-5068-9c02-24ffe83036a7",
+          "form": "8-K",
+          "quote": "about 4,550 $100k+ ARR customers, up from about 3,770 a year ago",
+          "section": "Headline - larger customers",
+          "span_id": null
+        }
+      ],
+      "expected_answer": {
+        "kind": "text",
+        "text": "About 4,550 customers with $100k+ ARR, up from about 3,770 a year ago."
+      },
+      "future_revisions": [],
+      "id": "BM-0036",
+      "issuer": {
+        "cik": "0001561550",
+        "ticker": "DDOG"
+      },
+      "question": "What does Datadog cite as evidence of growth among its larger customers in the first quarter of 2026, and what were the customer counts?"
+    },
+    {
+      "answerable": true,
+      "as_of": "2026-05-21T00:00:00Z",
+      "category": "revenue_driver_extraction",
+      "documents_reviewed": [
+        "0001585521-26-000069"
+      ],
+      "evidence": [
+        {
+          "accession": "0001585521-26-000069",
+          "evidence_id": "fc503174-0e3e-57d0-9586-5ffcb675d098",
+          "form": "8-K",
+          "quote": "First quarter Enterprise revenue of $755.7 million, up 7.2% year over year",
+          "section": "Highlights",
+          "span_id": null
+        }
+      ],
+      "expected_answer": {
+        "high": "755.7",
+        "kind": "numeric",
+        "low": "755.7",
+        "period": "Q1 FY2027",
+        "scale_exponent": 6,
+        "unit": "USD"
+      },
+      "future_revisions": [],
+      "id": "BM-0037",
+      "issuer": {
+        "cik": "0001585521",
+        "ticker": "ZM"
+      },
+      "question": "Which revenue category does Zoom highlight as an Enterprise growth driver in the first quarter of fiscal 2027, and what was its value and growth?"
+    },
+    {
+      "answerable": true,
+      "as_of": "2026-04-30T00:00:00Z",
+      "category": "revenue_driver_extraction",
+      "documents_reviewed": [
+        "0001650372-26-000024"
+      ],
+      "evidence": [
+        {
+          "accession": "0001650372-26-000024",
+          "evidence_id": "9e979f46-10f8-5169-af33-942878dffaa5",
+          "form": "8-K",
+          "quote": "Cloud revenue of $1,132 million, up 29% year-over-year",
+          "section": "Headline",
+          "span_id": null
+        }
+      ],
+      "expected_answer": {
+        "high": "1132",
+        "kind": "numeric",
+        "low": "1132",
+        "period": "Q3 FY2026",
+        "scale_exponent": 6,
+        "unit": "USD"
+      },
+      "future_revisions": [],
+      "id": "BM-0038",
+      "issuer": {
+        "cik": "0001650372",
+        "ticker": "TEAM"
+      },
+      "question": "What Cloud revenue and growth rate does Atlassian report for the third quarter of fiscal 2026 as a driver of its results?"
+    },
+    {
+      "answerable": true,
+      "as_of": "2026-05-27T00:00:00Z",
+      "category": "revenue_driver_extraction",
+      "documents_reviewed": [
+        "0001108524-26-000125"
+      ],
+      "evidence": [
+        {
+          "accession": "0001108524-26-000125",
+          "evidence_id": "94f13eb7-6e4c-52bd-a43d-a0c2a01eedd7",
+          "form": "8-K",
+          "quote": "including approximately 3pts Informatica contribution",
+          "section": "Guidance",
+          "span_id": null
+        }
+      ],
+      "expected_answer": {
+        "kind": "text",
+        "text": "Approximately 3 points of full-year FY2027 revenue (an inorganic driver from Informatica)."
+      },
+      "future_revisions": [],
+      "id": "BM-0039",
+      "issuer": {
+        "cik": "0001108524",
+        "ticker": "CRM"
+      },
+      "question": "In Salesforce's first quarter fiscal 2027 guidance, approximately how many points of full-year FY2027 revenue growth does the company attribute to the Informatica acquisition?"
+    },
+    {
+      "answerable": true,
+      "as_of": "2026-05-26T00:00:00Z",
+      "category": "revenue_driver_extraction",
+      "documents_reviewed": [
+        "0001713683-26-000095"
+      ],
+      "evidence": [
+        {
+          "accession": "0001713683-26-000095",
+          "evidence_id": "a4477a18-1d0e-56e0-a696-c86df70ca96f",
+          "form": "8-K",
+          "quote": "Annual Recurring Revenue (ARR) grew 25% year-over-year to $3,525 million",
+          "section": "Third Quarter Highlights",
+          "span_id": null
+        }
+      ],
+      "expected_answer": {
+        "high": "3525",
+        "kind": "numeric",
+        "low": "3525",
+        "period": "Q3 FY2026",
+        "scale_exponent": 6,
+        "unit": "USD"
+      },
+      "future_revisions": [],
+      "id": "BM-0040",
+      "issuer": {
+        "cik": "0001713683",
+        "ticker": "ZS"
+      },
+      "question": "What annual recurring revenue (ARR) and growth rate does Zscaler report as its core recurring-revenue driver in the third quarter of fiscal 2026?"
+    },
+    {
+      "answerable": true,
+      "as_of": "2026-05-28T00:00:00Z",
+      "category": "contradiction_detection",
+      "documents_reviewed": [
+        "0001628280-26-013199",
+        "0001628280-26-038798"
+      ],
+      "evidence": [
+        {
+          "accession": "0001628280-26-013199",
+          "evidence_id": "e30ea0fd-1389-5d0d-bc7d-d7d66501b60d",
+          "form": "8-K",
+          "quote": "$2.860 billion to $2.900 billion",
+          "section": "Full Year Fiscal 2027 Guidance",
+          "span_id": null
+        },
+        {
+          "accession": "0001628280-26-038798",
+          "evidence_id": "2cf77981-2b76-55e5-bb2f-5c90d95cbb06",
+          "form": "8-K",
+          "quote": "$2.92 billion to $2.96 billion",
+          "section": "Full Year Fiscal 2027 Guidance",
+          "span_id": null
+        }
+      ],
+      "expected_answer": {
+        "kind": "text",
+        "text": "The March 2, 2026 (Q4 FY2026) release guided full-year FY2027 revenue to $2.860B-$2.900B; the May 28, 2026 (Q1 FY2027) release guided $2.92B-$2.96B. Not a true conflict - MongoDB raised full-year guidance between the two dates."
+      },
+      "future_revisions": [],
+      "id": "BM-0041",
+      "issuer": {
+        "cik": "0001441816",
+        "ticker": "MDB"
+      },
+      "question": "MongoDB's fourth quarter fiscal 2026 release and its first quarter fiscal 2027 release state different full-year fiscal 2027 revenue guidance ranges. Identify the two ranges and explain the discrepancy."
+    },
+    {
+      "answerable": true,
+      "as_of": "2026-05-27T00:00:00Z",
+      "category": "contradiction_detection",
+      "documents_reviewed": [
+        "0001108524-26-000056",
+        "0001108524-26-000125"
+      ],
+      "evidence": [
+        {
+          "accession": "0001108524-26-000056",
+          "evidence_id": "4a155d42-84c0-54bc-a8f8-53bc186f1367",
+          "form": "8-K",
+          "quote": "full year FY27 revenue guidance of $45.8 billion to $46.2 billion",
+          "section": "Guidance",
+          "span_id": null
+        },
+        {
+          "accession": "0001108524-26-000125",
+          "evidence_id": "a35fda8e-fd9c-5bcb-89a0-ec8a289ef4ee",
+          "form": "8-K",
+          "quote": "full year FY27 revenue of $45.9 billion to $46.2 billion",
+          "section": "Guidance",
+          "span_id": null
+        }
+      ],
+      "expected_answer": {
+        "kind": "text",
+        "text": "The Q4 FY2026 release (Feb 25, 2026) initiated FY2027 revenue guidance of $45.8B-$46.2B; the Q1 FY2027 release (May 27, 2026) raised the low end to $45.9B-$46.2B. Not contradictory - the midpoint was raised."
+      },
+      "future_revisions": [],
+      "id": "BM-0042",
+      "issuer": {
+        "cik": "0001108524",
+        "ticker": "CRM"
+      },
+      "question": "Two Salesforce releases state different full-year fiscal 2027 revenue guidance figures. What are they, and are they contradictory?"
+    },
+    {
+      "answerable": true,
+      "as_of": "2026-05-27T00:00:00Z",
+      "category": "contradiction_detection",
+      "documents_reviewed": [
+        "0001640147-26-000027"
+      ],
+      "evidence": [
+        {
+          "accession": "0001640147-26-000027",
+          "evidence_id": "c115bb65-7f26-5545-940e-5ff11f0eb21c",
+          "form": "8-K",
+          "quote": "Product revenue of $5,840 million, representing 31% year-over-year growth, up from previous guidance of $5,660 million",
+          "section": "Financial Outlook",
+          "span_id": null
+        }
+      ],
+      "expected_answer": {
+        "kind": "text",
+        "text": "The sentence gives current guidance of $5,840 million and previous guidance of $5,660 million; they differ because Snowflake raised its full-year FY2027 product-revenue guidance."
+      },
+      "future_revisions": [],
+      "id": "BM-0043",
+      "issuer": {
+        "cik": "0001640147",
+        "ticker": "SNOW"
+      },
+      "question": "Snowflake's first quarter fiscal 2027 release states two different full-year fiscal 2027 product-revenue guidance figures in a single sentence. What are they and why do they differ?"
+    },
+    {
+      "answerable": true,
+      "as_of": "2026-04-22T00:00:00Z",
+      "category": "contradiction_detection",
+      "documents_reviewed": [
+        "0001373715-26-000005",
+        "0001373715-26-000054"
+      ],
+      "evidence": [
+        {
+          "accession": "0001373715-26-000005",
+          "evidence_id": "b6a083da-9b55-5572-aa0a-cf9c1a1b552d",
+          "form": "8-K",
+          "quote": "$3,650 - $3,655",
+          "section": "Guidance - First Quarter 2026",
+          "span_id": null
+        },
+        {
+          "accession": "0001373715-26-000054",
+          "evidence_id": "0e29f6b3-f4b4-5e0b-92ab-b52069a1f990",
+          "form": "8-K",
+          "quote": "Subscription revenues of $3,671 million in Q1 2026, representing 22% year-over-year growth, 19% in constant currency",
+          "section": "Financial highlights",
+          "span_id": null
+        }
+      ],
+      "expected_answer": {
+        "kind": "text",
+        "text": "Q4 2025 guidance was $3,650-$3,655M for Q1 2026 subscription revenue; actual Q1 2026 subscription revenue was $3,671M. Not a conflict - actual results beat the earlier guidance."
+      },
+      "future_revisions": [],
+      "id": "BM-0044",
+      "issuer": {
+        "cik": "0001373715",
+        "ticker": "NOW"
+      },
+      "question": "ServiceNow's fourth quarter 2025 release guided first quarter 2026 subscription revenues to $3,650-$3,655 million, but the first quarter 2026 release reports a different figure. Identify the discrepancy."
+    },
+    {
+      "answerable": true,
+      "as_of": "2026-05-07T00:00:00Z",
+      "category": "contradiction_detection",
+      "documents_reviewed": [
+        "0001193125-26-046563",
+        "0001193125-26-211923"
+      ],
+      "evidence": [
+        {
+          "accession": "0001193125-26-046563",
+          "evidence_id": "049221f9-afac-5226-8461-445c58a5d91a",
+          "form": "8-K",
+          "quote": "Total revenue is expected to be in the range of $3.69 billion to $3.70 billion, up 18% year over year on an as-reported basis and 16% in constant currency.",
+          "section": "Business Outlook - Full Year 2026",
+          "span_id": null
+        },
+        {
+          "accession": "0001193125-26-211923",
+          "evidence_id": "e48b29e7-9378-5da0-a4f0-92118b3bad69",
+          "form": "8-K",
+          "quote": "Total revenue is expected to be in the range of $3.700 billion to $3.708 billion, up 18% year over year on an as-reported basis and 17% in constant currency.",
+          "section": "Business Outlook - Full Year 2026",
+          "span_id": null
+        }
+      ],
+      "expected_answer": {
+        "kind": "text",
+        "text": "The Feb 11, 2026 (Q4 2025) release guided full-year 2026 revenue to $3.69 billion to $3.70 billion; the May 7, 2026 (Q1 2026) release raised it to $3.700 billion to $3.708 billion. Reconciled as a guidance raise."
+      },
+      "future_revisions": [],
+      "id": "BM-0045",
+      "issuer": {
+        "cik": "0001404655",
+        "ticker": "HUBS"
+      },
+      "question": "HubSpot's Q4 2025 release and Q1 2026 release state different full-year 2026 total-revenue guidance ranges. What are they, and how are they reconciled?"
+    },
+    {
+      "answerable": true,
+      "as_of": "2026-04-15T00:00:00Z",
+      "category": "temporal_cutoff_trap",
+      "documents_reviewed": [
+        "0001628280-26-013199"
+      ],
+      "evidence": [
+        {
+          "accession": "0001628280-26-013199",
+          "evidence_id": "e30ea0fd-1389-5d0d-bc7d-d7d66501b60d",
+          "form": "8-K",
+          "quote": "$2.860 billion to $2.900 billion",
+          "section": "Full Year Fiscal 2027 Guidance",
+          "span_id": null
+        }
+      ],
+      "expected_answer": {
+        "high": "2.900",
+        "kind": "numeric",
+        "low": "2.860",
+        "period": "FY2027",
+        "scale_exponent": 9,
+        "unit": "USD"
+      },
+      "future_revisions": [
+        "0001628280-26-038798"
+      ],
+      "id": "BM-0046",
+      "issuer": {
+        "cik": "0001441816",
+        "ticker": "MDB"
+      },
+      "question": "As of 2026-04-15, what full-year fiscal 2027 revenue guidance range had MongoDB most recently issued?"
+    },
+    {
+      "answerable": true,
+      "as_of": "2026-04-01T00:00:00Z",
+      "category": "temporal_cutoff_trap",
+      "documents_reviewed": [
+        "0001108524-26-000056"
+      ],
+      "evidence": [
+        {
+          "accession": "0001108524-26-000056",
+          "evidence_id": "4a155d42-84c0-54bc-a8f8-53bc186f1367",
+          "form": "8-K",
+          "quote": "full year FY27 revenue guidance of $45.8 billion to $46.2 billion",
+          "section": "Guidance",
+          "span_id": null
+        }
+      ],
+      "expected_answer": {
+        "high": "46.2",
+        "kind": "numeric",
+        "low": "45.8",
+        "period": "FY2027",
+        "scale_exponent": 9,
+        "unit": "USD"
+      },
+      "future_revisions": [
+        "0001108524-26-000125"
+      ],
+      "id": "BM-0047",
+      "issuer": {
+        "cik": "0001108524",
+        "ticker": "CRM"
+      },
+      "question": "As of 2026-04-01, what was Salesforce's most recently issued full-year fiscal 2027 revenue guidance range?"
+    },
+    {
+      "answerable": true,
+      "as_of": "2026-01-15T00:00:00Z",
+      "category": "temporal_cutoff_trap",
+      "documents_reviewed": [
+        "0001628280-25-054425"
+      ],
+      "evidence": [
+        {
+          "accession": "0001628280-25-054425",
+          "evidence_id": "7144c284-552c-59d4-8be6-d76b29a8e75a",
+          "form": "8-K",
+          "quote": "$2.434 billion to $2.439 billion",
+          "section": "Fiscal 2026 Guidance",
+          "span_id": null
+        }
+      ],
+      "expected_answer": {
+        "high": "2.439",
+        "kind": "numeric",
+        "low": "2.434",
+        "period": "FY2026",
+        "scale_exponent": 9,
+        "unit": "USD"
+      },
+      "future_revisions": [
+        "0001628280-26-013199"
+      ],
+      "id": "BM-0048",
+      "issuer": {
+        "cik": "0001441816",
+        "ticker": "MDB"
+      },
+      "question": "As of 2026-01-15, what full-year fiscal 2026 revenue guidance had MongoDB most recently provided?"
+    },
+    {
+      "answerable": true,
+      "as_of": "2026-03-01T00:00:00Z",
+      "category": "temporal_cutoff_trap",
+      "documents_reviewed": [
+        "0001373715-26-000005"
+      ],
+      "evidence": [
+        {
+          "accession": "0001373715-26-000005",
+          "evidence_id": "b6a083da-9b55-5572-aa0a-cf9c1a1b552d",
+          "form": "8-K",
+          "quote": "$3,650 - $3,655",
+          "section": "Guidance - First Quarter 2026",
+          "span_id": null
+        }
+      ],
+      "expected_answer": {
+        "high": "3655",
+        "kind": "numeric",
+        "low": "3650",
+        "period": "Q1 2026",
+        "scale_exponent": 6,
+        "unit": "USD"
+      },
+      "future_revisions": [
+        "0001373715-26-000054"
+      ],
+      "id": "BM-0049",
+      "issuer": {
+        "cik": "0001373715",
+        "ticker": "NOW"
+      },
+      "question": "As of 2026-03-01, what was ServiceNow's most recently issued guidance for first quarter 2026 subscription revenues?"
+    },
+    {
+      "answerable": true,
+      "as_of": "2026-03-15T00:00:00Z",
+      "category": "temporal_cutoff_trap",
+      "documents_reviewed": [
+        "0001193125-26-046563"
+      ],
+      "evidence": [
+        {
+          "accession": "0001193125-26-046563",
+          "evidence_id": "049221f9-afac-5226-8461-445c58a5d91a",
+          "form": "8-K",
+          "quote": "Total revenue is expected to be in the range of $3.69 billion to $3.70 billion, up 18% year over year on an as-reported basis and 16% in constant currency.",
+          "section": "Business Outlook - Full Year 2026",
+          "span_id": null
+        }
+      ],
+      "expected_answer": {
+        "high": "3.70",
+        "kind": "numeric",
+        "low": "3.69",
+        "period": "FY2026",
+        "scale_exponent": 9,
+        "unit": "USD"
+      },
+      "future_revisions": [
+        "0001193125-26-211923"
+      ],
+      "id": "BM-0050",
+      "issuer": {
+        "cik": "0001404655",
+        "ticker": "HUBS"
+      },
+      "question": "As of 2026-03-15, what full-year 2026 total-revenue guidance had HubSpot most recently issued?"
+    },
+    {
+      "answerable": true,
+      "as_of": "2023-05-26T00:00:00Z",
+      "category": "restatement_handling",
+      "documents_reviewed": [
+        "0001786352-23-000037"
+      ],
+      "evidence": [
+        {
+          "accession": "0001786352-23-000037",
+          "evidence_id": "df12d5a7-b75b-5efd-b123-a994d033cd07",
+          "form": "10-K/A",
+          "quote": "The adoption of ASU 2021-08 resulted in an increase in deferred revenue assumed and a related increase to goodwill",
+          "section": "Recently Adopted Accounting Pronouncements",
+          "span_id": null
+        }
+      ],
+      "expected_answer": {
+        "kind": "text",
+        "text": "ASU 2021-08 (Business Combinations, Topic 805 - accounting for contract assets and contract liabilities from contracts with customers)."
+      },
+      "future_revisions": [],
+      "id": "BM-0051",
+      "issuer": {
+        "cik": "0001786352",
+        "ticker": "BILL"
+      },
+      "question": "In BILL's Form 10-K/A for fiscal year ended June 30, 2022, which accounting standard adoption caused the company to retrospectively adjust its previously reported interim financial statements?"
+    },
+    {
+      "answerable": true,
+      "as_of": "2023-05-26T00:00:00Z",
+      "category": "restatement_handling",
+      "documents_reviewed": [
+        "0001786352-23-000037"
+      ],
+      "evidence": [
+        {
+          "accession": "0001786352-23-000037",
+          "evidence_id": "77612feb-a27d-54dc-a586-a9866b397185",
+          "form": "10-K/A",
+          "quote": "2,363,090",
+          "section": "ASU 2021-08 adoption impact table",
+          "span_id": null
+        },
+        {
+          "accession": "0001786352-23-000037",
+          "evidence_id": "df12d5a7-b75b-5efd-b123-a994d033cd07",
+          "form": "10-K/A",
+          "quote": "The adoption of ASU 2021-08 resulted in an increase in deferred revenue assumed and a related increase to goodwill",
+          "section": "Recently Adopted Accounting Pronouncements",
+          "span_id": null
+        }
+      ],
+      "expected_answer": {
+        "high": "2363090",
+        "kind": "numeric",
+        "low": "2363090",
+        "period": "Oct 1, 2021 (as adjusted)",
+        "scale_exponent": 3,
+        "unit": "USD"
+      },
+      "future_revisions": [],
+      "id": "BM-0052",
+      "issuer": {
+        "cik": "0001786352",
+        "ticker": "BILL"
+      },
+      "question": "Per the ASU 2021-08 adoption impact disclosed in BILL's fiscal 2022 Form 10-K/A, what was goodwill as adjusted at October 1, 2021 (in thousands)?"
+    },
+    {
+      "answerable": true,
+      "as_of": "2023-05-26T00:00:00Z",
+      "category": "restatement_handling",
+      "documents_reviewed": [
+        "0001786352-23-000038"
+      ],
+      "evidence": [
+        {
+          "accession": "0001786352-23-000038",
+          "evidence_id": "cab1516c-0721-5b1c-99a4-e18c1d6c561a",
+          "form": "10-Q/A",
+          "quote": "The material weakness did not result in any misstatement of our condensed consolidated financial statements",
+          "section": "Explanatory Note",
+          "span_id": null
+        }
+      ],
+      "expected_answer": {
+        "kind": "text",
+        "text": "No. The amendment addressed a material weakness in internal control over financial reporting; the company stated the material weakness did not result in any misstatement of the quarter's financial statements."
+      },
+      "future_revisions": [],
+      "id": "BM-0053",
+      "issuer": {
+        "cik": "0001786352",
+        "ticker": "BILL"
+      },
+      "question": "Did BILL's Form 10-Q/A for the quarter ended September 30, 2022 restate the previously issued financial statements for that quarter?"
+    },
+    {
+      "answerable": true,
+      "as_of": "2023-05-26T00:00:00Z",
+      "category": "restatement_handling",
+      "documents_reviewed": [
+        "0001786352-23-000038"
+      ],
+      "evidence": [
+        {
+          "accession": "0001786352-23-000038",
+          "evidence_id": "9b2d7b01-80c2-569d-bdd6-35a07d5d45f9",
+          "form": "10-Q/A",
+          "quote": "internal control over financial reporting related to certain information systems and applications within the quote-to-cash process",
+          "section": "Explanatory Note",
+          "span_id": null
+        }
+      ],
+      "expected_answer": {
+        "kind": "text",
+        "text": "A material weakness in internal control over financial reporting related to certain information systems and applications within the quote-to-cash process."
+      },
+      "future_revisions": [],
+      "id": "BM-0054",
+      "issuer": {
+        "cik": "0001786352",
+        "ticker": "BILL"
+      },
+      "question": "What deficiency did BILL disclose in its Form 10-Q/A for the quarter ended September 30, 2022 as the reason for the amendment?"
+    },
+    {
+      "answerable": true,
+      "as_of": "2023-05-26T00:00:00Z",
+      "category": "restatement_handling",
+      "documents_reviewed": [
+        "0001786352-23-000037"
+      ],
+      "evidence": [
+        {
+          "accession": "0001786352-23-000037",
+          "evidence_id": "df12d5a7-b75b-5efd-b123-a994d033cd07",
+          "form": "10-K/A",
+          "quote": "The adoption of ASU 2021-08 resulted in an increase in deferred revenue assumed and a related increase to goodwill",
+          "section": "Recently Adopted Accounting Pronouncements",
+          "span_id": null
+        }
+      ],
+      "expected_answer": {
+        "kind": "text",
+        "text": "It increased the deferred revenue assumed and increased goodwill as of the acquisition date, with a consequent increase in revenue during fiscal 2022."
+      },
+      "future_revisions": [],
+      "id": "BM-0055",
+      "issuer": {
+        "cik": "0001786352",
+        "ticker": "BILL"
+      },
+      "question": "According to BILL's fiscal 2022 Form 10-K/A, what was the effect of adopting ASU 2021-08 on the acquisition accounting for Invoice2go?"
+    },
+    {
+      "answerable": false,
+      "as_of": "2026-05-28T00:00:00Z",
+      "category": "insufficient_evidence",
+      "documents_reviewed": [
+        "0001628280-26-038798"
+      ],
+      "evidence": [],
+      "expected_answer": null,
+      "future_revisions": [],
+      "id": "BM-0056",
+      "issuer": {
+        "cik": "0001441816",
+        "ticker": "MDB"
+      },
+      "question": "What was MongoDB's net revenue retention rate for the first quarter of fiscal 2027?"
+    },
+    {
+      "answerable": false,
+      "as_of": "2026-05-07T00:00:00Z",
+      "category": "insufficient_evidence",
+      "documents_reviewed": [
+        "0001628280-26-031677"
+      ],
+      "evidence": [],
+      "expected_answer": null,
+      "future_revisions": [],
+      "id": "BM-0057",
+      "issuer": {
+        "cik": "0001561550",
+        "ticker": "DDOG"
+      },
+      "question": "What was Datadog's net revenue retention rate in the first quarter of 2026?"
+    },
+    {
+      "answerable": false,
+      "as_of": "2026-05-21T00:00:00Z",
+      "category": "insufficient_evidence",
+      "documents_reviewed": [
+        "0001585521-26-000069"
+      ],
+      "evidence": [],
+      "expected_answer": null,
+      "future_revisions": [],
+      "id": "BM-0058",
+      "issuer": {
+        "cik": "0001585521",
+        "ticker": "ZM"
+      },
+      "question": "What were Zoom's remaining performance obligations (RPO) as of the end of the first quarter of fiscal 2027?"
+    },
+    {
+      "answerable": false,
+      "as_of": "2026-04-30T00:00:00Z",
+      "category": "insufficient_evidence",
+      "documents_reviewed": [
+        "0001650372-26-000024"
+      ],
+      "evidence": [],
+      "expected_answer": null,
+      "future_revisions": [],
+      "id": "BM-0059",
+      "issuer": {
+        "cik": "0001650372",
+        "ticker": "TEAM"
+      },
+      "question": "What dollar-based net revenue retention rate did Atlassian report for the third quarter of fiscal 2026?"
+    },
+    {
+      "answerable": false,
+      "as_of": "2026-05-21T00:00:00Z",
+      "category": "insufficient_evidence",
+      "documents_reviewed": [
+        "0001327811-26-000024"
+      ],
+      "evidence": [],
+      "expected_answer": null,
+      "future_revisions": [],
+      "id": "BM-0060",
+      "issuer": {
+        "cik": "0001327811",
+        "ticker": "WDAY"
+      },
+      "question": "What were Workday's total remaining performance obligations (RPO) as of the end of the first quarter of fiscal 2027?"
+    },
+    {
+      "answerable": false,
+      "as_of": "2026-05-28T00:00:00Z",
+      "category": "insufficient_evidence",
+      "documents_reviewed": [
+        "0001660134-26-000050"
+      ],
+      "evidence": [],
+      "expected_answer": null,
+      "future_revisions": [],
+      "id": "BM-0061",
+      "issuer": {
+        "cik": "0001660134",
+        "ticker": "OKTA"
+      },
+      "question": "What was Okta's total annual recurring revenue (ARR) as of the first quarter of fiscal 2027?"
+    },
+    {
+      "answerable": true,
+      "as_of": "2026-04-30T00:00:00Z",
+      "category": "revenue_driver_extraction",
+      "documents_reviewed": [
+        "0001447669-26-000046"
+      ],
+      "evidence": [
+        {
+          "accession": "0001447669-26-000046",
+          "evidence_id": "c217fc52-b757-51f8-a6c2-d7318c7f34e6",
+          "form": "8-K",
+          "quote": "up 20% reported and 16% organic year-over-year",
+          "section": "Headline",
+          "span_id": null
+        }
+      ],
+      "expected_answer": {
+        "kind": "text",
+        "text": "Revenue grew 20% year-over-year on a reported basis and 16% on an organic basis."
+      },
+      "future_revisions": [],
+      "id": "BM-0062",
+      "issuer": {
+        "cik": "0001447669",
+        "ticker": "TWLO"
+      },
+      "question": "How does Twilio characterize its first quarter 2026 revenue growth on a reported versus organic basis?"
+    },
+    {
+      "answerable": true,
+      "as_of": "2026-06-04T00:00:00Z",
+      "category": "exact_fact_lookup",
+      "documents_reviewed": [
+        "0001261333-26-000072"
+      ],
+      "evidence": [
+        {
+          "accession": "0001261333-26-000072",
+          "evidence_id": "86f9d1aa-c974-5107-bb2d-bf458a7c0ec9",
+          "form": "8-K",
+          "quote": "40,000 customers investing in our rapidly expanding roadmap",
+          "section": "Management commentary",
+          "span_id": null
+        }
+      ],
+      "expected_answer": {
+        "high": "40000",
+        "kind": "numeric",
+        "low": "40000",
+        "period": "Q1 FY2027",
+        "scale_exponent": 0,
+        "unit": "customers"
+      },
+      "future_revisions": [],
+      "id": "BM-0063",
+      "issuer": {
+        "cik": "0001261333",
+        "ticker": "DOCU"
+      },
+      "question": "How many customers does Docusign's CEO cite as investing in the company's IAM platform in the first quarter of fiscal 2027?"
+    },
+    {
+      "answerable": true,
+      "as_of": "2026-05-26T00:00:00Z",
+      "category": "exact_fact_lookup",
+      "documents_reviewed": [
+        "0001713683-26-000095"
+      ],
+      "evidence": [
+        {
+          "accession": "0001713683-26-000095",
+          "evidence_id": "3d65c650-3edb-5889-8546-85aa3a9ff334",
+          "form": "8-K",
+          "quote": "Free cash flow of $136.0 million, compared to $119.5 million a year ago, grew 14% year-over-year",
+          "section": "Third Quarter Highlights",
+          "span_id": null
+        }
+      ],
+      "expected_answer": {
+        "high": "136.0",
+        "kind": "numeric",
+        "low": "136.0",
+        "period": "Q3 FY2026",
+        "scale_exponent": 6,
+        "unit": "USD"
+      },
+      "future_revisions": [],
+      "id": "BM-0064",
+      "issuer": {
+        "cik": "0001713683",
+        "ticker": "ZS"
+      },
+      "question": "What was Zscaler's free cash flow in the third quarter of fiscal 2026?"
+    },
+    {
+      "answerable": true,
+      "as_of": "2026-02-10T00:00:00Z",
+      "category": "exact_fact_lookup",
+      "documents_reviewed": [
+        "0001628280-26-006645"
+      ],
+      "evidence": [
+        {
+          "accession": "0001628280-26-006645",
+          "evidence_id": "187767e9-fcc7-5afe-85e5-a3880691ef5f",
+          "form": "8-K",
+          "quote": "603 $1 million+ ARR customers, up from 462 a year ago",
+          "section": "Headline - larger customers",
+          "span_id": null
+        }
+      ],
+      "expected_answer": {
+        "high": "603",
+        "kind": "numeric",
+        "low": "603",
+        "period": "Q4 2025",
+        "scale_exponent": 0,
+        "unit": "customers"
+      },
+      "future_revisions": [],
+      "id": "BM-0065",
+      "issuer": {
+        "cik": "0001561550",
+        "ticker": "DDOG"
+      },
+      "question": "How many customers with $1 million or more in ARR did Datadog report for the fourth quarter of 2025?"
+    }
+  ],
+  "question_count": 65,
+  "resolved": false,
+  "schema_version": "m2-smoke-manifest/v1"
+}

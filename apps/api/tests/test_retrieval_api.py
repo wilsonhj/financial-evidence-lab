@@ -278,7 +278,87 @@ def test_create_read_trace_happy_path(
         "input_tokens",
         "output_tokens",
     }
-    assert tj["claims"] == []
+
+
+def test_claims_generated_and_persisted(
+    client: TestClient, org: tuple[str, str], seeded: dict[str, str]
+) -> None:
+    """M2-020: the run decomposes selected context into atomic claims that are
+    persisted with their citation edges and surfaced in the trace."""
+    created = _create(client, org, seeded["workspace_id"])
+    trace = client.get(f"/v1/retrieval-runs/{created['run_id']}", headers=_headers(*org)).json()
+
+    claims = trace["claims"]
+    assert claims, "expected generated claims"
+    # One atomic claim per accepted context item, all in the closed status set.
+    accepted_items = {c["item_id"] for c in trace["candidates"] if c["accepted"]}
+    cited_items = {cit["item_id"] for cl in claims for cit in cl["citations"]}
+    assert cited_items, "expected citation edges"
+    assert cited_items <= accepted_items, "citations must target accepted candidates"
+    for claim in claims:
+        assert claim["status"] in {
+            "supported",
+            "partially_supported",
+            "contradicted",
+            "derived",
+            "unsupported",
+        }
+        for citation in claim["citations"]:
+            assert citation["status"] in {"entailed", "partial", "contradictory", "irrelevant"}
+            assert isinstance(citation["numeric_checks"], dict)
+
+    # claim_generated events are traced; budget records generation usage.
+    assert any(e["type"] == "claim_generated" for e in trace["events"])
+    assert trace["budget_usage"]["output_tokens"] >= 1
+
+
+def test_citations_verified_with_numeric_checks(
+    client: TestClient, org: tuple[str, str], seeded: dict[str, str]
+) -> None:
+    """M2-021: citation edges are verified (entailed) and the fact-backed claim
+    carries a full deterministic numeric check."""
+    created = _create(client, org, seeded["workspace_id"])
+    trace = client.get(f"/v1/retrieval-runs/{created['run_id']}", headers=_headers(*org)).json()
+
+    assert any(e["type"] == "citation_verified" for e in trace["events"])
+
+    # Every citation is classified; at least one fact claim carries the full
+    # value/unit/period/sign/scale numeric check, all passing on the seed corpus.
+    numeric_seen = False
+    for claim in trace["claims"]:
+        for citation in claim["citations"]:
+            assert citation["status"] in {"entailed", "partial", "contradictory", "irrelevant"}
+            if citation["numeric_checks"]:
+                assert set(citation["numeric_checks"]) == {
+                    "value",
+                    "unit",
+                    "period",
+                    "sign",
+                    "scale",
+                }
+                assert all(citation["numeric_checks"].values())
+                numeric_seen = True
+    assert numeric_seen, "expected a fact-backed claim with numeric checks"
+
+
+def test_provider_refusal_abstains(
+    client: TestClient, org: tuple[str, str], seeded: dict[str, str], db_url: str
+) -> None:
+    """M2-022: when the provider refuses, no claim is supported so the run
+    abstains (verifying -> abstained, terminal run_abstained)."""
+    # The mock structured provider refuses when the prompt contains "REFUSE".
+    created = _create(client, org, seeded["workspace_id"], question="REFUSE this revenue question")
+    trace = client.get(f"/v1/retrieval-runs/{created['run_id']}", headers=_headers(*org)).json()
+
+    assert trace["status"] == "abstained"
+    assert trace["claims"] == []
+    assert trace["events"][-1]["type"] == "run_abstained"
+    # Retrieval still ran: context was selected before the abstention.
+    assert trace["candidates"], "expected candidates even when abstaining"
+
+    row = _run_row(db_url, created["run_id"])
+    assert row["status"] == "abstained"
+    assert row["last_event"] == "run_abstained"
 
 
 def test_trace_replay_byte_stable(
@@ -478,6 +558,117 @@ def test_lane_failure_persists_failed_run(
     assert row["last_event"] == "run_failed"
     assert row["error"]["code"] == "LANE_EXECUTION_FAILED"
     assert row["candidate_count"] == 0
+
+
+def test_dangling_citation_persists_failed_run(
+    client: TestClient,
+    org: tuple[str, str],
+    seeded: dict[str, str],
+    db_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """CitationIntegrityError (dangling citation) must become a durable failed run."""
+    from decimal import Decimal
+
+    from fel_retrieval.generation import (
+        ClaimCitation,
+        GeneratedClaim,
+        GenerationResult,
+        StructuredClaimGenerator,
+    )
+
+    def _dangling_generate(
+        self: Any, question: str, context: Any, *, as_of: str
+    ) -> GenerationResult:
+        assert context, "expected accepted context to cite against"
+        ghost = str(uuid.uuid4())
+        claim = GeneratedClaim(
+            ord=0,
+            text="dangling citation claim",
+            status="supported",
+            citations=(ClaimCitation(item_id=ghost, source_span_id=context[0].source_span_id),),
+            confidence=Decimal("1"),
+        )
+        return GenerationResult(
+            claims=(claim,),
+            provider="mock",
+            model="mock",
+            input_tokens=1,
+            output_tokens=1,
+            refused=False,
+        )
+
+    monkeypatch.setattr(StructuredClaimGenerator, "generate", _dangling_generate)
+
+    created = _create(client, org, seeded["workspace_id"])
+    row = _run_row(db_url, created["run_id"])
+    assert row["status"] == "failed"
+    assert row["last_event"] == "run_failed"
+    assert row["error"]["code"] == "DANGLING_CITATION"
+
+    trace = client.get(f"/v1/retrieval-runs/{created['run_id']}", headers=_headers(*org))
+    assert trace.status_code == 200, trace.text
+    assert trace.json()["status"] == "failed"
+
+
+def test_contradicted_claim_succeeds_with_spans_preserved(
+    client: TestClient,
+    org: tuple[str, str],
+    seeded: dict[str, str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A contradicted claim is preserved and displayed; the run still succeeds."""
+    from fel_retrieval.verification import CitationEdge, MockCitationVerifier
+
+    def _contradict(
+        self: Any, claim_text: str, evidence: Any, *, claim_numeric: Any
+    ) -> CitationEdge:
+        return CitationEdge(
+            status="contradictory",
+            numeric_checks={"value": False},
+            rationale="injected contradiction",
+        )
+
+    monkeypatch.setattr(MockCitationVerifier, "verify", _contradict)
+
+    created = _create(client, org, seeded["workspace_id"])
+    trace = client.get(f"/v1/retrieval-runs/{created['run_id']}", headers=_headers(*org)).json()
+
+    assert trace["status"] == "succeeded"
+    contradicted = [c for c in trace["claims"] if c["status"] == "contradicted"]
+    assert contradicted, "expected at least one contradicted claim"
+    for claim in contradicted:
+        assert claim["citations"], "contradicted claim must preserve citation spans"
+        assert all(cit["status"] == "contradictory" for cit in claim["citations"])
+
+
+def test_numeric_from_fact_row_fails_closed_on_incomplete_provenance() -> None:
+    """Incomplete fact provenance must hard-fail, never coerce NULL→0 / empty strings."""
+    from app.retrieval import _numeric_from_fact_row
+
+    complete = {
+        "id": "item-1",
+        "financial_fact_id": "ff-1",
+        "value": "100",
+        "unit": "USD",
+        "period": "FY2025",
+        "scale": 6,
+    }
+    numeric = _numeric_from_fact_row(complete)
+    assert numeric is not None
+    assert numeric.scale == 6
+    assert numeric.period == "FY2025"
+
+    assert _numeric_from_fact_row({**complete, "financial_fact_id": None}) is None
+
+    with pytest.raises(ValueError, match="incomplete fact provenance"):
+        _numeric_from_fact_row({**complete, "scale": None})
+    with pytest.raises(ValueError, match="missing period"):
+        _numeric_from_fact_row({**complete, "period": None})
+    with pytest.raises(ValueError, match="missing unit"):
+        _numeric_from_fact_row({**complete, "unit": ""})
+    with pytest.raises(ValueError, match="missing value"):
+        _numeric_from_fact_row({**complete, "value": None})
 
 
 def test_feedback_non_candidate_item_is_422(

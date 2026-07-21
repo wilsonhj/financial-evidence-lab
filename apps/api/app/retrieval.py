@@ -27,9 +27,12 @@ connection with a tuple row factory, because the lane SQL in ``fel_retrieval``
 consumes positional rows. Org isolation is unaffected: every org-scoped write
 stays on the RLS-bound tenant connection.
 
-Generation/verification are not part of this milestone, so runs complete with an
-empty ``claims`` set; the status still walks the full machine because the schema
-only admits ``succeeded`` out of ``verifying``.
+Generation (M2-020) decomposes the selected context into atomic claims via the
+pinned structured provider; verification (M2-021) re-derives every citation edge
+from the evidence and persists claims with their edges before the run goes
+terminal. When no claim is supported (e.g. the provider refused), the run
+abstains — ``verifying -> abstained`` with a terminal ``run_abstained`` event —
+otherwise it succeeds (a contradicted claim is preserved and displayed, M2-022).
 """
 
 from __future__ import annotations
@@ -37,8 +40,9 @@ from __future__ import annotations
 import json
 import time
 import uuid
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Mapping
 from datetime import UTC, datetime
+from decimal import Decimal
 from typing import Annotated, Any
 
 import psycopg
@@ -52,6 +56,8 @@ from app.db import tenant_connection
 from app.dependencies import get_tenant_context
 from app.errors import api_error
 from fel_providers import EmbeddingProvider, MockEmbeddingProvider
+from fel_providers.interfaces import StructuredLLMProvider
+from fel_providers.mocks import MockStructuredLLMProvider
 from fel_retrieval import (
     LANE_ORDER,
     LaneCall,
@@ -67,13 +73,31 @@ from fel_retrieval import (
     plan_query,
     tables_lane,
 )
+from fel_retrieval.generation import (
+    ContextItem,
+    GeneratedClaim,
+    NumericTuple,
+    StructuredClaimGenerator,
+)
 from fel_retrieval.lanes import LaneCandidate
+from fel_retrieval.verification import (
+    CitationIntegrityError,
+    MockCitationVerifier,
+    should_abstain,
+    verify_claims,
+)
 
 router = APIRouter(prefix="/v1", tags=["retrieval"])
 
 # Planner identity persisted on every query/run. Kept in one place so the query
 # guard's run<->query planner-pin agreement always holds.
 PLANNER_VERSION = "synonym-planner/v1"
+
+# Generation identity persisted on every run (immutable lineage). Only the
+# deterministic mock structured provider is wired; any other pin fails closed at
+# generation time, so the persisted pin is always load-bearing.
+GENERATION_PROVIDER = "mock"
+GENERATION_MODEL = "mock-structured-v1"
 
 EVENT_SCHEMA_VERSION = "retrieval-event/v1"
 
@@ -118,6 +142,26 @@ def _resolve_embedding_provider(provider: str, model: str) -> EmbeddingProvider:
     if provider == "mock":
         return MockEmbeddingProvider(512)
     raise UnsupportedEmbeddingProvider(provider, model)
+
+
+class UnsupportedGenerationProvider(RuntimeError):
+    """The pinned structured-generation provider has no wired implementation.
+
+    Only the deterministic mock exists today; any other pin fails closed so a run
+    records a typed failure rather than silently generating with the wrong model.
+    """
+
+    def __init__(self, provider: str, model: str) -> None:
+        super().__init__(f"generation provider {provider!r} (model {model!r}) is not available")
+        self.provider = provider
+        self.model = model
+
+
+def _resolve_generation_provider(provider: str, model: str) -> StructuredLLMProvider:
+    """Resolve the run's pinned structured-generation provider (mock only today)."""
+    if provider == "mock":
+        return MockStructuredLLMProvider()
+    raise UnsupportedGenerationProvider(provider, model)
 
 
 class CreateQuery(BaseModel):
@@ -217,6 +261,15 @@ class _RunWriter:
         # column-scoped grant, and run_completed is already the latest event.
         self._conn.execute(
             "UPDATE retrieval_runs SET status = 'succeeded', finished_at = now(),"
+            " budget_usage = %s::jsonb, timings_ms = %s::jsonb WHERE id = %s",
+            (json.dumps(budget_usage), json.dumps(timings_ms), self._run_id),
+        )
+
+    def finish_abstained(self, *, budget_usage: dict[str, int], timings_ms: dict[str, int]) -> None:
+        # verifying -> abstained; run_abstained is already the latest event so the
+        # terminal-event guard passes. Only column-scoped grant fields are written.
+        self._conn.execute(
+            "UPDATE retrieval_runs SET status = 'abstained', finished_at = now(),"
             " budget_usage = %s::jsonb, timings_ms = %s::jsonb WHERE id = %s",
             (json.dumps(budget_usage), json.dumps(timings_ms), self._run_id),
         )
@@ -376,23 +429,61 @@ def _execute_pipeline(
     fusing_ms = int((time.monotonic() - t0) * 1000)
 
     writer.set_status("generating")
+    t0 = time.monotonic()
+    context = _load_context_items(conn, accepted)
+    generator = StructuredClaimGenerator(
+        _resolve_generation_provider(GENERATION_PROVIDER, GENERATION_MODEL)
+    )
+    generation = generator.generate(plan["variants"][0], context, as_of=plan["effective_as_of"])
+    for claim in generation.claims:
+        writer.emit(
+            "claim_generated",
+            {"ord": claim.ord, "citations": len(claim.citations)},
+        )
+    generating_ms = int((time.monotonic() - t0) * 1000)
+
     writer.set_status("verifying")
+    t0 = time.monotonic()
+    # Re-derive every citation edge and support status from the evidence; a
+    # dangling/cross-version citation raises CitationIntegrityError (fail closed).
+    claims = verify_claims(generation.claims, context, MockCitationVerifier())
+    for claim in claims:
+        for citation in claim.citations:
+            writer.emit(
+                "citation_verified",
+                {
+                    "claim_ord": claim.ord,
+                    "item_id": citation.item_id,
+                    "status": citation.status,
+                    "numeric_checks": citation.numeric_checks,
+                },
+            )
+    _persist_claims(conn, run_id=run_id, org_id=org_id, claims=claims)
+    verifying_ms = int((time.monotonic() - t0) * 1000)
 
     context_tokens = _context_tokens(conn, accepted)
     budget_usage = {
         "context_items": len(accepted),
         "context_tokens": context_tokens,
-        "input_tokens": 0,
-        "output_tokens": 0,
+        "input_tokens": generation.input_tokens,
+        "output_tokens": generation.output_tokens,
     }
     timings_ms = {
         "planning": planning_ms,
         "retrieving": retrieving_ms,
         "fusing": fusing_ms,
-        "total": planning_ms + retrieving_ms + fusing_ms,
+        "generating": generating_ms,
+        "verifying": verifying_ms,
+        "total": planning_ms + retrieving_ms + fusing_ms + generating_ms + verifying_ms,
     }
-    writer.emit("run_completed", {"status": "succeeded"})
-    writer.finish_succeeded(budget_usage=budget_usage, timings_ms=timings_ms)
+    # Missing supporting evidence yields abstention; a contradicted claim is
+    # preserved and displayed (the run still succeeds).
+    if should_abstain(claims):
+        writer.emit("run_abstained", {"reason": "insufficient_evidence"})
+        writer.finish_abstained(budget_usage=budget_usage, timings_ms=timings_ms)
+    else:
+        writer.emit("run_completed", {"status": "succeeded"})
+        writer.finish_succeeded(budget_usage=budget_usage, timings_ms=timings_ms)
 
 
 def _decision_dict(decision: Any, stamp: str) -> dict[str, Any]:
@@ -448,6 +539,137 @@ def _context_tokens(conn: psycopg.Connection[Any], item_ids: list[str]) -> int:
         (item_ids,),
     ).fetchone()
     return int(row["tokens"]) if row else 0
+
+
+def _load_context_items(conn: psycopg.Connection[Any], accepted: list[str]) -> list[ContextItem]:
+    """Load the accepted context items (rank-ordered) for claim generation.
+
+    Fact-kind items carry a checkable numeric tuple: ``value`` / ``unit`` /
+    ``scale`` from ``financial_facts``, and ``period`` from the denormalized
+    ``retrieval_items.period`` filter column (corpus period label; the facts
+    table stores period as typed date columns, not a text label). An incomplete
+    provenance tuple fails closed — never coerce NULL scale→0, drop numeric, or
+    invent empty unit/period.
+    """
+    if not accepted:
+        return []
+    rows = conn.execute(
+        "SELECT ri.id, ri.kind, ri.content, ri.source_span_id, ri.document_version_id,"
+        " ri.financial_fact_id, ri.period AS period, ff.value, ff.unit, ff.scale"
+        " FROM retrieval_items ri"
+        " LEFT JOIN financial_facts ff ON ff.id = ri.financial_fact_id"
+        " WHERE ri.id = ANY(%s::uuid[])",
+        (accepted,),
+    ).fetchall()
+    by_id = {str(row["id"]): row for row in rows}
+    items: list[ContextItem] = []
+    for item_id in accepted:
+        row = by_id.get(item_id)
+        if row is None:  # pragma: no cover - accepted ids are always persisted items
+            continue
+        numeric = _numeric_from_fact_row(row)
+        items.append(
+            ContextItem(
+                item_id=item_id,
+                kind=row["kind"],
+                text=row["content"],
+                source_span_id=str(row["source_span_id"]),
+                document_version_id=str(row["document_version_id"]),
+                financial_fact_id=(
+                    str(row["financial_fact_id"]) if row["financial_fact_id"] else None
+                ),
+                numeric=numeric,
+            )
+        )
+    return items
+
+
+def _numeric_from_fact_row(row: Mapping[str, Any]) -> NumericTuple | None:
+    """Build a NumericTuple from a joined retrieval_items/financial_facts row.
+
+    Returns ``None`` for non-fact items. Raises when a fact link is present but
+    any provenance field is missing — silent coercion is a fail-open hazard.
+    """
+    if row["financial_fact_id"] is None:
+        return None
+    value = row["value"]
+    unit = row["unit"]
+    period = row["period"]
+    scale = row["scale"]
+    missing = [
+        name
+        for name, raw in (
+            ("value", value),
+            ("unit", unit),
+            ("period", period),
+            ("scale", scale),
+        )
+        if raw is None or (isinstance(raw, str) and not raw)
+    ]
+    if missing:
+        raise ValueError(
+            f"incomplete fact provenance for item {row['id']}: missing {', '.join(missing)}"
+        )
+    return NumericTuple(
+        value=Decimal(value),
+        unit=str(unit),
+        period=str(period),
+        scale=int(scale),
+    )
+
+
+def _persist_claims(
+    conn: psycopg.Connection[Any],
+    *,
+    run_id: str,
+    org_id: str,
+    claims: tuple[GeneratedClaim, ...],
+) -> None:
+    """Persist claims and their citations while the run is still open.
+
+    Honours the 0003 guards: claims are run-children inserted before the terminal
+    status, and each citation targets an accepted candidate of the same run
+    (``fel_guard_citation``). Confidence is stored as a decimal string.
+    """
+    for claim in claims:
+        claim_id = str(uuid.uuid4())
+        confidence = f"{claim.confidence:f}" if claim.confidence is not None else None
+        conn.execute(
+            "INSERT INTO claims ("
+            " id, org_id, run_id, ord, text, status, confidence, calculation_lineage"
+            ") VALUES (%s, %s, %s, %s, %s, %s, %s, %s::jsonb)",
+            (
+                claim_id,
+                org_id,
+                run_id,
+                claim.ord,
+                claim.text,
+                claim.status,
+                confidence,
+                json.dumps(claim.calculation_lineage),
+            ),
+        )
+        for citation in claim.citations:
+            conn.execute(
+                "INSERT INTO citations ("
+                " id, org_id, run_id, claim_id, retrieval_item_id, source_span_id,"
+                " status, verifier, model, version, numeric_checks, rationale"
+                ") VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s)",
+                (
+                    str(uuid.uuid4()),
+                    org_id,
+                    run_id,
+                    claim_id,
+                    citation.item_id,
+                    citation.source_span_id,
+                    citation.status,
+                    citation.verifier,
+                    citation.model,
+                    citation.version,
+                    json.dumps(citation.numeric_checks),
+                    citation.rationale,
+                ),
+            )
 
 
 def _corpus_read_connection() -> psycopg.Connection[Any]:
@@ -546,8 +768,9 @@ def _insert_run(
     conn.execute(
         "INSERT INTO retrieval_runs ("
         " id, org_id, query_id, parent_run_id, mode, config_hash,"
-        " embedding_provider, embedding_model, planner_version"
-        ") VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+        " embedding_provider, embedding_model, generation_provider, generation_model,"
+        " planner_version"
+        ") VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
         (
             run_id,
             ctx.org_id,
@@ -557,6 +780,8 @@ def _insert_run(
             index["config_hash"],
             index["embedding_provider"],
             index["embedding_model"],
+            GENERATION_PROVIDER,
+            GENERATION_MODEL,
             PLANNER_VERSION,
         ),
     )
@@ -577,6 +802,8 @@ def _failure_envelope(exc: Exception) -> dict[str, str]:
         return {"code": "EMBEDDING_PROVIDER_UNAVAILABLE", "message": str(exc)}
     if isinstance(exc, LaneExecutionError):
         return {"code": "LANE_EXECUTION_FAILED", "message": str(exc)}
+    if isinstance(exc, CitationIntegrityError):
+        return {"code": exc.code, "message": str(exc)}
     return {"code": "PIPELINE_FAILED", "message": str(exc)}
 
 
@@ -836,6 +1063,16 @@ def get_retrieval_run(
             " ORDER BY rc.fused_rank, rc.retrieval_item_id::text",
             (str(run_id),),
         ).fetchall()
+        claim_rows = conn.execute(
+            "SELECT id, ord, text, status FROM claims WHERE run_id = %s ORDER BY ord",
+            (str(run_id),),
+        ).fetchall()
+        citation_rows = conn.execute(
+            "SELECT claim_id, retrieval_item_id, source_span_id, status, numeric_checks"
+            " FROM citations WHERE run_id = %s"
+            " ORDER BY claim_id::text, retrieval_item_id::text, source_span_id::text",
+            (str(run_id),),
+        ).fetchall()
 
     events = [_event_body(row, str(run_id)) for row in event_rows]
     decisions: list[dict[str, Any]] = []
@@ -862,7 +1099,7 @@ def get_retrieval_run(
         "events": events,
         "candidates": _group_candidates(candidate_rows),
         "decisions": decisions,
-        "claims": [],
+        "claims": _group_claims(claim_rows, citation_rows),
         "timings_ms": run["timings_ms"],
         "budget_usage": run["budget_usage"],
         "cost_usd": _format_cost(run["cost_usd"]),
@@ -919,6 +1156,35 @@ def _group_candidates(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
             )
         )
     return [grouped[item_id] for item_id in order]
+
+
+def _group_claims(
+    claim_rows: list[dict[str, Any]], citation_rows: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """Assemble the trace's retrievalClaim list (claims + their citation edges).
+
+    Ordered by claim ``ord`` with citations in a stable id order so the trace is
+    byte-stable across reads.
+    """
+    citations_by_claim: dict[str, list[dict[str, Any]]] = {}
+    for row in citation_rows:
+        citations_by_claim.setdefault(str(row["claim_id"]), []).append(
+            {
+                "item_id": str(row["retrieval_item_id"]),
+                "source_span_id": str(row["source_span_id"]),
+                "status": row["status"],
+                "numeric_checks": row["numeric_checks"] or {},
+            }
+        )
+    return [
+        {
+            "id": str(row["id"]),
+            "text": row["text"],
+            "status": row["status"],
+            "citations": citations_by_claim.get(str(row["id"]), []),
+        }
+        for row in claim_rows
+    ]
 
 
 def _sse_stream(ctx: TenantContext, run_id: str, last_event_id: int) -> Iterator[str]:
