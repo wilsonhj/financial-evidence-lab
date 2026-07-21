@@ -42,6 +42,24 @@ jobs:
       - run: pnpm run test
       - run: node scripts/audit-bulk.mjs
 
+  web-e2e:
+    name: Web — Playwright E2E (fixture mode)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Only chromium is configured in apps/web/playwright.config.ts. The
+      # config's webServer block runs `next build && next start` and drives the
+      # Observatory against fixture data (FEL_EVIDENCE_SOURCE=fixture) — no
+      # live backend, no network.
+      - run: pnpm --filter @fel/web exec playwright install --with-deps chromium
+      - run: pnpm --filter @fel/web run test:e2e
+
   python:
     name: Python — format, lint, typecheck, test, security
     runs-on: ubuntu-latest
