@@ -281,7 +281,7 @@ packages:
     depends_on: [M2-RETRIEVAL-BACKEND]
     team: retrieval
     branch: agent/m2-claims-verification
-    status: ready # post-#119; parallel with M2-OBSERVATORY-UI (disjoint paths); serialize vs blocked #108 (apps/api + evals overlap)
+    status: merged # PR #122 (2026-07-21); issue #58; follow-ups #132 (live 65-Q exit gate / M2-024) + #133 (numeric-tautology unit test) + #137 (fast-follow hardening)
     allowed_paths:
       - packages/retrieval/**
       - packages/retrieval-evals/**
@@ -293,7 +293,7 @@ packages:
     depends_on: [M2-RETRIEVAL-BACKEND, READER-CROSS-STACK] # contract inherited; #96 is reader gate
     team: experience
     branch: agent/m2-observatory-ui
-    status: ready # post-#119; parallel with M2-CLAIMS-VERIFICATION; serialize vs blocked #108 (apps/web overlap)
+    status: merged # PR #123 (2026-07-21); issue #59; follow-ups #131 (Playwright CI draft) + #134 (E2E in CI) + #135 (live SSE proxy, M3-deferred) + #136 (WCAG/keyboard audit) + #138 (web-layer client telemetry)
     allowed_paths: [apps/web/**, packages/ui/**]
 
   # M3 — extraction.
@@ -325,6 +325,7 @@ packages:
     depends_on: [M2-CLAIMS-VERIFICATION, M3-CONTRACT]
     team: extraction
     branch: agent/m3-extraction-core
+    status: ready # deps satisfied — #58 merged via #122, #101 merged via #112; serialize vs any contracts/migrations owner and blocked #108
     allowed_paths:
       - packages/ontology/**
       - packages/providers/**
