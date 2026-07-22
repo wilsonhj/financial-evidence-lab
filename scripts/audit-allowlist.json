@@ -1,14 +1,1 @@
-[
-  {
-    "id": "GHSA-v2hh-gcrm-f6hx",
-    "package": "fast-uri",
-    "reason": "Transitive dep (via fastify/ajv toolchain); no non-breaking fix at time of triage. Prefer a pnpm override to the fixed version — remove this entry once the override lands.",
-    "reviewBy": "2026-10-20"
-  },
-  {
-    "id": "GHSA-f88m-g3jw-g9cj",
-    "package": "sharp",
-    "reason": "Transitive dep (via next image optimization); upgrade requires a breaking major bump. Pinned pending upstream non-breaking fix.",
-    "reviewBy": "2026-10-20"
-  }
-]
+[]
