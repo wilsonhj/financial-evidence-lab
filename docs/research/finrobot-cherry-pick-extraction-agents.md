@@ -473,82 +473,35 @@ donor's own best idea (deterministic valuation engine) taken to its conclusion.
   `docs/` where CI's Python jobs would half-adopt it.
 - Prompt *content* for the five roles can mine the donor's `[ROLE]/[TASKS]/[OUTPUT]`
   template (§4.2), but every prompt lands as a versioned, hashed `RoleSpec.instructions`
-  recorded per step — never a module-level string edited in place (E10).
+  recorded per step — never a module-level string edited in place (E10). The port MUST be
+  clean-room: FinRobot is Apache-2.0, FEL is MIT. If any FinRobot source or prompt text is
+  copied verbatim during implementation, add Apache-2.0 attribution + a NOTICE /
+  third-party-licenses entry and confirm MIT/Apache-2.0 compatibility before commit.
 
-## 7. Review and verification trace
+## 7. Review and verification
 
-### First adversarial pass (rev 1 → rev 2): runner attack + fact-check
+This draft was hardened across an adversarial runner attack, a fact-check, and PR #117's
+independent three-stream review (contract/data integrity, security/reliability, CI/
+reproducibility). The durable decisions those passes produced live where they apply rather
+than being narrated here:
 
-**Runner-logic attack** (executed probes against the rev-1 skeleton + the repo mock):
-refusal-as-abstention (high; the verified refusal-as-injection hole) → typed
-`ProviderRefused`; `step_key` missing `run_id` and hashing messages only (high) → full
-4-tuple over the full request; budget precheck-only semantics (medium-high) → reservation +
-wall-clock cap + post-call hard stop; dishonest repair turn (medium) → failed output shown
-as an assistant turn; delimiter escape / forgeable span markers (medium) → sanitization +
-span-id validation; untyped provider exceptions and sentinel leaks (low-medium) → wrapped
-and separated. Probes that did not land: no repair-message accumulation, correct `missing`
-scoping, exact two-call ceiling, Decimal end-to-end, frozen `temperature` default,
-`RoleSpec` immutability.
+- A provider *refusal* is a typed failure, never an abstention — conflating them turns "make
+  the model refuse" into a success-reporting suppression vector (§3 E2, `ProviderRefused`).
+- The root input hash is the replay anchor persisted on every attempt, keeping a repaired
+  success addressable under `0004`'s success index; per-attempt request hashes are event
+  metadata (§5).
+- The run pins BOTH provider and model, so both enter request identity and are enforced
+  against each response (§5).
+- Response provenance (id/provider/model/usage) is captured before `budget.record` can raise,
+  so a budget-crossing call still persists its metadata (§5 code).
+- DB-atomic budget reservation and cancellable timeouts are mandatory real-port requirements
+  the in-process sketch cannot demonstrate (§6).
 
-**Fact-check:** 26 claims verified exact (donor inventory and behaviors, all cited M3
-requirement IDs, ADR-0007 caps, `0004` CHECK ranges, provider interface field names,
-governance chain). Corrections folded in: E6's donor description (the donor *does* use a
-system/user split; the real gap is untrusted-data delimiting), guidance-row mapping
-attribution, `risks` → post-MVP risk detector remap, E5/E10 precision.
-
-### External PR review pass (rev 2 → rev 3)
-
-An independent three-stream review on PR #117 (contract/data integrity, security/
-reliability, CI/reproducibility) found rev-2 defects that this revision corrects — each
-verified against the repo before fixing:
-
-- **Frozen-schema fidelity (high, confirmed):** `extraction-payload.schema.json` is a root
-  `oneOf` (7 variants) with no root `required`, so rev 2's required-keys validation was
-  vacuous against it and `{"proposals": []}` matched no variant. Fixed via the explicit
-  worker-internal envelope + full-validator requirement (§5) and the corrected contract
-  boundary statement (§6).
-- **Replay addressability (high, confirmed):** `0004`'s success index keys on the stored
-  per-attempt `input_hash`; rev 2's per-attempt input hashes would have made a repaired
-  success unfindable from the original inputs. Fixed: root input hash is the persisted
-  replay anchor on every attempt; per-attempt request hashes become event metadata (§5).
-- **Model pin absent from identity/enforcement (medium, confirmed):** `model_ref` now part
-  of the request hash and asserted against each response.
-- **Provenance loss on budget-crossing calls (medium, confirmed):** response id/provider/
-  model are captured before `budget.record` can raise.
-- **Budget atomicity/timeout (high, accepted as real-port requirements):** an in-process
-  sketch cannot demonstrate DB-atomic reservation or cancellable timeouts; §6 now lists
-  them as mandatory port requirements rather than implying the sketch suffices.
-- **Process items:** FinRobot pinned to commit `297a8d2` with Apache-2.0 provenance (§1);
-  reproduction appendix added (§8); executable harness deferred to the M3 package's own
-  tests (§6); research-issue linkage and branch refresh handled at the PR level.
-
-### Second PR re-review (rev 3 → rev 4)
-
-A re-review of the rev-3 head flagged one item the first pass had only half-closed:
-
-- **Run-pinned provider absent from identity/enforcement (confirmed):** rev 3 put
-  `model_ref` in the request hash and asserted it, but `0004` pins BOTH `provider` and
-  `model` on `extraction_runs`. Fixed: `_request_hash` now includes `provider_ref`, and the
-  runner rejects any response whose `provider` **or** `model` differs from the run pin
-  (`ProviderError`). Prior blockers 1–2 (schema/ADR boundary, replay root hash) were
-  confirmed fixed; the budget-atomicity item stands as a documented real-port requirement.
-
-### Executed verification
-
-The §5 code blocks were extracted verbatim and run against the **repo's real**
-`fel_providers.mocks.MockStructuredLLMProvider`; paths the fixed mock cannot produce
-(valid empty-envelope abstention, provider exception, repair-turn inspection, model-pin
-violation) were exercised with minimal fakes built on the same frozen
-`StructuredModelResult` dataclass. Verified: typed happy path with usage recording;
-`step_key` stability on identical inputs and change on `run_id`/`workflow_version`/schema/
-model-pin; the exact two-attempt boundary (initial + one repair, then `SchemaInvalid`);
-refusal → `ProviderRefused` (failure semantics, budget still charged); budget precheck
-refusing at call caps and output-token reservation; wall-clock expiry; model-pin
-enforcement; and delimiter sanitization. Honest constraint: the repo mock returns a fixed
-payload, so the happy path is exercisable only with schemas whose required keys are a
-subset of the mock's; realistic schemas exercise the repair-then-fail path. Item-level
-`oneOf` validation is NOT exercised by the skeleton at all (by design — see §5/§6); it is
-a real-port requirement.
+The §5 blocks run against the repo's `MockStructuredLLMProvider` but are not a committed test
+target: the executable harness belongs in the M3 package's own tests (§6), reproducible
+standalone via §8. Item-level `oneOf` validation of proposal items is a real-port requirement
+the skeleton does not exercise by design (§5/§6). This doc makes no standing "all checks pass"
+claim — the authoritative checks are those deferred package tests.
 
 ## 8. Reproduction
 

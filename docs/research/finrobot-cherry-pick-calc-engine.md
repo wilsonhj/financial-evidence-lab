@@ -3,10 +3,12 @@
 **Status:** Proposal / research draft (NOT an accepted ADR)
 **Date:** 2026-07-20 (rev 6 — identity encoding decision: out-of-alphabet None marker in sketch; typed canonical JSON mandatory for real port)
 **Author:** multi-agent analysis session (`claude/finrobot-multi-agent-analysis-fd6byx`)
+**Companion:** `finrobot-cherry-pick-extraction-agents.md` (same treatment for the M3 extraction roles).
 **Scope guard:** Illustrative code only — no source is added under `packages/calculation-engine/**`.
-`packages/calculation-engine/**` is the `M4-MODEL-CALC` package's `allowed_path`
-(`docs/handoff/workstreams.yaml`; tasks T0401–T0410, calc engine per T0403), **not** an
-AGENTS.md shared path. So the engine's *internal* source lands as normal work under the M4
+`packages/calculation-engine/**` is an `M4-MODEL-CALC` `allowed_path`
+(`docs/handoff/workstreams.yaml`; tasks {T0401, T0402, T0403, T0409, T0410}, calc engine per
+T0403; the path is shared with the sibling `M4-FACT-SCENARIOS` workstream, not exclusive to
+`M4-MODEL-CALC`), **not** an AGENTS.md shared path. So the engine's *internal* source lands as normal work under the M4
 issue. An accepted ADR + `contract-change` label is required only when a **shared path** is
 touched: publishing the engine's public types into `packages/contracts/`, adding a migration
 under `db/migrations/`, or — for §8 of this doc — amending `specs/001-financial-evidence-lab/`
@@ -82,7 +84,7 @@ arithmetic in `next_quarter` (rev 2 cloned the prior period's *day count*, drift
 days/year — measured, not hypothetical); period-consistency and quarterly-unit enforcement
 between inputs; slug-validated lineage ids + UTC-normalized timestamps so the content address
 is injective and canonical (the house reason `fel_retrieval/ids.py` can join with `|` is that
-its components are UUIDs/hashes — free strings forge delimiters); **exactly-one** lineage field
+its components are delimiter-free tokens — free strings forge delimiters); **exactly-one** lineage field
 per provenance kind, selected by kind rather than `or`-chains; a `measure` axis on `Unit`
 (ratio ≠ count; blocks the donor's 100× percent bug, G11); finiteness guards (NaN/Inf
 `Decimal`s otherwise slip through sign checks); `AssumptionSet` invariants enforced;
@@ -114,8 +116,8 @@ from enum import Enum
 MONEY_SCALE = Decimal("0.01")
 
 # Lineage ids and formula versions must be slugs/UUIDs so joined identity keys are injective.
-# This is WHY fel_retrieval/ids.py can join with "|": its components are UUIDs/hashes and
-# cannot contain delimiters. Free-form ids would let "a;b" forge a boundary.
+# This is WHY fel_retrieval/ids.py can join with "|": its components are delimiter-free
+# tokens (slugs/UUIDs) and cannot contain delimiters. Free-form ids would let "a;b" forge a boundary.
 # Keep "-" in the alphabet: UUID lineage ids are hyphenated. Do NOT "fix" None-collisions
 # by banning "-" from SAFE_ID — encode absent Unit fields with a marker OUTSIDE this set.
 SAFE_ID = re.compile(r"^[A-Za-z0-9._@-]+$")
@@ -353,7 +355,8 @@ from .models import (
     MONEY_SCALE, RATIO, CalcResult, Provenance, Quantity, Range,
 )
 
-# For DERIVED inputs the caller-claimed as_of is NOT trusted (Constitution I): availability
+# For DERIVED inputs the caller-claimed as_of is NOT trusted — an elaboration of Constitution
+# Principle I (no look-ahead), not a verbatim clause: availability
 # must be resolved from the immutable parents. The leaf API takes an injected resolver that
 # maps a DERIVED quantity to its parents' effective availability under the run's tenant/
 # corpus pin; the §5 graph evaluator supplies this from in-graph parents by construction.
@@ -465,7 +468,10 @@ from in-graph parents, never accepted from outside it.
 absent `Unit` axes) because `SAFE_ID` must keep `"-"` for UUID lineage ids — banning the
 hyphen would break `source_span_id` / `assumption_id` validation. Production `result_id`
 (Option C) MUST hash typed canonical JSON instead of joining strings; the illustrative
-`ids.py` fence is not the M4 contract.
+`ids.py` fence is not the M4 contract. (Option B — length-prefixed TLV encoding of each
+component, where every field is written as its byte length followed by its bytes — also
+removes delimiter-forgery risk, but it is hand-rolled and less legible than JSON, so Option C
+is preferred over it.)
 
 ## 5. M4 adaptation: a driver-graph evaluator, not a function library
 
@@ -508,6 +514,10 @@ via spec §10.1 and the constitution's approved-libraries constraint). A flat li
   period / provenance rejection tests. At M5, rolling-origin backtests score `Range` coverage
   against spec §19.6's release gate: empirical coverage of the nominal 80% interval must land
   in 75–85%.
+- **License hygiene:** the port MUST be clean-room — FinRobot is Apache-2.0, FEL is MIT. If
+  any FinRobot source or prompt text is copied verbatim during implementation, add Apache-2.0
+  attribution + a NOTICE / third-party-licenses entry and confirm MIT/Apache-2.0 compatibility
+  before commit.
 
 ## 7. Where the "agent-team" fits (M3/M5 orchestration)
 
@@ -568,115 +578,30 @@ multiple → `NaN` propagated into bands; `_get_metric` strips `%` without divid
    gates; if accepted, sequence it after M5 since it reuses the §5 evaluator unchanged.
 5. Treat FinRobot as a *functional sketch to be rewritten under FEL invariants*, never a drop-in.
 
-## 10. Review and verification trace
+## 10. Review and verification
 
-### First pass (rev 1 → rev 2): three-lens agent team
+This draft was hardened across several adversarial and PR-review passes (a three-lens agent
+team, two skeleton attacks, and PR #117's independent review streams). The durable design
+decisions those passes produced are recorded where they apply rather than narrated here:
 
-Lenses: FEL-invariant compliance, financial-math correctness, house-style/governance.
-Blockers folded in: DERIVED lineage validated and propagated; `growth_sensitivity` promoted
-from bare magic `Decimal` to a sourced `Quantity` inside `inputs`; Decimal canonicalization in
-the content address; money rounding policy; structural unit checks; `Range` monotonicity;
-negative-band rejection; governance reading corrected (`packages/calculation-engine/**` is
-M4's `allowed_path`, not a shared path); package renamed `fel_calculation_engine`; `ids.py`
-split out; football-field re-scoped to P1 (it is not in spec §8.5's nine-item visualization
-list); §11.3/§11.4 reconciliation note added. Rev 2 also added `FiscalPeriod` (G10),
-structured `Unit`, the §5 graph evaluator + `AssumptionSet`, and §6/§8.
+- `next_quarter` uses calendar-**month** arithmetic, not day-count cloning, so it does not
+  drift ~5 days/year (§4 code).
+- `SAFE_ID` slug validation + exactly-one-lineage selection by kind keep the content address
+  injective, so §5's memoization cannot return the wrong financial result as a "cache hit"
+  (§4).
+- The `measure` axis makes a ratio, a count, and an un-normalized percent structurally
+  distinct, closing the donor's 100× bug (G11, §3/§4).
+- Absent `Unit` axes are encoded with a NUL marker **outside** the `SAFE_ID` alphabet so
+  `Unit(None,…)` cannot collide with `Unit("-",…)`; production `result_id` (Option C) must
+  hash typed canonical JSON regardless (§4 "Identity encoding").
+- A `DERIVED` input's claimed `as_of` is never trusted — availability is resolved from
+  immutable parents via an injected resolver that fails closed without one (G5; §4
+  "Derived-lineage cutoff resolution").
 
-### Second adversarial pass (rev 2 → rev 3): skeleton attack + repo fact-check
-
-Skeleton findings fixed in §4:
-
-- **`next_quarter` day-count cloning (major):** rev 2 cloned the prior period's day span,
-  drifting ~5 days/year even for plain calendar quarters — the fiscal-calendar caveat did not
-  cover it. Replaced with month arithmetic; caveat retained for issuer calendars.
-- **No period semantics between inputs (major):** an annual growth rate applied unchecked to a
-  quarterly base, and `per_period` was never required to be `"quarter"` — reopening the G10
-  metric-name trap. Added period-consistency and quarterly-unit checks.
-- **Forgeable delimiters in the content address (major):** free-string ids could embed
-  `;`/`|`/`=` and collide distinct input sets into one `result_id`, silently poisoning §5's
-  memoization. Fixed with `SAFE_ID` slug validation (the house reason `fel_retrieval` joins
-  are safe: components are UUIDs/hashes).
-- **Non-exclusive lineage fields (major):** "required iff" was enforced only one way; a stray
-  extra id made the `or`-chains put the *wrong* id into lineage and the content address.
-  Exclusivity now enforced both ways; selection is by kind via `lineage_tag()`.
-- **Dimensionless conflation (major, promoted to gap G11):** a ratio, a count, and an
-  un-normalized percent were structurally identical — the donor's 100× bug reproduced. Added
-  the `measure` axis; `RATIO` required for growth inputs.
-- **Minors/nits:** UTC-normalized timestamp keys (offset-equivalent instants now hash
-  identically); currency-aware money-scale + edge-quantization policy documented; non-finite
-  `Decimal` rejection; `AssumptionSet` invariants enforced (sorted/unique/self-keyed
-  ASSUMPTION entries); input-provenance comments now enforced; `ids_of` deduplicates and
-  sorts; `CalcResult` self-validates (`value == band.mid`); `-0` canonicalization.
-
-Fact-check corrections applied: worker paths gained the `ingestion/` segment (§8); the
-Constitution Principle II quote restored to source sentence order (§1); React Flow attributed
-to spec §10.1 + constitution rather than §8 (§5); ADR-0007 cites now say "decision 5/7"
-(§7); property/golden testing culture cited to spec §20.1 with Hypothesis flagged as proposed
-(§6); §19.6 interval gate stated precisely (empirical coverage of the nominal 80% interval,
-75–85%). Verified accurate and unchanged: v0.4.0 → v0.5.0 additive-minor claim, ADR-0007 caps,
-shared-path governance, milestone numbering (M4-MODEL-CALC tasks T0401–T0410, calc engine
-T0403; M5 = Forecast Lab), and the absence of a football-field chart from spec §8.5.
-
-### External PR review pass (rev 3 → rev 4)
-
-An independent three-stream review on PR #117 found two genuine rev-3 defects, both
-verified against the code before fixing:
-
-- **Unit-key collision breaking id injectivity (high, confirmed by probe):** rev 3
-  validated `Unit` fields only as non-empty, so `Unit(None, "A/B", "C")` and
-  `Unit(None, "A", "B/C")` both keyed to `-/A/B/C` — a collision in the content address
-  that backs memoization, i.e. the wrong financial result returned as a "cache hit". Fixed:
-  every `Unit` component must match the same delimiter-free token charset as lineage ids,
-  input names entering `result_id` are validated too, and the doc now requires adversarial
-  collision tests (with typed-canonical-JSON hashing noted as the sturdier alternative).
-- **Derived-lineage cutoff bypass (high, accepted as real-port requirement):** a `DERIVED`
-  quantity's caller-claimed `as_of` could relabel post-cutoff data as available. The sketch
-  cannot resolve parents without a store; the §4 note now makes parent resolution under the
-  run's tenant/corpus pin — with availability derived from resolved parents, never
-  claimed — a mandatory port requirement, and observes the §5 evaluator dissolves the issue
-  by construction.
-- **Provenance/process items:** FinRobot pinned to commit `297a8d2` with Apache-2.0 license
-  provenance (§1); reproduction appendix added (§11).
-
-### Second PR re-review (rev 4 → rev 5)
-
-A re-review of the rev-4 head found both high-severity fixes were only partially closed:
-
-- **Unit-key None-vs-sentinel collision (confirmed):** rev 4 closed the `/`-collision but
-  still encoded `None` as `"-"`, and `SAFE_ID` admits `"-"`, so `Unit(None,None,None)`
-  collided with `Unit("-","-","-")` — the same identity-corruption class. Fixed: absent
-  fields are encoded with a marker byte OUTSIDE the `SAFE_ID` alphabet (NUL), which a
-  present, validated token can never contain; collision tests extended to None-vs-sentinel.
-- **Derived cutoff still trusted in the fenced sketch (confirmed):** rev 4 made parent
-  resolution a §4 prose requirement but the *copy-pasteable* `_require_available` still
-  trusted a `DERIVED` input's own `as_of` while its comment claimed "closes G5". Fixed in
-  the code itself: the leaf API takes an injected `resolve_availability` resolver, a
-  `DERIVED` input with no resolver fails closed, and its claimed `as_of` is never used for
-  the cutoff; the "closes G5" comment is reworded accordingly.
-
-### Identity encoding decision (rev 5 → rev 6)
-
-Chose **Option A in the sketch + Option C as the mandatory real-port rule** (not length-
-prefix TLV):
-
-- **Why not ban `"-"` from `SAFE_ID`:** the same charset validates UUID lineage ids, which
-  are hyphenated. Narrowing the alphabet would reject valid `source_span_id` values.
-- **Why NUL for absent `Unit` axes (A):** sentinel ∉ token alphabet ⇒
-  `Unit(None,…)` cannot collide with `Unit("-",…)`; keeps the retrieval-style join readable
-  for the research fence.
-- **Why typed canonical JSON is MUST for M4 (C):** production identity must not depend on
-  delimiter folklore; JSON `null` is the typed stand-in for absent axes, and enums lock
-  `per_period` / `measure`. Adversarial collision tests remain required either way.
-
-### Executed verification
-
-The §4 code blocks were extracted verbatim into a standalone package and executed. All checks
-pass: exact decimal arithmetic to the cent; band monotonicity; `result_id` stable under
-Decimal re-scaling and changed by any band-affecting input; DERIVED lineage propagation; and
-every fail-closed guard (float and non-finite rejection, temporal cutoff, missing/extra
-lineage, naive datetimes, unit and period mismatches, negative sensitivity, negative low band,
-inverted periods, unsafe ids). The rev-2 `next_quarter` drift was *measured* by this suite
-(Q1 2026 + 4 quarters → Dec 27) before being fixed in rev 3.
+The §4 blocks are illustrative, not a committed test target: their executable verification
+belongs in the M4 package's golden/property tests (§6) and can be reproduced standalone via
+§11. This doc makes no standing "all checks pass" claim — the authoritative checks are those
+deferred package tests.
 
 ## 11. Reproduction
 
