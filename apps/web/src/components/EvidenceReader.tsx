@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 
 import type {
@@ -40,6 +40,11 @@ export interface EvidenceReaderProps {
   documentIdBySpanId: Record<string, string>;
   /** Spans excluded fail-closed by citation verification. */
   integrityFailures: CitationIntegrityFailure[];
+  /**
+   * Span to select and scroll to on mount (from an Observatory candidate deep
+   * link, `?span=`). Ignored unless it belongs to this document.
+   */
+  initialSpanId?: string | null;
 }
 
 export function EvidenceReader({
@@ -51,6 +56,7 @@ export function EvidenceReader({
   documentIdBySectionId,
   documentIdBySpanId,
   integrityFailures,
+  initialSpanId = null,
 }: EvidenceReaderProps) {
   const document = documents.find((doc) => doc.id === documentId);
   const ownSections = useMemo(
@@ -88,9 +94,26 @@ export function EvidenceReader({
     [facts, documentIdBySpanId, documentId],
   );
 
-  const [activeSectionId, setActiveSectionId] = useState<string | null>(ownSections[0]?.id ?? null);
-  const [selectedSpanId, setSelectedSpanId] = useState<string | null>(null);
+  // Only honour a deep-linked span that belongs to this document; a foreign
+  // span id from the URL must never select or scroll cross-document evidence.
+  const deepLinkedSpanId =
+    initialSpanId && documentIdBySpanId[initialSpanId] === documentId ? initialSpanId : null;
+  const deepLinkedSectionId = deepLinkedSpanId
+    ? (spansById.get(deepLinkedSpanId)?.span.section_id ?? null)
+    : null;
+
+  const [activeSectionId, setActiveSectionId] = useState<string | null>(
+    deepLinkedSectionId ?? ownSections[0]?.id ?? null,
+  );
+  const [selectedSpanId, setSelectedSpanId] = useState<string | null>(deepLinkedSpanId);
   const [notes, setNotes] = useState(emptyNotesState);
+
+  useEffect(() => {
+    if (deepLinkedSectionId) {
+      globalThis.document?.getElementById(`section-${deepLinkedSectionId}`)?.scrollIntoView();
+    }
+    // Mount-only: the deep link is an initial position, not a live control.
+  }, []);
 
   const handleSelectSection = (sectionId: string) => {
     setActiveSectionId(sectionId);

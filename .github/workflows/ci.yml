@@ -42,6 +42,24 @@ jobs:
       - run: pnpm run test
       - run: node scripts/audit-bulk.mjs
 
+  web-e2e:
+    name: Web — Playwright E2E (fixture mode)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Only chromium is configured in apps/web/playwright.config.ts. The
+      # config's webServer block runs `next build && next start` and drives the
+      # Observatory against fixture data (FEL_EVIDENCE_SOURCE=fixture) — no
+      # live backend, no network.
+      - run: pnpm --filter @fel/web exec playwright install --with-deps chromium
+      - run: pnpm --filter @fel/web run test:e2e
+
   python:
     name: Python — format, lint, typecheck, test, security
     runs-on: ubuntu-latest
@@ -78,11 +96,11 @@ jobs:
           for f in db/migrations/*.sql; do
             PGPASSWORD=fel-ci-only psql --set ON_ERROR_STOP=1 -h localhost -U fel -d fel_test -f "$f"
           done
-      - run: black --check apps workers evals packages/providers packages/retrieval
-      - run: ruff check apps workers evals packages/providers packages/retrieval
-      - run: mypy apps/api/app workers/src evals/graders packages/providers/fel_providers packages/retrieval/fel_retrieval
+      - run: black --check apps workers evals packages/providers packages/retrieval packages/retrieval-evals
+      - run: ruff check apps workers evals packages/providers packages/retrieval packages/retrieval-evals
+      - run: mypy apps/api/app workers/src evals/graders packages/providers/fel_providers packages/retrieval/fel_retrieval packages/retrieval-evals/fel_retrieval_evals
       - run: pytest
-      - run: bandit -q -r apps workers evals packages/providers packages/retrieval -c pyproject.toml
+      - run: bandit -q -r apps workers evals packages/providers packages/retrieval packages/retrieval-evals -c pyproject.toml
       - run: pip-audit -r requirements-dev.txt
 
   database:

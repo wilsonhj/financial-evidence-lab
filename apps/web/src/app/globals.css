@@ -449,3 +449,176 @@ a {
     scroll-behavior: auto !important;
   }
 }
+
+/* Search Observatory */
+.obs-trace {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.obs-status {
+  margin: 0;
+}
+
+.obs-question {
+  font-weight: 600;
+  font-size: 1.1rem;
+}
+
+.obs-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.5rem 1.5rem;
+  margin: 0.5rem 0;
+}
+
+.obs-meta div {
+  display: flex;
+  flex-direction: column;
+}
+
+.obs-meta dt {
+  font-size: 0.8rem;
+  color: var(--color-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.obs-meta dd {
+  margin: 0;
+  word-break: break-word;
+}
+
+.obs-variants,
+.obs-timeline,
+.obs-rejected,
+.obs-claims,
+.obs-citations {
+  margin: 0.25rem 0;
+  padding-left: 1.25rem;
+}
+
+.obs-lane-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
+.obs-lane {
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.obs-lane h3 {
+  margin: 0 0 0.35rem;
+}
+
+.obs-empty,
+.obs-muted {
+  color: var(--color-muted);
+  font-size: 0.9rem;
+}
+
+.obs-claim {
+  margin-bottom: 0.75rem;
+}
+
+.obs-claim-text {
+  margin: 0 0 0.25rem;
+}
+
+.candidate-ref {
+  font-size: 0.9rem;
+}
+
+/* Observatory controls, feedback, comparison and replay */
+.obs-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  max-width: 640px;
+  margin: 1rem 0;
+  padding: 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+}
+
+.obs-controls label {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.obs-controls input[type="text"],
+.obs-controls input[type="number"],
+.obs-controls input[type="datetime-local"],
+.obs-controls textarea {
+  width: 100%;
+  padding: 0.4rem;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  font: inherit;
+}
+
+.obs-controls fieldset {
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.obs-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-weight: 400;
+}
+
+.obs-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.obs-feedback {
+  display: inline-flex;
+  gap: 0.4rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.obs-feedback select,
+.obs-feedback input {
+  font: inherit;
+  padding: 0.25rem;
+}
+
+.obs-feedback-list {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.obs-feedback-list li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.obs-changed th,
+.obs-changed td {
+  background: var(--color-highlight-bg);
+}
+
+.obs-replay {
+  max-height: 320px;
+  overflow-y: auto;
+}
