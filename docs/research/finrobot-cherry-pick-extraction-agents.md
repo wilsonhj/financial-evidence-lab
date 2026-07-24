@@ -162,15 +162,20 @@ MAX_ATTEMPTS = 2   # M3-WF-004: one initial call + one schema-repair call, never
 
 UNTRUSTED_OPEN = "<untrusted-evidence>"
 UNTRUSTED_CLOSE = "</untrusted-evidence>"
-# Span ids are typed uuid in migration 0004; validate before interpolation so evidence
-# cannot forge "[span:...]" markers or boundary tags through a malicious id.
+# Span ids are typed uuid in migration 0004; validate before interpolation so a malicious id
+# cannot forge "[span:...]" markers or boundary tags. Validating the id is necessary but not
+# sufficient: the untrusted evidence *text* can itself embed a fabricated "[span:...]"
+# substring, so _sanitize strips span markers as well as the boundary tags.
 SPAN_ID = re.compile(r"^[A-Za-z0-9-]{8,64}$")
+_SPAN_MARKER = re.compile(r"\[span:[^\]]*\]")
 
 
 def _sanitize(text: str) -> str:
-    """Strip forgeable boundary sequences from untrusted evidence text. A real port may
-    additionally use a per-call random boundary nonce."""
-    return text.replace(UNTRUSTED_CLOSE, "").replace(UNTRUSTED_OPEN, "")
+    """Strip forgeable boundary sequences from untrusted evidence text: the untrusted-block
+    delimiters AND any embedded "[span:...]" marker (which would otherwise let evidence text
+    forge a citation boundary). A real port may additionally use a per-call random nonce."""
+    stripped = text.replace(UNTRUSTED_CLOSE, "").replace(UNTRUSTED_OPEN, "")
+    return _SPAN_MARKER.sub("", stripped)
 
 
 @dataclass(frozen=True)
@@ -292,8 +297,8 @@ class RunBudget:
     def record(self, result: StructuredModelResult) -> None:
         """Post-call hard stop: input size and cost are unknowable pre-call, so a single
         call may overshoot — detected, recorded, and terminal, not silent. Callers MUST
-        capture response provenance (id/provider/model/usage) BEFORE calling record, so a
-        budget-crossing call's metadata still persists to its step row."""
+        capture response provenance (id/provider/model/usage) BEFORE calling record so it is
+        known if record raises; persisting it on that raise path is the caller's real-port job."""
         self.calls_used += 1
         self.input_tokens_used += result.input_tokens
         self.output_tokens_used += result.output_tokens
@@ -392,8 +397,10 @@ def run_model_step(
             result = provider.generate_structured(request)
         except Exception as exc:                                   # typed, metadata-preserving
             raise ProviderError(f"provider raised on attempt {attempt}: {exc}") from exc
-        # Capture provenance BEFORE budget.record — record may raise on a cap-crossing
-        # call, and the step row still needs this call's id/provider/model/usage.
+        # Compute provenance BEFORE budget.record — record may raise on a cap-crossing call.
+        # This ordering only guarantees id/provider/model/usage are known before the raise;
+        # PERSISTING them on the raise path (attach to the exception, or write the step row
+        # before raising) is a real-port requirement — this skeleton omits persistence (§6).
         prov, model = result.provider, result.model
         response_ids.append(result.response_id)
         budget.record(result)
@@ -493,7 +500,8 @@ than being narrated here:
 - The run pins BOTH provider and model, so both enter request identity and are enforced
   against each response (§5).
 - Response provenance (id/provider/model/usage) is captured before `budget.record` can raise,
-  so a budget-crossing call still persists its metadata (§5 code).
+  so it is known on the raise path (§5 code); persisting it there is a real-port requirement,
+  since the skeleton itself omits persistence (§6).
 - DB-atomic budget reservation and cancellable timeouts are mandatory real-port requirements
   the in-process sketch cannot demonstrate (§6).
 
@@ -518,6 +526,12 @@ From the repo root, with no dependencies beyond the standard library and the in-
    (two-attempt boundary → `SchemaInvalid` after exactly 2 calls), evidence text containing
    `REFUSE` (→ `ProviderRefused`), and `RunBudget` variants (call caps 0/1, small
    `max_output_tokens`, `max_wall_seconds=0`).
-4. Expected: all fail-closed guards raise their typed exceptions; identical inputs
-   reproduce identical `step_key`s; changing `run_id`, `workflow_version`, the schema, or
-   `model_ref` changes identity.
+   To exercise pin enforcement — which the stock mock cannot, since it always returns
+   `provider="mock"`/`model="mock-structured-v1"` matching the pin — also drive a stub that
+   returns a mismatched provider/model, e.g. a `StructuredModelResult` with
+   `provider="other"` (or `model="mock-structured-v2"`) against `provider_ref="mock"`/
+   `model_ref="mock-structured-v1"`.
+4. Expected: all fail-closed guards raise their typed exceptions — including the mismatched
+   stub raising `ProviderError` on the pin check; identical inputs reproduce identical
+   `step_key`s; changing `run_id`, `workflow_version`, the schema, or `model_ref` changes
+   identity.
