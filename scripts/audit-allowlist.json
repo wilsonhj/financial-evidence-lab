@@ -1,1 +1,8 @@
-[]
+[
+  {
+    "id": "GHSA-mh99-v99m-4gvg",
+    "package": "brace-expansion",
+    "reason": "brace-expansion@2.1.2 via minimatch@5.1.9 <- @redocly/openapi-core@1.34.17 <- openapi-typescript <- @fel/contracts (devDependency, build-time OpenAPI codegen only; never shipped). The 2.x line has no patched release - maintenance-v2 tops out at the vulnerable 2.1.2, and the fix exists only in 5.0.8. minimatch@5.1.9 declares ^2.0.1 and breaks outright on 5.x (brace-expansion moved from a function export to an object export after 2.x, so it throws 'TypeError: expand is not a function'), hence it cannot be overridden forward. The advisory is a DoS requiring attacker-controlled brace patterns; codegen only ever expands developer-authored spec globs, so it is not reachable here. The fixable instance (minimatch@10.2.5, which declares ^5.0.5) is pinned forward to 5.0.8 by override instead. NOTE: this suppression is package-wide, not version-scoped, so it will also mask any future GHSA-mh99-v99m-4gvg finding against a 5.x resolution. Clear it by upgrading openapi-typescript/@redocly/openapi-core past minimatch@5.",
+    "reviewBy": "2026-10-24"
+  }
+]
