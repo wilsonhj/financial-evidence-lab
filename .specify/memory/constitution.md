@@ -1,12 +1,13 @@
 <!--
 Sync Impact Report
-- Version change: 1.0.0 -> 1.1.0
-- Modified principles: Simplicity and Provider Isolation (stack now referenced via ADR-0002, not restated); Test-First Quality Gates (gate reference updated to the canonical feature-directory spec)
-- Modified sections: Approved Technical Constraints (now references docs/decisions/ADR-0002-mvp-stack.md; deck.gl removed with the deferred Embedding Atlas); Development and Review Workflow (specs/001-financial-evidence-lab/ is canonical; root SPEC.md/PLAN.md/TASKS.md are pointer stubs, no mirroring)
-- Added principles: none (all five principle names retained)
+- Version change: 1.1.0 -> 1.2.0
+- Modified principles: none (all five principle names retained)
+- Modified sections: Development and Review Workflow (canonical product specs vs additive milestone Spec Kit packages; handoff checklist authority when tasks.md lags)
+- Added principles: none
 - Removed sections: none
 - Templates: ✅ .specify/templates/plan-template.md; ✅ .specify/templates/spec-template.md; ✅ .specify/templates/tasks-template.md
 - Follow-up TODOs: none
+- Prior (1.1.0): Simplicity and Provider Isolation (stack via ADR-0002); Test-First gate path; Approved Technical Constraints; specs/001 canonical vs root stubs
 -->
 # Financial Evidence Lab Constitution
 
@@ -36,7 +37,8 @@ The MVP MUST use the smallest architecture that satisfies measured requirements.
 
 ## Development and Review Workflow
 
-- The active Spec Kit feature directory, `specs/001-financial-evidence-lab/`, holds the sole canonical `spec.md`, `plan.md`, and `tasks.md`. Root `SPEC.md`, `PLAN.md`, and `TASKS.md` are pointer stubs only; nothing is mirrored.
+- The product MVP requirements live in `specs/001-financial-evidence-lab/`. Milestone implementation design may also live in additive Spec Kit packages (`specs/002-observable-hybrid-retrieval/`, `specs/003-agentic-extraction/`, and later). When they conflict, `001` plus Accepted ADRs win for product scope; the milestone package plus its ADR win for that milestone’s frozen contracts and task IDs. Root `SPEC.md`, `PLAN.md`, and `TASKS.md` remain pointer stubs only.
+- Agents MUST NOT treat unchecked boxes in `specs/001-financial-evidence-lab/tasks.md` as blocking when `docs/handoff/workstreams.yaml` shows the corresponding package `merged`. Prefer handoff status for dispatch.
 - Work proceeds by Spec Kit phase and dependency order. Parallel agents MUST own disjoint files or modules.
 - Context7 and primary documentation MUST be consulted for version-sensitive framework behavior.
 - Each logical change is reviewed against this constitution, the active feature spec, and its acceptance tests.
@@ -46,4 +48,4 @@ The MVP MUST use the smallest architecture that satisfies measured requirements.
 
 This constitution supersedes conflicting implementation practices. Amendments require a documented rationale, impact assessment, user approval, semantic version bump, and propagation to dependent templates and active feature artifacts. Every pull request MUST include a constitution check. Unjustified complexity or a failed mandatory gate blocks merge.
 
-**Version**: 1.1.0 | **Ratified**: 2026-07-11 | **Last Amended**: 2026-07-12
+**Version**: 1.2.0 | **Ratified**: 2026-07-11 | **Last Amended**: 2026-07-25

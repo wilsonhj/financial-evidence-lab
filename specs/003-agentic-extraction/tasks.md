@@ -4,9 +4,9 @@ Tasks are test-first. Integration lead alone marks completion after merge and ev
 
 ## Phase 0 — Shared contract gate (serial)
 
-- [ ] **M3-000** Reconcile PR #75 artifacts to `main`; correct or explicitly track the post-merge provenance/coverage review findings.
-- [ ] **M3-001** Merge issue #101 against accepted ADR-0007: migration `0004_extraction_core.sql` (after M2 `0003_retrieval_core.sql`), RLS/grants/immutability tests, extraction JSON schemas/fixtures/OpenAPI v0.4.0, generated client, and additive structured-provider protocol/mock.
-- [ ] **M3-002** Verify contract semver, generated drift, migration up/down/restore smoke, RLS negatives, and `make ci` before implementation branches rebase.
+- [ ] **M3-000** Reconcile PR #75 artifacts to `main`; correct or explicitly track the post-merge provenance/coverage review findings. (Research draft remains on `main`; #60 carries limitations at ontology freeze — do not treat as a missing contract gate.)
+- [x] **M3-001** Merge issue #101 against accepted ADR-0007: migration `0004_extraction_core.sql` (after M2 `0003_retrieval_core.sql`), RLS/grants/immutability tests, extraction JSON schemas/fixtures/OpenAPI v0.4.0, generated client, and additive structured-provider protocol/mock. — done via PR #112 / issue #101 (2026-07-19).
+- [x] **M3-002** Verify contract semver, generated drift, migration up/down/restore smoke, RLS negatives, and `make ci` before implementation branches rebase. — satisfied on `main` with `@fel/contracts@0.4.0` + migration `0004` harnesses.
 
 ## Package #60 — M3-EXTRACTION-CORE
 
