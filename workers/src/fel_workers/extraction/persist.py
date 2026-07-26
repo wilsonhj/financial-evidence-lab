@@ -208,6 +208,12 @@ class PostgresPersistStore:
                 span_id = row.get("source_span_id")
                 if not span_id:
                     continue
+                document_version_id = row.get("document_version_id")
+                if not document_version_id:
+                    # Fail closed: never substitute span_id (composite FK to source_spans).
+                    raise StepFailed(
+                        f"proposal evidence missing document_version_id for span {span_id}"
+                    )
                 self.conn.execute(
                     """
                     INSERT INTO extraction_proposal_evidence (
@@ -220,7 +226,7 @@ class PostgresPersistStore:
                         org_id,
                         pid,
                         span_id,
-                        row.get("document_version_id") or span_id,
+                        document_version_id,
                         row.get("role") or "supports",
                         row.get("citation_status") or "partial",
                         ordinal,
@@ -317,6 +323,12 @@ class PostgresCheckpointStore:
         ).fetchone()
         if row is None:
             return None
+        output = self._load_stage_output(
+            org_id=org_id,
+            run_id=run_id,
+            step_name=step_name,
+            input_hash=input_hash,
+        )
         return StageRecord(
             step_name=row[0],
             attempt=row[1],
@@ -328,7 +340,38 @@ class PostgresCheckpointStore:
             output_tokens=row[7] or 0,
             cost_usd=Decimal(str(row[8] if row[8] is not None else 0)),
             error=row[9],
+            output=output,
         )
+
+    def _load_stage_output(
+        self,
+        *,
+        org_id: str,
+        run_id: str,
+        step_name: str,
+        input_hash: str,
+    ) -> Any:
+        """Hydrate stage output from step_completed events (no steps.output column)."""
+        row = self.conn.execute(
+            """
+            SELECT payload
+              FROM extraction_run_events
+             WHERE org_id = %s AND run_id = %s AND event_type = 'step_completed'
+               AND payload->>'step_name' = %s
+               AND payload->>'input_hash' = %s
+             ORDER BY id DESC
+             LIMIT 1
+            """,
+            (org_id, run_id, step_name, input_hash),
+        ).fetchone()
+        if row is None:
+            return None
+        payload = row[0]
+        if isinstance(payload, str):
+            payload = json.loads(payload)
+        if not isinstance(payload, dict):
+            return None
+        return payload.get("stage_output")
 
     def commit_succeeded(
         self,

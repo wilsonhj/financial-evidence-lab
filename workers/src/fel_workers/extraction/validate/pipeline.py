@@ -53,7 +53,12 @@ def validate_proposals(
 
         blockers = _collect_blockers(clean, ontology, evidence_by_span)
         draft = _build_draft(
-            run_id=run_id, kind=kind, clean=clean, blockers=blockers, ontology=ontology
+            run_id=run_id,
+            kind=kind,
+            clean=clean,
+            blockers=blockers,
+            ontology=ontology,
+            evidence_by_span=evidence_by_span,
         )
         assert draft.state == "needs_review"
         drafts.append(draft)
@@ -83,6 +88,7 @@ def _build_draft(
     clean: dict[str, Any],
     blockers: list[str],
     ontology: OntologyDocument,
+    evidence_by_span: dict[str, dict[str, Any]],
 ) -> ProposalDraft:
     metric_id = str(clean.get("metric_id") or "unknown")
     raw_hash = hash_json(clean)
@@ -105,7 +111,7 @@ def _build_draft(
             "duplicate": False,
         },
         review_priority="high",
-        evidence=_evidence_rows(clean),
+        evidence=_evidence_rows(clean, evidence_by_span=evidence_by_span),
         id=proposal_id_for(
             run_id=run_id, kind=str(kind), metric_id=metric_id, raw_payload_hash=raw_hash
         ),
@@ -134,13 +140,27 @@ def _comparability(
         return {"key": None, "fields": []}
 
 
-def _evidence_rows(clean: dict[str, Any]) -> list[dict[str, Any]]:
+def _evidence_rows(
+    clean: dict[str, Any],
+    *,
+    evidence_by_span: dict[str, dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    """Build citation rows; pin document_version_id from assembled evidence when omitted."""
+    pinned = evidence_by_span or {}
     rows: list[dict[str, Any]] = []
     for item in clean.get("evidence") or []:
         if isinstance(item, dict) and item.get("source_span_id"):
-            rows.append(dict(item))
+            row = dict(item)
         elif isinstance(item, str):
-            rows.append({"source_span_id": item, "role": "supports", "citation_status": "partial"})
+            row = {"source_span_id": item, "role": "supports", "citation_status": "partial"}
+        else:
+            continue
+        span_id = str(row["source_span_id"])
+        if not row.get("document_version_id"):
+            pinned_doc = (pinned.get(span_id) or {}).get("document_version_id")
+            if pinned_doc:
+                row["document_version_id"] = pinned_doc
+        rows.append(row)
     return rows
 
 

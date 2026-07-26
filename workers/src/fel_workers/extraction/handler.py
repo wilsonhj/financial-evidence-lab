@@ -172,6 +172,12 @@ def _evidence_from_payload(payload: dict[str, Any]) -> list[EvidenceBlock]:
             continue
         text = str(item.get("text") or "")
         text_hash = str(item.get("text_hash") or sha256_hex(text))
+        document_version_id = str(item.get("document_version_id") or "")
+        if not document_version_id:
+            raise ValueError(
+                f"evidence span {span_id} missing document_version_id "
+                "(must not default to source_span_id)"
+            )
         published = item.get("published_at")
         published_at = None
         if published:
@@ -179,7 +185,7 @@ def _evidence_from_payload(payload: dict[str, Any]) -> list[EvidenceBlock]:
         blocks.append(
             EvidenceBlock(
                 source_span_id=span_id,
-                document_version_id=str(item.get("document_version_id") or span_id),
+                document_version_id=document_version_id,
                 text=text,
                 text_hash=text_hash,
                 published_at=published_at,

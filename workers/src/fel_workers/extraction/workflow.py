@@ -27,6 +27,7 @@ from fel_workers.extraction.normalize import normalize_payload
 from fel_workers.extraction.persist import MemoryPersistStore
 from fel_workers.extraction.roles.base import ROLE_SPECS
 from fel_workers.extraction.runner import Abstention, run_model_step
+from fel_workers.extraction.serialize import serialize_stage_output
 from fel_workers.extraction.telemetry import emit
 from fel_workers.extraction.types import (
     MODE_STAGES,
@@ -287,7 +288,13 @@ def _run_stage(ctx: _ExecCtx, step_name: str) -> None:
         org_id=req.org_id,
         run_id=req.run_id,
         event_type="step_completed",
-        payload={"step_name": step_name, "output_hash": output_hash},
+        payload={
+            "step_name": step_name,
+            "input_hash": input_hash,
+            "output_hash": output_hash,
+            # Frozen 0004 has no steps.output column; persist resume payload here.
+            "stage_output": serialize_stage_output(output),
+        },
     )
     if (
         ctx.deps.crash_after_stages is not None

@@ -44,22 +44,50 @@ _REDACT_KEYS = frozenset(
 
 
 def redact_payload(payload: dict[str, Any]) -> dict[str, Any]:
-    """Drop known sensitive keys and truncate unexpected long strings."""
+    """Drop known sensitive keys and truncate unexpected long strings.
+
+    Checkpoint payloads under ``stage_output`` keep span ``text`` so crash-resume
+    can restore evidence without a steps.output column (frozen migration 0004).
+    Secrets are still stripped everywhere.
+    """
+    return _redact(payload, allow_span_text=False)
+
+
+def _redact(payload: dict[str, Any], *, allow_span_text: bool) -> dict[str, Any]:
     cleaned: dict[str, Any] = {}
     for key, value in payload.items():
         lowered = key.lower()
-        if lowered in _REDACT_KEYS or any(part in lowered for part in ("secret", "password")):
+        if (
+            lowered in {"secret", "api_key", "password", "token"}
+            or "secret" in lowered
+            or "password" in lowered
+        ):
+            cleaned[key] = "[redacted]"
+            continue
+        if key == "stage_output" and isinstance(value, (dict, list)):
+            cleaned[key] = _redact_stage_output(value)
+            continue
+        if lowered in _REDACT_KEYS and not (allow_span_text and lowered == "text"):
             cleaned[key] = "[redacted]"
             continue
         if isinstance(value, dict):
-            cleaned[key] = redact_payload(value)
+            cleaned[key] = _redact(value, allow_span_text=allow_span_text)
         elif isinstance(value, list):
-            cleaned[key] = [redact_payload(v) if isinstance(v, dict) else v for v in value]
+            cleaned[key] = [
+                (_redact(v, allow_span_text=allow_span_text) if isinstance(v, dict) else v)
+                for v in value
+            ]
         elif isinstance(value, str) and len(value) > 256:
             cleaned[key] = value[:64] + "…[truncated]"
         else:
             cleaned[key] = value
     return cleaned
+
+
+def _redact_stage_output(value: dict[str, Any] | list[Any]) -> dict[str, Any] | list[Any]:
+    if isinstance(value, list):
+        return [_redact(v, allow_span_text=True) if isinstance(v, dict) else v for v in value]
+    return _redact(value, allow_span_text=True)
 
 
 @dataclass

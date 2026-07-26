@@ -42,20 +42,17 @@ _EXTRACTION_ROLE_SCHEMAS = frozenset(
 
 _FIXTURE_ENTITY = "11111111-1111-4111-8111-111111111111"
 _FIXTURE_SPAN = "22222222-2222-4222-8222-222222222222"
+_FIXTURE_DOC = "33333333-3333-4333-8333-333333333333"
 
 
 def _load_extraction_payload_fixtures() -> dict[str, Any]:
     """Load contract fixtures when present; fall back to inline KPI/guidance/driver."""
+    here = Path(__file__).resolve()
     candidates = [
-        Path(__file__).resolve().parents[3]
-        / "contracts"
-        / "fixtures"
-        / "extraction-payloads.valid.json",
-        Path(__file__).resolve().parents[4]
-        / "packages"
-        / "contracts"
-        / "fixtures"
-        / "extraction-payloads.valid.json",
+        # packages/providers/fel_providers/mocks.py → packages/contracts/...
+        here.parents[2] / "contracts" / "fixtures" / "extraction-payloads.valid.json",
+        # repo-root convention
+        here.parents[3] / "packages" / "contracts" / "fixtures" / "extraction-payloads.valid.json",
     ]
     for path in candidates:
         if path.is_file():
@@ -162,14 +159,26 @@ def _extraction_envelope_for(request: StructuredGenerationRequest) -> dict[str, 
         if not isinstance(item_raw, dict):
             raise TypeError("guidance_point fixture must be an object")
         item = dict(item_raw)
-        item["evidence"] = [{"source_span_id": _FIXTURE_SPAN, "role": "supports"}]
+        item["evidence"] = [
+            {
+                "source_span_id": _FIXTURE_SPAN,
+                "document_version_id": _FIXTURE_DOC,
+                "role": "supports",
+            }
+        ]
         return {"proposals": [item], "notes": None}
     if request.schema_name == "revenue_driver":
         item_raw = fixtures["revenue_driver"]
         if not isinstance(item_raw, dict):
             raise TypeError("revenue_driver fixture must be an object")
         item = dict(item_raw)
-        item["evidence"] = [{"source_span_id": _FIXTURE_SPAN, "role": "supports"}]
+        item["evidence"] = [
+            {
+                "source_span_id": _FIXTURE_SPAN,
+                "document_version_id": _FIXTURE_DOC,
+                "role": "supports",
+            }
+        ]
         return {"proposals": [item], "notes": None}
     # kpi / extraction-step-output default — enrich qualifiers for ontology gates
     kpi_raw = fixtures["kpi"]
@@ -182,7 +191,13 @@ def _extraction_envelope_for(request: StructuredGenerationRequest) -> dict[str, 
     quals.setdefault("construction", "reported_arr")
     quals.setdefault("scope", "consolidated")
     kpi["qualifiers"] = quals
-    kpi["evidence"] = [{"source_span_id": _FIXTURE_SPAN, "role": "supports"}]
+    kpi["evidence"] = [
+        {
+            "source_span_id": _FIXTURE_SPAN,
+            "document_version_id": _FIXTURE_DOC,
+            "role": "supports",
+        }
+    ]
     return {"proposals": [kpi], "notes": None}
 
 
