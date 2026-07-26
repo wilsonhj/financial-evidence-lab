@@ -45,14 +45,23 @@ def handle_extraction_run(
     lease_check: Callable[[], bool] | None = None,
     cancel_check: Callable[[], bool] | None = None,
     use_memory_stores: bool | None = None,
+    job_org_id: str | None = None,
 ) -> WorkflowState:
     """Dispatch one ``extraction_run`` job.
 
     Validates workspace ownership before service-role writes when a live
     connection is provided and ``use_memory_stores`` is not forced.
     Inline ``evidence`` in the payload supports mock CI without seeding spans.
+
+    When ``job_org_id`` is supplied (from ``ClaimedJob.org_id``), the payload
+    ``org_id`` must match — jobs are tenant-bound at enqueue time.
     """
     request = request_from_payload(payload)
+    if job_org_id is not None and request.org_id != job_org_id:
+        raise ValueError(
+            f"extraction_run payload org_id {request.org_id} does not match "
+            f"job org_id {job_org_id}"
+        )
     # Prefer memory stores for mock/inline evidence payloads so CI can run
     # without seeding extraction_runs / workspaces rows.
     inline_evidence = bool(payload.get("evidence") or payload.get("spans"))

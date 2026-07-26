@@ -1,11 +1,40 @@
-"""Citation hash / document-version verification."""
+"""Citation hash / span-pin verification."""
 
 from __future__ import annotations
 
 from collections.abc import Mapping
 from typing import Any
 
+from fel_workers.extraction.hashing import sha256_hex
 from fel_workers.ingestion.parser import text_hash
+
+
+def citation_errors(
+    payload: dict[str, Any],
+    *,
+    evidence_by_span: dict[str, dict[str, Any]],
+    expected_hashes: dict[str, str] | None = None,
+) -> list[str]:
+    """Verify cited span ids exist and optional text hashes match (live path)."""
+    errors: list[str] = []
+    evidence = payload.get("evidence") or payload.get("source_span_ids") or []
+    span_ids: list[str] = []
+    if isinstance(evidence, list):
+        for item in evidence:
+            if isinstance(item, str):
+                span_ids.append(item)
+            elif isinstance(item, dict) and item.get("source_span_id"):
+                span_ids.append(str(item["source_span_id"]))
+    for span_id in span_ids:
+        block = evidence_by_span.get(span_id)
+        if block is None:
+            errors.append(f"cited span not in pinned evidence: {span_id}")
+            continue
+        if expected_hashes and span_id in expected_hashes:
+            actual = block.get("text_hash") or sha256_hex(block.get("text", ""))
+            if actual != expected_hashes[span_id]:
+                errors.append(f"span hash mismatch: {span_id}")
+    return errors
 
 
 def verify_citations(
@@ -35,7 +64,6 @@ def verify_citations(
             if expected_hash and actual != expected_hash:
                 blockers.append(f"citation_hash_mismatch:{span_id}")
             elif not expected_hash:
-                # Compute and compare against any provided hash on the evidence row.
                 provided = item.get("text_hash")
                 if provided and provided != actual:
                     blockers.append(f"citation_hash_mismatch:{span_id}")
@@ -46,4 +74,4 @@ def verify_citations(
     return blockers
 
 
-__all__ = ["verify_citations"]
+__all__ = ["citation_errors", "verify_citations"]

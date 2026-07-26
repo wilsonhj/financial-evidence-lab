@@ -19,8 +19,15 @@ class MemoryCheckpointStore:
     _by_run: dict[str, list[StageRecord]] = field(default_factory=dict)
 
     def load_succeeded(
-        self, *, run_id: str, step_name: str, input_hash: str, workflow_version: str
+        self,
+        *,
+        run_id: str,
+        org_id: str,
+        step_name: str,
+        input_hash: str,
+        workflow_version: str,
     ) -> StageRecord | None:
+        del org_id  # ownership validated by caller; success key is content-addressed
         return self._succeeded.get((run_id, step_name, input_hash, workflow_version))
 
     def commit_succeeded(

@@ -40,6 +40,12 @@ def assert_workspace_ownership(
         )
 
 
+def _ensure_needs_review(draft: ProposalDraft) -> None:
+    """M3 invariant: proposals enter review only — never auto-approve."""
+    if draft.state != "needs_review":
+        raise ValueError("M3 proposals must enter needs_review; no auto-approve")
+
+
 @dataclass
 class MemoryPersistStore:
     """Idempotent in-memory proposal/conflict store for tests and mock E2E."""
@@ -59,8 +65,7 @@ class MemoryPersistStore:
         del org_id, workspace_id
         persisted: list[ProposalDraft] = []
         for draft in drafts:
-            if draft.state != "needs_review":
-                raise ValueError("M3 proposals must enter needs_review; no auto-approve")
+            _ensure_needs_review(draft)
             pid = draft.id or proposal_id_for(
                 run_id=run_id,
                 kind=draft.kind,
@@ -97,9 +102,14 @@ class MemoryPersistStore:
         return out
 
     def set_run_status(
-        self, *, run_id: str, status: str, error: dict[str, Any] | None = None
+        self,
+        *,
+        run_id: str,
+        org_id: str,
+        status: str,
+        error: dict[str, Any] | None = None,
     ) -> None:
-        del error
+        del org_id, error
         self.run_status[run_id] = status
 
     def mark_running(self, *, run_id: str, org_id: str) -> None:
@@ -124,7 +134,12 @@ class PostgresPersistStore:
         )
 
     def set_run_status(
-        self, *, run_id: str, status: str, error: dict[str, Any] | None = None
+        self,
+        *,
+        run_id: str,
+        org_id: str,
+        status: str,
+        error: dict[str, Any] | None = None,
     ) -> None:
         finished = status in {"succeeded", "failed", "cancelled"}
         self.conn.execute(
@@ -133,9 +148,9 @@ class PostgresPersistStore:
                SET status = %s,
                    error = %s::jsonb,
                    finished_at = CASE WHEN %s THEN now() ELSE finished_at END
-             WHERE id = %s
+             WHERE id = %s AND org_id = %s
             """,
-            (status, json.dumps(error) if error else None, finished, run_id),
+            (status, json.dumps(error) if error else None, finished, run_id, org_id),
         )
 
     def persist_proposals(
@@ -149,8 +164,7 @@ class PostgresPersistStore:
         assert_workspace_ownership(self.conn, org_id=org_id, workspace_id=workspace_id)
         persisted: list[ProposalDraft] = []
         for draft in drafts:
-            if draft.state != "needs_review":
-                raise ValueError("M3 proposals must enter needs_review; no auto-approve")
+            _ensure_needs_review(draft)
             pid = draft.id or proposal_id_for(
                 run_id=run_id,
                 kind=draft.kind,
@@ -228,7 +242,6 @@ class PostgresPersistStore:
             if len(draft.member_proposal_ids) < 2:
                 raise ValueError("conflict groups require at least two members")
             cid = draft.id or str(uuid.uuid4())
-            draft.id = cid
             self.conn.execute(
                 """
                 INSERT INTO extraction_conflicts (
@@ -238,14 +251,31 @@ class PostgresPersistStore:
                 """,
                 (cid, org_id, workspace_id, draft.conflict_key, draft.reason_codes),
             )
+            # ON CONFLICT DO NOTHING may skip insert — resolve the real row id
+            # before writing members (members require org_id + conflict_id).
+            row = self.conn.execute(
+                """
+                SELECT id FROM extraction_conflicts
+                 WHERE org_id = %s AND workspace_id = %s AND conflict_key = %s
+                """,
+                (org_id, workspace_id, draft.conflict_key),
+            ).fetchone()
+            if row is None:
+                raise StepFailed(
+                    f"conflict row missing after upsert for key {draft.conflict_key}",
+                    code="conflict_upsert",
+                )
+            real_cid = str(row[0])
+            draft.id = real_cid
             for proposal_id in draft.member_proposal_ids:
                 self.conn.execute(
                     """
-                    INSERT INTO extraction_conflict_members (conflict_id, proposal_id)
-                    VALUES (%s, %s)
+                    INSERT INTO extraction_conflict_members
+                        (conflict_id, proposal_id, org_id)
+                    VALUES (%s, %s, %s)
                     ON CONFLICT DO NOTHING
                     """,
-                    (cid, proposal_id),
+                    (real_cid, proposal_id, org_id),
                 )
             out.append(draft)
         return out
@@ -257,10 +287,17 @@ class PostgresCheckpointStore:
     _memory: MemoryCheckpointStore = field(default_factory=MemoryCheckpointStore)
 
     def load_succeeded(
-        self, *, run_id: str, step_name: str, input_hash: str, workflow_version: str
+        self,
+        *,
+        run_id: str,
+        org_id: str,
+        step_name: str,
+        input_hash: str,
+        workflow_version: str,
     ) -> StageRecord | None:
         mem = self._memory.load_succeeded(
             run_id=run_id,
+            org_id=org_id,
             step_name=step_name,
             input_hash=input_hash,
             workflow_version=workflow_version,
@@ -272,11 +309,11 @@ class PostgresCheckpointStore:
             SELECT step_name, attempt, status, input_hash, output_hash,
                    provider_response_id, input_tokens, output_tokens, cost_usd, error
               FROM extraction_run_steps
-             WHERE run_id = %s AND step_name = %s AND input_hash = %s
+             WHERE run_id = %s AND org_id = %s AND step_name = %s AND input_hash = %s
                AND workflow_version = %s AND status = 'succeeded'
              LIMIT 1
             """,
-            (run_id, step_name, input_hash, workflow_version),
+            (run_id, org_id, step_name, input_hash, workflow_version),
         ).fetchone()
         if row is None:
             return None

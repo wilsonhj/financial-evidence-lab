@@ -1,4 +1,4 @@
-"""Duplicate detection via comparability keys."""
+"""Duplicate detection via fingerprints and comparability keys."""
 
 from __future__ import annotations
 
@@ -6,6 +6,73 @@ from collections import defaultdict
 from typing import Any
 
 from fel_workers.extraction.hashing import canonical_json, hash_json
+
+
+def duplicate_groups(payloads: list[dict[str, Any]]) -> list[list[int]]:
+    """Group indices that share kind+metric_id+period+value fingerprint (live path)."""
+    buckets: dict[str, list[int]] = {}
+    for idx, payload in enumerate(payloads):
+        key = hash_json(
+            {
+                "kind": payload.get("kind"),
+                "metric_id": payload.get("metric_id"),
+                "period": payload.get("period"),
+                "value": payload.get("value"),
+                "low": payload.get("low"),
+                "high": payload.get("high"),
+                "category": payload.get("category"),
+            }
+        )
+        buckets.setdefault(key, []).append(idx)
+    return [members for members in buckets.values() if len(members) > 1]
+
+
+def conflict_key_for(
+    payload: dict[str, Any],
+    *,
+    ontology_comparability_key: str | None = None,
+) -> str:
+    """Deterministic conflict grouping key.
+
+    Prefer the ontology comparability key (e.g. NRR ``base_quantity``) when
+    present so non-comparable definitions never share a value_disagreement
+    bucket. Fall back to payload shape including qualifiers.
+    """
+    if ontology_comparability_key:
+        return hash_json(
+            {
+                "comparability": ontology_comparability_key,
+                "kind": payload.get("kind"),
+                "entity_id": payload.get("entity_id"),
+                "period": payload.get("period"),
+            }
+        )
+    # Careful fallback: include qualifiers so distinct NRR bases do not collide
+    # when ontology key construction failed closed.
+    return hash_json(
+        {
+            "kind": payload.get("kind"),
+            "metric_id": payload.get("metric_id"),
+            "entity_id": payload.get("entity_id"),
+            "period": payload.get("period"),
+            "dimensions": payload.get("dimensions") or {},
+            "qualifiers": payload.get("qualifiers") or {},
+        }
+    )
+
+
+def value_fingerprint(payload: dict[str, Any]) -> str:
+    return hash_json(
+        {
+            "value": payload.get("value"),
+            "low": payload.get("low"),
+            "high": payload.get("high"),
+            "text": payload.get("text"),
+            "category": payload.get("category"),
+            "direction": payload.get("direction"),
+            "raw_value": payload.get("raw_value"),
+        }
+    )
 
 
 def comparability_key_for(payload: dict[str, Any]) -> dict[str, Any]:
@@ -43,8 +110,11 @@ def definition_hash_for(payload: dict[str, Any]) -> str:
 
 
 __all__ = [
-    "comparability_key_for",
-    "definition_hash_for",
-    "find_duplicates",
     "canonical_json",
+    "comparability_key_for",
+    "conflict_key_for",
+    "definition_hash_for",
+    "duplicate_groups",
+    "find_duplicates",
+    "value_fingerprint",
 ]

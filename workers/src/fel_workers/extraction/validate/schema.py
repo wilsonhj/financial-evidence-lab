@@ -28,6 +28,26 @@ _DRIVER_CATEGORIES = frozenset(
     }
 )
 _SCHEMA_VERSION = "extraction-payload/v1"
+_COMMON_REQUIRED = (
+    "schema_version",
+    "kind",
+    "entity_id",
+    "issuer_label",
+    "metric_id",
+    "raw_value",
+    "period",
+    "dimensions",
+    "qualifiers",
+    "reported_or_derived",
+)
+_KPI_REQUIRED = _COMMON_REQUIRED + ("value", "unit", "scale", "sign")
+_GUIDANCE_REQUIRED = _COMMON_REQUIRED + ("shape",)
+_DRIVER_REQUIRED = _COMMON_REQUIRED + (
+    "category",
+    "description",
+    "direction",
+    "target_metric_ids",
+)
 
 
 @lru_cache(maxsize=1)
@@ -141,26 +161,18 @@ def _decimal_field(payload: dict[str, Any], key: str) -> list[str]:
     return []
 
 
+def _validate_numeric_shape(
+    payload: dict[str, Any], *, required: tuple[str, ...], decimal_keys: tuple[str, ...]
+) -> list[str]:
+    errors = _require(payload, required)
+    errors.extend(_numeric_trio(payload))
+    for key in decimal_keys:
+        errors.extend(_decimal_field(payload, key))
+    return errors
+
+
 def _validate_kpi(payload: dict[str, Any]) -> list[str]:
-    errors = _require(
-        payload,
-        (
-            "schema_version",
-            "kind",
-            "entity_id",
-            "issuer_label",
-            "metric_id",
-            "raw_value",
-            "value",
-            "unit",
-            "scale",
-            "sign",
-            "period",
-            "dimensions",
-            "qualifiers",
-            "reported_or_derived",
-        ),
-    )
+    errors = _require(payload, _KPI_REQUIRED)
     errors.extend(_common(payload, reported={"reported", "derived"}))
     errors.extend(_numeric_trio(payload))
     errors.extend(_decimal_field(payload, "value"))
@@ -168,41 +180,35 @@ def _validate_kpi(payload: dict[str, Any]) -> list[str]:
 
 
 def _validate_guidance(payload: dict[str, Any]) -> list[str]:
-    errors = _require(
-        payload,
-        (
-            "schema_version",
-            "kind",
-            "entity_id",
-            "issuer_label",
-            "metric_id",
-            "raw_value",
-            "shape",
-            "period",
-            "dimensions",
-            "qualifiers",
-            "reported_or_derived",
-        ),
-    )
+    errors = _require(payload, _GUIDANCE_REQUIRED)
     errors.extend(_common(payload, reported={"management_assertion"}))
     shape = payload.get("shape")
     if shape == "point":
-        errors.extend(_require(payload, ("value", "unit", "scale", "sign")))
-        errors.extend(_numeric_trio(payload))
-        errors.extend(_decimal_field(payload, "value"))
+        errors.extend(
+            _validate_numeric_shape(
+                payload, required=("value", "unit", "scale", "sign"), decimal_keys=("value",)
+            )
+        )
     elif shape == "range":
-        errors.extend(_require(payload, ("low", "high", "unit", "scale", "sign")))
-        errors.extend(_numeric_trio(payload))
-        errors.extend(_decimal_field(payload, "low"))
-        errors.extend(_decimal_field(payload, "high"))
+        errors.extend(
+            _validate_numeric_shape(
+                payload,
+                required=("low", "high", "unit", "scale", "sign"),
+                decimal_keys=("low", "high"),
+            )
+        )
     elif shape == "floor":
-        errors.extend(_require(payload, ("low", "unit", "scale", "sign")))
-        errors.extend(_numeric_trio(payload))
-        errors.extend(_decimal_field(payload, "low"))
+        errors.extend(
+            _validate_numeric_shape(
+                payload, required=("low", "unit", "scale", "sign"), decimal_keys=("low",)
+            )
+        )
     elif shape == "ceiling":
-        errors.extend(_require(payload, ("high", "unit", "scale", "sign")))
-        errors.extend(_numeric_trio(payload))
-        errors.extend(_decimal_field(payload, "high"))
+        errors.extend(
+            _validate_numeric_shape(
+                payload, required=("high", "unit", "scale", "sign"), decimal_keys=("high",)
+            )
+        )
     elif shape == "qualitative":
         text = payload.get("text")
         if not isinstance(text, str) or not text.strip():
@@ -213,25 +219,7 @@ def _validate_guidance(payload: dict[str, Any]) -> list[str]:
 
 
 def _validate_driver(payload: dict[str, Any]) -> list[str]:
-    errors = _require(
-        payload,
-        (
-            "schema_version",
-            "kind",
-            "entity_id",
-            "issuer_label",
-            "metric_id",
-            "raw_value",
-            "category",
-            "description",
-            "direction",
-            "target_metric_ids",
-            "period",
-            "dimensions",
-            "qualifiers",
-            "reported_or_derived",
-        ),
-    )
+    errors = _require(payload, _DRIVER_REQUIRED)
     errors.extend(_common(payload, reported={"management_assertion"}))
     if payload.get("category") not in _DRIVER_CATEGORIES:
         errors.append(f"invalid category: {payload.get('category')!r}")

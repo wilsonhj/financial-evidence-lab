@@ -13,14 +13,15 @@ from fel_workers.extraction.types import ConflictDraft, ExtractionMode, Proposal
 from fel_workers.extraction.validate.checks import (
     accounting_errors,
     citation_errors,
-    conflict_key_for,
     default_ontology,
     definition_errors,
     duplicate_groups,
     range_errors,
-    value_fingerprint,
 )
+from fel_workers.extraction.validate.conflicts import detect_conflicts
 from fel_workers.extraction.validate.schema import validate_payload_item
+
+_VALID_KINDS = frozenset({"kpi", "guidance", "revenue_driver"})
 
 
 @dataclass
@@ -45,111 +46,112 @@ def validate_proposals(
     for payload in payloads:
         # Strip internal normalizer metadata before schema check / persist.
         clean = {k: v for k, v in payload.items() if not str(k).startswith("_")}
-        blockers = validate_payload_item(clean)
-        blockers.extend(accounting_errors(clean, ontology))
-        blockers.extend(range_errors(clean))
-        blockers.extend(definition_errors(clean, ontology))
-        blockers.extend(citation_errors(clean, evidence_by_span=evidence_by_span))
-
         kind_raw = clean.get("kind")
-        if kind_raw not in {"kpi", "guidance", "revenue_driver"}:
+        if kind_raw not in _VALID_KINDS:
             continue
         kind = cast(ExtractionMode, kind_raw)
-        metric_id = str(clean.get("metric_id") or "unknown")
-        raw_hash = hash_json(clean)
-        definition = clean.get("definition")
-        definition_hash = sha256_hex(str(definition)) if definition is not None else sha256_hex("")
 
-        comparability: dict[str, Any] = {}
-        try:
-            metric = ontology.metric(metric_id)
-            quals = {
-                str(k): str(v)
-                for k, v in (clean.get("qualifiers") or {}).items()
-                if v is not None and str(v).strip()
-            }
-            comparability = {
-                "key": build_comparability_key(metric, quals),
-                "fields": list(metric.comparability_key_fields),
-            }
-        except (KeyError, TypeError, ValueError) as exc:
-            blockers.append(f"comparability_key unavailable: {exc}")
-            comparability = {"key": None, "fields": []}
-
-        evidence_rows: list[dict[str, Any]] = []
-        for item in clean.get("evidence") or []:
-            if isinstance(item, dict) and item.get("source_span_id"):
-                evidence_rows.append(dict(item))
-            elif isinstance(item, str):
-                evidence_rows.append(
-                    {"source_span_id": item, "role": "supports", "citation_status": "partial"}
-                )
-
-        draft = ProposalDraft(
-            kind=kind,
-            metric_id=metric_id,
-            payload=clean,
-            raw_payload_hash=raw_hash,
-            definition_hash=definition_hash,
-            comparability_key=comparability,
-            record_confidence=Decimal("0"),
-            field_confidences={},
-            validation_summary={
-                "ok": not blockers,
-                "blockers": blockers,
-                "duplicate": False,
-            },
-            review_priority="high",
-            evidence=evidence_rows,
-            id=proposal_id_for(
-                run_id=run_id, kind=str(kind), metric_id=metric_id, raw_payload_hash=raw_hash
-            ),
+        blockers = _collect_blockers(clean, ontology, evidence_by_span)
+        draft = _build_draft(
+            run_id=run_id, kind=kind, clean=clean, blockers=blockers, ontology=ontology
         )
         assert draft.state == "needs_review"
         drafts.append(draft)
         cleaned_payloads.append(clean)
 
+    _mark_duplicates(drafts, cleaned_payloads)
+    return ValidationResult(proposals=drafts, conflicts=detect_conflicts(drafts))
+
+
+def _collect_blockers(
+    clean: dict[str, Any],
+    ontology: OntologyDocument,
+    evidence_by_span: dict[str, dict[str, Any]],
+) -> list[str]:
+    blockers = validate_payload_item(clean)
+    blockers.extend(accounting_errors(clean, ontology))
+    blockers.extend(range_errors(clean))
+    blockers.extend(definition_errors(clean, ontology))
+    blockers.extend(citation_errors(clean, evidence_by_span=evidence_by_span))
+    return blockers
+
+
+def _build_draft(
+    *,
+    run_id: str,
+    kind: ExtractionMode,
+    clean: dict[str, Any],
+    blockers: list[str],
+    ontology: OntologyDocument,
+) -> ProposalDraft:
+    metric_id = str(clean.get("metric_id") or "unknown")
+    raw_hash = hash_json(clean)
+    definition = clean.get("definition")
+    definition_hash = sha256_hex(str(definition)) if definition is not None else sha256_hex("")
+    comparability = _comparability(clean, metric_id, ontology, blockers)
+
+    return ProposalDraft(
+        kind=kind,
+        metric_id=metric_id,
+        payload=clean,
+        raw_payload_hash=raw_hash,
+        definition_hash=definition_hash,
+        comparability_key=comparability,
+        record_confidence=Decimal("0"),
+        field_confidences={},
+        validation_summary={
+            "ok": not blockers,
+            "blockers": blockers,
+            "duplicate": False,
+        },
+        review_priority="high",
+        evidence=_evidence_rows(clean),
+        id=proposal_id_for(
+            run_id=run_id, kind=str(kind), metric_id=metric_id, raw_payload_hash=raw_hash
+        ),
+    )
+
+
+def _comparability(
+    clean: dict[str, Any],
+    metric_id: str,
+    ontology: OntologyDocument,
+    blockers: list[str],
+) -> dict[str, Any]:
+    try:
+        metric = ontology.metric(metric_id)
+        quals = {
+            str(k): str(v)
+            for k, v in (clean.get("qualifiers") or {}).items()
+            if v is not None and str(v).strip()
+        }
+        return {
+            "key": build_comparability_key(metric, quals),
+            "fields": list(metric.comparability_key_fields),
+        }
+    except (KeyError, TypeError, ValueError) as exc:
+        blockers.append(f"comparability_key unavailable: {exc}")
+        return {"key": None, "fields": []}
+
+
+def _evidence_rows(clean: dict[str, Any]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for item in clean.get("evidence") or []:
+        if isinstance(item, dict) and item.get("source_span_id"):
+            rows.append(dict(item))
+        elif isinstance(item, str):
+            rows.append({"source_span_id": item, "role": "supports", "citation_status": "partial"})
+    return rows
+
+
+def _mark_duplicates(drafts: list[ProposalDraft], cleaned_payloads: list[dict[str, Any]]) -> None:
     for group in duplicate_groups(cleaned_payloads):
         for idx in group:
-            drafts[idx].validation_summary["duplicate"] = True
-            blockers = list(drafts[idx].validation_summary.get("blockers") or [])
+            summary = drafts[idx].validation_summary
+            summary["duplicate"] = True
+            blockers = list(summary.get("blockers") or [])
             blockers.append("duplicate_candidate")
-            drafts[idx].validation_summary["blockers"] = blockers
-
-    conflicts = detect_conflicts(drafts)
-    return ValidationResult(proposals=drafts, conflicts=conflicts)
-
-
-def detect_conflicts(drafts: list[ProposalDraft]) -> list[ConflictDraft]:
-    """Group proposals that share conflict_key and disagree or duplicate."""
-    by_key: dict[str, list[ProposalDraft]] = {}
-    for draft in drafts:
-        key = conflict_key_for(draft.payload)
-        by_key.setdefault(key, []).append(draft)
-
-    conflicts: list[ConflictDraft] = []
-    for key, members in sorted(by_key.items(), key=lambda kv: kv[0]):
-        if len(members) < 2:
-            continue
-        fingerprints = {value_fingerprint(m.payload) for m in members}
-        member_ids = sorted(m.id for m in members if m.id)
-        if len(member_ids) < 2:
-            continue
-        reasons: list[str] = []
-        if len(fingerprints) >= 2:
-            reasons.append("value_disagreement")
-        if len(fingerprints) == 1 or any(m.validation_summary.get("duplicate") for m in members):
-            reasons.append("duplicate_candidate")
-        if not reasons:
-            continue
-        conflicts.append(
-            ConflictDraft(
-                conflict_key=key,
-                reason_codes=sorted(set(reasons)),
-                member_proposal_ids=member_ids,
-            )
-        )
-    return conflicts
+            summary["blockers"] = blockers
 
 
 __all__ = ["ValidationResult", "detect_conflicts", "validate_proposals"]

@@ -43,7 +43,13 @@ from fel_workers.extraction.validate import validate_proposals
 
 class CheckpointStore(Protocol):
     def load_succeeded(
-        self, *, run_id: str, step_name: str, input_hash: str, workflow_version: str
+        self,
+        *,
+        run_id: str,
+        org_id: str,
+        step_name: str,
+        input_hash: str,
+        workflow_version: str,
     ) -> StageRecord | None: ...
 
     def commit_succeeded(
@@ -81,7 +87,12 @@ class PersistStore(Protocol):
     ) -> list[Any]: ...
 
     def set_run_status(
-        self, *, run_id: str, status: str, error: dict[str, Any] | None = None
+        self,
+        *,
+        run_id: str,
+        org_id: str,
+        status: str,
+        error: dict[str, Any] | None = None,
     ) -> None: ...
 
 
@@ -144,10 +155,15 @@ def run_extraction_workflow(state: WorkflowState, deps: WorkflowDeps) -> Workflo
     except LeaseLost:
         raise
     except Cancelled as exc:
+        if not deps.lease_check():
+            raise LeaseLost("queue lease lost before cancelled status write") from exc
         state.status = "cancelled"
         state.error = {"code": exc.code, "message": str(exc)}
         deps.persist.set_run_status(
-            run_id=state.request.run_id, status="cancelled", error=state.error
+            run_id=state.request.run_id,
+            org_id=state.request.org_id,
+            status="cancelled",
+            error=state.error,
         )
         deps.events.append(
             org_id=state.request.org_id,
@@ -156,9 +172,16 @@ def run_extraction_workflow(state: WorkflowState, deps: WorkflowDeps) -> Workflo
             payload=state.error,
         )
     except (BudgetExceeded, ProviderRefused, StepFailed, ExtractionError) as exc:
+        if not deps.lease_check():
+            raise LeaseLost("queue lease lost before failed status write") from exc
         state.status = "failed"
         state.error = {"code": getattr(exc, "code", "extraction_error"), "message": str(exc)}
-        deps.persist.set_run_status(run_id=state.request.run_id, status="failed", error=state.error)
+        deps.persist.set_run_status(
+            run_id=state.request.run_id,
+            org_id=state.request.org_id,
+            status="failed",
+            error=state.error,
+        )
         deps.events.append(
             org_id=state.request.org_id,
             run_id=state.request.run_id,
@@ -218,6 +241,7 @@ def _run_stage(ctx: _ExecCtx, step_name: str) -> None:
     )
     existing = ctx.deps.checkpoint.load_succeeded(
         run_id=req.run_id,
+        org_id=req.org_id,
         step_name=step_name,
         input_hash=input_hash,
         workflow_version=req.workflow_version,
@@ -345,35 +369,19 @@ def _restore_output(state: WorkflowState, step_name: str, output: Any) -> None:
     elif step_name == "validate" and isinstance(output, dict):
         state.normalized = list(output.get("normalized") or state.normalized)
         # Rebuild drafts so resume after validate does not lose proposals.
-        evidence_by_span = {
-            e.source_span_id: {
-                "document_version_id": e.document_version_id,
-                "text": e.text,
-                "text_hash": e.text_hash,
-            }
-            for e in state.evidence
-        }
         rebuilt = validate_proposals(
             run_id=state.request.run_id,
             payloads=state.normalized,
-            evidence_by_span=evidence_by_span,
+            evidence_by_span=dict(evidence_map(state.evidence)),
         )
         state.validated = rebuilt.proposals
         state.conflicts = rebuilt.conflicts
     elif step_name == "detect_conflicts" and isinstance(output, dict):
         if not state.validated and state.normalized:
-            evidence_by_span = {
-                e.source_span_id: {
-                    "document_version_id": e.document_version_id,
-                    "text": e.text,
-                    "text_hash": e.text_hash,
-                }
-                for e in state.evidence
-            }
             rebuilt = validate_proposals(
                 run_id=state.request.run_id,
                 payloads=state.normalized,
-                evidence_by_span=evidence_by_span,
+                evidence_by_span=dict(evidence_map(state.evidence)),
             )
             state.validated = rebuilt.proposals
             state.conflicts = rebuilt.conflicts
@@ -512,7 +520,8 @@ def _stage_model(ctx: _ExecCtx, role: Role, step_name: str) -> dict[str, Any]:
         if not isinstance(prop, dict):
             continue
         item = dict(prop)
-        item.setdefault("entity_id", req.entity_id)
+        # Pin entity_id to the run request (overwrite model output).
+        item["entity_id"] = req.entity_id
         item.setdefault("issuer_label", req.issuer_label)
         stamped.append(item)
     ctx.state.raw_proposals.extend(stamped)
@@ -533,18 +542,10 @@ def _stage_normalize(state: WorkflowState) -> list[dict[str, Any]]:
 
 def _stage_validate(ctx: _ExecCtx) -> dict[str, Any]:
     state = ctx.state
-    evidence_by_span = {
-        e.source_span_id: {
-            "document_version_id": e.document_version_id,
-            "text": e.text,
-            "text_hash": e.text_hash,
-        }
-        for e in state.evidence
-    }
     result = validate_proposals(
         run_id=state.request.run_id,
         payloads=state.normalized,
-        evidence_by_span=evidence_by_span,
+        evidence_by_span=dict(evidence_map(state.evidence)),
         ontology=ctx.ontology,
     )
     state.validated = result.proposals
@@ -579,6 +580,8 @@ def _stage_detect_conflicts(state: WorkflowState) -> dict[str, Any]:
 
 
 def _stage_persist(ctx: _ExecCtx) -> dict[str, Any]:
+    if not ctx.deps.lease_check():
+        raise LeaseLost("queue lease lost before persist")
     state = ctx.state
     req = state.request
     persisted = ctx.deps.persist.persist_proposals(
@@ -605,11 +608,15 @@ def _stage_persist(ctx: _ExecCtx) -> dict[str, Any]:
 
 
 def _finalize_success(ctx: _ExecCtx) -> None:
+    if not ctx.deps.lease_check():
+        raise LeaseLost("queue lease lost before finalize")
     state = ctx.state
     req = state.request
     if state.validated:
         state.status = "waiting_review"
-        ctx.deps.persist.set_run_status(run_id=req.run_id, status="waiting_review")
+        ctx.deps.persist.set_run_status(
+            run_id=req.run_id, org_id=req.org_id, status="waiting_review"
+        )
         ctx.deps.events.append(
             org_id=req.org_id,
             run_id=req.run_id,
@@ -619,7 +626,7 @@ def _finalize_success(ctx: _ExecCtx) -> None:
     else:
         state.status = "succeeded"
         state.abstained = True
-        ctx.deps.persist.set_run_status(run_id=req.run_id, status="succeeded")
+        ctx.deps.persist.set_run_status(run_id=req.run_id, org_id=req.org_id, status="succeeded")
         ctx.deps.events.append(
             org_id=req.org_id,
             run_id=req.run_id,

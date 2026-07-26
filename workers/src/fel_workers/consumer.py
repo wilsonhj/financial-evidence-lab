@@ -281,6 +281,7 @@ def run_worker(
                     # Inline evidence => mock/test path (no extraction_runs seed required).
                     use_memory_stores=bool(job.payload.get("evidence"))
                     and not bool(job.payload.get("persist_db")),
+                    job_org_id=job.org_id,
                 )
                 if result.status == "failed":
                     raise RuntimeError(

@@ -14,6 +14,11 @@ from fel_workers.extraction.budget import RunBudget
 from fel_workers.extraction.errors import ProviderError, ProviderRefused, SchemaInvalid
 from fel_workers.extraction.hashing import request_hash, step_key
 from fel_workers.extraction.roles.base import MAX_ATTEMPTS, RoleSpec
+from fel_workers.extraction.types import Role
+from fel_workers.extraction.validate.schema import validate_payload_item
+
+# Proposal-bearing roles: envelope + per-item payload schema.
+_PROPOSAL_ITEM_ROLES = frozenset({Role.KPI, Role.GUIDANCE, Role.DRIVER_MAPPER})
 
 
 @dataclass(frozen=True)
@@ -47,6 +52,33 @@ def _envelope_errors(parsed: dict[str, object], schema: dict[str, object]) -> li
 
 def _is_empty_proposals(parsed: dict[str, object]) -> bool:
     return "proposals" in parsed and parsed.get("proposals") == []
+
+
+def _proposal_item_schema_errors(parsed: dict[str, object]) -> list[str] | None:
+    """Return errors when proposals is non-empty and every item is schema-invalid.
+
+    ``None`` means accept the envelope (at least one valid item, or no proposals
+    key to check). Empty proposals are handled as Abstention before this runs.
+    """
+    if "proposals" not in parsed:
+        return None
+    proposals = parsed.get("proposals")
+    if not isinstance(proposals, list) or not proposals:
+        return None
+    item_errors: list[str] = []
+    any_valid = False
+    for idx, item in enumerate(proposals):
+        if not isinstance(item, dict):
+            item_errors.append(f"proposals[{idx}] must be an object")
+            continue
+        errs = validate_payload_item(item)
+        if errs:
+            item_errors.extend(f"proposals[{idx}]: {e}" for e in errs)
+        else:
+            any_valid = True
+    if any_valid:
+        return None
+    return item_errors or ["all proposal items failed schema validation"]
 
 
 def run_model_step(
@@ -133,20 +165,35 @@ def run_model_step(
                     outcome: dict[str, object] | Abstention = Abstention(
                         "explicit zero-proposal envelope"
                     )
-                else:
-                    outcome = result.parsed
-                return StepResult(
-                    key,
-                    root_input_hash,
-                    outcome,
-                    prov,
-                    model,
-                    tuple(response_ids),
-                    tuple(attempt_hashes),
-                    attempt,
-                    spec.instructions_hash(),
-                )
-            problems = env_errors
+                    return StepResult(
+                        key,
+                        root_input_hash,
+                        outcome,
+                        prov,
+                        model,
+                        tuple(response_ids),
+                        tuple(attempt_hashes),
+                        attempt,
+                        spec.instructions_hash(),
+                    )
+                item_errors: list[str] | None = None
+                if spec.role in _PROPOSAL_ITEM_ROLES:
+                    item_errors = _proposal_item_schema_errors(result.parsed)
+                if item_errors is None:
+                    return StepResult(
+                        key,
+                        root_input_hash,
+                        result.parsed,
+                        prov,
+                        model,
+                        tuple(response_ids),
+                        tuple(attempt_hashes),
+                        attempt,
+                        spec.instructions_hash(),
+                    )
+                problems = item_errors
+            else:
+                problems = env_errors
 
         if attempt < MAX_ATTEMPTS:
             failed_output = (
