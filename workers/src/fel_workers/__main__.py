@@ -274,6 +274,11 @@ def run_main(argv: list[str]) -> int:
     except RuntimeError as exc:
         log.error("%s", exc)
         return 2
+    from fel_providers.mocks import MockStructuredLLMProvider
+
+    # M3 extraction_run jobs need a StructuredLLMProvider. CI/mock smoke uses
+    # the deterministic mock; live OpenAI adapter lands with #62 credentials.
+    structured_llm = MockStructuredLLMProvider()
     with psycopg.connect(database_url, autocommit=True) as conn:
         completed = run_worker(
             conn,
@@ -282,6 +287,7 @@ def run_main(argv: list[str]) -> int:
             queue_name=args.queue,
             max_iterations=args.max_iterations,
             should_continue=lambda: _running,
+            structured_llm=structured_llm,
         )
     log.info("worker run mode finished; %d job(s) completed", completed)
     return 0

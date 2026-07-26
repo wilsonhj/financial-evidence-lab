@@ -325,7 +325,7 @@ packages:
     depends_on: [M2-CLAIMS-VERIFICATION, M3-CONTRACT]
     team: extraction
     branch: agent/m3-extraction-core
-    status: ready # deps satisfied — #58 merged via #122, #101 merged via #112; serialize vs any contracts/migrations owner and blocked #108
+    status: active # dispatched 2026-07-26 on agent/m3-extraction-core from main @ 89e4363; serialize vs any contracts/migrations owner and blocked #108
     allowed_paths:
       - packages/ontology/**
       - packages/providers/**

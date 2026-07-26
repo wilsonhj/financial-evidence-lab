@@ -1,11 +1,11 @@
 # Implementation status
 
-Last updated: 2026-07-21
+Last updated: 2026-07-26
 
 ## Repository
 
 - Default and implementation base: `main`.
-- Current main tip: `ad1717b` (PR #128 js-yaml override; prior notable tips PR #127 DB-GUARD-HARDENING @ `e55eea8`, PR #119 M2-RETRIEVAL-BACKEND merge @ `c546ec2`).
+- Current main tip: local `89e4363` (Spec Kit reconcile; remote tip prior `3ff9976` #117). Active package: M3-EXTRACTION-CORE (#60) on `agent/m3-extraction-core`.
 - Canonical product spec: `specs/001-financial-evidence-lab/spec.md` v1.2.
 - M2 implementation design: `specs/002-observable-hybrid-retrieval/` plus ADR-0006 (live on main).
 - M3 implementation design: `specs/003-agentic-extraction/` plus ADR-0007 (live on main).
@@ -46,13 +46,13 @@ Still research-draft (not a dispatch blocker): recovered benchmark needs SEC tim
 
 ## Active
 
-None. No package currently `active`.
+1. **Active:** M3-EXTRACTION-CORE (#60) — branch `agent/m3-extraction-core`; paths `packages/ontology/**`, `packages/providers/**`, `workers/src/fel_workers/extraction/**`, `workers/src/fel_workers/consumer.py`, `workers/src/fel_workers/__main__.py`, `workers/tests/**`.
+
+Serialization notes: #60 must serialize with any contracts/migrations owner. Blocked #108 overlaps `apps/api/**` + `apps/web/**` + `evals/**` — if #108 unblocks, do not run it concurrently with any package holding those paths.
 
 ## Ready (post-#122/#123 reconciliation)
 
-1. **Ready:** M3-EXTRACTION-CORE (#60) — `packages/ontology/**`, `packages/providers/**`, `workers/src/fel_workers/extraction/**`, `workers/src/fel_workers/consumer.py`, `workers/src/fel_workers/__main__.py`, `workers/tests/**`; deps satisfied (M2-CLAIMS-VERIFICATION merged via #122; M3-CONTRACT merged via #112).
-
-Serialization notes: #60 must serialize with any contracts/migrations owner. Blocked #108 overlaps `apps/api/**` + `apps/web/**` + `evals/**` — if #108 unblocks, do not run it concurrently with any package holding those paths.
+None. Next after #60: M3-REVIEW (#61).
 
 ## Blocked (registered, not dispatchable)
 

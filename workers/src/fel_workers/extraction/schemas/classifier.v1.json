@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fel.local/workers/extraction/schemas/classifier/v1",
+  "title": "ExtractionClassifier",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["document_type", "sections", "relevant_modes"],
+  "properties": {
+    "document_type": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sections": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["source_span_id", "label"],
+        "properties": {
+          "source_span_id": {
+            "type": "string",
+            "minLength": 8
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "relevant_modes": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["kpi", "guidance", "revenue_driver"]
+      },
+      "uniqueItems": true
+    }
+  },
+  "x-fel-version": "1.0.0"
+}

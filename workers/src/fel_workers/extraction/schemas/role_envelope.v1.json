@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fel.local/workers/extraction/schemas/role-envelope/v1",
+  "title": "ExtractionRoleEnvelope",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["proposals"],
+  "properties": {
+    "proposals": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "notes": {
+      "type": ["string", "null"]
+    }
+  },
+  "x-fel-version": "1.0.0"
+}
