@@ -8,6 +8,7 @@ from typing import Any, cast
 
 from fel_ontology import build_comparability_key
 from fel_ontology.models import OntologyDocument
+from fel_workers.extraction.errors import IntegrityError
 from fel_workers.extraction.hashing import hash_json, proposal_id_for, sha256_hex
 from fel_workers.extraction.types import ConflictDraft, ExtractionMode, ProposalDraft
 from fel_workers.extraction.validate.checks import (
@@ -60,7 +61,9 @@ def validate_proposals(
             ontology=ontology,
             evidence_by_span=evidence_by_span,
         )
-        assert draft.state == "needs_review"
+        if draft.state != "needs_review":
+            # errors.py: never emit a proposal that is not awaiting review.
+            raise IntegrityError(f"proposal state must be needs_review, got {draft.state!r}")
         drafts.append(draft)
         cleaned_payloads.append(clean)
 

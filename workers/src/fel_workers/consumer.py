@@ -257,6 +257,13 @@ def run_worker(
             connection_factory, job, interval_seconds=heartbeat_interval_seconds
         )
         heartbeat.start()
+
+        def _lease_check(hb: LeaseHeartbeat = heartbeat) -> bool:
+            # Bound as a default so the closure captures this iteration's
+            # heartbeat (ruff B023); annotated so mypy can infer it against
+            # the Callable[[], bool] parameter.
+            return not hb.lease_lost
+
         try:
             if job.kind == JOB_KIND_SEC_DISCOVERY:
                 run_discovery_job(conn, sec, job.payload, job_queue=queue_name)
@@ -277,7 +284,7 @@ def run_worker(
                     conn,
                     extraction_provider,
                     job.payload,
-                    lease_check=lambda hb=heartbeat: not hb.lease_lost,
+                    lease_check=_lease_check,
                     # Inline evidence => mock/test path (no extraction_runs seed required).
                     use_memory_stores=bool(job.payload.get("evidence"))
                     and not bool(job.payload.get("persist_db")),

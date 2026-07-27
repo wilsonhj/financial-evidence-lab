@@ -70,7 +70,8 @@ def handle_extraction_run(
     else:
         memory = conn is None or inline_evidence
     if not memory:
-        assert conn is not None
+        if conn is None:  # pragma: no cover — narrowed by the branch above
+            raise RuntimeError("database persistence selected without a connection")
         assert_workspace_ownership(conn, org_id=request.org_id, workspace_id=request.workspace_id)
         persist: Any = PostgresPersistStore(conn)
         persist.mark_running(run_id=request.run_id, org_id=request.org_id)

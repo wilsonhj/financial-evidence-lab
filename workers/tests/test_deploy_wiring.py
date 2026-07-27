@@ -71,13 +71,17 @@ def _run_entrypoint(
     """Run ``python -m fel_workers run`` with a scrubbed environment.
 
     The environment is built from scratch (not inherited): the passthrough
-    variables above, PYTHONPATH so the subprocess resolves fel_workers and
-    fel_providers the same way pytest does, the dummy DSN, and the mode
+    variables above, PYTHONPATH so the subprocess resolves fel_workers,
+    fel_providers and fel_ontology the same way pytest does, the dummy DSN, and the mode
     variables under test. Nothing else — production-like.
     """
     env = {key: os.environ[key] for key in _PASSTHROUGH_VARS if key in os.environ}
     env["PYTHONPATH"] = os.pathsep.join(
-        [str(_REPO_ROOT / "workers" / "src"), str(_REPO_ROOT / "packages" / "providers")]
+        [
+            str(_REPO_ROOT / "workers" / "src"),
+            str(_REPO_ROOT / "packages" / "providers"),
+            str(_REPO_ROOT / "packages" / "ontology"),
+        ]
     )
     env["FEL_DATABASE_URL"] = dsn
     env.update(mode_env)

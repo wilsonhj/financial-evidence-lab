@@ -108,12 +108,7 @@
         "dollar-based net expansion rate"
       ],
       "required_qualifiers": ["base_quantity", "window", "population_scope"],
-      "comparability_key_fields": [
-        "metric_id",
-        "base_quantity",
-        "window",
-        "population_scope"
-      ],
+      "comparability_key_fields": ["metric_id", "base_quantity", "window", "population_scope"],
       "derivation_policy": "reported_ratio",
       "review_policy": "monetary_manual_only",
       "notes": "ARR vs product revenue vs ACV bases are not comparable; expansion naming ≠ retention inclusions."
@@ -129,12 +124,7 @@
       "scale_handling": "percent",
       "aliases": ["gross revenue retention", "GRR", "gross retention"],
       "required_qualifiers": ["base_quantity", "window", "churn_inclusions"],
-      "comparability_key_fields": [
-        "metric_id",
-        "base_quantity",
-        "window",
-        "churn_inclusions"
-      ],
+      "comparability_key_fields": ["metric_id", "base_quantity", "window", "churn_inclusions"],
       "derivation_policy": "reported_ratio",
       "review_policy": "monetary_manual_only",
       "notes": "Churn/contraction inclusion differences break comparability."
@@ -170,11 +160,7 @@
         "customers with ARR of $100,000 or more"
       ],
       "required_qualifiers": ["threshold_amount", "threshold_basis"],
-      "comparability_key_fields": [
-        "metric_id",
-        "threshold_amount",
-        "threshold_basis"
-      ],
+      "comparability_key_fields": ["metric_id", "threshold_amount", "threshold_basis"],
       "derivation_policy": "reported",
       "review_policy": "manual_review",
       "notes": "ARR vs TTM revenue vs ACV at the same dollar cutoff are not comparable."
@@ -293,11 +279,7 @@
       "unit": "percent",
       "period_semantics": "duration",
       "scale_handling": "percent",
-      "aliases": [
-        "subscription gross margin",
-        "product gross margin",
-        "subscription GM"
-      ],
+      "aliases": ["subscription gross margin", "product gross margin", "subscription GM"],
       "required_qualifiers": ["margin_scope"],
       "comparability_key_fields": ["metric_id", "margin_scope"],
       "derivation_policy": "sub_revenue_minus_sub_cogs_when_cited",
@@ -313,11 +295,7 @@
       "unit": "percent",
       "period_semantics": "duration",
       "scale_handling": "percent",
-      "aliases": [
-        "services gross margin",
-        "professional services gross margin",
-        "services GM"
-      ],
+      "aliases": ["services gross margin", "professional services gross margin", "services GM"],
       "required_qualifiers": ["margin_scope"],
       "comparability_key_fields": ["metric_id", "margin_scope"],
       "derivation_policy": "services_revenue_minus_services_cogs_when_cited",
