@@ -3,8 +3,11 @@ packages:
   - "packages/*"
 
 # Security overrides so `node scripts/audit-bulk.mjs` in CI stays green.
-# - next>postcss (M1-EVIDENCE-UI): next@16.2.10 pins postcss 8.4.31 (GHSA-qx2v-qp2m-jg93);
-#   scoped to next so other consumers (e.g. vite) keep their declared resolution.
+# - postcss (M1-EVIDENCE-UI, GHSA-qx2v-qp2m-jg93 then GHSA-r28c-9q8g-f849): originally
+#   scoped to next@16.2.10's postcss 8.4.31 pin so other consumers kept their declared
+#   resolution. GHSA-r28c-9q8g-f849 (path traversal via sourceMappingURL auto-loading)
+#   covers <=8.5.17, which both next@16.2.11 and vite@8.1.4 resolved, so the scoping no
+#   longer holds — the override is global and forces patched 8.5.x (>=8.5.18).
 # - js-yaml (GHSA-52cp-r559-cp3m / CVE-2026-59869): @redocly/openapi-core@1.34.17
 #   (via openapi-typescript in @fel/contracts) pins js-yaml@4.2.0; force >=4.3.0.
 # - fast-uri (GHSA-v2hh-gcrm-f6hx): ajv@8.20.0 pins fast-uri@3.1.3 (host
@@ -12,7 +15,7 @@ packages:
 # - next>sharp (GHSA-f88m-g3jw-g9cj): next@16.2.10 pins sharp@0.34.5 for image
 #   optimization (libvips CVEs); scoped to next, force patched 0.35.x (^0.35.0).
 overrides:
-  "next>postcss": "^8.5.10"
+  "postcss": "^8.5.18"
   "js-yaml": "^4.3.0"
   "fast-uri": "^3.1.4"
   "next>sharp": "^0.35.0"
