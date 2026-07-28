@@ -5,7 +5,8 @@ Last updated: 2026-07-28
 ## Repository
 
 - Default and implementation base: `main`.
-- Current main tip before this merge: `eed2140` (#144 postcss/brace-expansion advisory remediation, stacked on #142). No active package; next dispatch is M3-REVIEW (#61).
+- Current `origin/main` tip: `eed2140` (#144 postcss/brace-expansion advisory remediation, stacked on #142). Note: local `main` may sit at `89e4363`, which is **not** on `origin/main` — it reached the remote only via `agent/m3-extraction-core` and lands with PR #145. Always resolve trunk against `origin/main`.
+- In review: M3-EXTRACTION-CORE (#60) on `agent/m3-extraction-core` (PR #145). Next dispatch after it merges is M3-REVIEW (#61).
 - Canonical product spec: `specs/001-financial-evidence-lab/spec.md` v1.2.
 - M2 implementation design: `specs/002-observable-hybrid-retrieval/` plus ADR-0006 (live on main).
 - M3 implementation design: `specs/003-agentic-extraction/` plus ADR-0007 (live on main).
@@ -25,8 +26,7 @@ Last updated: 2026-07-28
 - M2-RETRIEVAL-BACKEND full package: PRs #114 + #119 / issue #57 (closed) — item builder, versioned index publish + exact-vs-HNSW oracle, cutoff-safe lanes, deterministic planner, RRF k=60 fusion, query/trace/SSE/rerun/feedback API with persisted byte-stable replay; acceptance report at `packages/retrieval/ACCEPTANCE.md`.
 - M2-CLAIMS-VERIFICATION full package: PR #122 / issue #58 (merged) — atomic claim decomposition, citation entailment/verification, abstention, 50–100-question smoke gate, retrieval/performance suite; live 65-question exit gate deferred to follow-up #132.
 - M2-OBSERVATORY-UI full package: PR #123 / issue #59 (merged) — Search Observatory trace timeline, lane toggles, evidence feedback, and replay; browser E2E and live SSE deferred to follow-ups #131/#134/#135.
-- Dependency-advisory remediation chain on `main`: PRs #140 (fast-uri/sharp + fail-closed audit-gate triage), #142 (globalize postcss override), #144 (postcss floor `^8.5.23` + brace-expansion GHSA-mh99-v99m-4gvg). The `brace-expansion` entry in `scripts/audit-allowlist.json` is **package-wide and expires 2026-10-24** — it will mask any future finding for that advisory, including against a 5.x resolution. Scheduled refresh tracked by #143.
-- M3-EXTRACTION-CORE full package: PR #145 / issue #60 (merged) — `packages/ontology` saas-metrics/v1 (14 metrics / 9 families), bounded durable extraction workflow (budgets, checkpoints, five typed roles), Decimal normalize/validate, `extraction_run` consumer dispatch, proposals always `needs_review`. Review remediation on-branch: numeric parser truncation (`4200000` → `420`), evidence truncated to 64 chars on resume, mock model bound unconditionally in the production entrypoint, worker packaging, budget reset per retry, runs stuck `running` after untyped escapes. Two defects found by first real-Postgres coverage: four of five terminal paths never wrote their terminal event (0004 rejects child inserts once a run row is terminal), and content-triggered mock controls (`ABSTAIN`/`REFUSE`) were reachable from untrusted filing text. Live OpenAI deferred to #62; terminal-run retry semantics to #146.
+- Dependency-advisory remediation chain on `main`: PRs #128 (js-yaml GHSA-52cp @ `ad1717b`), #140 (fast-uri/sharp + fail-closed audit-gate triage @ `ef13b0f`), #142 (globalize postcss override @ `1208028`), #144 (postcss floor `^8.5.23` + brace-expansion GHSA-mh99-v99m-4gvg @ `eed2140`). All four touch `shared_paths` and are the class of change #141 is about. The `brace-expansion` entry in `scripts/audit-allowlist.json` is **package-wide and expires 2026-10-24** — it will mask any future finding for that advisory, including against a 5.x resolution. Scheduled refresh tracked by #143.
 - DB-GUARD-HARDENING: PR #127 / issue #125 (closed) — retroactive 0005 authorization record, as-fel_app guard-harness pass, superseded-pin regression, helper consolidation.
 - Migration `0005` query-guard role fix (fel_guard_query FOR SHARE vs SELECT-only fel_app): PR #118, with as-fel_app harness regression.
 - Retrieval integration suites isolated in a dedicated `<db>_retrieval` test database (cross-suite FK isolation defect found by first CI exposure): PR #119.
@@ -48,15 +48,19 @@ Still research-draft (not a dispatch blocker): recovered benchmark needs SEC tim
 
 ## Active
 
-None.
+1. **In review:** M3-EXTRACTION-CORE (#60) — branch `agent/m3-extraction-core`, PR **#145** OPEN from `main` @ `eed2140`. All five checks green, `mergeStateStatus: CLEAN`, no review submitted (GitHub disallows self-approval, so `reviewDecision` is empty despite four blockers having been raised and resolved). Nothing else may claim its paths until this merges.
+
+   Scope delivered: `packages/ontology` saas-metrics/v1 (14 metrics / 9 families), bounded durable extraction workflow (budgets, checkpoints, five typed roles), Decimal normalize/validate, `extraction_run` consumer dispatch, proposals always `needs_review`. Review remediation on-branch: numeric parser truncation (`4200000` → `420`), evidence truncated to 64 chars on resume, mock model bound unconditionally in the production entrypoint, worker packaging, budget reset per retry, runs stuck `running` after untyped escapes. Two defects found by first real-Postgres coverage: four of five terminal paths never wrote their terminal event (0004 rejects child inserts once a run row is terminal), and content-triggered mock controls (`ABSTAIN`/`REFUSE`) were reachable from untrusted filing text. Live OpenAI deferred to #62; terminal-run retry semantics to #146.
+
+   Move this record into **Completed** when PR #145 lands, and flip `workstreams.yaml` `status: review` -> `merged` with the merge SHA.
 
 Serialization notes: blocked #108 overlaps `apps/api/**` + `apps/web/**` + `evals/**` — if #108 unblocks, do not run it concurrently with any package holding those paths.
 
-## Ready (post-#145 reconciliation)
+## Ready
 
-1. **Ready:** M3-REVIEW (#61) — branch `agent/m3-review`; paths `apps/web/**`, `apps/api/**`. Unblocked by #60 merging via PR #145.
+None — #61 and #62 both depend on #60, which has not merged yet.
 
-Then M3-CONFIDENCE-GATE (#62), which also owns the live OpenAI adapter #60 deferred.
+On #145 merging, M3-REVIEW (#61) becomes ready (branch `agent/m3-review`, not yet created; paths `apps/web/**`, `apps/api/**`), then M3-CONFIDENCE-GATE (#62), which also owns the live OpenAI adapter #60 deferred. Flip both `status:` keys in `workstreams.yaml` at the same time — they currently inherit `defaults.status: blocked`.
 
 ## Blocked (registered, not dispatchable)
 
@@ -68,7 +72,7 @@ Then M3-CONFIDENCE-GATE (#62), which also owns the live OpenAI adapter #60 defer
 
 ## Next (after ready merges)
 
-1. M3-EXTRACTION-CORE (#60) on #58 + #101 (both merged) — now ready; then #61/#62.
+1. M3-EXTRACTION-CORE (#60) — delivered on `agent/m3-extraction-core`; awaiting merge of PR #145. Then #61, then #62.
 2. READER-PROD-SMOKE (#108) remains blocked until credentials + integrity residual cleared (does **not** gate #60).
 
 ### M2 follow-ups (issues opened 2026-07-21)
@@ -83,6 +87,14 @@ Tracked after the #122/#123 merges; none blocks #60.
 - **#137** — M2-CLAIMS fast-follow hardening (mock→live cutover hygiene).
 - **#138** — M2-OBSERVATORY: dedicated web-layer client telemetry.
 - PR **#131** — Observatory Playwright E2E in fixture mode (**merged** @ `bc6a2a3`; #59 criterion 6). Re-scope or close **#134** against it: that issue still reads as if E2E-in-CI were outstanding.
+
+### Open issues carried but not queued
+
+These are OPEN on GitHub and own no package entry in `workstreams.yaml`. Listed so resume rule 2 has something to reconcile against.
+
+- **#81** — [EXT-2b] supplemental SEC stress cohort: restore the ≥8 distinct stress-feature bar. Open since 2026-07-13, `agent-task`, appears in neither handoff file.
+- **#56** — [M1-CORPUS-QA] open; corpus QA is listed under Completed above, with the T0112 live-artifact residual tracked only as a trailing comment in `workstreams.yaml`. Needs the same explicit tracker note #96 has, or closing.
+- **#87** — [M1-READER-INTEGRATION] open, `contract-change`; referenced only as "child F of #87". Neither file states the parent is still open.
 
 ### M3 / process follow-ups (opened 2026-07-24 → 2026-07-28)
 
