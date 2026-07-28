@@ -35,6 +35,7 @@ JSON files (no secrets in this tree — see `../README.md` and
 | `FEL_DATABASE_URL` | yes | Postgres connection string for the job queue. The consumer exits with status 2 if unset. |
 | `FEL_SEC_LIVE` | to select live mode | When set truthy (see "Mode flag values" below), binds the live EDGAR client. Live mode fails closed: the process exits with status 2 unless `FEL_STORAGE_DIR` and `FEL_SEC_USER_AGENT` are also set. |
 | `FEL_MOCK_SMOKE` | to select mock mode | When set truthy, explicitly opts in to the deterministic mock providers. Non-production smoke option ONLY: a mock run claims real queued jobs and completes them with fabricated output, so it must be isolated on a non-production database/queue. Never set on a service pointed at production. |
+| `FEL_ALLOW_MOCK_LLM` | to run extraction with the mock model | Binds the deterministic mock `StructuredLLMProvider` for `extraction_run` jobs. Separate from `FEL_MOCK_SMOKE` and NOT implied by it: mock SEC ingestion fabricates documents, whereas the mock model fabricates complete financial PROPOSALS — a fixed ARR figure, period and evidence span ids — that the persist path writes into a tenant's `needs_review` queue, indistinguishable from genuine model output to a human reviewer. A worker started on the `extraction` queue without this variable exits with status 2 before any database connection. The live OpenAI adapter lands with #62. |
 | `FEL_SEC_USER_AGENT` | when live mode is selected | SEC fair-access identity sent as the EDGAR `User-Agent`. Value shape: `org-or-app name (contact@example.com)` — at least 8 characters and containing a plausible contact address (`@` with a dotted domain; degenerate values like `@` or `ops@example` exit with status 2). The in-code default identity remains for library/tests only; the production identity always comes from this variable. |
 | `FEL_STORAGE_DIR` | only when live mode is selected | Durable path for ingested blobs (`LocalDirStorageProvider`). On Railway this must point inside a mounted volume — container disk is ephemeral, and blobs stored outside a volume vanish on redeploy, leaving persisted storage keys (and citations) unresolvable. |
 | `FEL_FRED_API_KEY` | not yet consumed | Reserved for future FRED/ALFRED job kinds. The deployed consumer today dispatches SEC discovery/fetch jobs only and does NOT read this variable — setting it has no effect until FRED ingestion lands. |
@@ -42,7 +43,8 @@ JSON files (no secrets in this tree — see `../README.md` and
 
 ### Mode flag values
 
-`FEL_SEC_LIVE` and `FEL_MOCK_SMOKE` are parsed strictly: after stripping
+`FEL_SEC_LIVE`, `FEL_MOCK_SMOKE` and `FEL_ALLOW_MOCK_LLM` are parsed
+strictly: after stripping
 whitespace, case-insensitive `1`/`true`/`yes`/`on` means set; absent or
 empty means unset; ANY other non-empty value — including typos like
 `ture` and including `0` — exits with status 2 naming the variable and
