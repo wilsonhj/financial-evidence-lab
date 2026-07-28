@@ -18,14 +18,15 @@ This suite therefore resumes through a FRESH store object on a FRESH
 connection, which is the only configuration that actually reads the durable
 row. Skips without TEST_DATABASE_URL, as the other DB-backed suites do.
 
-Requires a FRESH database, which is what CI provisions. These are the first
-tests to create durable `extraction_runs` rows, and 0004 makes them permanent
-(`extraction_runs cannot be deleted`, and `extraction_proposal_evidence is
-append-only`), so the rows cannot be torn down. They pin the `corpus_versions`
-row they reference, and the shared `corpus_conn` fixture deletes
-`corpus_versions` globally rather than per-org — so re-running against an
-already-used database fails in `test_consumer_dispatch`, not here. Recreate the
-database between local runs.
+Runs against an isolated `<db>_extraction` sibling, for the same reason the
+retrieval integration suites use `<db>_retrieval` (PR #119). These are the
+first tests to commit durable `extraction_runs` rows, and 0004 makes them
+permanent (`extraction_runs cannot be deleted`, `extraction_proposal_evidence
+is append-only`), so they cannot be torn down. Each row pins the
+`corpus_versions` row it references, while the shared `corpus_conn` fixture
+deletes `corpus_versions` globally rather than per-org — so sharing the base
+database would break every later suite in the same CI run at fixture setup,
+not this one. See `ensure_extraction_database`.
 """
 
 from __future__ import annotations
@@ -33,7 +34,9 @@ from __future__ import annotations
 import os
 import uuid
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit, urlunsplit
 
 import psycopg
 import pytest
@@ -70,6 +73,48 @@ _SECTION = "00000000-0000-0000-0000-00000000c801"
 # span chain must be seeded under them or the composite fk rejects the insert.
 _SPAN = FIXTURE_SPAN
 _DOC_VERSION = FIXTURE_DOC
+
+
+def ensure_extraction_database(base_url: str) -> str:
+    """Create and migrate a dedicated ``<db>_extraction`` sibling; return its URL.
+
+    Mirrors `packages/retrieval/tests/conftest.py::ensure_retrieval_database`,
+    for the same reason. These tests commit durable `extraction_runs` rows, and
+    0004 makes them permanent (`extraction_runs cannot be deleted`,
+    `extraction_proposal_evidence is append-only`). Such a row holds an FK to
+    `corpus_versions`, so running against the base TEST_DATABASE_URL
+    permanently blocks the workers/ingestion suites' `DELETE FROM
+    corpus_versions` cleanup — every later suite sharing the database fails at
+    fixture setup. An isolated sibling keeps that blast radius local. Roles are
+    cluster-level, so grants inside the migrations resolve there too.
+
+    Idempotent: creation swallows DuplicateDatabase, and the non-idempotent
+    migrations run only when the marker table is absent.
+    """
+    parsed = urlsplit(base_url)
+    extraction_db = parsed.path.lstrip("/") + "_extraction"
+    extraction_url = urlunsplit(parsed._replace(path="/" + extraction_db))
+
+    with psycopg.connect(base_url, autocommit=True) as conn:
+        try:
+            conn.execute(f'CREATE DATABASE "{extraction_db}"')  # noqa: S608 — derived name
+        except psycopg.errors.DuplicateDatabase:
+            pass
+
+    repo_root = Path(__file__).resolve().parents[3]
+    with psycopg.connect(extraction_url, autocommit=True) as conn:
+        marker = conn.execute("SELECT to_regclass('public.extraction_runs')").fetchone()
+        if marker is None or marker[0] is None:
+            for path in sorted(repo_root.glob("db/migrations/*.sql")):
+                conn.execute(path.read_text())
+    return extraction_url
+
+
+@pytest.fixture(scope="module")
+def extraction_db_url() -> str:
+    if TEST_DATABASE_URL is None:
+        pytest.skip("TEST_DATABASE_URL not configured")
+    return ensure_extraction_database(TEST_DATABASE_URL)
 
 
 def _seed_parents(conn: psycopg.Connection) -> None:
@@ -235,7 +280,7 @@ def _postgres_deps(conn: psycopg.Connection, llm: _CountingLLM, **extra: Any) ->
 
 
 @pytest.mark.skipif(TEST_DATABASE_URL is None, reason="TEST_DATABASE_URL not configured")
-def test_crash_and_resume_through_real_postgres_stores() -> None:
+def test_crash_and_resume_through_real_postgres_stores(extraction_db_url: str) -> None:
     """Resume after process death must restore stage output from the durable row.
 
     The second pass uses new store objects on a new connection, so
@@ -243,12 +288,11 @@ def test_crash_and_resume_through_real_postgres_stores() -> None:
     rehydrate from `extraction_run_events`. If it returns `output=None` the
     workflow re-runs committed stages, which the call counter catches.
     """
-    assert TEST_DATABASE_URL is not None
 
     # Baseline: an uninterrupted run, to know how much model work the pipeline
     # costs exactly once. Resume must not exceed it.
     baseline_request = _request(str(uuid.uuid4()))
-    with psycopg.connect(TEST_DATABASE_URL, autocommit=True) as conn:
+    with psycopg.connect(extraction_db_url, autocommit=True) as conn:
         _seed_parents(conn)
         _seed_run(conn, baseline_request)
         PostgresPersistStore(conn).mark_running(run_id=baseline_request.run_id, org_id=_ORG)
@@ -262,7 +306,7 @@ def test_crash_and_resume_through_real_postgres_stores() -> None:
 
     run_id = str(uuid.uuid4())
     request = _request(run_id)
-    with psycopg.connect(TEST_DATABASE_URL, autocommit=True) as conn:
+    with psycopg.connect(extraction_db_url, autocommit=True) as conn:
         _seed_run(conn, request)
         PostgresPersistStore(conn).mark_running(run_id=run_id, org_id=_ORG)
         # Die after the first model stage commits, so resume has real work to
@@ -282,7 +326,7 @@ def test_crash_and_resume_through_real_postgres_stores() -> None:
         ), "process death must leave the run resumable, not terminal"
 
     # Process death: nothing survives but the database.
-    with psycopg.connect(TEST_DATABASE_URL, autocommit=True) as fresh_conn:
+    with psycopg.connect(extraction_db_url, autocommit=True) as fresh_conn:
         fresh_conn.execute("SELECT set_config('app.org_id', %s, false)", (_ORG,))
         second = _CountingLLM()
         final = run_extraction_workflow(
@@ -301,18 +345,17 @@ def test_crash_and_resume_through_real_postgres_stores() -> None:
 
 
 @pytest.mark.skipif(TEST_DATABASE_URL is None, reason="TEST_DATABASE_URL not configured")
-def test_stage_output_round_trips_through_the_durable_event_row() -> None:
+def test_stage_output_round_trips_through_the_durable_event_row(extraction_db_url: str) -> None:
     """Narrow guard on the mechanism the resume above depends on.
 
     `extraction_run_steps` has no output column, so `load_succeeded` hydrates
     from the `step_completed` event payload. A fresh store proves the read
     comes from Postgres rather than the in-process cache.
     """
-    assert TEST_DATABASE_URL is not None
     run_id = str(uuid.uuid4())
     request = _request(run_id)
 
-    with psycopg.connect(TEST_DATABASE_URL, autocommit=True) as conn:
+    with psycopg.connect(extraction_db_url, autocommit=True) as conn:
         _seed_parents(conn)
         _seed_run(conn, request)
         PostgresPersistStore(conn).mark_running(run_id=run_id, org_id=_ORG)
@@ -333,7 +376,7 @@ def test_stage_output_round_trips_through_the_durable_event_row() -> None:
     assert committed is not None, "the crashed pass committed no succeeded step"
     step_name, input_hash = committed
 
-    with psycopg.connect(TEST_DATABASE_URL, autocommit=True) as fresh_conn:
+    with psycopg.connect(extraction_db_url, autocommit=True) as fresh_conn:
         fresh_conn.execute("SELECT set_config('app.org_id', %s, false)", (_ORG,))
         record = PostgresCheckpointStore(conn=fresh_conn).load_succeeded(
             run_id=run_id,
@@ -352,7 +395,7 @@ def test_stage_output_round_trips_through_the_durable_event_row() -> None:
 
 
 @pytest.mark.skipif(TEST_DATABASE_URL is None, reason="TEST_DATABASE_URL not configured")
-def test_terminal_event_is_written_before_the_run_row_goes_terminal() -> None:
+def test_terminal_event_is_written_before_the_run_row_goes_terminal(extraction_db_url: str) -> None:
     """A failing run must still persist its `run_failed` event.
 
     0004's `fel_assert_extraction_run_open` rejects every child insert once the
@@ -362,11 +405,10 @@ def test_terminal_event_is_written_before_the_run_row_goes_terminal() -> None:
     escaped this, which is exactly the branch the memory-backed happy path
     covers.
     """
-    assert TEST_DATABASE_URL is not None
     run_id = str(uuid.uuid4())
     request = _request(run_id)
 
-    with psycopg.connect(TEST_DATABASE_URL, autocommit=True) as conn:
+    with psycopg.connect(extraction_db_url, autocommit=True) as conn:
         _seed_parents(conn)
         _seed_run(conn, request)
         PostgresPersistStore(conn).mark_running(run_id=run_id, org_id=_ORG)
