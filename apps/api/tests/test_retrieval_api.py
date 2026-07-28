@@ -26,7 +26,7 @@ from tests.conftest import TEST_DATABASE_URL, ensure_retrieval_database, require
 pytestmark = requires_db
 
 import app.retrieval as retrieval  # noqa: E402
-from fel_providers import MockEmbeddingProvider  # noqa: E402
+from fel_providers import MockEmbeddingProvider, MockStructuredLLMProvider  # noqa: E402
 from fel_retrieval import build_and_publish, make_index_version_spec  # noqa: E402
 
 
@@ -342,12 +342,23 @@ def test_citations_verified_with_numeric_checks(
 
 
 def test_provider_refusal_abstains(
-    client: TestClient, org: tuple[str, str], seeded: dict[str, str], db_url: str
+    client: TestClient,
+    org: tuple[str, str],
+    seeded: dict[str, str],
+    db_url: str,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """M2-022: when the provider refuses, no claim is supported so the run
     abstains (verifying -> abstained, terminal run_abstained)."""
-    # The mock structured provider refuses when the prompt contains "REFUSE".
-    created = _create(client, org, seeded["workspace_id"], question="REFUSE this revenue question")
+
+    # Refusal is configured on the provider the run resolves, never triggered by
+    # prompt content (see test_question_containing_refuse_still_answers).
+    def _refusing_provider() -> MockStructuredLLMProvider:
+        return MockStructuredLLMProvider(refuse=True)
+
+    monkeypatch.setattr(retrieval, "MockStructuredLLMProvider", _refusing_provider)
+
+    created = _create(client, org, seeded["workspace_id"])
     trace = client.get(f"/v1/retrieval-runs/{created['run_id']}", headers=_headers(*org)).json()
 
     assert trace["status"] == "abstained"
@@ -359,6 +370,20 @@ def test_provider_refusal_abstains(
     row = _run_row(db_url, created["run_id"])
     assert row["status"] == "abstained"
     assert row["last_event"] == "run_abstained"
+
+
+def test_question_containing_refuse_still_answers(
+    client: TestClient, org: tuple[str, str], seeded: dict[str, str]
+) -> None:
+    """The question is untrusted input. It must not reach a provider refusal
+    switch: a caller (or an injected span) that writes "REFUSE" would otherwise
+    deny every answer on the run."""
+    created = _create(client, org, seeded["workspace_id"], question="REFUSE this revenue question")
+    trace = client.get(f"/v1/retrieval-runs/{created['run_id']}", headers=_headers(*org)).json()
+
+    assert trace["status"] == "succeeded"
+    assert trace["claims"], "expected claims despite 'REFUSE' in the question"
+    assert trace["events"][-1]["type"] == "run_completed"
 
 
 def test_trace_replay_byte_stable(

@@ -22,6 +22,12 @@ Two modes:
     and complete them with fabricated output, so they must never point at
     a production database or queue.
 
+  The structured MODEL binding is a separate, equally explicit opt-in:
+  ``FEL_ALLOW_MOCK_LLM`` (see :func:`build_structured_llm`). Nothing else
+  binds a model, so an unconfigured worker cannot answer ``extraction_run``
+  jobs with fabricated financials; a worker pointed at the ``extraction``
+  queue without it exits 2 at startup (:func:`validate_extraction_model_binding`).
+
   Flag parsing is strict and normalized (see :func:`_read_mode_flag`):
   after stripping whitespace, case-insensitive ``1``/``true``/``yes``/``on``
   means set; absent or empty means unset; ANY other non-empty value (e.g.
@@ -45,7 +51,7 @@ from typing import TYPE_CHECKING
 import psycopg
 
 if TYPE_CHECKING:
-    from fel_providers.interfaces import SecClient, StorageProvider
+    from fel_providers.interfaces import SecClient, StorageProvider, StructuredLLMProvider
 
 log = logging.getLogger("fel_workers")
 
@@ -164,6 +170,65 @@ def build_run_providers() -> tuple[SecClient, StorageProvider]:
     return sec, LocalDirStorageProvider(storage_dir)
 
 
+# Queue that carries extraction_run jobs. Named here as a literal, like the
+# 'ingestion' argparse default above, so the configuration gates stay free of
+# the extraction package's import graph; pinned to
+# fel_workers.extraction.handler.DEFAULT_EXTRACTION_QUEUE by a test.
+EXTRACTION_QUEUE = "extraction"
+
+
+def build_structured_llm() -> StructuredLLMProvider | None:
+    """Bind the structured-model provider for run mode from the environment.
+
+    Returns ``None`` unless ``FEL_ALLOW_MOCK_LLM`` is set truthy (strict
+    parsing via :func:`_read_mode_flag`). The mock is deliberately NOT
+    implied by ``FEL_MOCK_SMOKE``: mock SEC ingestion fabricates documents,
+    but the mock model fabricates complete financial PROPOSALS — a fixed
+    ARR figure, period and evidence span ids — which the extraction persist
+    path writes into a tenant's ``needs_review`` queue, indistinguishable
+    from genuine model output for a human reviewer. That blast radius gets
+    its own opt-in. The live OpenAI adapter lands with #62 credentials.
+
+    With no model bound, ``extraction_run`` jobs are failed closed at
+    dispatch by :func:`fel_workers.consumer.run_worker` (missing-capability
+    path) rather than answered with fabricated output.
+    """
+    if not _read_mode_flag("FEL_ALLOW_MOCK_LLM"):
+        return None
+    from fel_providers.mocks import MockStructuredLLMProvider
+
+    log.warning(
+        "FEL_ALLOW_MOCK_LLM is set: extraction_run jobs will be answered by the"
+        " deterministic MOCK model and will persist FABRICATED proposals into"
+        " the review queue. Non-production smoke option only."
+    )
+    return MockStructuredLLMProvider()
+
+
+def validate_extraction_model_binding(queue_name: str) -> None:
+    """Refuse to start an extraction worker that has no model bound.
+
+    ``extraction_run`` jobs are enqueued on :data:`EXTRACTION_QUEUE`, so the
+    selected queue is the one startup-visible signal for "this worker will
+    dispatch extraction". Such a worker with no model can only fail every
+    job it claims, and failing at startup puts that in the deploy log
+    instead of leaving an apparently healthy service to bury it in the job
+    table. The gate is scoped to that queue on purpose: a live SEC ingestion
+    worker legitimately needs no model and must still start, and an
+    ``extraction_run`` that reaches it anyway is failed closed at dispatch.
+    """
+    if queue_name != EXTRACTION_QUEUE or _read_mode_flag("FEL_ALLOW_MOCK_LLM"):
+        return
+    raise RuntimeError(
+        f"queue {queue_name!r} carries extraction_run jobs but no model is"
+        " configured — refusing to start. Set FEL_ALLOW_MOCK_LLM=1 to opt in"
+        " explicitly to the deterministic mock model. WARNING: the mock model"
+        " answers every extraction with FABRICATED financial proposals that"
+        " land in the review queue looking like genuine output; it must never"
+        " point at a production database or queue."
+    )
+
+
 def resolve_provider_mode() -> str:
     """Resolve the explicit provider mode: ``"live"`` or ``"mock"``.
 
@@ -237,15 +302,17 @@ def run_entry(argv: list[str]) -> int:
     (usage to stdout, exit 0) works even on an unconfigured service; the
     fail-closed gate runs immediately after, still before any database
     connection: it enforces an explicit provider mode
-    (:func:`resolve_provider_mode`) and, in live mode, a configured SEC
-    identity (:func:`validate_live_user_agent`), then delegates to
-    :func:`run_main`. Exits 2 on any configuration error.
+    (:func:`resolve_provider_mode`), in live mode a configured SEC identity
+    (:func:`validate_live_user_agent`), and on the extraction queue a
+    configured model (:func:`validate_extraction_model_binding`), then
+    delegates to :func:`run_main`. Exits 2 on any configuration error.
     """
-    parse_run_args(argv)  # -h/--help (and usage errors) resolve here
+    args = parse_run_args(argv)  # -h/--help (and usage errors) resolve here
     _configure()
     try:
         if resolve_provider_mode() == "live":
             validate_live_user_agent()
+        validate_extraction_model_binding(args.queue)
     except RuntimeError as exc:
         log.error("%s", exc)
         return 2
@@ -259,7 +326,9 @@ def run_main(argv: list[str]) -> int:
     :func:`run_entry` (the only deployment path). Called directly, it keeps
     the legacy library/test contract of defaulting to mock providers via
     :func:`build_run_providers` — never expose this function as a service
-    entrypoint without the :func:`run_entry` gate in front of it.
+    entrypoint without the :func:`run_entry` gate in front of it. The
+    structured-model binding has no such default: it is ``None`` unless
+    :func:`build_structured_llm` sees the explicit opt-in, on every path.
     """
     from fel_workers.consumer import run_worker
 
@@ -271,14 +340,10 @@ def run_main(argv: list[str]) -> int:
         return 2
     try:
         sec, storage = build_run_providers()
+        structured_llm = build_structured_llm()
     except RuntimeError as exc:
         log.error("%s", exc)
         return 2
-    from fel_providers.mocks import MockStructuredLLMProvider
-
-    # M3 extraction_run jobs need a StructuredLLMProvider. CI/mock smoke uses
-    # the deterministic mock; live OpenAI adapter lands with #62 credentials.
-    structured_llm = MockStructuredLLMProvider()
     with psycopg.connect(database_url, autocommit=True) as conn:
         completed = run_worker(
             conn,

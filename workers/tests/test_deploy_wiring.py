@@ -178,6 +178,46 @@ def test_run_help_exits_0_even_unconfigured() -> None:
     assert "--max-iterations" in proc.stdout, proc.stdout
 
 
+def test_extraction_queue_without_model_opt_in_exits_2() -> None:
+    """A worker pointed at the extraction queue with no model bound must
+    refuse to START, not start healthy and fail every job it claims. The
+    mock model fabricates complete financial proposals, so binding it
+    implicitly is the defect this gate closes: the operator must say
+    FEL_ALLOW_MOCK_LLM out loud."""
+    proc = _run_entrypoint(
+        {"FEL_MOCK_SMOKE": "1"},
+        args=("--max-iterations", "1", "--queue", "extraction"),
+    )
+    _assert_config_exit_no_db(proc)
+    assert "FEL_ALLOW_MOCK_LLM" in proc.stderr
+    assert "extraction" in proc.stderr
+
+
+def test_extraction_queue_with_model_opt_in_passes_the_gate() -> None:
+    """The gate must not over-block: with the opt-in set, the extraction
+    worker proceeds to the database step (refused loopback), not a config
+    exit."""
+    proc = _run_entrypoint(
+        {"FEL_MOCK_SMOKE": "1", "FEL_ALLOW_MOCK_LLM": "1"},
+        dsn=REFUSED_DSN,
+        args=("--max-iterations", "1", "--queue", "extraction"),
+    )
+    assert proc.returncode != 2, (proc.stdout, proc.stderr)
+    assert "refusing to start" not in proc.stderr
+    # Taking the opt-in is loud: the fabricated-output warning is on the record.
+    assert "FABRICATED" in proc.stderr, proc.stderr
+    assert "OperationalError" in proc.stderr or "connection" in proc.stderr.lower(), proc.stderr
+
+
+def test_ingestion_queue_starts_without_a_model_binding() -> None:
+    """The gate is scoped to the extraction queue: a live SEC ingestion
+    worker legitimately has no model and must still start. An extraction_run
+    that reaches it anyway is failed closed at dispatch by run_worker."""
+    proc = _run_entrypoint({"FEL_MOCK_SMOKE": "1"}, dsn=REFUSED_DSN)
+    assert proc.returncode != 2, (proc.stdout, proc.stderr)
+    assert "refusing to start" not in proc.stderr
+
+
 def test_live_without_storage_exits_2() -> None:
     proc = _run_entrypoint({"FEL_SEC_LIVE": "1", "FEL_SEC_USER_AGENT": VALID_UA})
     _assert_config_exit_no_db(proc)

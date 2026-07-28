@@ -51,9 +51,10 @@ def test_generates_one_atomic_supported_claim_per_context_item() -> None:
 
 
 def test_refusal_yields_no_claims_and_records_usage() -> None:
-    gen = StructuredClaimGenerator(MockStructuredLLMProvider())
-    # The mock provider refuses when any message contains "REFUSE".
-    result = gen.generate("REFUSE to answer", [_ctx("id", "x")], as_of="2026-01-01T00:00:00+00:00")
+    # Refusal is configured on the provider; no question or context text can
+    # trigger it, so an untrusted turn cannot fake an abstention.
+    gen = StructuredClaimGenerator(MockStructuredLLMProvider(refuse=True))
+    result = gen.generate("What was revenue?", [_ctx("id", "x")], as_of="2026-01-01T00:00:00+00:00")
     assert result.refused
     assert result.refusal is not None
     assert result.claims == ()

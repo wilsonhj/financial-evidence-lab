@@ -40,6 +40,11 @@ _EXTRACTION_ROLE_SCHEMAS = frozenset(
     }
 )
 
+
+def _is_system(message: dict[str, str]) -> bool:
+    return message.get("role") == "system"
+
+
 _FIXTURE_ENTITY = "11111111-1111-4111-8111-111111111111"
 _FIXTURE_SPAN = "22222222-2222-4222-8222-222222222222"
 _FIXTURE_DOC = "33333333-3333-4333-8333-333333333333"
@@ -123,8 +128,14 @@ def _load_extraction_payload_fixtures() -> dict[str, Any]:
 
 
 def _extraction_envelope_for(request: StructuredGenerationRequest) -> dict[str, object]:
-    """Return a schema-valid parsed object for extraction role schemas."""
-    if any("ABSTAIN" in (m.get("content") or "") for m in request.messages):
+    """Return a schema-valid parsed object for extraction role schemas.
+
+    The ABSTAIN switch is read from the SYSTEM message only. The other turns
+    carry filing text, which is attacker-influenced: a document containing
+    the word would otherwise empty every envelope for the whole run — an
+    injection-controlled denial of extraction.
+    """
+    if any("ABSTAIN" in (m.get("content") or "") for m in request.messages if _is_system(m)):
         if request.schema_name in {"classifier", "extraction-classifier"}:
             return {
                 "document_type": "unknown",
@@ -207,10 +218,20 @@ class MockStructuredLLMProvider:
     For M3 extraction role ``schema_name`` values, returns schema-valid envelopes
     shaped like worker-local classifier/fact-table schemas or contract
     ``extraction-payload`` items inside ``proposals[]``. Protocol shape unchanged.
+
+    Refusal is a constructor switch (``MockStructuredLLMProvider(refuse=True)``),
+    never message content: ``messages`` mixes trusted instructions with
+    attacker-influenced filing/question text, so a content trigger would let a
+    document null ``parsed`` and refuse every step of a run — an
+    injection-controlled denial of service. Configuring it here puts the switch
+    out of reach of every message, not just the untrusted ones.
     """
 
     provider = "mock"
     model = "mock-structured-v1"
+
+    def __init__(self, *, refuse: bool = False) -> None:
+        self._refuse = refuse
 
     def generate_structured(self, request: StructuredGenerationRequest) -> StructuredModelResult:
         if request.max_output_tokens < 1:
@@ -226,7 +247,7 @@ class MockStructuredLLMProvider:
             ]
         )
         digest = hashlib.sha256(seed_material.encode()).hexdigest()
-        refused = any("REFUSE" in (message.get("content") or "") for message in request.messages)
+        refused = self._refuse
         input_tokens = max(1, len(seed_material) // 4)
         output_tokens = 8 if refused else min(request.max_output_tokens, 32)
         parsed: dict[str, object] | None

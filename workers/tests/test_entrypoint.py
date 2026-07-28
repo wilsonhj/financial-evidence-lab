@@ -1,16 +1,28 @@
 """The worker module entrypoint: heartbeat mode terminates cleanly, the
-``run`` job-consumer mode (finding 4) wires the queue loop, and live-mode
-provider binding fails closed without durable storage (re-review finding 2)."""
+``run`` job-consumer mode (finding 4) wires the queue loop, live-mode
+provider binding fails closed without durable storage (re-review finding 2),
+and the structured-model binding fails closed without an explicit opt-in."""
 
 from __future__ import annotations
 
+import contextlib
 import os
 import pathlib
+from collections.abc import Iterator
+from typing import Any
 
+import psycopg
 import pytest
 
-from fel_providers.mocks import MockSecClient, MockStorageProvider
-from fel_workers.__main__ import build_run_providers, main, parse_run_args, run_main
+from fel_providers.mocks import MockSecClient, MockStorageProvider, MockStructuredLLMProvider
+from fel_workers.__main__ import (
+    EXTRACTION_QUEUE,
+    build_run_providers,
+    build_structured_llm,
+    main,
+    parse_run_args,
+    run_main,
+)
 from fel_workers.ingestion.sec_client import LiveSecClient
 from fel_workers.storage import LocalDirStorageProvider
 
@@ -75,6 +87,68 @@ def test_live_mode_binds_local_dir_storage(
     storage.put("raw/sha256/abc", b"blob")
     assert storage.get("raw/sha256/abc") == b"blob"
     assert (tmp_path / "blobs" / "raw" / "sha256" / "abc").read_bytes() == b"blob"
+
+
+def _capture_run_worker_kwargs(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
+    """Stub out the queue loop and the database so ``run_main`` can be run for
+    its WIRING only: returns the kwargs it passed to ``run_worker``."""
+    captured: dict[str, Any] = {}
+
+    def _fake_run_worker(*args: Any, **kwargs: Any) -> int:
+        captured.update(kwargs)
+        return 0
+
+    @contextlib.contextmanager
+    def _fake_connect(*args: Any, **kwargs: Any) -> Iterator[object]:
+        yield object()
+
+    monkeypatch.setattr("fel_workers.consumer.run_worker", _fake_run_worker)
+    monkeypatch.setattr(psycopg, "connect", _fake_connect)
+    return captured
+
+
+def test_run_main_binds_no_model_without_opt_in(monkeypatch: pytest.MonkeyPatch) -> None:
+    """No FEL_ALLOW_MOCK_LLM => no structured model is bound at all.
+
+    The mock model answers every extraction_run with fabricated financials
+    (a fixed $100m ARR proposal against fixture span/document ids). Binding
+    it unconditionally meant a production worker persisted those into a real
+    tenant's needs_review queue, indistinguishable from genuine output.
+    """
+    monkeypatch.setenv("FEL_DATABASE_URL", "postgresql://unused.invalid/never-connected")
+    monkeypatch.delenv("FEL_SEC_LIVE", raising=False)
+    monkeypatch.delenv("FEL_ALLOW_MOCK_LLM", raising=False)
+    captured = _capture_run_worker_kwargs(monkeypatch)
+    assert run_main(["--max-iterations", "1"]) == 0
+    assert captured["structured_llm"] is None
+
+
+def test_run_main_binds_mock_model_with_opt_in(monkeypatch: pytest.MonkeyPatch) -> None:
+    """FEL_ALLOW_MOCK_LLM=1 is the explicit opt-in the CI/mock smoke path uses."""
+    monkeypatch.setenv("FEL_DATABASE_URL", "postgresql://unused.invalid/never-connected")
+    monkeypatch.delenv("FEL_SEC_LIVE", raising=False)
+    monkeypatch.setenv("FEL_ALLOW_MOCK_LLM", "1")
+    captured = _capture_run_worker_kwargs(monkeypatch)
+    assert run_main(["--max-iterations", "1"]) == 0
+    assert isinstance(captured["structured_llm"], MockStructuredLLMProvider)
+
+
+def test_build_structured_llm_rejects_typo_opt_in(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The opt-in shares the strict mode-flag parser: a typo fails closed
+    rather than silently reading as unset."""
+    monkeypatch.setenv("FEL_ALLOW_MOCK_LLM", "ture")
+    with pytest.raises(RuntimeError) as excinfo:
+        build_structured_llm()
+    assert "FEL_ALLOW_MOCK_LLM" in str(excinfo.value)
+
+
+def test_extraction_queue_literal_matches_handler_constant() -> None:
+    """The entrypoint names the extraction queue as a literal (like the
+    'ingestion' argparse default) — this pins it to the handler's constant so
+    a rename cannot silently disarm the startup gate."""
+    from fel_workers.extraction.handler import DEFAULT_EXTRACTION_QUEUE
+
+    assert EXTRACTION_QUEUE == DEFAULT_EXTRACTION_QUEUE
 
 
 @pytest.mark.skipif(

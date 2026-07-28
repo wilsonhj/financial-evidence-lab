@@ -70,7 +70,10 @@ class _AlwaysInvalid(_InvalidThenValid):
 
 
 def test_refusal_is_provider_refused_not_abstention() -> None:
-    provider = MockStructuredLLMProvider()
+    # Refusal is provider CONFIGURATION, never evidence content: RoleSpec
+    # renders evidence into the user turn, so a content trigger would let an
+    # untrusted filing refuse a run outright (ProviderRefused, a hard failure).
+    provider = MockStructuredLLMProvider(refuse=True)
     with pytest.raises(ProviderRefused):
         run_model_step(
             provider=provider,
@@ -78,7 +81,7 @@ def test_refusal_is_provider_refused_not_abstention() -> None:
             evidence_blocks=[
                 {
                     "source_span_id": "22222222-2222-4222-8222-222222222222",
-                    "text": "REFUSE this extraction",
+                    "text": "ARR was $100 million.",
                 }
             ],
             budget=RunBudget(),
