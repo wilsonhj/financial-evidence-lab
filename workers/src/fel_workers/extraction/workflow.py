@@ -175,34 +175,38 @@ def run_extraction_workflow(state: WorkflowState, deps: WorkflowDeps) -> Workflo
             raise LeaseLost("queue lease lost before cancelled status write") from exc
         state.status = "cancelled"
         state.error = {"code": exc.code, "message": str(exc)}
-        deps.persist.set_run_status(
-            run_id=state.request.run_id,
-            org_id=state.request.org_id,
-            status="cancelled",
-            error=state.error,
-        )
+        # Append BEFORE the status write: 0004's fel_assert_extraction_run_open
+        # rejects any child insert once the run row is terminal, so writing the
+        # status first loses the event and masks `exc` with the guard error.
         deps.events.append(
             org_id=state.request.org_id,
             run_id=state.request.run_id,
             event_type="run_cancelled",
             payload=state.error,
         )
+        deps.persist.set_run_status(
+            run_id=state.request.run_id,
+            org_id=state.request.org_id,
+            status="cancelled",
+            error=state.error,
+        )
     except (BudgetExceeded, ProviderRefused, StepFailed, ExtractionError) as exc:
         if not deps.lease_check():
             raise LeaseLost("queue lease lost before failed status write") from exc
         state.status = "failed"
         state.error = {"code": getattr(exc, "code", "extraction_error"), "message": str(exc)}
-        deps.persist.set_run_status(
-            run_id=state.request.run_id,
-            org_id=state.request.org_id,
-            status="failed",
-            error=state.error,
-        )
+        # Append before the terminal status write — see the run_cancelled note.
         deps.events.append(
             org_id=state.request.org_id,
             run_id=state.request.run_id,
             event_type="run_failed",
             payload=state.error,
+        )
+        deps.persist.set_run_status(
+            run_id=state.request.run_id,
+            org_id=state.request.org_id,
+            status="failed",
+            error=state.error,
         )
         emit("run_failed", run_id=state.request.run_id, code=state.error["code"])
     except Exception as exc:
@@ -213,17 +217,20 @@ def run_extraction_workflow(state: WorkflowState, deps: WorkflowDeps) -> Workflo
             raise LeaseLost("queue lease lost before failed status write") from exc
         state.status = "failed"
         state.error = {"code": "internal_error", "message": f"{type(exc).__name__}: {exc}"}
-        deps.persist.set_run_status(
-            run_id=state.request.run_id,
-            org_id=state.request.org_id,
-            status="failed",
-            error=state.error,
-        )
+        # Append before the terminal status write — see the run_cancelled note.
+        # Getting this backwards masked `exc` with the guard's own error, which
+        # defeats the re-raise below.
         deps.events.append(
             org_id=state.request.org_id,
             run_id=state.request.run_id,
             event_type="run_failed",
             payload=state.error,
+        )
+        deps.persist.set_run_status(
+            run_id=state.request.run_id,
+            org_id=state.request.org_id,
+            status="failed",
+            error=state.error,
         )
         emit("run_failed", run_id=state.request.run_id, code=state.error["code"])
         raise
@@ -712,13 +719,16 @@ def _finalize_success(ctx: _ExecCtx) -> None:
     else:
         state.status = "succeeded"
         state.abstained = True
-        ctx.deps.persist.set_run_status(run_id=req.run_id, org_id=req.org_id, status="succeeded")
+        # Append before the terminal status write — see the run_cancelled note.
+        # `waiting_review` above is non-terminal, so only this branch trips the
+        # guard, which is why the happy path never surfaced it.
         ctx.deps.events.append(
             org_id=req.org_id,
             run_id=req.run_id,
             event_type="run_succeeded",
             payload={"abstained": True},
         )
+        ctx.deps.persist.set_run_status(run_id=req.run_id, org_id=req.org_id, status="succeeded")
     emit("run_finished", run_id=req.run_id, status=state.status)
 
 
