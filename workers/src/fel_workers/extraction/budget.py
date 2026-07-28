@@ -23,10 +23,13 @@ class RunBudget:
     input_tokens_used: int = 0
     output_tokens_used: int = 0
     cost_usd: Decimal = Decimal("0")
+    # Seconds already burned by earlier attempts of this run: the wall cap bounds
+    # the run, so a requeue must not restart the clock at zero.
+    wall_seconds_used: float = 0.0
     started_monotonic: float = field(default_factory=time.monotonic)
 
     def elapsed_seconds(self) -> float:
-        return time.monotonic() - self.started_monotonic
+        return self.wall_seconds_used + (time.monotonic() - self.started_monotonic)
 
     def precheck(self, *, reserve_output_tokens: int) -> None:
         """Refuse the call while everything knowable pre-call still fits."""

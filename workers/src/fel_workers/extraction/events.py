@@ -67,8 +67,14 @@ def _redact(payload: dict[str, Any], *, allow_span_text: bool) -> dict[str, Any]
         if key == "stage_output" and isinstance(value, (dict, list)):
             cleaned[key] = _redact_stage_output(value)
             continue
-        if lowered in _REDACT_KEYS and not (allow_span_text and lowered == "text"):
-            cleaned[key] = "[redacted]"
+        if lowered in _REDACT_KEYS:
+            if allow_span_text and lowered == "text" and isinstance(value, str):
+                # Exempt span text from truncation as well as redaction: the
+                # checkpoint restores this value verbatim and the stored
+                # text_hash must keep describing it.
+                cleaned[key] = value
+            else:
+                cleaned[key] = "[redacted]"
             continue
         if isinstance(value, dict):
             cleaned[key] = _redact(value, allow_span_text=allow_span_text)

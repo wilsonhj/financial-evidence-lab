@@ -22,9 +22,9 @@ from fel_workers.extraction.errors import (
     StepFailed,
 )
 from fel_workers.extraction.events import MemoryEventStore
-from fel_workers.extraction.hashing import hash_json, stage_input_hash
+from fel_workers.extraction.hashing import hash_json, sha256_hex, stage_input_hash
 from fel_workers.extraction.normalize import normalize_payload
-from fel_workers.extraction.persist import MemoryPersistStore
+from fel_workers.extraction.persist import MemoryPersistStore, UsageSnapshot
 from fel_workers.extraction.roles.base import ROLE_SPECS
 from fel_workers.extraction.runner import Abstention, run_model_step
 from fel_workers.extraction.serialize import serialize_stage_output
@@ -96,6 +96,10 @@ class PersistStore(Protocol):
         error: dict[str, Any] | None = None,
     ) -> None: ...
 
+    def record_usage(self, *, run_id: str, org_id: str, usage: UsageSnapshot) -> None: ...
+
+    def load_usage(self, *, run_id: str, org_id: str) -> UsageSnapshot: ...
+
 
 @dataclass
 class WorkflowDeps:
@@ -124,16 +128,20 @@ class _ExecCtx:
 def run_extraction_workflow(state: WorkflowState, deps: WorkflowDeps) -> WorkflowState:
     """Advance ``state`` through STAGE_ORDER with content-addressed resume."""
     ontology = deps.ontology or load_saas_metrics()
+    # Caps bound the run, not one queue attempt: earlier attempts may be ahead of
+    # the in-memory usage this attempt was handed.
+    carried = deps.persist.load_usage(run_id=state.request.run_id, org_id=state.request.org_id)
     budget = RunBudget(
         max_calls=state.request.max_calls,
         max_input_tokens=state.request.max_input_tokens,
         max_output_tokens=state.request.max_output_tokens,
         max_cost_usd=state.request.max_cost_usd,
         max_wall_seconds=state.request.max_wall_seconds,
-        calls_used=state.usage.calls_used,
-        input_tokens_used=state.usage.input_tokens_used,
-        output_tokens_used=state.usage.output_tokens_used,
-        cost_usd=state.usage.cost_usd,
+        calls_used=max(state.usage.calls_used, carried.calls_used),
+        input_tokens_used=max(state.usage.input_tokens_used, carried.input_tokens_used),
+        output_tokens_used=max(state.usage.output_tokens_used, carried.output_tokens_used),
+        cost_usd=max(state.usage.cost_usd, carried.cost_usd),
+        wall_seconds_used=carried.wall_seconds_used,
     )
     ctx = _ExecCtx(state=state, deps=deps, budget=budget, ontology=ontology)
     state.status = "running"
@@ -146,12 +154,19 @@ def run_extraction_workflow(state: WorkflowState, deps: WorkflowDeps) -> Workflo
     emit("run_started", run_id=state.request.run_id)
 
     try:
-        for step_name in STAGE_ORDER:
-            _boundary(ctx)
-            if _should_skip_mode_stage(state, step_name):
-                _mark_skipped(ctx, step_name)
-                continue
-            _run_stage(ctx, step_name)
+        try:
+            for step_name in STAGE_ORDER:
+                _boundary(ctx)
+                if _should_skip_mode_stage(state, step_name):
+                    _mark_skipped(ctx, step_name)
+                    continue
+                _run_stage(ctx, step_name)
+        finally:
+            # Flush the run's usage so a requeue resumes from it, before any
+            # terminal status write — frozen 0004 refuses to mutate a run row
+            # that already reached a terminal status. A lost lease writes nothing.
+            if deps.lease_check():
+                _record_usage(ctx)
         _finalize_success(ctx)
     except LeaseLost:
         raise
@@ -190,12 +205,59 @@ def run_extraction_workflow(state: WorkflowState, deps: WorkflowDeps) -> Workflo
             payload=state.error,
         )
         emit("run_failed", run_id=state.request.run_id, code=state.error["code"])
+    except Exception as exc:
+        # Untyped escape (bad role outcome, malformed checkpoint, …): land the
+        # run row so a crashed run is never mistaken for an in-flight one, then
+        # re-raise so the traceback surfaces and the queue still fails the job.
+        if not deps.lease_check():
+            raise LeaseLost("queue lease lost before failed status write") from exc
+        state.status = "failed"
+        state.error = {"code": "internal_error", "message": f"{type(exc).__name__}: {exc}"}
+        deps.persist.set_run_status(
+            run_id=state.request.run_id,
+            org_id=state.request.org_id,
+            status="failed",
+            error=state.error,
+        )
+        deps.events.append(
+            org_id=state.request.org_id,
+            run_id=state.request.run_id,
+            event_type="run_failed",
+            payload=state.error,
+        )
+        emit("run_failed", run_id=state.request.run_id, code=state.error["code"])
+        raise
     finally:
         state.usage.calls_used = budget.calls_used
         state.usage.input_tokens_used = budget.input_tokens_used
         state.usage.output_tokens_used = budget.output_tokens_used
         state.usage.cost_usd = budget.cost_usd
     return state
+
+
+def _record_usage(ctx: _ExecCtx) -> None:
+    """Persist accumulated usage and emit ``budget_updated``."""
+    req = ctx.state.request
+    usage = UsageSnapshot(
+        calls_used=ctx.budget.calls_used,
+        input_tokens_used=ctx.budget.input_tokens_used,
+        output_tokens_used=ctx.budget.output_tokens_used,
+        cost_usd=ctx.budget.cost_usd,
+        wall_seconds_used=ctx.budget.elapsed_seconds(),
+    )
+    ctx.deps.persist.record_usage(run_id=req.run_id, org_id=req.org_id, usage=usage)
+    ctx.deps.events.append(
+        org_id=req.org_id,
+        run_id=req.run_id,
+        event_type="budget_updated",
+        payload={
+            "calls_used": usage.calls_used,
+            "input_tokens_used": usage.input_tokens_used,
+            "output_tokens_used": usage.output_tokens_used,
+            "cost_usd": str(usage.cost_usd),
+            "wall_seconds_used": usage.wall_seconds_used,
+        },
+    )
 
 
 def _should_skip_mode_stage(state: WorkflowState, step_name: str) -> bool:
@@ -353,12 +415,21 @@ def _restore_output(state: WorkflowState, step_name: str, output: Any) -> None:
                 published_at = published
             elif isinstance(published, str) and published:
                 published_at = datetime.fromisoformat(published.replace("Z", "+00:00"))
+            text = str(block.get("text") or "")
+            text_hash = str(block["text_hash"])
+            if sha256_hex(text) != text_hash:
+                # Fail closed: re-extracting from altered text under the original
+                # hash would emit proposals whose citations do not describe them.
+                raise IntegrityError(
+                    f"restored evidence for span {block['source_span_id']} does not "
+                    "match its checkpointed text_hash"
+                )
             restored.append(
                 EvidenceBlock(
                     source_span_id=str(block["source_span_id"]),
                     document_version_id=str(block["document_version_id"]),
-                    text=str(block.get("text") or ""),
-                    text_hash=str(block["text_hash"]),
+                    text=text,
+                    text_hash=text_hash,
                     published_at=published_at,
                 )
             )
@@ -451,6 +522,13 @@ def _stage_assemble_evidence(ctx: _ExecCtx) -> list[dict[str, Any]]:
     for block in blocks:
         if not block.text_hash.startswith("sha256:"):
             raise IntegrityError(f"evidence text_hash missing for {block.source_span_id}")
+        if sha256_hex(block.text) != block.text_hash:
+            # Fail closed at ingest, not only on resume: the hash is the
+            # citation's content address, so a digest that does not describe
+            # the text makes every proposal cite evidence it cannot prove.
+            raise IntegrityError(
+                f"evidence text_hash does not describe its text for {block.source_span_id}"
+            )
         if block.published_at is not None and block.published_at > state.request.as_of:
             from fel_workers.extraction.errors import CutoffViolation
 
@@ -492,6 +570,7 @@ def _stage_model(ctx: _ExecCtx, role: Role, step_name: str) -> dict[str, Any]:
         # Refusal is a typed failure for the run (never abstention).
         raise
     ctx.model_calls += result.attempts
+    _record_usage(ctx)
     if isinstance(result.outcome, Abstention):
         ctx.state.abstained = True
         if role == Role.CLASSIFIER:

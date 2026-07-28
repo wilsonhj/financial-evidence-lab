@@ -21,8 +21,20 @@ __all__ = [
     "PostgresCheckpointStore",
     "PostgresEventStore",
     "PostgresPersistStore",
+    "UsageSnapshot",
     "assert_workspace_ownership",
 ]
+
+
+@dataclass(frozen=True)
+class UsageSnapshot:
+    """Accumulated run usage, carried across queue attempts of the same run."""
+
+    calls_used: int = 0
+    input_tokens_used: int = 0
+    output_tokens_used: int = 0
+    cost_usd: Decimal = Decimal("0")
+    wall_seconds_used: float = 0.0
 
 
 def assert_workspace_ownership(
@@ -53,6 +65,7 @@ class MemoryPersistStore:
     proposals: dict[str, ProposalDraft] = field(default_factory=dict)
     conflicts: dict[str, ConflictDraft] = field(default_factory=dict)
     run_status: dict[str, str] = field(default_factory=dict)
+    usage: dict[str, UsageSnapshot] = field(default_factory=dict)
 
     def persist_proposals(
         self,
@@ -112,6 +125,14 @@ class MemoryPersistStore:
         del org_id, error
         self.run_status[run_id] = status
 
+    def record_usage(self, *, run_id: str, org_id: str, usage: UsageSnapshot) -> None:
+        del org_id
+        self.usage[run_id] = usage
+
+    def load_usage(self, *, run_id: str, org_id: str) -> UsageSnapshot:
+        del org_id
+        return self.usage.get(run_id, UsageSnapshot())
+
     def mark_running(self, *, run_id: str, org_id: str) -> None:
         del org_id
         self.run_status[run_id] = "running"
@@ -152,6 +173,63 @@ class PostgresPersistStore:
             """,
             (status, json.dumps(error) if error else None, finished, run_id, org_id),
         )
+
+    def record_usage(self, *, run_id: str, org_id: str, usage: UsageSnapshot) -> None:
+        """Mirror accumulated usage onto the run row so a requeue resumes from it."""
+        self.conn.execute(
+            """
+            UPDATE extraction_runs
+               SET calls_used = %s,
+                   input_tokens_used = %s,
+                   output_tokens_used = %s,
+                   cost_usd = %s
+             WHERE id = %s AND org_id = %s
+            """,
+            (
+                usage.calls_used,
+                usage.input_tokens_used,
+                usage.output_tokens_used,
+                usage.cost_usd,
+                run_id,
+                org_id,
+            ),
+        )
+
+    def load_usage(self, *, run_id: str, org_id: str) -> UsageSnapshot:
+        """Usage spent by earlier attempts of this run."""
+        row = self.conn.execute(
+            """
+            SELECT calls_used, input_tokens_used, output_tokens_used, cost_usd
+              FROM extraction_runs
+             WHERE id = %s AND org_id = %s
+            """,
+            (run_id, org_id),
+        ).fetchone()
+        if row is None:
+            return UsageSnapshot()
+        return UsageSnapshot(
+            calls_used=row[0] or 0,
+            input_tokens_used=row[1] or 0,
+            output_tokens_used=row[2] or 0,
+            cost_usd=Decimal(str(row[3] if row[3] is not None else 0)),
+            wall_seconds_used=self._load_wall_seconds(run_id=run_id, org_id=org_id),
+        )
+
+    def _load_wall_seconds(self, *, run_id: str, org_id: str) -> float:
+        """Frozen 0004 has no wall-clock column; it rides the budget_updated event."""
+        row = self.conn.execute(
+            """
+            SELECT payload->>'wall_seconds_used'
+              FROM extraction_run_events
+             WHERE org_id = %s AND run_id = %s AND event_type = 'budget_updated'
+             ORDER BY id DESC
+             LIMIT 1
+            """,
+            (org_id, run_id),
+        ).fetchone()
+        if row is None or row[0] is None:
+            return 0.0
+        return float(row[0])
 
     def persist_proposals(
         self,
