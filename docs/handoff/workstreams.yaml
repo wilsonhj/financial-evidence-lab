@@ -325,7 +325,7 @@ packages:
     depends_on: [M2-CLAIMS-VERIFICATION, M3-CONTRACT]
     team: extraction
     branch: agent/m3-extraction-core
-    status: active # dispatched 2026-07-26 on agent/m3-extraction-core from main @ 89e4363; serialize vs any contracts/migrations owner and blocked #108
+    status: merged # PR #145 (2026-07-28); issue #60; review blockers 1-4 + both high-severity findings fixed on-branch; follow-ups #146 (terminal-run retry design) + #62 (live OpenAI adapter, deferred)
     allowed_paths:
       - packages/ontology/**
       - packages/providers/**

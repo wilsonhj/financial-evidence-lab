@@ -1,11 +1,11 @@
 # Implementation status
 
-Last updated: 2026-07-26
+Last updated: 2026-07-28
 
 ## Repository
 
 - Default and implementation base: `main`.
-- Current main tip: local `89e4363` (Spec Kit reconcile; remote tip prior `3ff9976` #117). Active package: M3-EXTRACTION-CORE (#60) on `agent/m3-extraction-core`.
+- Current main tip before this merge: `eed2140` (#144 postcss/brace-expansion advisory remediation, stacked on #142). No active package; next dispatch is M3-REVIEW (#61).
 - Canonical product spec: `specs/001-financial-evidence-lab/spec.md` v1.2.
 - M2 implementation design: `specs/002-observable-hybrid-retrieval/` plus ADR-0006 (live on main).
 - M3 implementation design: `specs/003-agentic-extraction/` plus ADR-0007 (live on main).
@@ -25,6 +25,8 @@ Last updated: 2026-07-26
 - M2-RETRIEVAL-BACKEND full package: PRs #114 + #119 / issue #57 (closed) — item builder, versioned index publish + exact-vs-HNSW oracle, cutoff-safe lanes, deterministic planner, RRF k=60 fusion, query/trace/SSE/rerun/feedback API with persisted byte-stable replay; acceptance report at `packages/retrieval/ACCEPTANCE.md`.
 - M2-CLAIMS-VERIFICATION full package: PR #122 / issue #58 (merged) — atomic claim decomposition, citation entailment/verification, abstention, 50–100-question smoke gate, retrieval/performance suite; live 65-question exit gate deferred to follow-up #132.
 - M2-OBSERVATORY-UI full package: PR #123 / issue #59 (merged) — Search Observatory trace timeline, lane toggles, evidence feedback, and replay; browser E2E and live SSE deferred to follow-ups #131/#134/#135.
+- Dependency-advisory remediation chain on `main`: PRs #140 (fast-uri/sharp + fail-closed audit-gate triage), #142 (globalize postcss override), #144 (postcss floor `^8.5.23` + brace-expansion GHSA-mh99-v99m-4gvg). The `brace-expansion` entry in `scripts/audit-allowlist.json` is **package-wide and expires 2026-10-24** — it will mask any future finding for that advisory, including against a 5.x resolution. Scheduled refresh tracked by #143.
+- M3-EXTRACTION-CORE full package: PR #145 / issue #60 (merged) — `packages/ontology` saas-metrics/v1 (14 metrics / 9 families), bounded durable extraction workflow (budgets, checkpoints, five typed roles), Decimal normalize/validate, `extraction_run` consumer dispatch, proposals always `needs_review`. Review remediation on-branch: numeric parser truncation (`4200000` → `420`), evidence truncated to 64 chars on resume, mock model bound unconditionally in the production entrypoint, worker packaging, budget reset per retry, runs stuck `running` after untyped escapes. Two defects found by first real-Postgres coverage: four of five terminal paths never wrote their terminal event (0004 rejects child inserts once a run row is terminal), and content-triggered mock controls (`ABSTAIN`/`REFUSE`) were reachable from untrusted filing text. Live OpenAI deferred to #62; terminal-run retry semantics to #146.
 - DB-GUARD-HARDENING: PR #127 / issue #125 (closed) — retroactive 0005 authorization record, as-fel_app guard-harness pass, superseded-pin regression, helper consolidation.
 - Migration `0005` query-guard role fix (fel_guard_query FOR SHARE vs SELECT-only fel_app): PR #118, with as-fel_app harness regression.
 - Retrieval integration suites isolated in a dedicated `<db>_retrieval` test database (cross-suite FK isolation defect found by first CI exposure): PR #119.
@@ -46,13 +48,15 @@ Still research-draft (not a dispatch blocker): recovered benchmark needs SEC tim
 
 ## Active
 
-1. **Active:** M3-EXTRACTION-CORE (#60) — branch `agent/m3-extraction-core`; paths `packages/ontology/**`, `packages/providers/**`, `workers/src/fel_workers/extraction/**`, `workers/src/fel_workers/consumer.py`, `workers/src/fel_workers/__main__.py`, `workers/tests/**`.
+None.
 
-Serialization notes: #60 must serialize with any contracts/migrations owner. Blocked #108 overlaps `apps/api/**` + `apps/web/**` + `evals/**` — if #108 unblocks, do not run it concurrently with any package holding those paths.
+Serialization notes: blocked #108 overlaps `apps/api/**` + `apps/web/**` + `evals/**` — if #108 unblocks, do not run it concurrently with any package holding those paths.
 
-## Ready (post-#122/#123 reconciliation)
+## Ready (post-#145 reconciliation)
 
-None. Next after #60: M3-REVIEW (#61).
+1. **Ready:** M3-REVIEW (#61) — branch `agent/m3-review`; paths `apps/web/**`, `apps/api/**`. Unblocked by #60 merging via PR #145.
+
+Then M3-CONFIDENCE-GATE (#62), which also owns the live OpenAI adapter #60 deferred.
 
 ## Blocked (registered, not dispatchable)
 
@@ -78,7 +82,17 @@ Tracked after the #122/#123 merges; none blocks #60.
 - **#136** — M2-OBSERVATORY: full WCAG 2.2 AA + keyboard-operation audit.
 - **#137** — M2-CLAIMS fast-follow hardening (mock→live cutover hygiene).
 - **#138** — M2-OBSERVATORY: dedicated web-layer client telemetry.
-- Draft PR **#131** — Observatory Playwright E2E in fixture mode (stacked on #123; #59 criterion 6).
+- PR **#131** — Observatory Playwright E2E in fixture mode (**merged** @ `bc6a2a3`; #59 criterion 6). Re-scope or close **#134** against it: that issue still reads as if E2E-in-CI were outstanding.
+
+### M3 / process follow-ups (opened 2026-07-24 → 2026-07-28)
+
+- **#141** — process: shared-path config changes need `contract-change` label + authorization record. Decision pending.
+- **#143** — CI hygiene: scheduled dependency-advisory refresh so CI breakage stops being the discovery mechanism. Note the `brace-expansion` allowlist entry in `scripts/audit-allowlist.json` is package-wide and expires **2026-10-24**.
+- **#146** — M3: job retries can outlive a run's terminal state. Reachable via two paths: an untyped escape now lands the run `failed` (terminal), so the queue retries a job that can never resume; and `0004` forbids both deleting runs and mutating terminal ones. Decision pending; whichever option is chosen should also stop the consumer retrying a job whose run row is terminal.
+
+### Test-isolation rule (learned from PR #145, first CI exposure)
+
+CI provisions a fresh database per **run**, but every suite shares it **within** that run. Durable `extraction_runs` rows are permanent (`extraction_runs cannot be deleted`, `extraction_proposal_evidence is append-only`) and pin their `corpus_versions` row, while the shared `corpus_conn` fixture deletes `corpus_versions` globally — so a DB-backed extraction suite on the base URL fails every later suite at fixture setup. Extraction integration tests run against an isolated `<db>_extraction` sibling (`ensure_extraction_database`), mirroring `<db>_retrieval` from #119. Apply the same pattern to any new DB-backed suite in #61/#62.
 
 ## Credentials
 
