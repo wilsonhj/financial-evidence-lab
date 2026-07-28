@@ -6,10 +6,18 @@ import re
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
+# The grouped alternative requires at least one ',\d{3}' so it can never win on
+# a bare digit run and truncate it ('4200000' -> '420'). The suffix is anchored
+# with a word boundary so unit words keep their own meaning ('150 bps' is not
+# 150 billion). A parenthesized amount is accounting notation for a negative;
+# the closing paren may sit before or after the magnitude suffix.
 _NUM_RE = re.compile(
+    r"(?P<open>\()?\s*"
     r"(?P<sign>[-+])?\s*"
-    r"(?P<body>\d{1,3}(?:,\d{3})*(?:\.\d+)?|\d+(?:\.\d+)?)"
-    r"(?:\s*(?P<suffix>[mbk]|million|billion|thousand))?",
+    r"(?P<body>(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?|\.\d+)"
+    r"(?P<close_bare>\s*\))?"
+    r"(?:\s*(?P<suffix>million|billion|thousand|[mbk])s?\b)?"
+    r"(?P<close_suffixed>\s*\))?",
     re.IGNORECASE,
 )
 
@@ -40,7 +48,12 @@ def preview_normalize(raw_value: str, *, unit: str | None = None) -> dict[str, A
 
 
 def parse_numeric(raw_value: str) -> tuple[Decimal, int, str]:
-    """Parse raw numeric text into (value, scale, sign). Keeps Decimal only."""
+    """Parse raw numeric text into (value, scale, sign). Keeps Decimal only.
+
+    ``value`` is the mantissa as written and ``scale`` the magnitude suffix
+    that still has to be applied to reach base units; ``normalize_payload``
+    applies it exactly once.
+    """
     if not raw_value or not isinstance(raw_value, str):
         raise ValueError("raw_value required")
     cleaned = raw_value.replace("$", "").replace("%", "").strip()
@@ -57,7 +70,10 @@ def parse_numeric(raw_value: str) -> tuple[Decimal, int, str]:
     if suffix:
         scale = _SCALE_SUFFIX[suffix.lower()]
     explicit_sign = match.group("sign")
-    if explicit_sign == "-":
+    parenthesized = match.group("open") is not None and (
+        match.group("close_bare") is not None or match.group("close_suffixed") is not None
+    )
+    if explicit_sign == "-" or parenthesized:
         value = -abs(value)
     elif explicit_sign == "+":
         value = abs(value)

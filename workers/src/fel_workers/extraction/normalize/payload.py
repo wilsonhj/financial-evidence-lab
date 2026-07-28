@@ -91,6 +91,18 @@ def normalize_payload(raw: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def _to_base_units(value: Decimal, parsed_scale: int, scale_hint: int | None) -> Decimal:
+    """Apply the pending magnitude multiplier once (Decimal shift, never float).
+
+    ``scale`` is the multiplier the value still needs: value 100 with scale 6
+    is $100M. A suffix parsed from the field's own text ("$100 million") is
+    authoritative for that field; otherwise the payload's declared scale
+    applies, so the two can never compound.
+    """
+    scale = parsed_scale or (scale_hint or 0)
+    return value.scaleb(scale) if scale else value
+
+
 def _normalize_dimensions(dims: Any) -> dict[str, str]:
     if dims is None:
         return {}
@@ -132,25 +144,21 @@ def _normalize_numeric_fields(out: dict[str, Any], *, value_keys: tuple[str, ...
             # Fall back to parsing raw_value once for single-value shapes.
             if len(value_keys) == 1 and isinstance(out.get("raw_value"), str):
                 value, parsed_scale, sign = parse_numeric(out["raw_value"])
-                out[key] = format_decimal(value)
-                if scale_hint is None:
-                    scale_hint = parsed_scale
+                out[key] = format_decimal(_to_base_units(value, parsed_scale, scale_hint))
                 out["sign"] = sign
                 continue
             raise ValueError(f"missing numeric field {key}")
         if isinstance(raw, Decimal):
-            value = raw
+            value = _to_base_units(raw, 0, scale_hint)
             sign = "positive" if value > 0 else "negative" if value < 0 else "zero"
             out[key] = format_decimal(value)
             out["sign"] = out.get("sign") or sign
         elif isinstance(raw, str):
             value, parsed_scale, sign = parse_numeric(raw)
-            out[key] = format_decimal(value)
-            if scale_hint is None:
-                scale_hint = parsed_scale
+            out[key] = format_decimal(_to_base_units(value, parsed_scale, scale_hint))
             out["sign"] = out.get("sign") or sign
         elif isinstance(raw, int) and not isinstance(raw, bool):
-            value = Decimal(raw)
+            value = _to_base_units(Decimal(raw), 0, scale_hint)
             out[key] = format_decimal(value)
             out["sign"] = out.get("sign") or (
                 "positive" if value > 0 else "negative" if value < 0 else "zero"
@@ -158,7 +166,11 @@ def _normalize_numeric_fields(out: dict[str, Any], *, value_keys: tuple[str, ...
         else:
             raise ValueError(f"{key} must be a decimal string (got {type(raw).__name__})")
 
-    out["scale"] = 0 if scale_hint is None else scale_hint
+    # The multiplier has been consumed: normalized values are base-currency
+    # units (M3-SCH-002), matching XBRL ingestion, which also stores the
+    # unscaled amount at scale 0. Re-normalizing a normalized payload is a
+    # no-op because 10**0 == 1.
+    out["scale"] = 0
     if out.get("sign") not in {"positive", "negative", "zero"}:
         # Derive from primary numeric field.
         primary = Decimal(out[value_keys[0]])
