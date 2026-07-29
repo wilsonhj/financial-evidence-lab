@@ -1,12 +1,12 @@
 # ADR-0008: New first-party package scaffold wiring rides with the owning package
 
-Status: Accepted (Amendment 1 Proposed — see "Amendment 1")
+Status: Accepted
 Date: 2026-07-19
 Accepted: 2026-07-19 by integration lead on merge of PR #111
 Occasioned by: M2-RETRIEVAL-BACKEND (#57); recurs for every future first-party package
 Amends: ADR-0003 (root-config-edits)
 Amendment 1: 2026-07-29 — adds `infra/railway/worker.json` install-list
-registration; proposed, ratified on merge of the PR carrying it.
+registration; ratified 2026-07-29 by integration lead on merge of PR #147.
 
 ## Decision
 
@@ -114,7 +114,7 @@ the four conditions.
 
 ## Amendment 1 — `infra/railway/worker.json` install list (2026-07-29)
 
-Status: Proposed; ratified on merge of the PR carrying this amendment.
+Status: Accepted; ratified 2026-07-29 by integration lead on merge of PR #147.
 
 **Occasioned by** M3-EXTRACTION-CORE (#60, PR #145), whose `packages/ontology`
 is imported by the worker. The PR correctly appended `./packages/ontology` to
