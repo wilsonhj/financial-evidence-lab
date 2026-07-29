@@ -71,6 +71,14 @@ def test_consumer_fails_extraction_without_structured_llm(monkeypatch: pytest.Mo
 
 @requires_db
 def test_consumer_dispatches_extraction_run(corpus_conn: Any) -> None:
+    """Claim-to-complete wiring for extraction_run through the real queue.
+
+    Runs against the shared corpus database, so it cannot persist durably:
+    `extraction_runs` rows are permanent under 0004 and would block every
+    later suite's `DELETE FROM corpus_versions`. Memory stores are therefore
+    requested explicitly — the durable path is covered in
+    `test_dispatch_durability.py` against the isolated extraction sibling.
+    """
     payload = sample_payload(modes=["kpi"])
     queue.enqueue(
         corpus_conn,
@@ -78,6 +86,7 @@ def test_consumer_dispatches_extraction_run(corpus_conn: Any) -> None:
         payload=payload,
         queue="ingestion",
         idempotency_key=f"extraction|{payload['run_id']}",
+        org_id=payload["org_id"],
     )
     completed = run_worker(
         corpus_conn,
@@ -86,6 +95,7 @@ def test_consumer_dispatches_extraction_run(corpus_conn: Any) -> None:
         queue_name="ingestion",
         max_iterations=3,
         structured_llm=MockStructuredLLMProvider(),
+        extraction_memory_stores=True,
     )
     assert completed == 1
     row = corpus_conn.execute(

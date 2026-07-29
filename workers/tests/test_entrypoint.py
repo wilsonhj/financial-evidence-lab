@@ -124,13 +124,33 @@ def test_run_main_binds_no_model_without_opt_in(monkeypatch: pytest.MonkeyPatch)
 
 
 def test_run_main_binds_mock_model_with_opt_in(monkeypatch: pytest.MonkeyPatch) -> None:
-    """FEL_ALLOW_MOCK_LLM=1 is the explicit opt-in the CI/mock smoke path uses."""
+    """FEL_ALLOW_MOCK_LLM=1 on the extraction queue is the explicit opt-in the
+    CI/mock smoke path uses."""
     monkeypatch.setenv("FEL_DATABASE_URL", "postgresql://unused.invalid/never-connected")
     monkeypatch.delenv("FEL_SEC_LIVE", raising=False)
     monkeypatch.setenv("FEL_ALLOW_MOCK_LLM", "1")
     captured = _capture_run_worker_kwargs(monkeypatch)
-    assert run_main(["--max-iterations", "1"]) == 0
+    assert run_main(["--max-iterations", "1", "--queue", EXTRACTION_QUEUE]) == 0
     assert isinstance(captured["structured_llm"], MockStructuredLLMProvider)
+
+
+def test_run_main_binds_no_model_on_a_non_extraction_queue(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The opt-in binds a model only for the queue that carries extraction work.
+
+    ``run_main`` is reachable directly (library/test contract) without the
+    :func:`run_entry` startup gate, so the binding itself — not only the gate —
+    has to be queue-scoped. Otherwise an ingestion worker holds a model whose
+    only possible use is answering a misrouted ``extraction_run`` with
+    fabricated proposals.
+    """
+    monkeypatch.setenv("FEL_DATABASE_URL", "postgresql://unused.invalid/never-connected")
+    monkeypatch.delenv("FEL_SEC_LIVE", raising=False)
+    monkeypatch.setenv("FEL_ALLOW_MOCK_LLM", "1")
+    captured = _capture_run_worker_kwargs(monkeypatch)
+    assert run_main(["--max-iterations", "1", "--queue", "ingestion"]) == 0
+    assert captured["structured_llm"] is None
 
 
 def test_build_structured_llm_rejects_typo_opt_in(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -138,7 +158,7 @@ def test_build_structured_llm_rejects_typo_opt_in(monkeypatch: pytest.MonkeyPatc
     rather than silently reading as unset."""
     monkeypatch.setenv("FEL_ALLOW_MOCK_LLM", "ture")
     with pytest.raises(RuntimeError) as excinfo:
-        build_structured_llm()
+        build_structured_llm(EXTRACTION_QUEUE)
     assert "FEL_ALLOW_MOCK_LLM" in str(excinfo.value)
 
 

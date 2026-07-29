@@ -60,6 +60,13 @@ def test_mock_e2e_via_consumer_queue(
             queue_name=DEFAULT_EXTRACTION_QUEUE,
             max_iterations=3,
             structured_llm=structured_llm,
+            # Wiring smoke only: the payload's org/workspace are random uuids
+            # with no rows behind them, so this run deliberately discards its
+            # output. That is now an explicit opt-in — it used to be inferred
+            # from the payload carrying inline evidence, which meant PRODUCTION
+            # runs discarded their output too, silently. See
+            # test_dispatch_durability.py for the durable path.
+            extraction_memory_stores=True,
         )
         assert completed >= 1
         row = conn.execute(

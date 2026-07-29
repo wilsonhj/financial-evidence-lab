@@ -182,6 +182,7 @@ def run_worker(
     reap_interval_iterations: int = 1,
     stale_after_seconds: float = queue.HEARTBEAT_STALE_SECONDS,
     structured_llm: StructuredLLMProvider | None = None,
+    extraction_memory_stores: bool = False,
 ) -> int:
     """Claim-and-dispatch loop; returns the number of jobs completed.
 
@@ -198,6 +199,17 @@ def run_worker(
     worker crashed are requeued instead of staying 'running' forever. If the
     heartbeat reports the lease lost, the job is treated as lost: the handler
     result is discarded and no terminal state is written — the new owner wins.
+
+    ``extraction_memory_stores`` is the ONLY way to send ``extraction_run``
+    output to in-memory stores while a connection is live, and it is off by
+    default: with ``conn`` present, extraction persists to Postgres. Selection
+    used to be inferred from payload shape — inline ``evidence`` chose memory —
+    so a run with a live connection produced proposals, returned
+    ``waiting_review``, and had ``jobs.status`` flipped to ``succeeded`` while
+    ``extraction_runs``/``extraction_proposals``/``extraction_run_steps``/
+    ``extraction_run_events`` stayed empty. Enqueuers do not get to decide
+    whether their output is durable; operators do, out loud, and every job run
+    this way is logged as discarding its output.
     """
     completed = 0
     iterations = 0
@@ -280,14 +292,20 @@ def run_worker(
             elif job.kind == JOB_KIND_EXTRACTION_RUN:
                 if extraction_provider is None:  # pragma: no cover — narrowed above
                     raise RuntimeError("structured LLM capability vanished mid-dispatch")
+                if extraction_memory_stores:
+                    log.warning(
+                        "extraction_run %s is running against IN-MEMORY stores:"
+                        " no proposals, conflicts, steps or events will be"
+                        " persisted, and the job will still report success."
+                        " Non-production smoke option only.",
+                        job.id,
+                    )
                 result = handle_extraction_run(
                     conn,
                     extraction_provider,
                     job.payload,
                     lease_check=_lease_check,
-                    # Inline evidence => mock/test path (no extraction_runs seed required).
-                    use_memory_stores=bool(job.payload.get("evidence"))
-                    and not bool(job.payload.get("persist_db")),
+                    use_memory_stores=extraction_memory_stores,
                     job_org_id=job.org_id,
                 )
                 if result.status == "failed":

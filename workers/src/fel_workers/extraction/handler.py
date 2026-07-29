@@ -49,29 +49,43 @@ def handle_extraction_run(
 ) -> WorkflowState:
     """Dispatch one ``extraction_run`` job.
 
-    Validates workspace ownership before service-role writes when a live
-    connection is provided and ``use_memory_stores`` is not forced.
-    Inline ``evidence`` in the payload supports mock CI without seeding spans.
+    Store selection never depends on payload SHAPE. A live ``conn`` means the
+    durable Postgres stores; memory stores are used only when there is no
+    connection to write to, or when a caller forces them with an explicit
+    ``use_memory_stores=True``. Inline ``evidence``/``spans`` blocks supply the
+    text for the run and nothing else — they used to also (silently) redirect
+    every write to in-memory stores, so a run with a live connection returned
+    ``waiting_review``, the job was marked ``succeeded``, and not one row was
+    written. The two spellings are exact synonyms on every path.
 
-    When ``job_org_id`` is supplied (from ``ClaimedJob.org_id``), the payload
-    ``org_id`` must match — jobs are tenant-bound at enqueue time.
+    Tenancy on the durable path comes from the JOB, never from the payload:
+    ``job_org_id`` (``ClaimedJob.org_id``) must be present AND equal the payload
+    ``org_id``. A NULL job org is not "no constraint" — read that way, the
+    payload self-asserts its own tenant, and the remaining control does not
+    close the gap: ``assert_workspace_ownership`` only checks that workspace and
+    org agree with each other, not that the enqueuer was entitled to that org.
+    ``jobs.org_id`` is nullable by design for platform jobs (``sec_discovery``
+    and friends legitimately have none); ``extraction_run`` writes tenant data
+    and is not one of them. The requirement is scoped to the durable path —
+    memory stores write nothing, so there is no tenant to protect.
     """
     request = request_from_payload(payload)
+    memory = use_memory_stores if use_memory_stores is not None else conn is None
     if job_org_id is not None and request.org_id != job_org_id:
         raise ValueError(
             f"extraction_run payload org_id {request.org_id} does not match "
             f"job org_id {job_org_id}"
         )
-    # Prefer memory stores for mock/inline evidence payloads so CI can run
-    # without seeding extraction_runs / workspaces rows.
-    inline_evidence = bool(payload.get("evidence") or payload.get("spans"))
-    if use_memory_stores is not None:
-        memory = use_memory_stores
-    else:
-        memory = conn is None or inline_evidence
     if not memory:
-        if conn is None:  # pragma: no cover — narrowed by the branch above
+        if conn is None:
             raise RuntimeError("database persistence selected without a connection")
+        if job_org_id is None:
+            raise ValueError(
+                "extraction_run reached the durable path with no job org_id: "
+                f"refusing to persist run {request.run_id} on the payload's own "
+                f"claim to org {request.org_id}. Enqueue extraction_run jobs "
+                "tenant-bound — queue.enqueue(..., org_id=<tenant>)."
+            )
         assert_workspace_ownership(conn, org_id=request.org_id, workspace_id=request.workspace_id)
         persist: Any = PostgresPersistStore(conn)
         persist.mark_running(run_id=request.run_id, org_id=request.org_id)

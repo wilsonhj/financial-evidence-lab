@@ -218,6 +218,30 @@ def test_ingestion_queue_starts_without_a_model_binding() -> None:
     assert "refusing to start" not in proc.stderr
 
 
+def test_model_opt_in_on_a_non_extraction_queue_exits_2() -> None:
+    """The model opt-in and the queue that carries extraction work must be
+    cross-checked, not merely each checked alone.
+
+    ``validate_extraction_model_binding`` only gated STARTUP ON THE EXTRACTION
+    QUEUE, and the binding itself read FEL_ALLOW_MOCK_LLM with no idea which
+    queue the worker was pointed at. So this exact invocation started an
+    'ingestion' worker with the MOCK model bound, and ``run_worker`` — which
+    never compares queue name to job kind — would answer an ``extraction_run``
+    claimed from that queue with FABRICATED financial proposals written into a
+    tenant's review queue. Refusing to start is the fail-closed resolution: the
+    operator asked for a model on a queue that carries no extraction work, and
+    guessing which half they meant is exactly what this module never does."""
+    proc = _run_entrypoint(
+        {"FEL_MOCK_SMOKE": "1", "FEL_ALLOW_MOCK_LLM": "1"},
+        args=("--max-iterations", "1", "--queue", "ingestion"),
+    )
+    _assert_config_exit_no_db(proc)
+    assert "FEL_ALLOW_MOCK_LLM" in proc.stderr
+    assert "ingestion" in proc.stderr
+    # The mock was never bound, so its fabricated-output warning never fired.
+    assert "FABRICATED proposals" not in proc.stderr, proc.stderr
+
+
 def test_live_without_storage_exits_2() -> None:
     proc = _run_entrypoint({"FEL_SEC_LIVE": "1", "FEL_SEC_USER_AGENT": VALID_UA})
     _assert_config_exit_no_db(proc)
