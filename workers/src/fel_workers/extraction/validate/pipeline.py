@@ -106,8 +106,39 @@ def _collect_blockers(
     blockers.extend(accounting_errors(clean, ontology))
     blockers.extend(range_errors(clean))
     blockers.extend(definition_errors(clean, ontology))
-    blockers.extend(citation_errors(clean, evidence_by_span=evidence_by_span))
+    blockers.extend(
+        citation_errors(
+            clean,
+            evidence_by_span=evidence_by_span,
+            expected_hashes=_claimed_span_hashes(clean),
+        )
+    )
     return blockers
+
+
+def _claimed_span_hashes(clean: dict[str, Any]) -> dict[str, str]:
+    """Span hashes the *model* asserted, keyed by span id.
+
+    ``citation_errors`` compares these against the hash of the pinned evidence,
+    so a proposal that cites a span while asserting a different digest for it is
+    blocked. Without this the hash branch of ``citation_errors`` never executed:
+    the only caller passed no ``expected_hashes``.
+
+    The pinned text is verified against its own hash separately and earlier, in
+    ``workflow._stage_assemble_evidence`` (and again in ``_restore_output`` on
+    resume) — that is where the "evidence text matches its content address"
+    guarantee lives. This check is the different one: the *citation* must agree
+    with the pinned span it points at.
+    """
+    claimed: dict[str, str] = {}
+    for item in clean.get("evidence") or []:
+        if not isinstance(item, dict):
+            continue
+        span_id = item.get("source_span_id")
+        text_hash = item.get("text_hash")
+        if span_id and isinstance(text_hash, str) and text_hash:
+            claimed[str(span_id)] = text_hash
+    return claimed
 
 
 def _build_draft(

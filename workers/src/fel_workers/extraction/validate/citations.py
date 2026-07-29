@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from typing import Any
 
 from fel_workers.extraction.hashing import sha256_hex
-from fel_workers.ingestion.parser import text_hash
 
 
 def citation_errors(
@@ -37,41 +35,19 @@ def citation_errors(
     return errors
 
 
-def verify_citations(
-    *,
-    payload: dict[str, Any],
-    evidence: list[dict[str, Any]],
-    pinned_spans: Mapping[str, dict[str, Any]],
-) -> list[str]:
-    """Re-hash pinned span text; mismatches are integrity blockers."""
-    blockers: list[str] = []
-    if not evidence:
-        blockers.append("citation_missing")
-        return blockers
-    for item in evidence:
-        span_id = str(item.get("source_span_id") or "")
-        pinned = pinned_spans.get(span_id)
-        if pinned is None:
-            blockers.append(f"citation_span_not_pinned:{span_id}")
-            continue
-        expected_doc = item.get("document_version_id")
-        if expected_doc and expected_doc != pinned.get("document_version_id"):
-            blockers.append(f"citation_document_version_mismatch:{span_id}")
-        expected_hash = pinned.get("text_hash")
-        text = pinned.get("text")
-        if isinstance(text, str):
-            actual = text_hash(text)
-            if expected_hash and actual != expected_hash:
-                blockers.append(f"citation_hash_mismatch:{span_id}")
-            elif not expected_hash:
-                provided = item.get("text_hash")
-                if provided and provided != actual:
-                    blockers.append(f"citation_hash_mismatch:{span_id}")
-        status = item.get("citation_status")
-        if status == "invalid":
-            blockers.append(f"citation_marked_invalid:{span_id}")
-    del payload
-    return blockers
+# `verify_citations` used to live here: a second, richer-looking span-hash
+# verifier that read as a fail-closed guarantee and had ZERO callers, so none of
+# it ever ran. It is gone rather than left to imply a check that does not happen.
+# The guarantees it appeared to make are enforced where they belong:
+#
+# * "pinned evidence text matches its content address" — `IntegrityError` in
+#   `workflow._stage_assemble_evidence`, on every run, and again in
+#   `workflow._restore_output` when a checkpoint is rehydrated on resume.
+# * "a cited span exists in the pinned evidence" — `citation_errors` above.
+# * "a citation's asserted span hash matches the pinned span" — the
+#   `expected_hashes` branch of `citation_errors` above, which
+#   `validate/pipeline.py::_collect_blockers` now actually populates.
+# * "a citation marked invalid is recorded as such" —
+#   `workflow._stage_verify_citations`, which sets `citation_status`.
 
-
-__all__ = ["citation_errors", "verify_citations"]
+__all__ = ["citation_errors"]
