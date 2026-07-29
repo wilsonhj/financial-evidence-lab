@@ -4,33 +4,16 @@ from __future__ import annotations
 
 from typing import Any
 
-from fel_ontology import load_saas_metrics
-from fel_ontology.loader import OntologyLoadError
-from fel_ontology.models import OntologyDocument
+from fel_ontology.models import MetricDef, OntologyDocument
 
-_FALLBACK_KNOWN_METRICS = frozenset(
-    {
-        "arr",
-        "mrr",
-        "nrr",
-        "grr",
-        "cust_total",
-        "cust_threshold",
-        "seats",
-        "bookings",
-        "billings",
-        "rpo",
-        "crpo",
-        "deferred_rev",
-        "sub_gm",
-        "svc_gm",
-        "revenue",
-        "gross_margin",
-        "churn",
-        "demand",
-        "price",
-    }
-)
+# The unit family each ontology ``value_type`` admits. Unit *strings* are never
+# compared: the ontology writes ``USD/yr`` where a filing writes ``USD``, and a
+# check that demanded equality would block every well-formed ARR payload.
+_UNIT_BY_VALUE_TYPE = {"ratio_pct": "percent", "count": "count"}
+_CURRENCY_VALUE_TYPES = frozenset({"currency", "currency_derived"})
+# ``period_semantics`` values the ontology can express; ``forecast`` is a payload
+# period type with no ontology counterpart, so it is never graded here.
+_ONTOLOGY_PERIOD_TYPES = frozenset({"instant", "duration", "trailing_window"})
 
 
 def definition_errors(payload: dict[str, Any], ontology: OntologyDocument) -> list[str]:
@@ -55,39 +38,89 @@ def definition_errors(payload: dict[str, Any], ontology: OntologyDocument) -> li
     return []
 
 
-def check_definitions(payload: dict[str, Any]) -> list[str]:
-    """Required-qualifier blockers when ontology lookup is available."""
-    blockers: list[str] = []
+def check_definitions(payload: dict[str, Any], ontology: OntologyDocument) -> list[str]:
+    """Cross-check a payload against the ontology definition of its metric.
+
+    Until this was wired into ``validate/pipeline.py::_collect_blockers``,
+    ``metric.unit``, ``metric.value_type`` and ``metric.period_semantics`` were
+    read nowhere in the extraction path, so an ``arr`` denominated in percent
+    with a null currency reached the review queue as ``ok: true, blockers: []``.
+
+    Deliberately narrow. It grades only what the ontology states unambiguously,
+    and it never second-guesses a metric it cannot resolve.
+
+    It no longer restates required qualifiers: ``accounting_errors`` already
+    emits ``missing required qualifier: <field>`` for the identical condition on
+    the identical metrics, and ``_collect_blockers`` collapses only *exact*
+    string repeats — so a second spelling of the same finding would reach a
+    reviewer as two problems.
+    """
     metric_id = payload.get("metric_id")
     if not isinstance(metric_id, str) or not metric_id:
         return ["metric_id_missing"]
-    metric = _lookup_metric(metric_id)
-    if metric is None:
-        # Unknown metrics still proceed to review with a blocker (fail-closed for approval).
-        blockers.append("metric_unknown_to_ontology")
-        return blockers
-    required = metric.get("required_qualifiers") or []
-    qualifiers = payload.get("qualifiers") or {}
-    for name in required:
-        if name not in qualifiers:
-            blockers.append(f"qualifier_missing:{name}")
+    try:
+        metric = ontology.metric(metric_id)
+    except KeyError:
+        # Same policy as `accounting_errors`: guidance and revenue_driver carry
+        # free-text metric labels by design — the contract's own fixtures use
+        # `revenue`, `gross_margin`, `churn`, `demand` and `price`, none of
+        # which are SaaS-ontology metrics — so only a KPI must name a known one.
+        return ["metric_unknown_to_ontology"] if payload.get("kind") == "kpi" else []
+    blockers = _unit_errors(payload, metric)
+    blockers.extend(_period_errors(payload, metric))
     return blockers
 
 
-def _lookup_metric(metric_id: str) -> dict[str, Any] | None:
-    try:
-        doc = load_saas_metrics()
-        metric = doc.metric(metric_id)
-        return {
-            "id": metric.id,
-            "required_qualifiers": list(metric.required_qualifiers),
-        }
-    except KeyError:
-        return None
-    except OntologyLoadError:
-        if metric_id in _FALLBACK_KNOWN_METRICS:
-            return {"id": metric_id, "required_qualifiers": []}
-        return None
+def _unit_errors(payload: dict[str, Any], metric: MetricDef) -> list[str]:
+    """Unit and currency must be able to express the metric's ``value_type``.
+
+    Skipped for a payload that declares no ``unit``: qualitative guidance and
+    revenue drivers carry no numeric unit, and a numeric variant that omits one
+    is already blocked by ``validate_payload_item``.
+    """
+    if "unit" not in payload:
+        return []
+    errors: list[str] = []
+    unit = payload.get("unit")
+    currency = payload.get("currency")
+    expected = _UNIT_BY_VALUE_TYPE.get(metric.value_type)
+    if expected is not None:
+        if unit != expected:
+            errors.append(
+                f"unit {unit!r} cannot express {metric.value_type} metric "
+                f"{metric.id} (expected {expected!r})"
+            )
+        if currency is not None:
+            errors.append(
+                f"{metric.id} is a {metric.value_type} metric and takes no "
+                f"currency, got {currency!r}"
+            )
+    elif metric.value_type in _CURRENCY_VALUE_TYPES:
+        if unit in set(_UNIT_BY_VALUE_TYPE.values()):
+            errors.append(f"unit {unit!r} cannot express currency metric {metric.id}")
+        if not isinstance(currency, str) or not currency:
+            errors.append(f"currency metric {metric.id} declares no currency")
+    return errors
+
+
+def _period_errors(payload: dict[str, Any], metric: MetricDef) -> list[str]:
+    """A reported KPI must be stated over the period shape its metric has.
+
+    KPI only: guidance asserts a future period and a revenue driver carries no
+    measurement window, so neither can be graded against ``period_semantics``.
+    A ``forecast`` period type is likewise left alone — the ontology has no
+    forecast semantics to compare it against.
+    """
+    if payload.get("kind") != "kpi":
+        return []
+    period = payload.get("period")
+    ptype = period.get("type") if isinstance(period, dict) else None
+    if ptype not in _ONTOLOGY_PERIOD_TYPES or ptype == metric.period_semantics:
+        return []
+    return [
+        f"period.type {ptype!r} contradicts ontology period_semantics "
+        f"{metric.period_semantics!r} for {metric.id}"
+    ]
 
 
 __all__ = ["check_definitions", "definition_errors"]

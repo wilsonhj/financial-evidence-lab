@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from fel_ontology import load_saas_metrics
 from fel_ontology.models import OntologyDocument
-from fel_workers.extraction.validate.accounting import accounting_errors
+from fel_workers.extraction.validate.accounting import accounting_errors, check_accounting
 from fel_workers.extraction.validate.citations import citation_errors
-from fel_workers.extraction.validate.definitions import definition_errors
+from fel_workers.extraction.validate.definitions import check_definitions, definition_errors
 from fel_workers.extraction.validate.duplicates import (
     conflict_key_for,
     duplicate_groups,
@@ -22,6 +22,8 @@ def default_ontology() -> OntologyDocument:
 
 __all__ = [
     "accounting_errors",
+    "check_accounting",
+    "check_definitions",
     "citation_errors",
     "conflict_key_for",
     "default_ontology",

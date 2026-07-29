@@ -114,11 +114,16 @@ def test_citation_without_an_asserted_hash_is_not_penalised() -> None:
 def test_citation_errors_hash_branch_is_exercised_directly() -> None:
     """The two previously unreachable lines of citations.py, called head on."""
     payload = _kpi_with_evidence([{"source_span_id": FIXTURE_SPAN}])
+    # A citation asserting the wrong digest verifies nothing, so it now carries
+    # the "no verified citation" blocker alongside the mismatch it caused.
     assert citation_errors(
         payload,
         evidence_by_span=_pinned(),
         expected_hashes={FIXTURE_SPAN: sha256_hex("something else")},
-    ) == [f"span hash mismatch: {FIXTURE_SPAN}"]
+    ) == [
+        f"span hash mismatch: {FIXTURE_SPAN}",
+        "no verified citation: no cited span asserts a matching text_hash",
+    ]
     assert (
         citation_errors(
             payload,

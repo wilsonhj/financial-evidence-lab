@@ -18,6 +18,8 @@ from fel_workers.extraction.types import (
 )
 from fel_workers.extraction.validate.checks import (
     accounting_errors,
+    check_accounting,
+    check_definitions,
     citation_errors,
     default_ontology,
     definition_errors,
@@ -105,10 +107,17 @@ def _collect_blockers(
     ontology: OntologyDocument,
     evidence_by_span: dict[str, dict[str, Any]],
 ) -> list[str]:
+    # `check_accounting` and `check_definitions` are called here and nowhere
+    # else. Both existed with zero call sites, so the metric-identity rules they
+    # hold — billings lineage, cRPO timing, blended-margin proxying, and every
+    # unit/period cross-check against the ontology — were never applied to a
+    # single proposal.
     blockers = validate_payload_item(clean)
     blockers.extend(accounting_errors(clean, ontology))
+    blockers.extend(check_accounting(clean))
     blockers.extend(range_errors(clean))
     blockers.extend(definition_errors(clean, ontology))
+    blockers.extend(check_definitions(clean, ontology))
     blockers.extend(
         citation_errors(
             clean,
