@@ -5,6 +5,8 @@ Date: 2026-07-19
 Accepted: 2026-07-19 by integration lead on merge of PR #111
 Occasioned by: M2-RETRIEVAL-BACKEND (#57); recurs for every future first-party package
 Amends: ADR-0003 (root-config-edits)
+Amendment 1: 2026-07-29 — adds `infra/railway/worker.json` install-list
+registration; ratified 2026-07-29 by integration lead on merge of PR #147.
 
 ## Decision
 
@@ -30,6 +32,13 @@ ADR-0003 JS set:
   / `mypy` / `bandit` target lists.
 - **`.github/workflows/ci.yml`** — adding the same directories to the
   `python` job's `black` / `ruff` / `mypy` / `bandit` run lines.
+- **`infra/railway/worker.json`** (Amendment 1) — appending the new package
+  directory to the `buildCommand` `pip install` list, and only when the
+  worker actually imports it. Deploy-time counterpart of the `pyproject.toml`
+  entry: a package the worker imports but never installs makes the deployed
+  service fail on `ImportError` at startup. The `deploy` block —
+  `startCommand`, `restartPolicy`, replicas, health checks, env wiring — is
+  **not** in scope and remains INFRA-WORKER-DEPLOY's (#84).
 
 These are pure additive dir-list registrations: they change no existing
 package's build or test behavior, and omitting them leaves the new
@@ -102,3 +111,43 @@ the four conditions.
 - The Python packaging model changes (e.g. adopting installed workspace
   packages instead of path-based `mypy_path`/`pythonpath` wiring): revisit
   the registration surface this exception enumerates.
+
+## Amendment 1 — `infra/railway/worker.json` install list (2026-07-29)
+
+Status: Accepted; ratified 2026-07-29 by integration lead on merge of PR #147.
+
+**Occasioned by** M3-EXTRACTION-CORE (#60, PR #145), whose `packages/ontology`
+is imported by the worker. The PR correctly appended `./packages/ontology` to
+`worker.json`'s `buildCommand` install list — a one-token, mechanically forced
+edit of exactly the same shape as the `pyproject.toml` hunk beside it — but
+`infra/**` was absent from this ADR's `applies_to`, so it required a
+per-dispatch grant (recorded on #60, 2026-07-29). That grant would have to be
+re-issued for every future first-party package the worker imports:
+`packages/ontology` now, and `packages/calculation-engine` (#63),
+`packages/export` (#68), `packages/observability` in turn. The original ADR
+missed this because `packages/retrieval` (#57) — the package that occasioned
+it — is imported only by `apps/api`, never by the worker, so no install-list
+edit was needed and the gap did not surface.
+
+**Amendment.** `infra/railway/worker.json` joins the in-scope registration
+files, restricted to appending a package directory to the `build.buildCommand`
+`pip install` list, under the unchanged four ADR-0003 conditions. Every other
+key in that file, and every other file under `infra/**`, remains outside the
+exception.
+
+**Why this is safe.** The edit is additive and idempotent (installing one more
+first-party path changes no existing package's resolution); it is verifiable in
+one line of diff; and getting it wrong fails loudly at deploy time
+(`ImportError` on startup) rather than silently. The counterfactual is worse
+than the risk: omitting it ships a worker that cannot import a package it
+depends on.
+
+**Explicitly still excluded**, unchanged: dependency additions of any kind
+(including adding a *third-party* package to that same `pip install` list —
+only first-party `./packages/*` paths are covered), the `deploy` block,
+`api.json`, `infra/scripts/**`, and anything else under `infra/**`.
+
+**Machine-readable encoding** lands with ratification: `workstreams.yaml`
+`shared_path_exceptions` gains `infra/railway/worker.json` under this ADR's
+`applies_to`, and the rule string is unchanged
+(`new-first-party-package-scaffold-registration-only`).
