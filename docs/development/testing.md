@@ -1,0 +1,261 @@
+# Testing guide
+
+Financial Evidence Lab tests correctness at several boundaries: pure domain
+logic, generated contracts, service adapters, PostgreSQL/RLS behavior,
+cross-stack fixtures, browser flows, migrations, and security advisories.
+
+The fastest useful command depends on what you changed. Run the smallest
+relevant loop while developing, then the full gate before review.
+
+## Test matrix
+
+| Layer                     | Main tools                                            | Covers                                                           |
+| ------------------------- | ----------------------------------------------------- | ---------------------------------------------------------------- |
+| TypeScript unit/component | Vitest, Testing Library                               | contracts, web state, reader rendering, observatory behavior     |
+| Python unit               | pytest                                                | API services, worker logic, provider mocks, retrieval, graders   |
+| Database integration      | pytest + PostgreSQL/pgvector                          | migrations, RLS, queues, reader snapshots, retrieval persistence |
+| Contract drift            | repository generation scripts                         | JSON Schema/OpenAPI ↔ generated TypeScript consistency           |
+| Browser                   | Playwright                                            | fixture-mode Next.js routes and core interactions                |
+| Migration/operations      | shell harness + PostgreSQL                            | clean apply, role/RLS behavior, backup/restore expectations      |
+| Static quality            | ESLint, TypeScript, Ruff, mypy, Prettier, Black       | syntax, types, style, import and API mistakes                    |
+| Security                  | Gitleaks, Bandit, pip-audit, bulk npm advisory script | secrets, static Python findings, dependency advisories           |
+
+## Install the exact toolchain
+
+```sh
+corepack enable
+corepack pnpm install --frozen-lockfile
+
+python3.11 -m venv .venv
+.venv/bin/pip install --upgrade pip
+.venv/bin/pip install -r requirements-dev.txt
+```
+
+Use `corepack pnpm`, especially when a globally installed pnpm has a different
+major version.
+
+## Fast developer loops
+
+### JavaScript and TypeScript
+
+```sh
+# All workspace unit/component tests
+corepack pnpm run test
+
+# Web only
+corepack pnpm --filter @fel/web test
+
+# Type and lint checks
+corepack pnpm run typecheck
+corepack pnpm run lint
+corepack pnpm run format:check
+```
+
+Vitest uses the root workspace configuration. Prefer a focused path or test
+name while iterating, but run the workspace command before handoff.
+
+### Python
+
+```sh
+# All tests; DB-gated suites skip without TEST_DATABASE_URL
+.venv/bin/pytest
+
+# Focused packages
+.venv/bin/pytest apps/api/tests
+.venv/bin/pytest workers/tests
+.venv/bin/pytest packages/retrieval/tests
+.venv/bin/pytest packages/retrieval-evals/tests
+
+# Static checks
+.venv/bin/ruff check \
+  apps workers evals packages/providers packages/retrieval packages/retrieval-evals
+.venv/bin/mypy \
+  apps/api/app workers/src evals/graders \
+  packages/providers/fel_providers \
+  packages/retrieval/fel_retrieval \
+  packages/retrieval-evals/fel_retrieval_evals
+.venv/bin/black --check \
+  apps workers evals packages/providers packages/retrieval packages/retrieval-evals
+```
+
+## Database-backed tests
+
+Create a dedicated PostgreSQL database with pgvector and apply every migration:
+
+```sh
+createdb fel_test
+for migration in db/migrations/*.sql; do
+  psql postgresql:///fel_test -v ON_ERROR_STOP=1 -f "$migration"
+done
+export TEST_DATABASE_URL=postgresql:///fel_test
+.venv/bin/pytest
+```
+
+Requirements:
+
+- the test URL must never point to production;
+- the database must support pgvector;
+- the role must be able to run the repository's migration/setup fixtures;
+- retrieval isolation tests may create disposable sibling databases, so the
+  role used for the full suite needs `CREATEDB`.
+
+When `TEST_DATABASE_URL` is absent, DB-gated suites intentionally skip. A green
+local run with skips is not equivalent to the GitHub Actions PostgreSQL jobs.
+
+The database suites are where tenant isolation, application-role grants,
+cutoff boundaries, queue leasing, index immutability, reader snapshot
+consistency, and migration behavior are verified. Do not replace them with
+repository mocks for schema or RLS changes.
+
+## Contract generation and drift
+
+Contracts are compatibility surfaces. Generated clients/types must be rebuilt
+with the repository scripts and committed with their source contract changes.
+
+Run:
+
+```sh
+corepack pnpm --filter @fel/contracts test
+```
+
+If a package-local command reports no tests, use the root commands and inspect
+the scripts under `packages/contracts`; root CI is authoritative. Confirm that
+the generated-drift job leaves the worktree clean.
+
+Contract changes require:
+
+- a `contract-change` issue and any required ADR;
+- schema examples for success and typed failures;
+- migration compatibility where persistence changes;
+- provider/client mock updates;
+- tests for old/new boundary behavior.
+
+## Browser tests
+
+Playwright runs the Next.js app in deterministic fixture mode:
+
+```sh
+corepack pnpm --filter @fel/web exec playwright install chromium
+FEL_EVIDENCE_SOURCE=fixture \
+  corepack pnpm --filter @fel/web run test:e2e
+```
+
+Use the Playwright report and trace for failures:
+
+```sh
+corepack pnpm --filter @fel/web exec playwright show-report
+```
+
+Fixture browser tests prove UI behavior, routing, accessibility hooks, and
+client/server composition. They do **not** prove PostgreSQL, authentication,
+provider, HTTP adapter, or hosted deployment behavior. The production reader
+acceptance test must traverse the real worker → database → API → HTTP source →
+Next.js path.
+
+## Build verification
+
+The web runtime requires an explicit evidence mode even during build:
+
+```sh
+FEL_EVIDENCE_SOURCE=fixture corepack pnpm --filter @fel/web build
+```
+
+For HTTP-mode builds, provide all server-side runtime variables described in
+[`local.md`](./local.md). Never use a client-public bearer token to make a build
+pass.
+
+## Full local gate
+
+After the exact pnpm and Python environments are active:
+
+```sh
+make ci
+```
+
+The target runs formatting, linting, static types, JS/Python tests, Bandit,
+pip-audit, and the bulk npm advisory check. It can require registry/network
+access for dependency advisory data.
+
+GitHub Actions additionally runs:
+
+1. Gitleaks;
+2. the JS/TS quality and generated-client gates;
+3. Playwright browser tests;
+4. Python tests with PostgreSQL 17 + pgvector;
+5. database migration/backup/restore harnesses.
+
+Treat GitHub Actions as the final repository gate because it exercises services
+that a database-free laptop cannot.
+
+## Required tests by change type
+
+| Change               | Minimum evidence                                                                          |
+| -------------------- | ----------------------------------------------------------------------------------------- |
+| UI component/style   | focused component tests, fixture Playwright path, typecheck/build                         |
+| Web data adapter     | unit tests for every typed status; HTTP integration; no fixture fallback                  |
+| API route            | auth/validation/error tests plus DB integration for persistence                           |
+| RLS or tenancy       | same-tenant positive and cross-tenant negative tests as `fel_app`                         |
+| Cutoff/version logic | before, exact-boundary, after, invalid pin, quarantine, direct-read bypass cases          |
+| Span/citation logic  | non-first-section global offsets, exact hash slice, corrupt/out-of-range rejection        |
+| Queue/worker         | duplicate delivery, concurrent claim, lease expiry, retry/dead-letter, late-write fencing |
+| Retrieval            | lane contributions, deterministic fusion, rejection states, replay, schema/DB boundary    |
+| Provider adapter     | deterministic mock, timeout/error mapping, redaction, explicit live configuration         |
+| Migration            | clean apply, upgrade path, RLS/grants, rollback/restore strategy                          |
+| Generated contract   | schema examples, drift check, consumer typecheck                                          |
+
+## Test-data rules
+
+- Use synthetic or license-compatible committed fixtures.
+- Pin live evaluation corpora by checksum and record the effective cutoff.
+- Never commit provider credentials, personal contact details, or production
+  document payloads.
+- Deterministic mocks should preserve interface and failure semantics, not
+  merely return a happy-path shape.
+- A self-validating fixture cannot close a live-provider or cross-stack
+  acceptance gate.
+
+## Current baseline
+
+On `main` at `eed2140` during the 2026-07-29 documentation audit:
+
+- 31 JavaScript/TypeScript test files and 258 tests passed.
+- 423 Python tests passed and 164 database-gated tests skipped in an
+  environment without PostgreSQL.
+- The current `main` CI and the latest PR #145 head both had green five-job
+  GitHub Actions runs.
+
+These counts are a diagnostic snapshot, not a permanent release criterion.
+Behavioral gates and zero unresolved high/medium review findings matter more
+than maintaining an exact test count.
+
+## Troubleshooting
+
+### HTTP tests fail with a SOCKS/proxy import error
+
+Some developer environments inject proxy variables. Install the environment's
+required SOCKS support or run local-only tests with intentionally cleared proxy
+variables. Do not clear a required corporate proxy for live provider tests.
+
+### Tests pass locally but DB CI fails
+
+Check:
+
+- all migrations were applied in order;
+- local tests ran with `TEST_DATABASE_URL`;
+- the test role switched to `fel_app` where production does;
+- pgvector version/type behavior matches CI;
+- the role has `CREATEDB` for sibling-database isolation tests.
+
+### Playwright cannot start
+
+Install the browser binary, verify port availability, and run the app with
+`FEL_EVIDENCE_SOURCE=fixture`. Review `playwright.config.*` before changing
+timeouts; a startup/configuration failure is not usually fixed by a longer
+assertion timeout.
+
+### Dependency audit fails while unit tests pass
+
+Advisory gates are independent of functional tests. Inspect the exact
+transitive dependency and the comments in `pnpm-workspace.yaml`. Shared-path
+security overrides must follow the repository governance decision tracked in
+issue #141.
