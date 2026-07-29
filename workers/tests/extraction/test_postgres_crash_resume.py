@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import os
 import uuid
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -42,6 +43,7 @@ import psycopg
 import pytest
 
 from fel_providers.mocks import MockStructuredLLMProvider
+from fel_workers.extraction.events import ExtractionEvent
 from fel_workers.extraction.hashing import sha256_hex
 from fel_workers.extraction.persist import (
     PostgresCheckpointStore,
@@ -436,3 +438,183 @@ def test_terminal_event_is_written_before_the_run_row_goes_terminal(extraction_d
     assert (
         events is not None and events[0] == 1
     ), "run_failed was not persisted: the terminal status write beat the event append"
+
+
+# ---------------------------------------------------------------------------
+# PR #145 blocker 4 — the step commit and its output-carrying event were two
+# separate transactions under `autocommit=True`.
+# ---------------------------------------------------------------------------
+
+# The stage whose output IS the run's product: lose `extract_kpi`'s output and
+# there are no raw proposals, so normalize and validate produce nothing and the
+# run "abstains" — indistinguishable, from the outside, from a filing that
+# genuinely stated no KPI.
+_TORN_STEP = "extract_kpi"
+
+
+@dataclass
+class _LosingEventStore(PostgresEventStore):
+    """Silently drops the `step_completed` event for one step.
+
+    This is the *observable* state a death between `commit_succeeded` and the
+    event append leaves behind, and the only injection that reproduces it on both
+    sides of the fix: a durably `succeeded` step row with `output_hash NOT NULL`
+    and no event carrying its `stage_output`. Dropping the append (rather than
+    raising) means the surrounding transaction still commits, so the step row is
+    durable exactly as an autocommit-era crash left it. An event pruned or lost
+    later leaves the same row, which is why the resume-side guard is needed even
+    now that the pair is atomic.
+    """
+
+    lose_on_step: str = ""
+
+    def append(self, *, org_id: str, run_id: str, event_type: str, payload: dict[str, Any]) -> Any:
+        if event_type == "step_completed" and payload.get("step_name") == self.lose_on_step:
+            return ExtractionEvent(event_type=event_type, payload={})
+        return super().append(org_id=org_id, run_id=run_id, event_type=event_type, payload=payload)
+
+
+class _ExplodingEventStore(PostgresEventStore):
+    """Fails the `step_completed` append for one step, inside the transaction."""
+
+    fail_on_step: str = ""
+
+    def append(self, *, org_id: str, run_id: str, event_type: str, payload: dict[str, Any]) -> Any:
+        if event_type == "step_completed" and payload.get("step_name") == self.fail_on_step:
+            raise RuntimeError(f"injected event-append failure for {self.fail_on_step}")
+        return super().append(org_id=org_id, run_id=run_id, event_type=event_type, payload=payload)
+
+
+@pytest.mark.skipif(TEST_DATABASE_URL is None, reason="TEST_DATABASE_URL not configured")
+def test_death_between_step_commit_and_its_event_does_not_silently_abstain(
+    extraction_db_url: str,
+) -> None:
+    """A torn checkpoint must never be mistaken for a completed stage.
+
+    The injected loss puts the database in exactly the state a death in the
+    window between `commit_succeeded` and the `step_completed` append leaves: the
+    `extract_kpi` step row is durably `succeeded` with a non-null `output_hash`,
+    and the only carrier of its output is gone. On resume `load_succeeded` finds
+    the row but `_load_stage_output` finds no event, so `output` is None while
+    `output_hash` is not.
+
+    Before the fix the workflow treated that as a completed stage:
+    `_restore_output` returned early, `extract_kpi` was skipped with ZERO model
+    calls, and the run landed `succeeded` + `abstained=True` with no proposals —
+    silent data loss reported as a legitimate abstention, and permanent, because
+    0004 forbids re-opening a terminal run. Verified at PR #145 head: the resumed
+    run reported `status=succeeded abstained=True proposals=0 model_calls=0`.
+    """
+    run_id = str(uuid.uuid4())
+    request = _request(run_id)
+
+    with psycopg.connect(extraction_db_url, autocommit=True) as conn:
+        _seed_parents(conn)
+        _seed_run(conn, request)
+        PostgresPersistStore(conn).mark_running(run_id=run_id, org_id=_ORG)
+        events = _LosingEventStore(conn=conn, lose_on_step=_TORN_STEP)
+        run_extraction_workflow(
+            WorkflowState(request=request, evidence=_evidence()),
+            WorkflowDeps(
+                structured_llm=_CountingLLM(),
+                checkpoint=PostgresCheckpointStore(conn=conn),
+                events=events,
+                persist=PostgresPersistStore(conn),
+                evidence_loader=lambda _r: _evidence(),
+            ),
+        )
+
+        # Precondition: the database really is in the torn state under test.
+        step_row = conn.execute(
+            """
+            SELECT output_hash FROM extraction_run_steps
+             WHERE org_id = %s AND run_id = %s AND step_name = %s AND status = 'succeeded'
+            """,
+            (_ORG, run_id, _TORN_STEP),
+        ).fetchone()
+        assert step_row is not None and step_row[0] is not None, (
+            "the injected loss did not leave a durably succeeded step: "
+            "this test is no longer exercising the window it targets"
+        )
+        lost = conn.execute(
+            """
+            SELECT count(*) FROM extraction_run_events
+             WHERE org_id = %s AND run_id = %s AND event_type = 'step_completed'
+               AND payload->>'step_name' = %s
+            """,
+            (_ORG, run_id, _TORN_STEP),
+        ).fetchone()
+        assert lost is not None and lost[0] == 0, "the step_completed event survived"
+
+    # Process death: nothing survives but the database. Resume on a fresh store
+    # and connection, so the answer comes from Postgres, not an in-process cache.
+    with psycopg.connect(extraction_db_url, autocommit=True) as fresh_conn:
+        fresh_conn.execute("SELECT set_config('app.org_id', %s, false)", (_ORG,))
+        second = _CountingLLM()
+        final = run_extraction_workflow(
+            WorkflowState(request=request, evidence=_evidence()),
+            _postgres_deps(fresh_conn, second),
+        )
+
+    assert not final.abstained, (
+        "the resumed run abstained: a torn checkpoint was treated as a completed "
+        "stage, so the extraction silently produced nothing and reported it as if "
+        "the filing had stated nothing"
+    )
+    assert final.status == "waiting_review"
+    assert final.validated, "the resumed run produced no proposals"
+    assert second.calls >= 1, "the unrecoverable stage was skipped instead of re-run"
+
+
+@pytest.mark.skipif(TEST_DATABASE_URL is None, reason="TEST_DATABASE_URL not configured")
+def test_step_commit_and_its_event_are_one_transaction(extraction_db_url: str) -> None:
+    """If the event append fails, the step row must not be durable either.
+
+    This is the fix itself rather than its safety net: with the pair inside one
+    `conn.transaction()`, a failure in the window rolls back the step row, so the
+    stage is simply not checkpointed and re-runs normally.
+    """
+    run_id = str(uuid.uuid4())
+    request = _request(run_id)
+
+    with psycopg.connect(extraction_db_url, autocommit=True) as conn:
+        _seed_parents(conn)
+        _seed_run(conn, request)
+        PostgresPersistStore(conn).mark_running(run_id=run_id, org_id=_ORG)
+        events = _ExplodingEventStore(conn=conn)
+        events.fail_on_step = _TORN_STEP
+        checkpoint = PostgresCheckpointStore(conn=conn)
+        with pytest.raises(RuntimeError, match="injected event-append failure"):
+            run_extraction_workflow(
+                WorkflowState(request=request, evidence=_evidence()),
+                WorkflowDeps(
+                    structured_llm=_CountingLLM(),
+                    checkpoint=checkpoint,
+                    events=events,
+                    persist=PostgresPersistStore(conn),
+                    evidence_loader=lambda _r: _evidence(),
+                ),
+            )
+
+        rows = conn.execute(
+            """
+            SELECT count(*) FROM extraction_run_steps
+             WHERE org_id = %s AND run_id = %s AND step_name = %s
+            """,
+            (_ORG, run_id, _TORN_STEP),
+        ).fetchone()
+        assert rows is not None and rows[0] == 0, (
+            "the step row outlived the failed event append: the two writes are still "
+            "separately durable, so a crash in between can still orphan a stage output"
+        )
+        # The in-process cache must not answer for a rolled-back step either.
+        assert (
+            checkpoint.load_succeeded(
+                run_id=run_id,
+                org_id=_ORG,
+                step_name=_TORN_STEP,
+                input_hash="unused",
+                workflow_version=request.workflow_version,
+            )
+            is None
+        )

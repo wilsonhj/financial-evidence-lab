@@ -459,9 +459,21 @@ class PostgresCheckpointStore:
         workflow_version: str,
         record: StageRecord,
     ) -> StageRecord:
-        committed = self._memory.commit_succeeded(
+        self._insert_step_row(
             run_id=run_id, org_id=org_id, workflow_version=workflow_version, record=record
         )
+        return self._memory.commit_succeeded(
+            run_id=run_id, org_id=org_id, workflow_version=workflow_version, record=record
+        )
+
+    def _insert_step_row(
+        self,
+        *,
+        run_id: str,
+        org_id: str,
+        workflow_version: str,
+        record: StageRecord,
+    ) -> None:
         step_id = str(uuid.uuid4())
         self.conn.execute(
             """
@@ -493,7 +505,51 @@ class PostgresCheckpointStore:
                 record.cost_usd,
             ),
         )
-        return committed
+
+    def commit_succeeded_atomic(
+        self,
+        *,
+        run_id: str,
+        org_id: str,
+        workflow_version: str,
+        record: StageRecord,
+        events: Any,
+        event_payload: dict[str, Any],
+    ) -> StageRecord:
+        """Commit the step row and its ``step_completed`` event in ONE transaction.
+
+        The event payload's ``stage_output`` is the only carrier of a stage's
+        result (0004 has no ``steps.output`` column). Under the worker's
+        ``autocommit=True`` connection the two writes were separate transactions,
+        so a crash in between left a durably ``succeeded`` step with a non-null
+        ``output_hash`` and no recoverable output. On resume ``load_succeeded``
+        returned ``output=None``, ``_restore_output`` bailed out, the stage was
+        skipped with zero model calls, and the run landed ``succeeded`` +
+        ``abstained=True`` with no proposals — silent data loss reported as a
+        legitimate abstention, made permanent by 0004's terminal-run guard.
+
+        ``conn.transaction()`` opens an explicit block even in autocommit mode, so
+        either both rows land or neither does and the stage simply re-runs. The
+        in-process cache is only populated after the block commits, so a rollback
+        cannot leave ``load_succeeded`` answering from memory for a step whose row
+        no longer exists.
+        """
+        with self.conn.transaction():
+            self._insert_step_row(
+                run_id=run_id,
+                org_id=org_id,
+                workflow_version=workflow_version,
+                record=record,
+            )
+            events.append(
+                org_id=org_id,
+                run_id=run_id,
+                event_type="step_completed",
+                payload=event_payload,
+            )
+        return self._memory.commit_succeeded(
+            run_id=run_id, org_id=org_id, workflow_version=workflow_version, record=record
+        )
 
 
 @dataclass

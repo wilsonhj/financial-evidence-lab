@@ -300,6 +300,69 @@ def _boundary(ctx: _ExecCtx) -> None:
         raise BudgetExceeded(f"wall clock cap {ctx.budget.max_wall_seconds}s reached")
 
 
+def _is_recoverable(record: StageRecord, *, run_id: str) -> bool:
+    """Reject a checkpoint that claims an output it cannot hand back.
+
+    ``output_hash`` non-null with ``output is None`` is the torn state a crash
+    between the step commit and its ``step_completed`` event leaves behind (see
+    ``PostgresCheckpointStore.commit_succeeded_atomic``, which now makes the pair
+    atomic so this cannot be produced any more — rows written by earlier code, or
+    an event pruned later, still can be). Treating it as a completed stage skips
+    the stage with zero model calls and lands the run ``succeeded`` +
+    ``abstained=True`` with no proposals: silent data loss dressed up as a
+    legitimate abstention. Re-running the stage is the fail-closed answer; the
+    stage is idempotent by construction, keyed on ``input_hash``.
+    """
+    if record.output_hash is not None and record.output is None:
+        emit(
+            "stage_checkpoint_unrecoverable",
+            run_id=run_id,
+            step_name=record.step_name,
+            input_hash=record.input_hash,
+            output_hash=record.output_hash,
+        )
+        return False
+    return True
+
+
+def _commit_stage(
+    ctx: _ExecCtx, *, record: StageRecord, event_payload: dict[str, Any]
+) -> StageRecord:
+    """Commit a succeeded stage and its output-carrying event as one unit.
+
+    The ``step_completed`` event's ``stage_output`` is the ONLY carrier of a
+    stage's result (0004 has no ``steps.output`` column), so the two writes must
+    not be separately durable. Stores that can do it atomically expose
+    ``commit_succeeded_atomic``; the in-memory doubles have no durability
+    boundary to straddle and fall back to the two-call form.
+    """
+    req = ctx.state.request
+    atomic = getattr(ctx.deps.checkpoint, "commit_succeeded_atomic", None)
+    if callable(atomic):
+        committed: StageRecord = atomic(
+            run_id=req.run_id,
+            org_id=req.org_id,
+            workflow_version=req.workflow_version,
+            record=record,
+            events=ctx.deps.events,
+            event_payload=event_payload,
+        )
+        return committed
+    committed = ctx.deps.checkpoint.commit_succeeded(
+        run_id=req.run_id,
+        org_id=req.org_id,
+        workflow_version=req.workflow_version,
+        record=record,
+    )
+    ctx.deps.events.append(
+        org_id=req.org_id,
+        run_id=req.run_id,
+        event_type="step_completed",
+        payload=event_payload,
+    )
+    return committed
+
+
 def _run_stage(ctx: _ExecCtx, step_name: str) -> None:
     req = ctx.state.request
     stage_payload = _stage_input_payload(ctx.state, step_name)
@@ -316,7 +379,11 @@ def _run_stage(ctx: _ExecCtx, step_name: str) -> None:
         input_hash=input_hash,
         workflow_version=req.workflow_version,
     )
-    if existing is not None and existing.status == "succeeded":
+    if (
+        existing is not None
+        and existing.status == "succeeded"
+        and _is_recoverable(existing, run_id=req.run_id)
+    ):
         ctx.state.stages[step_name] = existing
         _restore_output(ctx.state, step_name, existing.output)
         emit(
@@ -345,26 +412,15 @@ def _run_stage(ctx: _ExecCtx, step_name: str) -> None:
         output_hash=output_hash,
         output=output,
     )
-    committed = ctx.deps.checkpoint.commit_succeeded(
-        run_id=req.run_id,
-        org_id=req.org_id,
-        workflow_version=req.workflow_version,
-        record=record,
-    )
-    ctx.state.stages[step_name] = committed
+    event_payload = {
+        "step_name": step_name,
+        "input_hash": input_hash,
+        "output_hash": output_hash,
+        # Frozen 0004 has no steps.output column; persist resume payload here.
+        "stage_output": serialize_stage_output(output),
+    }
+    ctx.state.stages[step_name] = _commit_stage(ctx, record=record, event_payload=event_payload)
     ctx.newly_committed += 1
-    ctx.deps.events.append(
-        org_id=req.org_id,
-        run_id=req.run_id,
-        event_type="step_completed",
-        payload={
-            "step_name": step_name,
-            "input_hash": input_hash,
-            "output_hash": output_hash,
-            # Frozen 0004 has no steps.output column; persist resume payload here.
-            "stage_output": serialize_stage_output(output),
-        },
-    )
     if (
         ctx.deps.crash_after_stages is not None
         and ctx.newly_committed >= ctx.deps.crash_after_stages
