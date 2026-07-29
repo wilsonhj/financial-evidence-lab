@@ -68,8 +68,8 @@
         "annualized run-rate revenue",
         "annual run-rate revenue"
       ],
-      "required_qualifiers": ["currency", "construction"],
-      "comparability_key_fields": ["metric_id", "construction", "scope"],
+      "required_qualifiers": ["currency", "construction", "scope"],
+      "comparability_key_fields": ["metric_id", "currency", "construction", "scope"],
       "derivation_policy": "reported_or_issuer_defined",
       "review_policy": "monetary_manual_only",
       "notes": "MRR×12 run-rate vs annualized contract value are not comparable."
@@ -84,8 +84,8 @@
       "period_semantics": "instant",
       "scale_handling": "base_usd",
       "aliases": ["monthly recurring revenue", "MRR", "monthly run-rate revenue"],
-      "required_qualifiers": ["currency", "construction"],
-      "comparability_key_fields": ["metric_id", "construction", "scope"],
+      "required_qualifiers": ["currency", "construction", "scope"],
+      "comparability_key_fields": ["metric_id", "currency", "construction", "scope"],
       "derivation_policy": "reported_or_issuer_defined",
       "review_policy": "monetary_manual_only",
       "notes": "Issuer construction must be preserved verbatim."
@@ -192,10 +192,10 @@
       "scale_handling": "base_usd",
       "aliases": ["bookings", "total contract value", "TCV"],
       "required_qualifiers": ["currency", "definition_present"],
-      "comparability_key_fields": ["metric_id", "definition_hash"],
+      "comparability_key_fields": ["metric_id", "currency", "definition_present"],
       "derivation_policy": "no_assumed_formula",
       "review_policy": "monetary_manual_only",
-      "notes": "Often undefined; never invent a formula."
+      "notes": "Often undefined; never invent a formula. Keys on definition_present because an extractor cannot supply a definition digest; the digest travels as the proposal-level definition_hash."
     },
     {
       "id": "billings",
@@ -208,7 +208,7 @@
       "scale_handling": "base_usd",
       "aliases": ["billings", "calculated billings"],
       "required_qualifiers": ["currency", "formula"],
-      "comparability_key_fields": ["metric_id", "formula"],
+      "comparability_key_fields": ["metric_id", "currency", "formula"],
       "derivation_policy": "revenue_plus_delta_deferred_when_cited",
       "review_policy": "monetary_manual_only",
       "notes": "Derivation only with cited revenue + Δ deferred revenue."
@@ -228,8 +228,8 @@
         "subscription revenue backlog",
         "transaction price allocated to remaining performance obligations"
       ],
-      "required_qualifiers": ["currency", "usage_exemption"],
-      "comparability_key_fields": ["metric_id", "usage_exemption", "label_family"],
+      "required_qualifiers": ["currency", "usage_exemption", "label_family"],
+      "comparability_key_fields": ["metric_id", "currency", "usage_exemption", "label_family"],
       "derivation_policy": "asc606_reported",
       "review_policy": "monetary_manual_only",
       "notes": "Human-facing backlog labels are aliases; exemptions break completeness."
@@ -245,7 +245,7 @@
       "scale_handling": "base_usd",
       "aliases": ["current RPO", "cRPO", "current remaining performance obligations"],
       "required_qualifiers": ["currency", "horizon_months"],
-      "comparability_key_fields": ["metric_id", "horizon_months"],
+      "comparability_key_fields": ["metric_id", "currency", "horizon_months"],
       "derivation_policy": "asc606_slice_verified",
       "review_policy": "monetary_manual_only",
       "notes": "≤12-month slice must be verified; not interchangeable with total RPO."
@@ -264,8 +264,13 @@
         "contract liabilities",
         "deferred revenue and contract liabilities"
       ],
-      "required_qualifiers": ["currency", "current_noncurrent_split"],
-      "comparability_key_fields": ["metric_id", "tag_family", "current_noncurrent_split"],
+      "required_qualifiers": ["currency", "current_noncurrent_split", "tag_family"],
+      "comparability_key_fields": [
+        "metric_id",
+        "currency",
+        "tag_family",
+        "current_noncurrent_split"
+      ],
       "derivation_policy": "asc606_or_legacy_tagged",
       "review_policy": "monetary_manual_only",
       "notes": "ASC 606 vs legacy tag families must be distinguished."

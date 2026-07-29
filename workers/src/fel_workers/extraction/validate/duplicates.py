@@ -9,7 +9,12 @@ from fel_workers.extraction.hashing import canonical_json, hash_json
 
 
 def duplicate_groups(payloads: list[dict[str, Any]]) -> list[list[int]]:
-    """Group indices that share kind+metric_id+period+value fingerprint (live path)."""
+    """Group indices that share kind+metric_id+period+currency+value fingerprint.
+
+    Currency scopes the fingerprint (as it does in ``comparability_key_for``):
+    the same number reported in USD and in JPY is two figures, not one restated
+    twice, and must not carry a ``duplicate_candidate`` blocker.
+    """
     buckets: dict[str, list[int]] = {}
     for idx, payload in enumerate(payloads):
         key = hash_json(
@@ -17,6 +22,7 @@ def duplicate_groups(payloads: list[dict[str, Any]]) -> list[list[int]]:
                 "kind": payload.get("kind"),
                 "metric_id": payload.get("metric_id"),
                 "period": payload.get("period"),
+                "currency": payload.get("currency"),
                 "value": payload.get("value"),
                 "low": payload.get("low"),
                 "high": payload.get("high"),
