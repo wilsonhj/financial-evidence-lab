@@ -31,6 +31,7 @@ not this one. See `ensure_extraction_database`.
 
 from __future__ import annotations
 
+import json
 import os
 import uuid
 from dataclasses import dataclass
@@ -196,14 +197,20 @@ def _seed_run(conn: psycopg.Connection, request: ExtractionRunRequest) -> None:
 
     0004 forbids inserting a non-queued run, so status is promoted afterwards
     the way PostgresPersistStore.mark_running does.
+
+    ``input_manifest`` is seeded from the request like every other pin: it is on
+    ``fel_guard_extraction_run``'s immutable list, and the durable path now binds
+    the payload to the row, so a fixture that left the column at its ``'{}'``
+    default while the payload declared a manifest would be modelling a
+    contradicted run rather than a well-formed one.
     """
     conn.execute(
         """
         INSERT INTO extraction_runs (
             id, org_id, workspace_id, entity_id, modes, as_of, corpus_version_id,
             ontology_version, workflow_version, provider, model, policy_id,
-            input_hash, idempotency_key, created_by, status
-        ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'queued')
+            input_manifest, input_hash, idempotency_key, created_by, status
+        ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s,%s,%s,'queued')
         """,
         (
             request.run_id,
@@ -218,6 +225,7 @@ def _seed_run(conn: psycopg.Connection, request: ExtractionRunRequest) -> None:
             request.provider,
             request.model,
             request.policy_id,
+            json.dumps(dict(request.input_manifest)),
             request.input_hash,
             f"crash-resume|{request.run_id}",
             _USER,

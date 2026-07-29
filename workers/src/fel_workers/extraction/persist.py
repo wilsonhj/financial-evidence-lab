@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import uuid
 from dataclasses import dataclass, field
+from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
@@ -21,6 +22,8 @@ __all__ = [
     "PostgresCheckpointStore",
     "PostgresEventStore",
     "PostgresPersistStore",
+    "RunPins",
+    "SpanPin",
     "UsageSnapshot",
     "assert_workspace_ownership",
 ]
@@ -35,6 +38,55 @@ class UsageSnapshot:
     output_tokens_used: int = 0
     cost_usd: Decimal = Decimal("0")
     wall_seconds_used: float = 0.0
+
+
+@dataclass(frozen=True)
+class RunPins:
+    """The immutable identity 0004 records for a run, read back from the row.
+
+    Every field here is protected by ``fel_guard_extraction_run``, which raises
+    ``extraction run identity pins are immutable`` on any UPDATE that changes
+    one. That makes the row — not the queue payload — the authority on what the
+    run is: its cutoff, its corpus, its model and its budget ceilings. The
+    package used to read ``extraction_runs`` exactly once (``load_usage``, four
+    usage counters) and never compare a pin, so the budget CHECKs 0004 spends
+    two constraints expressing were unenforceable at runtime: nothing read the
+    columns that carry them.
+    """
+
+    workspace_id: str
+    entity_id: str
+    modes: tuple[str, ...]
+    as_of: datetime
+    corpus_version_id: str
+    ontology_version: str
+    workflow_version: str
+    provider: str
+    model: str
+    policy_id: str
+    input_manifest: dict[str, Any]
+    input_hash: str
+    max_calls: int
+    max_input_tokens: int
+    max_output_tokens: int
+    max_cost_usd: Decimal
+    max_wall_seconds: int
+
+
+@dataclass(frozen=True)
+class SpanPin:
+    """The canonical ``source_spans`` row behind one cited span.
+
+    ``text_hash`` is the citation's content address, fixed at ingest against the
+    document version's canonical text. It is the only value that can decide
+    whether supplied evidence text really is what the span addresses; a hash
+    computed from that same text answers a different question (is this text
+    self-consistent) and always says yes.
+    """
+
+    source_span_id: str
+    document_version_id: str
+    text_hash: str
 
 
 def assert_workspace_ownership(
@@ -113,6 +165,32 @@ class MemoryPersistStore:
             self.conflicts[draft.conflict_key] = draft
             out.append(draft)
         return out
+
+    def persist_outputs_atomic(
+        self,
+        *,
+        run_id: str,
+        org_id: str,
+        workspace_id: str,
+        proposals: list[ProposalDraft],
+        conflicts: list[ConflictDraft],
+        events: Any,
+    ) -> tuple[list[ProposalDraft], list[ConflictDraft]]:
+        """Memory-path twin of the Postgres combined write (no transaction needed)."""
+        persisted = self.persist_proposals(
+            run_id=run_id, org_id=org_id, workspace_id=workspace_id, drafts=proposals
+        )
+        for draft in persisted:
+            if draft.state != "needs_review":
+                raise StepFailed("proposal escaped needs_review — auto-approve forbidden")
+        groups = self.persist_conflicts(org_id=org_id, workspace_id=workspace_id, drafts=conflicts)
+        events.append(
+            org_id=org_id,
+            run_id=run_id,
+            event_type="proposals_persisted",
+            payload={"count": len(persisted), "conflicts": len(groups)},
+        )
+        return persisted, groups
 
     def set_run_status(
         self,
@@ -194,6 +272,84 @@ class PostgresPersistStore:
                 org_id,
             ),
         )
+
+    def load_run_pins(self, *, run_id: str, org_id: str) -> RunPins | None:
+        """Read the run's immutable identity back, or ``None`` if there is no row.
+
+        Tenant-scoped by ``org_id`` like every other read here, so a payload
+        cannot reach another org's run row to bind against.
+        """
+        row = self.conn.execute(
+            """
+            SELECT workspace_id, entity_id, modes, as_of, corpus_version_id,
+                   ontology_version, workflow_version, provider, model, policy_id,
+                   input_manifest, input_hash, max_calls, max_input_tokens,
+                   max_output_tokens, max_cost_usd, max_wall_seconds
+              FROM extraction_runs
+             WHERE id = %s AND org_id = %s
+            """,
+            (run_id, org_id),
+        ).fetchone()
+        if row is None:
+            return None
+        manifest = row[10]
+        if isinstance(manifest, str):
+            manifest = json.loads(manifest)
+        return RunPins(
+            workspace_id=str(row[0]),
+            entity_id=str(row[1]),
+            modes=tuple(str(mode) for mode in row[2]),
+            as_of=row[3],
+            corpus_version_id=str(row[4]),
+            ontology_version=str(row[5]),
+            workflow_version=str(row[6]),
+            provider=str(row[7]),
+            model=str(row[8]),
+            policy_id=str(row[9]),
+            input_manifest=dict(manifest or {}),
+            input_hash=str(row[11]),
+            max_calls=int(row[12]),
+            max_input_tokens=int(row[13]),
+            max_output_tokens=int(row[14]),
+            max_cost_usd=Decimal(str(row[15])),
+            max_wall_seconds=int(row[16]),
+        )
+
+    def load_span_pins(self, span_ids: list[str]) -> dict[str, SpanPin]:
+        """Canonical ``source_spans`` rows for the cited spans, keyed by span id.
+
+        Spans are corpus-global (no ``org_id`` column in 0002); tenancy on the
+        evidence path is carried by ``extraction_proposal_evidence``'s composite
+        FK and by the run's own workspace bind, not here.
+
+        Ids that are not well-formed UUIDs are simply absent from the result
+        rather than raising: the caller fails them closed as unresolvable spans,
+        which is the same outcome with a message that names the span.
+        """
+        wanted: list[str] = []
+        for span_id in span_ids:
+            try:
+                wanted.append(str(uuid.UUID(span_id)))
+            except ValueError:
+                continue
+        if not wanted:
+            return {}
+        rows = self.conn.execute(
+            """
+            SELECT id, document_version_id, text_hash
+              FROM source_spans
+             WHERE id = ANY(%s::uuid[])
+            """,
+            (wanted,),
+        ).fetchall()
+        return {
+            str(row[0]): SpanPin(
+                source_span_id=str(row[0]),
+                document_version_id=str(row[1]),
+                text_hash=str(row[2]),
+            )
+            for row in rows
+        }
 
     def load_usage(self, *, run_id: str, org_id: str) -> UsageSnapshot:
         """Usage spent by earlier attempts of this run."""
@@ -380,6 +536,66 @@ class PostgresPersistStore:
                 )
             out.append(draft)
         return out
+
+    def persist_outputs_atomic(
+        self,
+        *,
+        run_id: str,
+        org_id: str,
+        workspace_id: str,
+        proposals: list[ProposalDraft],
+        conflicts: list[ConflictDraft],
+        events: Any,
+    ) -> tuple[list[ProposalDraft], list[ConflictDraft]]:
+        """Commit proposals, their evidence and their conflicts in ONE transaction.
+
+        The persist stage used to call ``persist_proposals`` and then
+        ``persist_conflicts`` with nothing between them, on the worker's
+        ``autocommit=True`` connection. Every statement was therefore its own
+        transaction, so when the conflict write raised — 0004's
+        ``conflict_terminal`` guard refusing to attach unreviewed proposals to an
+        already-adjudicated group is the reachable trigger — the proposals and
+        their evidence were already durable. Observed: 3 proposals and 3 evidence
+        rows committed, conflict membership 0, run finalised ``failed``.
+
+        The result is unrepairable, which is what makes this worth a transaction
+        rather than a retry. ``fel_guard_extraction_proposal`` calls
+        ``fel_assert_extraction_run_open`` on the UPDATE path, so once the run is
+        terminal the orphans can no longer be moved to ``rejected``, and DELETE
+        is forbidden outright. The only mechanically available repair is
+        hand-inserting the missing conflict members — exactly what the
+        ``conflict_terminal`` guard exists to prevent. Until then a reviewer sees
+        proposals the pipeline had grouped as mutually contradictory, presented
+        as independent findings, with no way to correct or withdraw them.
+
+        ``conn.transaction()`` opens an explicit block even under autocommit, so
+        either the whole stage lands or none of it does and the run simply fails
+        with nothing written. This is the same fix, for the same reason, as
+        :meth:`PostgresCheckpointStore.commit_succeeded_atomic`.
+
+        The ``needs_review`` assertion runs INSIDE the block: an escaped proposal
+        must roll back the write it escaped in, not merely be reported after it
+        is durable.
+        """
+        with self.conn.transaction():
+            persisted = self.persist_proposals(
+                run_id=run_id, org_id=org_id, workspace_id=workspace_id, drafts=proposals
+            )
+            for draft in persisted:
+                if draft.state != "needs_review":
+                    # Typed exactly as the workflow stage that used to carry this
+                    # check, so moving it here does not reclassify the failure.
+                    raise StepFailed("proposal escaped needs_review — auto-approve forbidden")
+            groups = self.persist_conflicts(
+                org_id=org_id, workspace_id=workspace_id, drafts=conflicts
+            )
+            events.append(
+                org_id=org_id,
+                run_id=run_id,
+                event_type="proposals_persisted",
+                payload={"count": len(persisted), "conflicts": len(groups)},
+            )
+        return persisted, groups
 
 
 @dataclass
