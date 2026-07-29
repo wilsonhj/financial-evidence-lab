@@ -28,6 +28,28 @@ _DRIVER_CATEGORIES = frozenset(
     }
 )
 _SCHEMA_VERSION = "extraction-payload/v1"
+
+# Keys the worker pipeline genuinely reads that the frozen contract does not
+# define. `evidence` carries citation rows (`validate/pipeline.py::_evidence_rows`,
+# `validate/citations.py::citation_errors`); `source_span_ids` is the flat
+# alternative `citation_errors` accepts. Nothing else may ride along: the
+# contract sets `additionalProperties: false` on every variant, and an unknown
+# key is how model-supplied control fields reached persistence.
+WORKER_EXTENSION_KEYS = frozenset({"evidence", "source_span_ids"})
+
+# Fields on a citation row that the pipeline computes for itself. A
+# model-supplied value is a self-grade, so it is reported here and dropped in
+# `validate/pipeline.py::_evidence_rows`.
+PIPELINE_CONTROL_EVIDENCE_KEYS = frozenset({"citation_status"})
+
+# `$defs` names of the closed variants, keyed by the payload's own discriminator.
+_GUIDANCE_SHAPE_DEFS = {
+    "point": "guidancePoint",
+    "range": "guidanceRange",
+    "floor": "guidanceFloor",
+    "ceiling": "guidanceCeiling",
+    "qualitative": "guidanceQualitative",
+}
 _COMMON_REQUIRED = (
     "schema_version",
     "kind",
@@ -73,6 +95,66 @@ def load_extraction_payload_schema() -> dict[str, Any]:
     return loaded
 
 
+def _closed_branch_properties(node: dict[str, Any]) -> set[str]:
+    """Property names of the `allOf` member that closes the object.
+
+    The guidance variants are `allOf: [guidanceBase, <closed branch>]`, and only
+    the closed branch carries `additionalProperties: false`, so it alone decides
+    which keys that shape may carry.
+    """
+    for member in node.get("allOf") or []:
+        if isinstance(member, dict) and member.get("additionalProperties") is False:
+            return set(member.get("properties") or {})
+    return set()
+
+
+def allowed_payload_keys(kind: Any, *, shape: Any) -> set[str]:
+    """Keys this payload variant may carry, read off the frozen contract schema.
+
+    Derived at call time from `packages/contracts/schemas/extraction-payload.schema.json`
+    (consumed, never modified) so the allowed set cannot drift from the contract.
+    An empty set means the variant is unrecognisable — `kind`/`shape` is already
+    reported as an error, and no unknown-key noise is added on top of it.
+    """
+    defs = load_extraction_payload_schema().get("$defs") or {}
+    if kind == "kpi":
+        properties = set((defs.get("kpi") or {}).get("properties") or {})
+    elif kind == "revenue_driver":
+        properties = set((defs.get("revenueDriver") or {}).get("properties") or {})
+    elif kind == "guidance":
+        name = _GUIDANCE_SHAPE_DEFS.get(str(shape))
+        properties = _closed_branch_properties(defs.get(name) or {}) if name else set()
+    else:
+        properties = set()
+    if not properties:
+        return set()
+    return properties | set(WORKER_EXTENSION_KEYS)
+
+
+def _unknown_key_errors(payload: dict[str, Any]) -> list[str]:
+    allowed = allowed_payload_keys(payload.get("kind"), shape=payload.get("shape"))
+    if not allowed:
+        return []
+    return [
+        f"unknown field not permitted by {_SCHEMA_VERSION}: {key}"
+        for key in sorted(payload)
+        if key not in allowed
+    ]
+
+
+def _evidence_control_field_errors(payload: dict[str, Any]) -> list[str]:
+    evidence = payload.get("evidence")
+    if not isinstance(evidence, list):
+        return []
+    errors: list[str] = []
+    for idx, item in enumerate(evidence):
+        if not isinstance(item, dict):
+            continue
+        for key in sorted(PIPELINE_CONTROL_EVIDENCE_KEYS.intersection(item)):
+            errors.append(f"evidence[{idx}]: {key} is set by the pipeline, not the model")
+    return errors
+
+
 def validate_payload_item(payload: dict[str, Any]) -> list[str]:
     """Return human-readable errors; empty list means schema-valid."""
     if not isinstance(payload, dict):
@@ -89,6 +171,11 @@ def validate_payload_item(payload: dict[str, Any]) -> list[str]:
         errors.extend(_validate_driver(payload))
     else:
         errors.append(f"unknown kind: {kind!r}")
+    # The contract closes every variant with `additionalProperties: false`; the
+    # checks above only look at the fields they know, so without this an invented
+    # key rode through normalize, validate and persist untouched.
+    errors.extend(_unknown_key_errors(payload))
+    errors.extend(_evidence_control_field_errors(payload))
     return errors
 
 
@@ -233,4 +320,10 @@ def _validate_driver(payload: dict[str, Any]) -> list[str]:
     return errors
 
 
-__all__ = ["load_extraction_payload_schema", "validate_payload_item"]
+__all__ = [
+    "PIPELINE_CONTROL_EVIDENCE_KEYS",
+    "WORKER_EXTENSION_KEYS",
+    "allowed_payload_keys",
+    "load_extraction_payload_schema",
+    "validate_payload_item",
+]

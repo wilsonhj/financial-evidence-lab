@@ -25,7 +25,10 @@ from fel_workers.extraction.validate.checks import (
     range_errors,
 )
 from fel_workers.extraction.validate.conflicts import detect_conflicts
-from fel_workers.extraction.validate.schema import validate_payload_item
+from fel_workers.extraction.validate.schema import (
+    PIPELINE_CONTROL_EVIDENCE_KEYS,
+    validate_payload_item,
+)
 
 _VALID_KINDS = frozenset({"kpi", "guidance", "revenue_driver"})
 
@@ -200,19 +203,67 @@ def _comparability(
         return {"key": None, "fields": []}
 
 
+def citation_status_for(
+    row: dict[str, Any],
+    *,
+    evidence_by_span: dict[str, dict[str, Any]],
+) -> str:
+    """Grade one citation row from the pinned evidence alone.
+
+    The single rule behind every `citation_status` the pipeline writes, so a
+    draft rebuilt on crash-resume and one graded by `workflow._stage_verify_citations`
+    can never disagree. It reads only the pinned span map — never a value the
+    model supplied — because `extraction_proposal_evidence` is append-only
+    (`db/migrations/0004_extraction_core.sql`) and a wrong grade is permanent.
+
+    * `invalid` — the row names no span, names one that is not pinned, or asserts
+      a `text_hash` that does not describe the span it cites. All three are
+      citations that cannot support anything.
+    * `verified` — the row asserted the span's content address and it matched.
+      This is the only claim code can prove: a role that actually opened the span
+      through the `read_span` tool has its `text_hash` (see `extraction/tools.py`).
+    * `partial` — the span is pinned but the row asserted nothing further about
+      its content. Membership alone is not verification, and it is what a
+      string-form citation (`"evidence": ["<span-id>"]`) can express at most, so
+      grading it `verified` would let the model upgrade a citation by choosing a
+      JSON shape.
+
+    `contradictory` is never returned: nothing in the pipeline evaluates whether
+    the cited evidence contradicts the claim, and claiming it would be a guess.
+    """
+    span_id = row.get("source_span_id")
+    if not isinstance(span_id, str) or not span_id.strip():
+        return "invalid"
+    pinned = evidence_by_span.get(span_id)
+    if pinned is None:
+        return "invalid"
+    asserted = row.get("text_hash")
+    if isinstance(asserted, str) and asserted:
+        actual = pinned.get("text_hash") or sha256_hex(str(pinned.get("text") or ""))
+        return "verified" if asserted == actual else "invalid"
+    return "partial"
+
+
 def _evidence_rows(
     clean: dict[str, Any],
     *,
     evidence_by_span: dict[str, dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
-    """Build citation rows; pin document_version_id from assembled evidence when omitted."""
+    """Build citation rows; pin document_version_id from assembled evidence when omitted.
+
+    Every row is graded here by `citation_status_for`, and any model-supplied
+    grade is dropped first. Grading at build time rather than only in
+    `workflow._stage_verify_citations` is what keeps a draft rebuilt on
+    crash-resume — where that stage is replayed from its checkpoint and never
+    re-runs — from reaching persist ungraded.
+    """
     pinned = evidence_by_span or {}
     rows: list[dict[str, Any]] = []
     for item in clean.get("evidence") or []:
         if isinstance(item, dict) and item.get("source_span_id"):
-            row = dict(item)
+            row = {k: v for k, v in item.items() if k not in PIPELINE_CONTROL_EVIDENCE_KEYS}
         elif isinstance(item, str):
-            row = {"source_span_id": item, "role": "supports", "citation_status": "partial"}
+            row = {"source_span_id": item, "role": "supports"}
         else:
             continue
         span_id = str(row["source_span_id"])
@@ -220,6 +271,7 @@ def _evidence_rows(
             pinned_doc = (pinned.get(span_id) or {}).get("document_version_id")
             if pinned_doc:
                 row["document_version_id"] = pinned_doc
+        row["citation_status"] = citation_status_for(row, evidence_by_span=pinned)
         rows.append(row)
     return rows
 
@@ -234,4 +286,4 @@ def _mark_duplicates(drafts: list[ProposalDraft], cleaned_payloads: list[dict[st
             summary["blockers"] = blockers
 
 
-__all__ = ["ValidationResult", "detect_conflicts", "validate_proposals"]
+__all__ = ["ValidationResult", "citation_status_for", "detect_conflicts", "validate_proposals"]

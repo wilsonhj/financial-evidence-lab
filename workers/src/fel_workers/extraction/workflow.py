@@ -40,6 +40,7 @@ from fel_workers.extraction.types import (
     WorkflowState,
 )
 from fel_workers.extraction.validate import validate_proposals
+from fel_workers.extraction.validate.pipeline import citation_status_for
 
 
 class CheckpointStore(Protocol):
@@ -707,17 +708,27 @@ def _stage_validate(ctx: _ExecCtx) -> dict[str, Any]:
 
 
 def _stage_verify_citations(state: WorkflowState) -> dict[str, Any]:
-    evidence_ids = {e.source_span_id for e in state.evidence}
-    invalid = 0
+    """Grade every citation row from the pinned evidence, overwriting the row.
+
+    The grade is assigned, never defaulted: `setdefault` let a model-supplied
+    `citation_status: "verified"` survive into `extraction_proposal_evidence`,
+    which 0004 makes append-only — UPDATE and DELETE both raise — so the wrong
+    value could never be corrected. `citation_status_for` is the single rule (see
+    its docstring for why span membership alone earns `partial`, not `verified`).
+    """
+    pinned = dict(evidence_map(state.evidence))
+    counts = {"verified": 0, "partial": 0, "invalid": 0}
     for draft in state.validated:
         for row in draft.evidence:
-            span_id = row.get("source_span_id")
-            if span_id and span_id not in evidence_ids:
-                row["citation_status"] = "invalid"
-                invalid += 1
-            else:
-                row.setdefault("citation_status", "verified")
-    return {"invalid_citations": invalid, "checked": len(state.validated)}
+            status = citation_status_for(row, evidence_by_span=pinned)
+            row["citation_status"] = status
+            counts[status] += 1
+    return {
+        "invalid_citations": counts["invalid"],
+        "partial_citations": counts["partial"],
+        "verified_citations": counts["verified"],
+        "checked": len(state.validated),
+    }
 
 
 def _stage_detect_conflicts(state: WorkflowState) -> dict[str, Any]:
