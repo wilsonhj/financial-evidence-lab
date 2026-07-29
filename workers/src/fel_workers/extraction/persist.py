@@ -253,14 +253,28 @@ class PostgresPersistStore:
         )
 
     def record_usage(self, *, run_id: str, org_id: str, usage: UsageSnapshot) -> None:
-        """Mirror accumulated usage onto the run row so a requeue resumes from it."""
+        """Mirror accumulated usage onto the run row so a requeue resumes from it.
+
+        Each counter is merged with ``GREATEST`` rather than assigned. These are
+        cumulative-from-zero totals for the run, so they may only ever climb —
+        and a blind ``SET`` let a writer holding a stale snapshot erase spend
+        another writer had already recorded, which is reachable because
+        ``lease_check`` fails open: a heartbeat thread that dies on a connection
+        error leaves the old worker believing it still owns the job while the
+        reaper hands it to a new one. Budget caps are only as good as the ledger
+        they read, so an erased call is an unbounded run.
+
+        ``GREATEST`` also puts the merge inside the statement, where Postgres
+        resolves it under the row lock. Read-then-write in Python would leave the
+        same race between the two statements.
+        """
         self.conn.execute(
             """
             UPDATE extraction_runs
-               SET calls_used = %s,
-                   input_tokens_used = %s,
-                   output_tokens_used = %s,
-                   cost_usd = %s
+               SET calls_used = GREATEST(calls_used, %s),
+                   input_tokens_used = GREATEST(input_tokens_used, %s),
+                   output_tokens_used = GREATEST(output_tokens_used, %s),
+                   cost_usd = GREATEST(cost_usd, %s)
              WHERE id = %s AND org_id = %s
             """,
             (
