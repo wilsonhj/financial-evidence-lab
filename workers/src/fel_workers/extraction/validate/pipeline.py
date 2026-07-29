@@ -10,7 +10,12 @@ from fel_ontology import build_comparability_key
 from fel_ontology.models import OntologyDocument
 from fel_workers.extraction.errors import IntegrityError
 from fel_workers.extraction.hashing import hash_json, proposal_id_for, sha256_hex
-from fel_workers.extraction.types import ConflictDraft, ExtractionMode, ProposalDraft
+from fel_workers.extraction.types import (
+    NORMALIZER_BLOCKERS_KEY,
+    ConflictDraft,
+    ExtractionMode,
+    ProposalDraft,
+)
 from fel_workers.extraction.validate.checks import (
     accounting_errors,
     citation_errors,
@@ -52,7 +57,17 @@ def validate_proposals(
             continue
         kind = cast(ExtractionMode, kind_raw)
 
-        blockers = _collect_blockers(clean, ontology, evidence_by_span)
+        # Blockers the normalizer detected without aborting (a declared scale or
+        # sign that contradicts the value) travel on the stripped `_` metadata
+        # key, so they survive a crash-resume with the checkpointed payload.
+        carried = payload.get(NORMALIZER_BLOCKERS_KEY)
+        blockers = [str(b) for b in carried] if isinstance(carried, list) else []
+        blockers.extend(_collect_blockers(clean, ontology, evidence_by_span))
+        # The normalizer's scale check and range_errors deliberately overlap
+        # (defense in depth on either side of normalization) and word the finding
+        # identically, so collapse exact repeats — a reviewer reading the summary
+        # should see each distinct problem once.
+        blockers = _dedupe(blockers)
         draft = _build_draft(
             run_id=run_id,
             kind=kind,
@@ -69,6 +84,17 @@ def validate_proposals(
 
     _mark_duplicates(drafts, cleaned_payloads)
     return ValidationResult(proposals=drafts, conflicts=detect_conflicts(drafts))
+
+
+def _dedupe(blockers: list[str]) -> list[str]:
+    """Order-preserving de-duplication of blocker strings."""
+    seen: set[str] = set()
+    out: list[str] = []
+    for blocker in blockers:
+        if blocker not in seen:
+            seen.add(blocker)
+            out.append(blocker)
+    return out
 
 
 def _collect_blockers(

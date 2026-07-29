@@ -78,7 +78,15 @@ def test_parse_numeric_parenthesized_is_negative() -> None:
     assert parse_numeric("$(2,500) thousand") == (Decimal("-2500"), 3, "negative")
 
 
-def test_normalize_payload_applies_scale_to_base_units() -> None:
+def test_normalize_payload_preserves_mantissa_and_exponent() -> None:
+    """The frozen contract stores a scaled amount as mantissa + exponent.
+
+    Its own reference fixture for "$100 million" is {"value": "100", "scale": 6}
+    (packages/contracts/fixtures/extraction-payloads.valid.json) and the schema
+    requires `scale`. Collapsing the pair to base units at scale 0 contradicted
+    the contract (ADR-0001: code conforms to contracts, never the reverse) and
+    made the value/scale comparison in fel_retrieval.verification meaningless.
+    """
     raw = {
         "schema_version": "extraction-payload/v1",
         "kind": "kpi",
@@ -97,9 +105,8 @@ def test_normalize_payload_applies_scale_to_base_units() -> None:
         "reported_or_derived": "reported",
     }
     out = normalize_payload(raw)
-    # Base-currency units (M3-SCH-002); the multiplier is consumed, so scale is 0.
-    assert out["value"] == "4200000"
-    assert out["scale"] == 0
+    assert out["value"] == "4.2"
+    assert out["scale"] == 6
     assert out["raw_value"] == "$4.2 million"
 
 
@@ -120,8 +127,10 @@ def test_normalize_payload_applies_scale_from_raw_value_suffix() -> None:
         "reported_or_derived": "reported",
     }
     out = normalize_payload(raw)
-    assert out["value"] == "100000000"
-    assert out["scale"] == 0
+    # The suffix in the field's own text supplies the exponent; it is carried,
+    # not multiplied into the mantissa.
+    assert out["value"] == "100"
+    assert out["scale"] == 6
 
 
 def test_normalize_payload_scale_is_idempotent() -> None:
@@ -144,11 +153,11 @@ def test_normalize_payload_scale_is_idempotent() -> None:
     }
     once = normalize_payload(raw)
     twice = normalize_payload(once)
-    assert once["value"] == twice["value"] == "100000000"
-    assert twice["scale"] == 0
+    assert once["value"] == twice["value"] == "100"
+    assert once["scale"] == twice["scale"] == 6
 
 
-def test_normalize_payload_scales_guidance_range_bounds() -> None:
+def test_normalize_payload_keeps_one_exponent_for_guidance_range_bounds() -> None:
     raw = {
         "schema_version": "extraction-payload/v1",
         "kind": "guidance",
@@ -168,9 +177,9 @@ def test_normalize_payload_scales_guidance_range_bounds() -> None:
         "qualifiers": {},
     }
     out = normalize_payload(raw)
-    assert out["low"] == "1000000000"
-    assert out["high"] == "1200000000"
-    assert out["scale"] == 0
+    assert out["low"] == "1"
+    assert out["high"] == "1.2"
+    assert out["scale"] == 9
 
 
 def test_normalize_payload_retains_raw_and_decimal_strings() -> None:
@@ -193,11 +202,12 @@ def test_normalize_payload_retains_raw_and_decimal_strings() -> None:
     }
     out = normalize_payload(raw)
     assert out["raw_value"] == "$100 million"
-    # scale 6 is applied: normalized values are base-currency units.
-    assert out["value"] == "100000000"
+    # Mantissa + exponent, exactly as the contract fixture writes it.
+    assert out["value"] == "100"
+    assert out["scale"] == 6
     assert out["dimensions"] == {"segment": "total"}
     # No float contamination
-    assert Decimal(out["value"]) == Decimal("100000000")
+    assert Decimal(out["value"]) == Decimal("100")
     assert format_decimal(Decimal("100.00")) == "100"
 
 

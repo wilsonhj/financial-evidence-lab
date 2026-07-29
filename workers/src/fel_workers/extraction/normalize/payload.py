@@ -8,7 +8,8 @@ from typing import Any
 
 from fel_workers.extraction.normalize.numeric import format_decimal, parse_numeric
 from fel_workers.extraction.normalize.period import normalize_period
-from fel_workers.extraction.types import NORMALIZER_VERSION
+from fel_workers.extraction.types import NORMALIZER_BLOCKERS_KEY, NORMALIZER_VERSION
+from fel_workers.extraction.validate.range import scale_blockers
 
 _CURRENCY_RE_OK = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
 _DRIVER_CATEGORIES = frozenset(
@@ -91,16 +92,31 @@ def normalize_payload(raw: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
-def _to_base_units(value: Decimal, parsed_scale: int, scale_hint: int | None) -> Decimal:
-    """Apply the pending magnitude multiplier once (Decimal shift, never float).
+def _effective_scale(parsed_scale: int, scale_hint: int | None) -> int:
+    """The exponent that describes one field's mantissa.
 
-    ``scale`` is the multiplier the value still needs: value 100 with scale 6
-    is $100M. A suffix parsed from the field's own text ("$100 million") is
-    authoritative for that field; otherwise the payload's declared scale
-    applies, so the two can never compound.
+    A suffix parsed from the field's own text ("$100 million") is authoritative
+    for that field; otherwise the payload's declared scale applies, so the two
+    can never compound.
     """
-    scale = parsed_scale or (scale_hint or 0)
-    return value.scaleb(scale) if scale else value
+    return parsed_scale or (scale_hint or 0)
+
+
+def _reconcile_scale(mantissas: dict[str, tuple[Decimal, int]]) -> tuple[dict[str, Decimal], int]:
+    """Restate every field of one payload against a single shared exponent.
+
+    ``extraction-payload/v1`` carries one ``scale`` for the whole payload, so a
+    range whose bounds were written at different magnitudes ("900 million to 1.2
+    billion") has to be brought onto a common exponent. The *smallest* exponent
+    is chosen, which makes every adjustment a left shift — exact under Decimal,
+    never a division, so no bound can be rounded across the other.
+    """
+    common = min(scale for _mantissa, scale in mantissas.values())
+    restated = {
+        key: (mantissa.scaleb(scale - common) if scale != common else mantissa)
+        for key, (mantissa, scale) in mantissas.items()
+    }
+    return restated, common
 
 
 def _normalize_dimensions(dims: Any) -> dict[str, str]:
@@ -132,49 +148,92 @@ def _normalize_numeric_fields(out: dict[str, Any], *, value_keys: tuple[str, ...
         out["currency"] = currency.upper()
     # Never convert currencies.
 
+    # Validate the DECLARED exponent before anything uses it. A model-supplied
+    # scale=99 or scale=-3 is a wrong-magnitude claim, so it is rejected as a
+    # hint and reported as a blocker — never silently honoured, and never
+    # raised, because the validate stage is where the pipeline expects blockers.
+    # The declared value is left in place so `range_errors` and the schema check
+    # see and report it too; nothing multiplies by it, so it cannot inflate a
+    # value. The bound lives in `validate/range.py` (single source of truth).
+    declared = out.get("scale")
+    blockers = scale_blockers(declared)
     scale_hint: int | None = None
-    if "scale" in out and out["scale"] is not None:
-        if not isinstance(out["scale"], int) or isinstance(out["scale"], bool):
-            raise ValueError("scale must be an integer")
-        scale_hint = out["scale"]
+    if not blockers and isinstance(declared, int) and not isinstance(declared, bool):
+        scale_hint = declared
 
+    mantissas: dict[str, tuple[Decimal, int]] = {}
     for key in value_keys:
         raw = out.get(key)
         if raw is None:
             # Fall back to parsing raw_value once for single-value shapes.
             if len(value_keys) == 1 and isinstance(out.get("raw_value"), str):
-                value, parsed_scale, sign = parse_numeric(out["raw_value"])
-                out[key] = format_decimal(_to_base_units(value, parsed_scale, scale_hint))
-                out["sign"] = sign
+                value, parsed_scale, _sign = parse_numeric(out["raw_value"])
+                mantissas[key] = (value, _effective_scale(parsed_scale, scale_hint))
                 continue
             raise ValueError(f"missing numeric field {key}")
         if isinstance(raw, Decimal):
-            value = _to_base_units(raw, 0, scale_hint)
-            sign = "positive" if value > 0 else "negative" if value < 0 else "zero"
-            out[key] = format_decimal(value)
-            out["sign"] = out.get("sign") or sign
+            mantissas[key] = (raw, _effective_scale(0, scale_hint))
         elif isinstance(raw, str):
-            value, parsed_scale, sign = parse_numeric(raw)
-            out[key] = format_decimal(_to_base_units(value, parsed_scale, scale_hint))
-            out["sign"] = out.get("sign") or sign
+            value, parsed_scale, _sign = parse_numeric(raw)
+            mantissas[key] = (value, _effective_scale(parsed_scale, scale_hint))
         elif isinstance(raw, int) and not isinstance(raw, bool):
-            value = _to_base_units(Decimal(raw), 0, scale_hint)
-            out[key] = format_decimal(value)
-            out["sign"] = out.get("sign") or (
-                "positive" if value > 0 else "negative" if value < 0 else "zero"
-            )
+            mantissas[key] = (Decimal(raw), _effective_scale(0, scale_hint))
         else:
             raise ValueError(f"{key} must be a decimal string (got {type(raw).__name__})")
 
-    # The multiplier has been consumed: normalized values are base-currency
-    # units (M3-SCH-002), matching XBRL ingestion, which also stores the
-    # unscaled amount at scale 0. Re-normalizing a normalized payload is a
-    # no-op because 10**0 == 1.
-    out["scale"] = 0
-    if out.get("sign") not in {"positive", "negative", "zero"}:
-        # Derive from primary numeric field.
-        primary = Decimal(out[value_keys[0]])
-        out["sign"] = "positive" if primary > 0 else "negative" if primary < 0 else "zero"
+    # The mantissa + exponent pair is the contract's own representation of a
+    # scaled amount — its reference fixture for "$100 million" is
+    # {"value": "100", "scale": 6} and the schema requires `scale`. Collapsing
+    # the pair to base units at scale 0 would contradict the frozen contract
+    # (ADR-0001: code conforms to contracts) and would make the value/scale
+    # comparison in packages/retrieval/fel_retrieval/verification.py meaningless.
+    # XBRL ingestion keeps the exponent the same way: parser.py preserves the ix
+    # `scale` attribute into `financial_facts.scale`.
+    restated, common_scale = _reconcile_scale(mantissas)
+    for key, mantissa in restated.items():
+        out[key] = format_decimal(mantissa)
+    if not blockers:
+        out["scale"] = common_scale
+
+    # Re-normalizing a normalized payload is a no-op: the mantissa carries no
+    # suffix of its own, so the declared scale round-trips unchanged.
+    blockers.extend(_resolve_sign(out, restated[value_keys[0]]))
+    _record_blockers(out, blockers)
+
+
+def _record_blockers(out: dict[str, Any], blockers: list[str]) -> None:
+    """Merge freshly detected blockers with any the payload already carries.
+
+    Order-preserving and deduplicated so re-normalizing a normalized payload is
+    idempotent, while a blocker the first pass found (a sign the normalizer has
+    since corrected, so the check can no longer re-fire) is never dropped.
+    """
+    existing = out.get(NORMALIZER_BLOCKERS_KEY)
+    merged: list[str] = []
+    for blocker in [*(existing if isinstance(existing, list) else []), *blockers]:
+        text = str(blocker)
+        if text not in merged:
+            merged.append(text)
+    if merged:
+        out[NORMALIZER_BLOCKERS_KEY] = merged
+
+
+def _resolve_sign(out: dict[str, Any], primary: Decimal) -> list[str]:
+    """Set ``sign`` from the primary value and report a declared sign that disagrees.
+
+    A model-declared ``sign: "positive"`` must never be allowed to stand over a
+    value that normalizes negative — that is the loss/profit inversion. The value
+    is the authoritative number, so the derived sign wins and the disagreement
+    becomes a blocker rather than a silent overwrite.
+    """
+    derived = "positive" if primary > 0 else "negative" if primary < 0 else "zero"
+    declared = out.get("sign")
+    out["sign"] = derived
+    if declared in {"positive", "negative", "zero"} and declared != derived:
+        return [f"sign contradicts value: declared {declared}, value is {derived}"]
+    if declared is not None and declared not in {"positive", "negative", "zero"}:
+        return [f"sign must be positive/negative/zero: {declared!r}"]
+    return []
 
 
 __all__ = ["normalize_payload"]

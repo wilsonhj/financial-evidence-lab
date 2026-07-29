@@ -18,6 +18,14 @@ WORKFLOW_VERSION = "extraction-workflow/v1"
 NORMALIZER_VERSION = "normalize/v1"
 VALIDATOR_VERSION = "validate/v1"
 
+# Internal normalizer metadata key carrying blockers the normalizer detected
+# without aborting (a declared scale or sign that contradicts the value). The
+# leading underscore means `validate/pipeline.py` strips it before the schema
+# check and persist, and `hash_json` never sees it — it is lifted into
+# `validation_summary["blockers"]` there instead. Defined here so the normalizer
+# and the validator can share the key without importing each other.
+NORMALIZER_BLOCKERS_KEY = "_normalizer_blockers"
+
 STAGE_ORDER: tuple[str, ...] = (
     "validate_request",
     "assemble_evidence",
