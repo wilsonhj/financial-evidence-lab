@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
+from decimal import Decimal
 from typing import Any, Protocol
 
 from fel_ontology import load_saas_metrics
@@ -23,7 +24,7 @@ from fel_workers.extraction.errors import (
 )
 from fel_workers.extraction.events import MemoryEventStore
 from fel_workers.extraction.hashing import hash_json, sha256_hex, stage_input_hash
-from fel_workers.extraction.normalize import normalize_payload
+from fel_workers.extraction.normalize.pipeline import normalize_payload
 from fel_workers.extraction.persist import MemoryPersistStore, UsageSnapshot
 from fel_workers.extraction.roles.base import ROLE_SPECS
 from fel_workers.extraction.runner import Abstention, run_model_step
@@ -31,6 +32,7 @@ from fel_workers.extraction.serialize import serialize_stage_output
 from fel_workers.extraction.telemetry import emit
 from fel_workers.extraction.types import (
     MODE_STAGES,
+    NORMALIZER_BLOCKERS_KEY,
     STAGE_ORDER,
     WORKFLOW_VERSION,
     EvidenceBlock,
@@ -88,6 +90,19 @@ class PersistStore(Protocol):
         drafts: list[Any],
     ) -> list[Any]: ...
 
+    def persist_outputs_atomic(
+        self,
+        *,
+        run_id: str,
+        org_id: str,
+        workspace_id: str,
+        proposals: list[Any],
+        conflicts: list[Any],
+        events: Any,
+    ) -> tuple[list[Any], list[Any]]:
+        """Proposals, evidence and conflicts in one transaction — see `_stage_persist`."""
+        ...
+
     def set_run_status(
         self,
         *,
@@ -116,6 +131,27 @@ class WorkflowDeps:
     crash_after_stages: int | None = None
 
 
+@dataclass(frozen=True)
+class _ModelStepAudit:
+    """One model step's provenance, for the ``extraction_run_steps`` row.
+
+    ``run_model_step`` knows the response ids, the attempt count and the request
+    hashes; the row that has columns for them is written by ``_run_stage``, which
+    only ever saw the stage output. Without this hand-off every step row carried
+    ``provider_response_id=NULL``, zero tokens, zero cost and ``attempt=1`` even
+    after a repair — an audit trail that reconciles with nothing.
+    """
+
+    provider_response_id: str | None
+    input_tokens: int
+    output_tokens: int
+    cost_usd: Decimal
+    attempts: int
+    instructions_hash: str
+    attempt_request_hashes: tuple[str, ...]
+    response_ids: tuple[str, ...]
+
+
 @dataclass
 class _ExecCtx:
     state: WorkflowState
@@ -124,6 +160,8 @@ class _ExecCtx:
     ontology: OntologyDocument
     newly_committed: int = 0
     model_calls: int = 0
+    # Set by `_stage_model`, consumed by `_run_stage`; cleared before each dispatch.
+    model_audit: _ModelStepAudit | None = None
 
 
 def run_extraction_workflow(state: WorkflowState, deps: WorkflowDeps) -> WorkflowState:
@@ -301,6 +339,27 @@ def _boundary(ctx: _ExecCtx) -> None:
         raise BudgetExceeded(f"wall clock cap {ctx.budget.max_wall_seconds}s reached")
 
 
+def _commit_fence(ctx: _ExecCtx, step_name: str) -> None:
+    """Re-fence between a stage's work and its durable write.
+
+    ``_boundary`` runs before the stage, so everything after it — the model call
+    above all — was unfenced: a worker whose lease expired mid-``classify`` still
+    committed the step row and its ``step_completed`` event. That is not a
+    harmless duplicate. ``extraction_run_events`` has no uniqueness constraint and
+    ``_load_stage_output`` takes ``ORDER BY id DESC LIMIT 1``, so the zombie's
+    output is what the run's real owner reads back on resume.
+
+    Raising here writes nothing and the owner re-runs the stage, which is
+    idempotent by construction (keyed on ``input_hash``). The wall-clock cap is
+    deliberately not re-checked: ``_boundary`` already enforces it at every stage
+    start, and failing at the finish line would only discard completed work.
+    """
+    if not ctx.deps.lease_check():
+        raise LeaseLost(f"queue lease lost before committing stage {step_name}")
+    if ctx.deps.cancel_check():
+        raise Cancelled(f"run cancelled before committing stage {step_name}")
+
+
 def _is_recoverable(record: StageRecord, *, run_id: str) -> bool:
     """Reject a checkpoint that claims an output it cannot hand back.
 
@@ -403,6 +462,7 @@ def _run_stage(ctx: _ExecCtx, step_name: str) -> None:
     )
     emit("step_started", run_id=req.run_id, step_name=step_name)
 
+    ctx.model_audit = None
     output = _dispatch_stage(ctx, step_name)
     output_hash = hash_json(output) if output is not None else None
     record = StageRecord(
@@ -420,6 +480,22 @@ def _run_stage(ctx: _ExecCtx, step_name: str) -> None:
         # Frozen 0004 has no steps.output column; persist resume payload here.
         "stage_output": serialize_stage_output(output),
     }
+    audit = ctx.model_audit
+    if audit is not None:
+        record.attempt = audit.attempts
+        record.provider_response_id = audit.provider_response_id
+        record.input_tokens = audit.input_tokens
+        record.output_tokens = audit.output_tokens
+        record.cost_usd = audit.cost_usd
+        # 0004 has no column for the instructions / per-attempt request hashes,
+        # and migrations are frozen — the event payload is their only home.
+        event_payload["model_step"] = {
+            "attempts": audit.attempts,
+            "instructions_hash": audit.instructions_hash,
+            "attempt_request_hashes": list(audit.attempt_request_hashes),
+            "provider_response_ids": list(audit.response_ids),
+        }
+    _commit_fence(ctx, step_name)
     ctx.state.stages[step_name] = _commit_stage(ctx, record=record, event_payload=event_payload)
     ctx.newly_committed += 1
     if (
@@ -506,8 +582,8 @@ def _restore_output(state: WorkflowState, step_name: str, output: Any) -> None:
         proposals = output.get("proposals") or []
         if isinstance(proposals, list):
             state.raw_proposals.extend(proposals)
-    elif step_name == "normalize" and isinstance(output, list):
-        state.normalized = output
+    elif step_name == "normalize" and isinstance(output, dict):
+        state.normalized = list(output.get("normalized") or [])
     elif step_name == "validate" and isinstance(output, dict):
         state.normalized = list(output.get("normalized") or state.normalized)
         # Rebuild drafts so resume after validate does not lose proposals.
@@ -617,6 +693,11 @@ def _evidence_dicts(state: WorkflowState) -> list[dict[str, str]]:
 def _stage_model(ctx: _ExecCtx, role: Role, step_name: str) -> dict[str, Any]:
     spec = ROLE_SPECS[role]
     req = ctx.state.request
+    # The budget is the only per-call usage ledger, so this step's share of it is
+    # the delta across the call (repair attempt included).
+    before_input = ctx.budget.input_tokens_used
+    before_output = ctx.budget.output_tokens_used
+    before_cost = ctx.budget.cost_usd
     try:
         result = run_model_step(
             provider=ctx.deps.structured_llm,
@@ -634,6 +715,17 @@ def _stage_model(ctx: _ExecCtx, role: Role, step_name: str) -> dict[str, Any]:
         # Refusal is a typed failure for the run (never abstention).
         raise
     ctx.model_calls += result.attempts
+    ctx.model_audit = _ModelStepAudit(
+        # The accepted answer is the last attempt's, never the rejected one.
+        provider_response_id=result.response_ids[-1] if result.response_ids else None,
+        input_tokens=ctx.budget.input_tokens_used - before_input,
+        output_tokens=ctx.budget.output_tokens_used - before_output,
+        cost_usd=ctx.budget.cost_usd - before_cost,
+        attempts=result.attempts,
+        instructions_hash=result.instructions_hash,
+        attempt_request_hashes=result.attempt_request_hashes,
+        response_ids=result.response_ids,
+    )
     _record_usage(ctx)
     if isinstance(result.outcome, Abstention):
         ctx.state.abstained = True
@@ -678,16 +770,39 @@ def _stage_model(ctx: _ExecCtx, role: Role, step_name: str) -> dict[str, Any]:
     return {"proposals": stamped}
 
 
-def _stage_normalize(state: WorkflowState) -> list[dict[str, Any]]:
+def _stage_normalize(state: WorkflowState) -> dict[str, Any]:
+    """Normalize every raw proposal, keeping the unnormalizable ones visible.
+
+    Dropping a payload the normalizer rejects made it vanish with no blocker, no
+    event and no counter: when every proposal hit that path the run landed
+    ``succeeded`` + ``abstained=True`` with nothing to review — total loss
+    dressed up as a legitimate abstention. So the payload is carried forward
+    unchanged with the rejection reason attached on ``NORMALIZER_BLOCKERS_KEY``,
+    the same channel the normalizer already uses for the blockers it detects
+    without aborting; ``validate/pipeline`` lifts it into
+    ``validation_summary["blockers"]``, so the candidate reaches review as a
+    proposal that cannot be accepted, reason included. Carrying it beats merely
+    counting it because a reviewer can then see *which* payload was rejected.
+
+    The counts are part of the stage output — hence of the durable
+    ``step_completed`` event — so loss is legible without diffing event blobs.
+    """
     normalized: list[dict[str, Any]] = []
+    blocked = 0
     for raw in state.raw_proposals:
-        try:
-            normalized.append(normalize_payload(raw))
-        except ValueError:
-            # Keep unnormalizable payloads out of proposals (abstain that candidate).
-            continue
+        payload, blockers = normalize_payload(raw)
+        if blockers:
+            blocked += 1
+            payload = {**payload, NORMALIZER_BLOCKERS_KEY: blockers}
+        normalized.append(payload)
     state.normalized = normalized
-    return normalized
+    if blocked:
+        emit("normalize_blocked", run_id=state.request.run_id, blocked=blocked)
+    return {
+        "normalized": normalized,
+        "normalized_count": len(normalized),
+        "blocked_count": blocked,
+    }
 
 
 def _stage_validate(ctx: _ExecCtx) -> dict[str, Any]:
@@ -744,27 +859,32 @@ def _stage_persist(ctx: _ExecCtx) -> dict[str, Any]:
         raise LeaseLost("queue lease lost before persist")
     state = ctx.state
     req = state.request
-    persisted = ctx.deps.persist.persist_proposals(
+    # One transaction for proposals, their evidence and their conflicts. Written
+    # separately these were three autocommitted groups, so a conflict failure —
+    # 0004's `conflict_terminal` guard is the reachable trigger — left the
+    # proposals durable with no conflict membership. Those orphans cannot be
+    # repaired: once the run finalises `failed`, `fel_guard_extraction_proposal`
+    # blocks moving them to `rejected` and DELETE is forbidden outright.
+    persisted, conflicts = ctx.deps.persist.persist_outputs_atomic(
         run_id=req.run_id,
         org_id=req.org_id,
         workspace_id=req.workspace_id,
-        drafts=state.validated,
+        proposals=state.validated,
+        conflicts=state.conflicts,
+        events=ctx.deps.events,
     )
     for draft in persisted:
         if draft.state != "needs_review":
             raise StepFailed("proposal escaped needs_review — auto-approve forbidden")
-    conflicts = ctx.deps.persist.persist_conflicts(
-        org_id=req.org_id,
-        workspace_id=req.workspace_id,
-        drafts=state.conflicts,
-    )
-    ctx.deps.events.append(
-        org_id=req.org_id,
-        run_id=req.run_id,
-        event_type="proposals_persisted",
-        payload={"count": len(persisted), "conflicts": len(conflicts)},
-    )
     return {"persisted": len(persisted), "conflicts": len(conflicts)}
+
+
+def _normalize_blocked_count(state: WorkflowState) -> int:
+    """Payloads the normalizer rejected, read back from the normalize stage record."""
+    record = state.stages.get("normalize")
+    output = record.output if record is not None else None
+    count = output.get("blocked_count") if isinstance(output, dict) else None
+    return count if isinstance(count, int) else 0
 
 
 def _finalize_success(ctx: _ExecCtx) -> None:
@@ -793,7 +913,12 @@ def _finalize_success(ctx: _ExecCtx) -> None:
             org_id=req.org_id,
             run_id=req.run_id,
             event_type="run_succeeded",
-            payload={"abstained": True},
+            payload={
+                "abstained": True,
+                # A real abstention reports 0 here; anything higher means the
+                # normalizer rejected payloads, so the empty review queue is loss.
+                "normalize_blocked_count": _normalize_blocked_count(state),
+            },
         )
         ctx.deps.persist.set_run_status(run_id=req.run_id, org_id=req.org_id, status="succeeded")
     emit("run_finished", run_id=req.run_id, status=state.status)

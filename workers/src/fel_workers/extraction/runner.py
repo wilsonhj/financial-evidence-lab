@@ -17,8 +17,16 @@ from fel_workers.extraction.roles.base import MAX_ATTEMPTS, RoleSpec
 from fel_workers.extraction.types import Role
 from fel_workers.extraction.validate.schema import validate_payload_item
 
-# Proposal-bearing roles: envelope + per-item payload schema.
-_PROPOSAL_ITEM_ROLES = frozenset({Role.KPI, Role.GUIDANCE, Role.DRIVER_MAPPER})
+# Proposal-bearing roles and the single ``kind`` each one may emit. All three
+# share ``role_envelope.v1.json`` (roles/base.py), so the schema alone cannot
+# stop the KPI role from returning guidance items — and ``_stage_model`` appends
+# every role's output to the shared ``state.raw_proposals``, so `modes=("kpi",)`
+# would otherwise produce guidance proposals whose prompt never ran.
+_ROLE_PROPOSAL_KIND: dict[Role, str] = {
+    Role.KPI: "kpi",
+    Role.GUIDANCE: "guidance",
+    Role.DRIVER_MAPPER: "revenue_driver",
+}
 
 
 @dataclass(frozen=True)
@@ -54,11 +62,17 @@ def _is_empty_proposals(parsed: dict[str, object]) -> bool:
     return "proposals" in parsed and parsed.get("proposals") == []
 
 
-def _proposal_item_schema_errors(parsed: dict[str, object]) -> list[str] | None:
-    """Return errors when proposals is non-empty and every item is schema-invalid.
+def _proposal_item_errors(parsed: dict[str, object], expected_kind: str) -> list[str] | None:
+    """Return every per-item problem, or ``None`` when all items are clean.
 
-    ``None`` means accept the envelope (at least one valid item, or no proposals
-    key to check). Empty proposals are handled as Abstention before this runs.
+    Every invalid item counts. Accepting the envelope as soon as one sibling
+    validated admitted the rest verbatim *and* skipped the repair attempt, so a
+    malformed payload reached normalize carrying no record of what was wrong
+    with it. Rejecting the envelope instead spends the one repair the runner is
+    allowed (``MAX_ATTEMPTS``) and fails typed if the model does not fix it —
+    the fail-closed answer for rows a reviewer can never correct.
+
+    Empty proposals are handled as Abstention before this runs.
     """
     if "proposals" not in parsed:
         return None
@@ -66,19 +80,15 @@ def _proposal_item_schema_errors(parsed: dict[str, object]) -> list[str] | None:
     if not isinstance(proposals, list) or not proposals:
         return None
     item_errors: list[str] = []
-    any_valid = False
     for idx, item in enumerate(proposals):
         if not isinstance(item, dict):
             item_errors.append(f"proposals[{idx}] must be an object")
             continue
-        errs = validate_payload_item(item)
-        if errs:
-            item_errors.extend(f"proposals[{idx}]: {e}" for e in errs)
-        else:
-            any_valid = True
-    if any_valid:
-        return None
-    return item_errors or ["all proposal items failed schema validation"]
+        kind = item.get("kind")
+        if kind != expected_kind:
+            item_errors.append(f"proposals[{idx}]: kind must be {expected_kind!r}, got {kind!r}")
+        item_errors.extend(f"proposals[{idx}]: {e}" for e in validate_payload_item(item))
+    return item_errors or None
 
 
 def run_model_step(
@@ -177,8 +187,9 @@ def run_model_step(
                         spec.instructions_hash(),
                     )
                 item_errors: list[str] | None = None
-                if spec.role in _PROPOSAL_ITEM_ROLES:
-                    item_errors = _proposal_item_schema_errors(result.parsed)
+                expected_kind = _ROLE_PROPOSAL_KIND.get(spec.role)
+                if expected_kind is not None:
+                    item_errors = _proposal_item_errors(result.parsed, expected_kind)
                 if item_errors is None:
                     return StepResult(
                         key,
