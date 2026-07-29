@@ -2,9 +2,6 @@
 
 Tasks are ordered by dependency. A task is complete only when its code, tests, telemetry, documentation, and acceptance evidence are present.
 
-> Completion marking is owned by the integration lead after merge verification
-> (`AGENTS.md`). Prefer `docs/handoff/workstreams.yaml` when this checklist lags.
-
 ## M0 — Platform and contracts
 
 - [x] `T0001` Scaffold the monorepo, formatting, typing, unit tests, security scanning, and CI cache.
@@ -31,25 +28,25 @@ Tasks are ordered by dependency. A task is complete only when its code, tests, t
 - [x] `T0109` Reject forecast features with missing required adjustments or timestamps (`FOR-005`).
 - [x] `T0110` Build the evidence reader with hierarchy, source highlights, fact metadata, duplicates, and amendments.
 - [x] `T0111` Create temporal-cutoff, parser golden-file, and idempotency test suites.
-- [ ] `T0112` Ingest the first 20 benchmark issuers and record corpus-quality metrics. — residual live artifact / prod smoke; packages merged; tracked on #56 / #108.
+- [ ] `T0112` Ingest the first 20 benchmark issuers and record corpus-quality metrics.
 
 ## M2 — Observable hybrid retrieval
 
-- [x] `T0201` Implement finance-aware passage, table-row, and fact chunking with stable provenance. — PRs #114/#119 / `packages/retrieval`.
-- [x] `T0202` Build PostgreSQL lexical and pgvector dense indexes (`FR-RAG-001`). — PRs #114/#119.
-- [x] `T0203` Implement structured fact/table lookup and entity/time/document filters (`FR-RAG-002`). — PRs #114/#119.
-- [x] `T0204` Implement the typed query plan and bounded query variants. — PRs #114/#119.
-- [x] `T0205` Add reciprocal-rank fusion and a pluggable reranker (`FR-RAG-003`). — PRs #114/#119.
-- [x] `T0206` Persist candidates, scores, filters, fusion, rejections, budgets, and latency (`FR-RAG-004`). — PRs #114/#119.
-- [x] `T0207` Implement atomic claims and closed claim/citation states (`FR-RAG-005`, `007`, `008`). — PR #122; live 65-Q exit residual → #132.
-- [x] `T0208` Implement citation entailment and numeric-consistency verification. — PR #122.
-- [x] `T0209` Implement abstention and qualified contradiction responses (`FR-RAG-006`). — PR #122.
-- [x] `T0210` Build the Search Observatory with lane toggles, trace timeline, evidence feedback, and replay. — PR #123; fixture E2E via #131; residuals #134–#138.
+- [ ] `T0201` Implement finance-aware passage, table-row, and fact chunking with stable provenance.
+- [ ] `T0202` Build PostgreSQL lexical and pgvector dense indexes (`FR-RAG-001`).
+- [ ] `T0203` Implement structured fact/table lookup and entity/time/document filters (`FR-RAG-002`).
+- [ ] `T0204` Implement the typed query plan and bounded query variants.
+- [ ] `T0205` Add reciprocal-rank fusion and a pluggable reranker (`FR-RAG-003`).
+- [ ] `T0206` Persist candidates, scores, filters, fusion, rejections, budgets, and latency (`FR-RAG-004`).
+- [ ] `T0207` Implement atomic claims and closed claim/citation states (`FR-RAG-005`, `007`, `008`).
+- [ ] `T0208` Implement citation entailment and numeric-consistency verification.
+- [ ] `T0209` Implement abstention and qualified contradiction responses (`FR-RAG-006`).
+- [ ] `T0210` Build the Search Observatory with lane toggles, trace timeline, evidence feedback, and replay.
 - [ ] ~~`T0211` Generate and version passage/fact/company projections for the Embedding Atlas.~~ — deferred (post-MVP) with the Embedding Atlas.
 - [ ] ~~`T0212` Build Atlas pan/zoom/filter/lasso/query-neighbor interactions (`UX-ATL-001`–`004`).~~ — deferred (post-MVP) with the Embedding Atlas.
 - [ ] ~~`T0213` Add keyboard-accessible table and exact-distance fallback (`UX-ATL-005`).~~ — deferred (post-MVP) with the Embedding Atlas.
-- [x] `T0214a` Build the 50–100-question smoke benchmark and automate the Section 19.6 gates against it for the M2 exit (`spec.md` Section 19.5). — PR #122 mock/smoke plumbing; live 65-Q exit gate residual → #132.
-- [x] `T0215` Run the reference-corpus retrieval performance suite (Atlas performance testing deferred post-MVP). — PR #122.
+- [ ] `T0214a` Build the 50–100-question smoke benchmark and automate the Section 19.6 gates against it for the M2 exit (`spec.md` Section 19.5).
+- [ ] `T0215` Run the reference-corpus retrieval performance suite (Atlas performance testing deferred post-MVP).
 
 ## M3 — Agentic extraction
 

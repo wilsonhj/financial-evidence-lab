@@ -11,7 +11,7 @@ This repository is designed for parallel implementation by Codex, Claude Code, a
 5. `docs/handoff/README.md`
 6. `docs/handoff/workstreams.yaml`
 
-The product MVP requirements live in `specs/001-financial-evidence-lab/`. Milestone implementation design may also live in additive Spec Kit packages (`specs/002-observable-hybrid-retrieval/`, `specs/003-agentic-extraction/`, and later). When they conflict, `001` plus Accepted ADRs win for product scope; the milestone package plus its ADR win for that milestone’s frozen contracts and task IDs. Root `SPEC.md`, `PLAN.md`, and `TASKS.md` are pointer stubs only — never edit or cite them as sources. Prefer `docs/handoff/workstreams.yaml` over stale unchecked boxes in `001/tasks.md` when a package is already `merged`. The locked MVP stack lives in `docs/decisions/ADR-0002-mvp-stack.md`.
+The feature directory `specs/001-financial-evidence-lab/` holds the sole canonical `spec.md`, `plan.md`, and `tasks.md`. Root `SPEC.md`, `PLAN.md`, and `TASKS.md` are pointer stubs only — never edit or cite them as sources. The locked MVP stack lives in `docs/decisions/ADR-0002-mvp-stack.md`.
 
 ## Working rules
 
