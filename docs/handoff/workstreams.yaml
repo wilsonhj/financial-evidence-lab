@@ -55,7 +55,18 @@ shared_path_exceptions:
       ]
     rule: mechanical-consequence-of-in-scope-change-only
   - adr: docs/decisions/ADR-0008-python-package-scaffold-edits.md
-    applies_to: [pyproject.toml, Makefile, .github/workflows/ci.yml]
+    # infra/railway/worker.json added by ADR-0008 Amendment 1 (2026-07-29):
+    # appending a first-party ./packages/* path to build.buildCommand's pip
+    # install list ONLY, and only when the worker imports it. The deploy block
+    # (startCommand, restartPolicy, health checks, env wiring), api.json, and
+    # everything else under infra/** stay outside the exception (#84 owns them).
+    applies_to:
+      [
+        pyproject.toml,
+        Makefile,
+        .github/workflows/ci.yml,
+        infra/railway/worker.json,
+      ]
     rule: new-first-party-package-scaffold-registration-only
 defaults:
   status: blocked
