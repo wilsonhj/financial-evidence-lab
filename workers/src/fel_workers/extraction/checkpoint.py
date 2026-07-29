@@ -49,8 +49,33 @@ class MemoryCheckpointStore:
         self._by_run.setdefault(run_id, []).append(record)
         return record
 
+    def commit_failed(
+        self,
+        *,
+        run_id: str,
+        org_id: str,
+        workflow_version: str,
+        record: StageRecord,
+    ) -> StageRecord:
+        """Record a failed stage attempt.
+
+        Deliberately NOT keyed into ``_succeeded``: the resume key is
+        success-only (0004's partial unique index is ``WHERE status =
+        'succeeded'``), so a failed attempt must never satisfy a later
+        ``load_succeeded``. It exists so a failing step leaves a diagnosable
+        row and its error behind instead of only a run-level message.
+        """
+        del org_id, workflow_version  # ownership validated by caller; not part of the failure key
+        if record.status != "failed":
+            raise ValueError("commit_failed requires a failed stage record")
+        self._by_run.setdefault(run_id, []).append(record)
+        return record
+
     def list_succeeded(self, *, run_id: str) -> list[StageRecord]:
         return [r for r in self._by_run.get(run_id, []) if r.status == "succeeded"]
+
+    def list_failed(self, *, run_id: str) -> list[StageRecord]:
+        return [r for r in self._by_run.get(run_id, []) if r.status == "failed"]
 
 
 __all__ = ["MemoryCheckpointStore"]

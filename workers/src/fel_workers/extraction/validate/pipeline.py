@@ -16,6 +16,7 @@ from fel_workers.extraction.types import (
     ExtractionMode,
     ProposalDraft,
 )
+from fel_workers.extraction.validate.accounting import identity_errors
 from fel_workers.extraction.validate.checks import (
     accounting_errors,
     citation_errors,
@@ -86,6 +87,7 @@ def validate_proposals(
         cleaned_payloads.append(clean)
 
     _mark_duplicates(drafts, cleaned_payloads)
+    _mark_identity_violations(drafts, cleaned_payloads)
     return ValidationResult(proposals=drafts, conflicts=detect_conflicts(drafts))
 
 
@@ -274,6 +276,23 @@ def _evidence_rows(
         row["citation_status"] = citation_status_for(row, evidence_by_span=pinned)
         rows.append(row)
     return rows
+
+
+def _mark_identity_violations(
+    drafts: list[ProposalDraft], cleaned_payloads: list[dict[str, Any]]
+) -> None:
+    """Attach cross-payload accounting identity breaks (M3-VAL-001).
+
+    Runs after the per-payload pass because an identity is a property of a set
+    of proposals, not of any one of them: ``accounting_errors`` never sees the
+    RPO row while it is validating the cRPO row. Every member of a broken
+    identity is blocked, since nothing here can tell which figure is wrong.
+    """
+    for index, codes in identity_errors(cleaned_payloads).items():
+        summary = drafts[index].validation_summary
+        blockers = _dedupe([*(summary.get("blockers") or []), *codes])
+        summary["blockers"] = blockers
+        summary["ok"] = False
 
 
 def _mark_duplicates(drafts: list[ProposalDraft], cleaned_payloads: list[dict[str, Any]]) -> None:
