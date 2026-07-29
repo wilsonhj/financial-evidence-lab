@@ -239,8 +239,9 @@ and a value axis.
   width="W" height="H">` with child `<title>` and `<desc>` for accessibility.
 - **Integer coordinates only.** Every x/y/width/height is computed in `int`
   arithmetic so no float `repr` can vary. No `%`-of-container, no CSS.
-- Axis maximum = `max(documents_ingested)` across issuers, floored at `1`, so
-  an all-zero report cannot divide by zero.
+- Axis maximum = `max((i["documents_ingested"] for i in issuers), default=1)`,
+  floored at `1`, so that neither an all-zero report nor an empty `issuers`
+  list can divide by zero or raise.
 - No external font, no `@import`, no embedded raster, no external URL: generic
   `font-family="monospace"` only.
 - Serialized as `'<?xml version="1.0" encoding="UTF-8"?>\n'` +
@@ -259,8 +260,11 @@ any day, produces byte-identical Markdown and SVG.
 - `ET` attribute insertion order is preserved on Python 3.11 (`.python-version`
   = `3.11`) — verified: `ET.tostring` on an element built with attributes
   `z,a,m` emits `z="1" a="2" m="3"`.
-- Tests assert byte-equality against the two committed goldens **and** assert
-  `render(x) == render(x)` across two independent calls.
+- Tests assert byte-equality against each committed golden **and** assert
+  `render(x) == render(x)` across two independent calls. If the size lever
+  below is taken, only the Markdown golden is committed and the SVG is proved
+  by the render-twice assertion alone; the Files-created table and the
+  allowed-paths list drop the SVG golden accordingly.
 
 **AC9 — n=1 is a hard design constraint, stated in code and README.** There is
 exactly **one** committed report. There is **no time series**. The renderer
@@ -318,7 +322,10 @@ exception, and it would blind the whole repo to B405 forever.
 
 **Escape hatch if the lead rejects the `nosec`:** emit the SVG by the same
 deterministic token-substitution used in `evals/harness/synthetic_sec.py:147-169`
-(`render_filing`), dropping `ElementTree` entirely. Every other AC is unchanged.
+(`render_filing`), dropping `ElementTree` entirely. Taking the hatch amends AC7
+(its `ET.indent` / `ET.tostring` serialization steps no longer apply) and AC10
+(`xml.etree.ElementTree` leaves the expected import set, so the AST-scan test
+asserts the smaller set); every other AC is unchanged.
 Ask on the issue before switching; do not decide unilaterally.
 
 ### Why stdlib, not a charting dependency
