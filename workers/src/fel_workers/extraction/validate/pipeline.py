@@ -16,9 +16,9 @@ from fel_workers.extraction.types import (
     ExtractionMode,
     ProposalDraft,
 )
+from fel_workers.extraction.validate.accounting import identity_errors
 from fel_workers.extraction.validate.checks import (
     accounting_errors,
-    check_accounting,
     check_definitions,
     citation_errors,
     default_ontology,
@@ -88,6 +88,7 @@ def validate_proposals(
         cleaned_payloads.append(clean)
 
     _mark_duplicates(drafts, cleaned_payloads)
+    _mark_identity_violations(drafts, cleaned_payloads)
     return ValidationResult(proposals=drafts, conflicts=detect_conflicts(drafts))
 
 
@@ -107,14 +108,14 @@ def _collect_blockers(
     ontology: OntologyDocument,
     evidence_by_span: dict[str, dict[str, Any]],
 ) -> list[str]:
-    # `check_accounting` and `check_definitions` are called here and nowhere
-    # else. Both existed with zero call sites, so the metric-identity rules they
-    # hold — billings lineage, cRPO timing, blended-margin proxying, and every
-    # unit/period cross-check against the ontology — were never applied to a
-    # single proposal.
+    # `check_definitions` is called here and nowhere else. It existed with zero
+    # call sites, so its unit/period/currency cross-checks against the ontology
+    # were never applied to a single proposal. `check_accounting`'s rules —
+    # billings lineage, cRPO timing, blended-margin proxying — now live inside
+    # `accounting_errors` itself rather than in a second function that has to be
+    # remembered separately.
     blockers = validate_payload_item(clean)
     blockers.extend(accounting_errors(clean, ontology))
-    blockers.extend(check_accounting(clean))
     blockers.extend(range_errors(clean))
     blockers.extend(definition_errors(clean, ontology))
     blockers.extend(check_definitions(clean, ontology))
@@ -283,6 +284,23 @@ def _evidence_rows(
         row["citation_status"] = citation_status_for(row, evidence_by_span=pinned)
         rows.append(row)
     return rows
+
+
+def _mark_identity_violations(
+    drafts: list[ProposalDraft], cleaned_payloads: list[dict[str, Any]]
+) -> None:
+    """Attach cross-payload accounting identity breaks (M3-VAL-001).
+
+    Runs after the per-payload pass because an identity is a property of a set
+    of proposals, not of any one of them: ``accounting_errors`` never sees the
+    RPO row while it is validating the cRPO row. Every member of a broken
+    identity is blocked, since nothing here can tell which figure is wrong.
+    """
+    for index, codes in identity_errors(cleaned_payloads).items():
+        summary = drafts[index].validation_summary
+        blockers = _dedupe([*(summary.get("blockers") or []), *codes])
+        summary["blockers"] = blockers
+        summary["ok"] = False
 
 
 def _mark_duplicates(drafts: list[ProposalDraft], cleaned_payloads: list[dict[str, Any]]) -> None:

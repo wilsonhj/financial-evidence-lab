@@ -1,4 +1,14 @@
-"""Duplicate detection via fingerprints and comparability keys."""
+"""Fact identity, value fingerprints, and duplicate grouping.
+
+Two payloads describe the *same fact* only when everything that makes them
+comparable agrees: kind, metric, entity, period, unit, currency, dimensions and
+qualifiers. They are the same *reading* of that fact only when their economic
+content agrees too. Those are the two questions this module answers, and it
+answers each in exactly one place — ``comparability_key_for`` for identity and
+``value_fingerprint`` for content — so duplicate grouping (``duplicate_groups``)
+and conflict grouping (``conflict_key_for``) can never disagree about what makes
+two figures the same.
+"""
 
 from __future__ import annotations
 
@@ -7,61 +17,40 @@ from typing import Any
 
 from fel_workers.extraction.hashing import canonical_json, hash_json
 
+# Entries of the identity key that a metric's ontology comparability key already
+# encodes: it names the metric and exactly the qualifiers that decide
+# comparability for it (``fel_ontology.build_comparability_key``). Every other
+# entry survives — the ontology key says nothing about dimensions, so an EMEA and
+# an APAC figure share one and are still two facts.
+_ONTOLOGY_SUPERSEDES = frozenset({"metric_id", "qualifiers"})
 
-def _magnitude(payload: dict[str, Any], key: str) -> str | None:
-    """The figure ``key`` states, as a canonical decimal at the payload's ``scale``.
 
-    Normalization keeps the filing's own mantissa in ``value``/``low``/``high``
-    and its declared exponent in ``scale`` rather than folding the two together,
-    so neither half identifies a figure alone: ``"100"`` at scale 3 and ``"100"``
-    at scale 6 are $100k and $100M. Identity is therefore keyed on the product,
-    not on the literal pair — ``"100"`` at scale 6 and ``"100000000"`` at scale 0
-    are one figure written two ways, and must fingerprint the same.
+def comparability_key_for(payload: dict[str, Any]) -> dict[str, Any]:
+    """Everything that must agree before two payloads describe the same fact.
 
-    A missing ``scale`` is read as 0 rather than skipped: the field is required
-    on every numeric variant of the frozen contract, and reading it as "no
-    exponent" keeps a malformed payload comparable to a well-formed one instead
-    of quietly giving it a private bucket.
+    ``scale`` is deliberately absent: it is notation, not identity. The same
+    figure written ``{"value": "1.2", "scale": 9}`` and ``{"value": "1200",
+    "scale": 6}`` is one fact reported twice, and ``value_fingerprint`` is what
+    decides whether the two readings agree.
+
+    ``entity_id`` and ``qualifiers`` are included for the same reason
+    ``dimensions`` and ``currency`` are: each one alone is enough to make two
+    otherwise identical rows different facts. Two issuers reporting ARR of 100
+    are not one figure restated (``entity_id``), and neither are consolidated ARR
+    and constant-currency ARR (``qualifiers`` — the ontology treats those as
+    non-comparable constructions, so collapsing them here would hand a reviewer a
+    ``duplicate_candidate`` on two figures the ontology says cannot be compared).
     """
-    raw = payload.get(key)
-    if raw is None:
-        return None
-    scale = payload.get("scale")
-    exponent = scale if isinstance(scale, int) and not isinstance(scale, bool) else 0
-    try:
-        return str(Decimal(str(raw)).scaleb(exponent).normalize())
-    except ArithmeticError:
-        # Not a number. `validate_payload_item` and `range_errors` already block
-        # it; keep the literal so two unparsable figures stay two figures.
-        return f"unparsed:{raw!r}@{scale!r}"
-
-
-def duplicate_groups(payloads: list[dict[str, Any]]) -> list[list[int]]:
-    """Group indices that share kind+metric_id+period+unit+currency+magnitude.
-
-    Unit and currency scope the fingerprint (as they do in
-    ``comparability_key_for``): the same number reported in USD and in JPY is two
-    figures, not one restated twice, and must not carry a ``duplicate_candidate``
-    blocker. The numeric fields enter as ``_magnitude`` — mantissa times scale —
-    so a figure and a figure 1000x larger can never fingerprint alike.
-    """
-    buckets: dict[str, list[int]] = {}
-    for idx, payload in enumerate(payloads):
-        key = hash_json(
-            {
-                "kind": payload.get("kind"),
-                "metric_id": payload.get("metric_id"),
-                "period": payload.get("period"),
-                "unit": payload.get("unit"),
-                "currency": payload.get("currency"),
-                "value": _magnitude(payload, "value"),
-                "low": _magnitude(payload, "low"),
-                "high": _magnitude(payload, "high"),
-                "category": payload.get("category"),
-            }
-        )
-        buckets.setdefault(key, []).append(idx)
-    return [members for members in buckets.values() if len(members) > 1]
+    return {
+        "kind": payload.get("kind"),
+        "metric_id": payload.get("metric_id"),
+        "entity_id": payload.get("entity_id"),
+        "period": payload.get("period"),
+        "unit": payload.get("unit"),
+        "currency": payload.get("currency"),
+        "dimensions": payload.get("dimensions") or {},
+        "qualifiers": payload.get("qualifiers") or {},
+    }
 
 
 def conflict_key_for(
@@ -73,80 +62,98 @@ def conflict_key_for(
 
     Prefer the ontology comparability key (e.g. NRR ``base_quantity``) when
     present so non-comparable definitions never share a value_disagreement
-    bucket. Fall back to payload shape including qualifiers.
+    bucket. It replaces the metric and qualifier entries of the fact identity and
+    nothing else; the remaining axes still have to agree. When key construction
+    failed closed, the full fact identity is the fallback.
     """
+    identity = comparability_key_for(payload)
     if ontology_comparability_key:
-        return hash_json(
-            {
-                "comparability": ontology_comparability_key,
-                "kind": payload.get("kind"),
-                "entity_id": payload.get("entity_id"),
-                "period": payload.get("period"),
-            }
-        )
-    # Careful fallback: the local comparability key, which includes qualifiers so
-    # distinct NRR bases do not collide when ontology key construction failed
-    # closed, plus unit/currency so a USD figure and a JPY one are never graded
-    # as disagreeing about the same quantity.
-    #
-    # `scale` is deliberately absent from both branches. It carries magnitude,
-    # and two figures that disagree about magnitude are exactly what a conflict
-    # group exists to surface — keying on it would file them apart and hide the
-    # disagreement. Magnitude belongs in `value_fingerprint`, not here.
-    return hash_json({"kind": payload.get("kind"), **comparability_key_for(payload)})
+        identity = {k: v for k, v in identity.items() if k not in _ONTOLOGY_SUPERSEDES}
+        identity["comparability"] = ontology_comparability_key
+    return hash_json(identity)
+
+
+def canonical_magnitude(value: Any, scale: Any) -> Any:
+    """Scale-independent identity of one mantissa + exponent number.
+
+    This contract stores numerics as a mantissa plus a decimal scale exponent
+    (``normalize/numeric.py``), so ``("1.2", 9)`` and ``("1200", 6)`` are both
+    $1.2bn and must reduce to the same token. The magnitude is
+    ``mantissa * 10**scale``, computed by shifting the ``Decimal``'s own
+    exponent: exact, free of context precision and rounding, and with no float
+    anywhere near a reported figure.
+
+    A missing or non-integer ``scale`` shifts nothing rather than guessing at a
+    magnitude (a malformed one is already a blocker — ``range.scale_blockers``).
+    A value that is not a finite number is returned untouched, so two different
+    unparseable values stay two different values instead of collapsing onto a
+    shared placeholder.
+    """
+    if value is None:
+        return None
+    try:
+        mantissa = Decimal(str(value))
+    except (ArithmeticError, ValueError):
+        return value
+    if not mantissa.is_finite():
+        return value
+    sign, digits, exponent = mantissa.as_tuple()
+    shift = scale if isinstance(scale, int) and not isinstance(scale, bool) else 0
+    exponent = int(exponent) + shift
+    trimmed = list(digits)
+    while len(trimmed) > 1 and trimmed[-1] == 0:
+        trimmed.pop()
+        exponent += 1
+    if trimmed == [0]:
+        # Zero is one amount at every scale and carries no sign.
+        return "0e0"
+    return f"{'-' if sign else ''}{''.join(str(d) for d in trimmed)}e{exponent}"
 
 
 def value_fingerprint(payload: dict[str, Any]) -> str:
-    """Fingerprint of *what a payload claims*, for value_disagreement detection.
+    """Economic content of a payload, independent of how it was written.
 
-    Numeric fields enter as ``_magnitude`` so a scale disagreement is a value
-    disagreement, and unit/currency are included so the same mantissa under a
-    different unit of account never reads as agreement.
+    Every numeric field is reduced through ``canonical_magnitude`` against the
+    payload's single declared ``scale`` (the normalizer reconciles a range's
+    bounds onto one exponent — ``normalize/payload.py::_reconcile_scale``), so a
+    figure restated in different magnitude words is not a ``value_disagreement``.
+
+    ``raw_value`` is deliberately absent. It is issuer wording preserved verbatim
+    by the normalizer, so hashing it would put "$1.2 billion" and "$1,200
+    million" in disagreement on the strength of their punctuation — the very
+    false positive normalizing the scale exists to remove.
     """
+    scale = payload.get("scale")
     return hash_json(
         {
-            "value": _magnitude(payload, "value"),
-            "low": _magnitude(payload, "low"),
-            "high": _magnitude(payload, "high"),
-            "unit": payload.get("unit"),
-            "currency": payload.get("currency"),
+            "value": canonical_magnitude(payload.get("value"), scale),
+            "low": canonical_magnitude(payload.get("low"), scale),
+            "high": canonical_magnitude(payload.get("high"), scale),
             "text": payload.get("text"),
             "category": payload.get("category"),
             "direction": payload.get("direction"),
-            "raw_value": payload.get("raw_value"),
         }
     )
 
 
-def comparability_key_for(payload: dict[str, Any]) -> dict[str, Any]:
-    """Stable local comparability fingerprint: which figures may be compared.
+def duplicate_groups(payloads: list[dict[str, Any]]) -> list[list[int]]:
+    """Group indices that are the same fact reported with the same value.
 
-    Full ontology-keyed strings are applied in ``validate.pipeline`` when
-    building proposal drafts; this helper is the fallback ``conflict_key_for``
-    uses when that construction failed closed, so the two notions of "the same
-    quantity" have one definition rather than two that can drift.
-
-    It carries no magnitude on purpose — comparability decides *whether* two
-    figures may be compared, and figures at different scales must stay
-    comparable so their disagreement is visible.
+    A duplicate is one figure stated twice, so both halves have to match: the
+    fact identity (``comparability_key_for``) *and* the economic content
+    (``value_fingerprint``). The same fact with disagreeing values is a conflict
+    for ``conflicts.detect_conflicts`` to raise, not a ``duplicate_candidate``.
     """
-    return {
-        "metric_id": payload.get("metric_id"),
-        "entity_id": payload.get("entity_id"),
-        "period": payload.get("period"),
-        "unit": payload.get("unit"),
-        "currency": payload.get("currency"),
-        "dimensions": payload.get("dimensions") or {},
-        "qualifiers": payload.get("qualifiers") or {},
-    }
-
-
-# `find_duplicates` used to live here: a second duplicate detector keyed on the
-# comparability dict alone, with ZERO callers anywhere including tests. It is
-# gone rather than left as live ammunition — it read no value, no magnitude and
-# no scale, so wiring it up would have declared two figures that merely describe
-# the same quantity to be the same figure. `duplicate_groups` above is the one
-# duplicate detector, and it fingerprints the magnitude.
+    buckets: dict[str, list[int]] = {}
+    for idx, payload in enumerate(payloads):
+        key = hash_json(
+            {
+                "identity": comparability_key_for(payload),
+                "value": value_fingerprint(payload),
+            }
+        )
+        buckets.setdefault(key, []).append(idx)
+    return [members for members in buckets.values() if len(members) > 1]
 
 
 def definition_hash_for(payload: dict[str, Any]) -> str:
@@ -156,6 +163,7 @@ def definition_hash_for(payload: dict[str, Any]) -> str:
 
 __all__ = [
     "canonical_json",
+    "canonical_magnitude",
     "comparability_key_for",
     "conflict_key_for",
     "definition_hash_for",

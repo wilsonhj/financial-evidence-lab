@@ -15,6 +15,8 @@ from typing import Any
 import psycopg
 from psycopg.rows import dict_row
 
+from fel_workers.redact import redact_error_text
+
 HEARTBEAT_STALE_SECONDS = 60
 
 
@@ -147,7 +149,18 @@ def fail(conn: psycopg.Connection, job: ClaimedJob, message: str) -> bool:
         (
             "failed" if terminal else "queued",
             terminal,
-            json.dumps({"error": {"code": "JOB_FAILED", "message": message, "request_id": job.id}}),
+            json.dumps(
+                {
+                    "error": {
+                        "code": "JOB_FAILED",
+                        # Handler exceptions interpolate the offending value, so
+                        # this can carry document text and credentials into a
+                        # durable column. Same discipline as the event payloads.
+                        "message": redact_error_text(message),
+                        "request_id": job.id,
+                    }
+                }
+            ),
             job.id,
             job.lease,
         ),

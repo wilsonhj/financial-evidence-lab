@@ -43,6 +43,7 @@ from fel_workers.extraction.types import (
 )
 from fel_workers.extraction.validate import validate_proposals
 from fel_workers.extraction.validate.pipeline import citation_status_for
+from fel_workers.redact import redact_error_text
 
 
 class CheckpointStore(Protocol):
@@ -423,6 +424,53 @@ def _commit_stage(
     return committed
 
 
+def _record_stage_failure(
+    ctx: _ExecCtx, *, step_name: str, input_hash: str, exc: BaseException
+) -> None:
+    """Write the failed step row and its ``step_failed`` event, then let the caller re-raise.
+
+    Without this a failing stage leaves ``extraction_run_steps`` with no row and
+    no error for the step that actually broke — the only signal is the run-level
+    ``run_failed`` payload, so step-level diagnosis of a failed run is impossible.
+
+    Every write here is best-effort and guarded: a store that is itself failing
+    (the common case when a stage dies) must not replace the real exception with
+    a bookkeeping one. The lease is checked first because a run whose lease is
+    gone no longer owns these rows.
+    """
+    req = ctx.state.request
+    code = getattr(exc, "code", None) or type(exc).__name__
+    error = {"code": str(code), "message": redact_error_text(str(exc))}
+    try:
+        if not ctx.deps.lease_check():
+            return
+        record = StageRecord(
+            step_name=step_name,
+            attempt=1,
+            status="failed",
+            input_hash=input_hash,
+            error=error,
+        )
+        commit_failed = getattr(ctx.deps.checkpoint, "commit_failed", None)
+        if callable(commit_failed):
+            commit_failed(
+                run_id=req.run_id,
+                org_id=req.org_id,
+                workflow_version=req.workflow_version,
+                record=record,
+            )
+            ctx.state.stages[step_name] = record
+        ctx.deps.events.append(
+            org_id=req.org_id,
+            run_id=req.run_id,
+            event_type="step_failed",
+            payload={"step_name": step_name, "input_hash": input_hash, "error": error},
+        )
+        emit("step_failed", run_id=req.run_id, step_name=step_name, code=error["code"])
+    except Exception:  # pragma: no cover — never mask the originating failure
+        return
+
+
 def _run_stage(ctx: _ExecCtx, step_name: str) -> None:
     req = ctx.state.request
     stage_payload = _stage_input_payload(ctx.state, step_name)
@@ -463,7 +511,11 @@ def _run_stage(ctx: _ExecCtx, step_name: str) -> None:
     emit("step_started", run_id=req.run_id, step_name=step_name)
 
     ctx.model_audit = None
-    output = _dispatch_stage(ctx, step_name)
+    try:
+        output = _dispatch_stage(ctx, step_name)
+    except BaseException as exc:  # noqa: BLE001 — recorded, then re-raised unchanged
+        _record_stage_failure(ctx, step_name=step_name, input_hash=input_hash, exc=exc)
+        raise
     output_hash = hash_json(output) if output is not None else None
     record = StageRecord(
         step_name=step_name,

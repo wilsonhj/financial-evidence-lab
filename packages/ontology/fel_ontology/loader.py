@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 from importlib import resources
-from typing import Any, cast
+from typing import Any, TypeVar, get_args
 
 from fel_ontology.models import (
     Family,
@@ -15,6 +15,15 @@ from fel_ontology.models import (
     PeriodSemantics,
     ValueType,
 )
+
+# Runtime enum vocabularies derived from the Literal aliases in models.py, so the
+# declared type and the accepted JSON value can never drift apart. ``cast()`` is
+# a no-op at runtime and these values come from a JSON file, so mypy cannot
+# check them either — without an explicit membership test the Literal types are
+# decorative and ``value_type: "not_a_type"`` loads cleanly.
+METRIC_KINDS: tuple[MetricKind, ...] = get_args(MetricKind)
+VALUE_TYPES: tuple[ValueType, ...] = get_args(ValueType)
+PERIOD_SEMANTICS: tuple[PeriodSemantics, ...] = get_args(PeriodSemantics)
 
 EXPECTED_METRIC_IDS: frozenset[str] = frozenset(
     {
@@ -48,10 +57,39 @@ def ontology_content_hash(raw: bytes) -> str:
 
 
 def _require_str_list(obj: dict[str, Any], key: str) -> tuple[str, ...]:
+    """Require a list of non-empty strings that is itself non-empty.
+
+    ``all(...)`` is vacuously True on ``[]``, so the previous form accepted an
+    empty list despite its own "non-empty" message. That is not cosmetic for
+    ``comparability_key_fields``: ``build_comparability_key`` joins the fields
+    it is given, so an empty list yields the empty key for every fact and makes
+    every fact comparable to every other one.
+    """
     value = obj.get(key)
-    if not isinstance(value, list) or not all(isinstance(x, str) and x for x in value):
+    if not isinstance(value, list) or not value or not all(isinstance(x, str) and x for x in value):
         raise OntologyLoadError(f"metric/family field {key!r} must be a non-empty string list")
     return tuple(value)
+
+
+_Choice = TypeVar("_Choice", bound=str)
+
+
+def _require_choice(
+    metric_id: str, obj: dict[str, Any], key: str, allowed: tuple[_Choice, ...]
+) -> _Choice:
+    """Validate a JSON string against a declared Literal vocabulary.
+
+    Returns a member of ``allowed``, so the narrowed Literal type on
+    :class:`~fel_ontology.models.MetricDef` is produced by a real membership
+    test rather than an unchecked ``cast``.
+    """
+    value = obj.get(key)
+    for candidate in allowed:
+        if value == candidate:
+            return candidate
+    raise OntologyLoadError(
+        f"metric {metric_id} field {key!r} must be one of {sorted(allowed)}, got {value!r}"
+    )
 
 
 def load_saas_metrics(*, path: str | None = None) -> OntologyDocument:
@@ -131,10 +169,10 @@ def load_saas_metrics(*, path: str | None = None) -> OntologyDocument:
                 id=mid,
                 canonical_name=str(m["canonical_name"]),
                 family_id=str(family_id),
-                kind=cast(MetricKind, m["kind"]),
-                value_type=cast(ValueType, m["value_type"]),
+                kind=_require_choice(mid, m, "kind", METRIC_KINDS),
+                value_type=_require_choice(mid, m, "value_type", VALUE_TYPES),
                 unit=str(m["unit"]),
-                period_semantics=cast(PeriodSemantics, m["period_semantics"]),
+                period_semantics=_require_choice(mid, m, "period_semantics", PERIOD_SEMANTICS),
                 scale_handling=str(m["scale_handling"]),
                 aliases=_require_str_list(m, "aliases"),
                 required_qualifiers=_require_str_list(m, "required_qualifiers"),

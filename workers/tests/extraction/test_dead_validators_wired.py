@@ -62,7 +62,8 @@ def _blockers(payload: dict[str, Any]) -> list[str]:
     return blockers
 
 
-# --- check_accounting: metric-identity blockers that never ran ---------------
+# --- metric-identity blockers that never ran (were in the dead check_accounting,
+# --- now folded into accounting_errors itself) -------------------------------
 
 
 def test_a_fully_cited_arr_is_clean() -> None:

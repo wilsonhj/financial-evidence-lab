@@ -713,11 +713,11 @@ class PostgresCheckpointStore:
             INSERT INTO extraction_run_steps (
                 id, org_id, run_id, step_name, attempt, status, input_hash, output_hash,
                 workflow_version, schema_version, prompt_version, provider_response_id,
-                input_tokens, output_tokens, cost_usd, started_at, finished_at
+                input_tokens, output_tokens, cost_usd, error, started_at, finished_at
             ) VALUES (
-                %s, %s, %s, %s, %s, 'succeeded', %s, %s,
+                %s, %s, %s, %s, %s, %s, %s, %s,
                 %s, %s, %s, %s,
-                %s, %s, %s, now(), now()
+                %s, %s, %s, %s, now(), now()
             )
             ON CONFLICT DO NOTHING
             """,
@@ -727,6 +727,7 @@ class PostgresCheckpointStore:
                 run_id,
                 record.step_name,
                 record.attempt,
+                record.status,
                 record.input_hash,
                 record.output_hash,
                 workflow_version,
@@ -736,7 +737,32 @@ class PostgresCheckpointStore:
                 record.input_tokens,
                 record.output_tokens,
                 record.cost_usd,
+                json.dumps(record.error) if record.error is not None else None,
             ),
+        )
+
+    def commit_failed(
+        self,
+        *,
+        run_id: str,
+        org_id: str,
+        workflow_version: str,
+        record: StageRecord,
+    ) -> StageRecord:
+        """Persist a failed stage attempt and its error.
+
+        0004's replay index is partial (``WHERE status = 'succeeded'``), so a
+        failed row cannot collide with it and cannot be mistaken for a resume
+        point. Without this, ``extraction_run_steps`` holds no row and no error
+        for the step that actually broke, leaving only a run-level message.
+        """
+        if record.status != "failed":
+            raise ValueError("commit_failed requires a failed stage record")
+        self._insert_step_row(
+            run_id=run_id, org_id=org_id, workflow_version=workflow_version, record=record
+        )
+        return self._memory.commit_failed(
+            run_id=run_id, org_id=org_id, workflow_version=workflow_version, record=record
         )
 
     def commit_succeeded_atomic(
