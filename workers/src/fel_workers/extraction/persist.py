@@ -339,7 +339,7 @@ class PostgresPersistStore:
             # before writing members (members require org_id + conflict_id).
             row = self.conn.execute(
                 """
-                SELECT id FROM extraction_conflicts
+                SELECT id, status FROM extraction_conflicts
                  WHERE org_id = %s AND workspace_id = %s AND conflict_key = %s
                 """,
                 (org_id, workspace_id, draft.conflict_key),
@@ -350,6 +350,23 @@ class PostgresPersistStore:
                     code="conflict_upsert",
                 )
             real_cid = str(row[0])
+            existing_status = str(row[1])
+            if existing_status != "open":
+                # conflict_key carries no run scope, so a rerun of the same
+                # disagreement resolves to the EARLIER row. Attaching this run's
+                # unreviewed proposals would silently reuse a human's
+                # adjudication, and 0004 forbids DELETE on extraction_conflicts
+                # and grants no DELETE on its members — the record could never be
+                # unwritten. Reopening is possible but the status CHECK would
+                # force clearing resolved_by/resolved_at, destroying the audit of
+                # who adjudicated it. Fail closed until the identity scope is
+                # decided (needs contract-change + ADR).
+                raise StepFailed(
+                    f"conflict {draft.conflict_key} already exists as "
+                    f"{existing_status!r}; refusing to attach unreviewed proposals "
+                    "to an adjudicated group",
+                    code="conflict_terminal",
+                )
             draft.id = real_cid
             for proposal_id in draft.member_proposal_ids:
                 self.conn.execute(

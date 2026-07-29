@@ -94,9 +94,13 @@ def test_conflict_members_insert_includes_org_id() -> None:
             executed.append((sql, params))
 
             class _Result:
-                def fetchone(self_inner) -> tuple[str] | None:  # noqa: N805
+                def fetchone(self_inner) -> tuple[str, str] | None:  # noqa: N805
                     if "FROM extraction_conflicts" in sql:
-                        return (conflict_id,)
+                        # persist_conflicts now selects (id, status): an existing
+                        # non-`open` row means a rerun would attach unreviewed
+                        # members to an adjudicated group. 'open' is the ordinary
+                        # path this test covers.
+                        return (conflict_id, "open")
                     return None
 
             return _Result()
