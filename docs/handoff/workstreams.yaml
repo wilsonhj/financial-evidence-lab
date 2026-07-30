@@ -336,7 +336,7 @@ packages:
     depends_on: [M2-CLAIMS-VERIFICATION, M3-CONTRACT]
     team: extraction
     branch: agent/m3-extraction-core
-    status: ready # deps satisfied — #58 merged via #122, #101 merged via #112; serialize vs any contracts/migrations owner and blocked #108
+    status: merged # PR #145 @ 61058e4 (2026-07-30); issue #60. Four review rounds; final round fixed the gross-profit polarity inversion, a normalizer-rejected row disabling identity checks for clean siblings, latest-not-greatest wall_seconds_used, and the same polarity defect in _check_rpo_balance. M4 (redaction inside stage_output) assessed a false positive, ruling still open. Follow-ups deferred out: #153 (unit-case unification) and #154 (guidance range ordering) — both move persisted identity keys and need an ADR.
     allowed_paths:
       - packages/ontology/**
       - packages/providers/**
@@ -420,6 +420,24 @@ packages:
       - packages/export/**
       - evals/**
       - docs/release/**
+  - id: DOCS-ONBOARDING # developer onboarding, architecture, system design, testing guides
+    issue: 148
+    # Deliberately empty: documentation work has no Spec Kit task. Registered
+    # retroactively — the branch was cut 16 minutes after #148 was filed and the
+    # dispatch checklist's registration step was never run, so the durable queue
+    # had no record this package existed while PR #149 was open against it.
+    tasks: []
+    depends_on: []
+    team: platform
+    branch: agent/developer-docs
+    # Matches the allowed paths #148's own body states. None is a shared path,
+    # so no contract-change label is required — confirmed against the
+    # shared_paths inventory at the top of this file.
+    status: ready # PR #149 open at de3a496, but branched from eed2140: its extraction-status prose predates the #145 merge and must be refreshed before it lands. See STATUS.md.
+    allowed_paths:
+      - README.md
+      - docs/architecture/**
+      - docs/development/**
   - id: EVALS-REPORT-RENDER # stdlib-only corpus-QA report renderer (Markdown + SVG)
     issue: 151
     # Deliberately empty: no Spec Kit task covers eval-report rendering. The

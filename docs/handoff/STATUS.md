@@ -40,6 +40,10 @@ Last updated: 2026-07-29
 - Research recovered to trunk: PR #117 — FinRobot cherry-pick studies (M4 calc-engine port, M3 extraction-role pattern).
 - ADR-0008 Amendment 1: PR #147 @ `355d2b6` — adds `infra/railway/worker.json` to the scaffold-registration exception, install-list append only. Ratified in the carrying commit with date, actor and PR number, matching the ADR-0005/0006 convention; supersedes the earlier "Proposed, ratified on merge" wording that had reopened finding I2.
 - Corpus-QA report renderer proposal: PR #150 @ `21750b1` — `docs/research/evals-report-renderer-proposal.md`. Proposal only; authorizes no code change. Registered below as `EVALS-REPORT-RENDER`; size-lever decision recorded there.
+- **M3-EXTRACTION-CORE full package: PR #145 @ `61058e4` (2026-07-30) — issue #60, 115 files, +15,326.** SaaS ontology package, five typed extraction roles, durable workflow FSM with checkpoint/resume over the event log, normalization, deterministic validators, atomic persistence, hard budgets, and audit redaction. Ships `packages/ontology/**` (a new first-party package), `workers/src/fel_workers/extraction/**`, `docs/runbooks/extraction-worker.md` and `workers/src/fel_workers/extraction/OPERATOR.md`.
+  - Merged after four review rounds. Final round fixed one blocker and three majors that the suite did not catch: the gross-profit identity inverted for contra-presented COGS, a normalizer-rejected row disabling identity checks for clean siblings, `wall_seconds_used` read latest-not-greatest, and the same polarity defect unfixed in `_check_rpo_balance`. M4 (redaction inside `stage_output`) was investigated and assessed a **false positive** — the frozen schemas intersect `_REDACT_KEYS` at exactly `{"text"}`, already exempted — and is still awaiting a formal ruling.
+  - Deliberately deferred out of the PR: **#153** (unify unit-case handling across identity, duplicate and definition checks — a one-sided fold was tried and reverted because it made a real break invisible) and **#154** (guidance range ordering: polarity-blind `check_range`, plus no ordering check at all for free-text `metric_id`s). Both move persisted identity keys and need an ADR.
+  - Verified at merge: 1047 passed, 0 skipped against Postgres 17 + pgvector with `TEST_DATABASE_URL` set; five CI jobs green.
 
 ### Tracker note — #96 residual owned by #108
 
@@ -57,18 +61,17 @@ None. No package currently `active`.
 
 ## Ready (post-#122/#123 reconciliation)
 
-1. **Ready, in review:** M3-EXTRACTION-CORE (#60) — `packages/ontology/**`, `packages/providers/**`, `workers/src/fel_workers/extraction/**`, `workers/src/fel_workers/consumer.py`, `workers/src/fel_workers/__main__.py`, `workers/tests/**`; deps satisfied (M2-CLAIMS-VERIFICATION merged via #122; M3-CONTRACT merged via #112).
-   - PR #145 is **open with an unresolved blocking review** at head `a08ba50`. One blocker plus four majors, all reproduced by the reviewer and **none caught by the suite** (1036 tests pass, linters clean):
-     - **B1 (blocking)** — `validate/accounting.py:387` computes `revenue - cogs`, but this PR's own parens fix (`normalize/numeric.py:135`) makes negative COGS reachable, so parenthesized-contra presentation yields `1000 − (−300) = 1300`. Correct statements are flagged and gross profit above revenue certifies clean. No negative-COGS test exists.
-     - **M1** — a normalizer-rejected row is indistinguishable from a clean one by the time `_mark_identity_violations` runs (`validate/pipeline.py:59` strips `NORMALIZER_BLOCKERS_KEY`), so one rejected row disables the identity checks for its clean siblings.
-     - **M2** — `unit` is not case-folded (`normalize/payload.py:142`) while `currency` is, so `usd` vs `USD` splits the slice and every identity silently skips.
-     - **M3** — `wall_seconds_used` is read latest-not-greatest (`extraction/persist.py` `_load_wall_seconds`), so a stale worker can erase it; `precheck` reads it for the wall cap.
-     - **M4** — sensitive-key redaction fires inside `stage_output`; the reviewer calls this payload corruption on resume, while the `events.py` docstring states it is intentional. Contested — needs an integration-lead ruling, not a silent change.
-   - Do not merge #145 until B1 is fixed with tests covering **both** COGS polarities.
+1. **Ready:** EVALS-REPORT-RENDER (#151) — `evals/reporting/**`, `evals/tests/**`; stdlib-only corpus-QA Markdown + SVG renderer per `docs/research/evals-report-renderer-proposal.md` (PR #150). No path overlap with any other non-blocked package.
 
-2. **Ready:** EVALS-REPORT-RENDER (#151) — `evals/reporting/**`, `evals/tests/**`; stdlib-only corpus-QA Markdown + SVG renderer per `docs/research/evals-report-renderer-proposal.md` (PR #150). Independent of #60: no path overlap.
+2. **Ready:** DOCS-ONBOARDING (#148) — `README.md`, `docs/architecture/**`, `docs/development/**`; developer onboarding, architecture, system-design and testing guides. PR #149 is open at `de3a496` but was branched from `eed2140`, so its extraction-status prose predates the #145 merge and must be refreshed before it lands — see the note below.
 
-Serialization notes: #60 must serialize with any contracts/migrations owner. Blocked #108 overlaps `apps/api/**` + `apps/web/**` + `evals/**` — if #108 unblocks, do not run it concurrently with any package holding those paths. EVALS-REPORT-RENDER holds `evals/**` subtrees; every other non-merged `evals/**` claimant (#108, #62, #67, #68) is currently blocked, so there is no live contention — but serialize it against whichever of those unblocks first.
+Serialization notes: blocked #108 overlaps `apps/api/**` + `apps/web/**` + `evals/**` — if #108 unblocks, do not run it concurrently with any package holding those paths. EVALS-REPORT-RENDER holds `evals/**` subtrees; every other non-merged `evals/**` claimant (#108, #62, #67, #68) is currently blocked, so there is no live contention — but serialize it against whichever of those unblocks first. DOCS-ONBOARDING overlaps nothing.
+
+### PR #149 must be refreshed before merge
+
+`README.md`, `docs/architecture/overview.md` and `docs/architecture/system-design.md` on `agent/developer-docs` assert in six places that the M3 extraction runtime is unmerged and carries unresolved blockers — `system-design.md` states outright that "downstream code must not assume that PR's runtime is available on `main`". All of that was true when written on 2026-07-29 and false since `61058e4`. Merging it unchanged would put a document on `main` denying the existence of the largest subsystem beside it.
+
+Also stale there: `packages/ontology` is missing from the repository map; `docs/runbooks/` is not referenced anywhere; the static-check commands in `docs/development/testing.md` omit `packages/ontology`, so a contributor copying them skips lint, type and format checks on a whole package that CI does gate; and the test-count baseline is pinned to `eed2140`.
 
 ## Blocked (registered, not dispatchable)
 
@@ -80,10 +83,12 @@ Serialization notes: #60 must serialize with any contracts/migrations owner. Blo
 
 ## Next (after ready merges)
 
-1. **Clear PR #145's blocking review** (B1 first). It is the critical path: #61 and #62 both depend on M3-EXTRACTION-CORE, and until #145 lands the only other dispatchable package is EVALS-REPORT-RENDER.
-2. **Rule on M4** (redaction inside `stage_output`). The reviewer and the `events.py` docstring disagree about whether current behaviour is a defect or deliberate. Decide explicitly and record it here — either the docstring or the code is wrong, and leaving the contradiction on trunk invites the next agent to "fix" the wrong side.
-3. EVALS-REPORT-RENDER (#151) — dispatchable now; does not gate and is not gated by #60.
-4. READER-PROD-SMOKE (#108) remains blocked until credentials + integrity residual cleared (does **not** gate #60).
+1. **M3-REVIEW (#61) and M3-CONFIDENCE-GATE (#62)** are unblocked now that #60 is merged — they were the packages waiting on it. Neither is registered `ready` yet; flip them when dispatching.
+2. **Refresh PR #149 before merging it.** Its extraction-status prose predates `61058e4` — see the note under Ready. The content is otherwise a genuine improvement over the scaffold-era docs it replaces.
+3. **Rule on M4** (redaction inside `stage_output`). Investigation says false positive with evidence; either close it as not-a-defect or change `events.py`'s docstring and the three tests that currently encode the behaviour as intentional. Leaving the contradiction on trunk invites the next agent to "fix" the wrong side.
+4. EVALS-REPORT-RENDER (#151) — dispatchable now, overlaps nothing.
+5. **#153 and #154** — both deferred out of #145, both move persisted identity keys, both need an ADR before implementation.
+6. READER-PROD-SMOKE (#108) remains blocked until credentials + the integrity residual are cleared.
 
 ### Decision record — EVALS-REPORT-RENDER size lever (2026-07-29)
 
