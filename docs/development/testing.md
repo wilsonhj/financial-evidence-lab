@@ -34,6 +34,11 @@ python3.11 -m venv .venv
 Use `corepack pnpm`, especially when a globally installed pnpm has a different
 major version.
 
+If `python3.11 -m venv .venv` fails with `command not found: python3.11`, see
+[local.md's `python3.11` is not installed](./local.md#python311-is-not-installed)
+— do not substitute a newer local Python; `.python-version` stays pinned to
+3.11 because CI builds against it.
+
 ## Fast developer loops
 
 ### JavaScript and TypeScript
@@ -42,8 +47,11 @@ major version.
 # All workspace unit/component tests
 corepack pnpm run test
 
-# Web only
-corepack pnpm --filter @fel/web test
+# Web only — run from the repo root, not via --filter: the root vitest
+# config's `include` globs are repo-root-relative, and `--filter` changes
+# cwd to apps/web, so `corepack pnpm --filter @fel/web test` reports "No
+# test files found" (exit 1) despite dozens of real test files.
+corepack pnpm exec vitest run apps/web
 
 # Type and lint checks
 corepack pnpm run typecheck
@@ -65,22 +73,28 @@ name while iterating, but run the workspace command before handoff.
 .venv/bin/pytest workers/tests
 .venv/bin/pytest packages/retrieval/tests
 .venv/bin/pytest packages/retrieval-evals/tests
+.venv/bin/pytest packages/ontology/tests
 
-# Static checks
+# Static checks (matches the Makefile's format-check/lint/typecheck targets
+# and ci.yml's python job exactly — packages/ontology joined the tree in #145)
 .venv/bin/ruff check \
-  apps workers evals packages/providers packages/retrieval packages/retrieval-evals
+  apps workers evals packages/providers packages/retrieval packages/retrieval-evals packages/ontology
 .venv/bin/mypy \
   apps/api/app workers/src evals/graders \
   packages/providers/fel_providers \
   packages/retrieval/fel_retrieval \
-  packages/retrieval-evals/fel_retrieval_evals
+  packages/retrieval-evals/fel_retrieval_evals \
+  packages/ontology/fel_ontology
 .venv/bin/black --check \
-  apps workers evals packages/providers packages/retrieval packages/retrieval-evals
+  apps workers evals packages/providers packages/retrieval packages/retrieval-evals packages/ontology
 ```
 
 ## Database-backed tests
 
-Create a dedicated PostgreSQL database with pgvector and apply every migration:
+Create a dedicated PostgreSQL database with pgvector and apply every migration.
+
+If PostgreSQL is a native install reachable over its default Unix socket,
+the bare form works:
 
 ```sh
 createdb fel_test
@@ -88,6 +102,22 @@ for migration in db/migrations/*.sql; do
   psql postgresql:///fel_test -v ON_ERROR_STOP=1 -f "$migration"
 done
 export TEST_DATABASE_URL=postgresql:///fel_test
+.venv/bin/pytest
+```
+
+If you started PostgreSQL with
+[`local.md`'s Docker option](./local.md#option-b-local-postgresql-and-api),
+it only listens over TCP on `localhost:5432` — the bare form above fails
+with `connection to server on socket "/tmp/.s.PGSQL.5432" failed: No such
+file or directory`. Use the same host/port/credentials as
+`FEL_DATABASE_URL` instead:
+
+```sh
+PGPASSWORD=fel createdb -h localhost -p 5432 -U fel fel_test
+for migration in db/migrations/*.sql; do
+  psql "postgresql://fel:fel@localhost:5432/fel_test" -v ON_ERROR_STOP=1 -f "$migration"
+done
+export TEST_DATABASE_URL=postgresql://fel:fel@localhost:5432/fel_test
 .venv/bin/pytest
 ```
 
@@ -216,15 +246,24 @@ that a database-free laptop cannot.
 
 ## Current baseline
 
-On `main` at `eed2140` during the 2026-07-29 documentation audit:
+Test counts drift with every PR — the numbers below are illustrative, not a
+target to keep in sync. Reproduce them yourself with `corepack pnpm run
+test` and `.venv/bin/pytest` before trusting a stale figure; treat GitHub
+Actions, not this paragraph, as the source of truth for whether the suite is
+green.
 
-- 31 JavaScript/TypeScript test files and 258 tests passed.
-- 423 Python tests passed and 164 database-gated tests skipped in an
-  environment without PostgreSQL.
-- The current `main` CI and the latest PR #145 head both had green five-job
-  GitHub Actions runs.
+Measured on `main` at `61058e4` (#145, M3-EXTRACTION-CORE ontology + worker
+FSM — the commit that added `packages/ontology` and the extraction worker):
 
-These counts are a diagnostic snapshot, not a permanent release criterion.
+- 31 JavaScript/TypeScript test files and 258 tests passed
+  (`corepack pnpm run test`).
+- 861 Python tests passed and 186 database-gated tests skipped without
+  `TEST_DATABASE_URL` (`.venv/bin/pytest`).
+- 1047 Python tests passed and 0 skipped with `TEST_DATABASE_URL` set against
+  a migrated Postgres 17 (`.venv/bin/pytest`).
+- `main`'s CI run for that commit had all five jobs green
+  (`gh run view --json conclusion,jobs`).
+
 Behavioral gates and zero unresolved high/medium review findings matter more
 than maintaining an exact test count.
 

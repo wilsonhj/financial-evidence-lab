@@ -15,8 +15,10 @@ research:
 4. extract structured financial concepts;
 5. build models and forecasts with traceable calculation lineage.
 
-Steps 1–3 are implemented in mock-first form. Step 4 has merged contracts and
-database foundations, with runtime implementation under review. Step 5 is
+Steps 1–3 are implemented in mock-first form. Step 4 has merged contracts,
+database foundations, and a bounded durable extraction runtime — an ontology
+package and a checkpointed worker FSM (`61058e4`, PR #145) — described in
+[`system-design.md`](./system-design.md#extraction-boundary). Step 5 is
 roadmap work.
 
 ## System context
@@ -62,7 +64,8 @@ retrieval indexes, runs, and audit records live in PostgreSQL.
 | `packages/contracts`                | Versioned JSON Schemas, OpenAPI descriptions, generated TypeScript types                               | Implemented through M3 contract v0.4                   |
 | `db/migrations`                     | Tenant, corpus, retrieval, extraction, queue, and RLS schema                                           | Implemented through migration `0005`                   |
 | `evals`, `packages/retrieval-evals` | Cross-stack fixtures, graders, and retrieval benchmarks                                                | Synthetic gates implemented; live gates open           |
-| Extraction runtime                  | Ontology and durable extraction workflow                                                               | Under review in PR #145                                |
+| `packages/ontology`                 | saas-metrics/v1 ontology (9 families / 14 metrics), comparability keys                                 | Implemented                                             |
+| Extraction runtime (`workers/.../extraction`) | Durable worker FSM: typed roles, normalization, validators, budget enforcement, atomic persistence | Implemented (`61058e4`, PR #145); known gaps below      |
 | Calculation/forecast packages       | Scenario model, forecast, backtest, release UI                                                         | Planned                                                |
 
 ## Architectural layers
@@ -174,8 +177,10 @@ The following are compatibility requirements, not implementation preferences:
   are superseded, not overwritten in place.
 - **Fail closed:** incomplete configuration, unknown modes, corrupt evidence,
   and unsupported live providers stop execution explicitly.
-- **Bounded cost:** operations reserve/check budgets and record usage; hard
-  enforcement for the M3 runtime is still a review gate.
+- **Bounded cost:** operations reserve/check budgets and record usage. The M3
+  extraction runtime enforces calls/tokens/cost/wall-clock hard caps
+  (`extraction/budget.py`), pre-call and post-call, carried across queue
+  retries of the same run.
 
 ## Sources of truth
 
@@ -195,6 +200,10 @@ Use each artifact for its intended purpose:
 6. GitHub issues, pull requests, and current `main` — live delivery state.
 7. [`docs/handoff`](../handoff/) — coordination snapshots; useful, but they can
    lag recent merges and must be reconciled before dispatch.
+8. [`docs/runbooks`](../runbooks/) — operator runbooks for durable subsystems
+   (for example [`extraction-worker.md`](../runbooks/extraction-worker.md)),
+   plus in-package `OPERATOR.md` files such as
+   [`workers/src/fel_workers/extraction/OPERATOR.md`](../../workers/src/fel_workers/extraction/OPERATOR.md).
 
 For lower-level behavior and current gaps, read
 [`system-design.md`](./system-design.md).

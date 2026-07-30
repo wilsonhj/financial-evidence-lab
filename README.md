@@ -25,7 +25,7 @@ Status as of **2026-07-29** on `main`:
 | Platform foundation           | Implemented                         | Workspace APIs, mock authentication, tenant-scoped RLS, audit/cost primitives, PostgreSQL jobs, and CI are in place.                                                                                                                             |
 | Evidence ingestion and reader | Implemented, with live gates open   | SEC ingestion, immutable document versions, canonical spans/facts, a composite reader API, and the Next.js evidence reader work in tests and mock mode. The 20-issuer live corpus gate and hosted end-to-end smoke are still open.               |
 | Hybrid retrieval and claims   | Implemented, mock-first             | Dense, lexical, fact, and table lanes, deterministic planning/RRF, replayable traces, feedback, claim decomposition, and the Search Observatory are present. Live embedding/generation selection and the 65-question acceptance run remain open. |
-| Structured extraction         | Contracts merged; runtime in review | The v0.4 API/database/provider foundation is on `main`. The worker/ontology implementation is [PR #145](https://github.com/wilsonhj/financial-evidence-lab/pull/145) and has unresolved correctness blockers.                                    |
+| Structured extraction         | Implemented, mock-first             | The v0.4 API/database/provider foundation, the `packages/ontology` SaaS metric ontology, and the durable extraction worker are all on `main`: typed extraction roles, a checkpointed workflow FSM, normalization, deterministic validators, hard budget enforcement, and atomic persistence. Live-provider extraction and the confidence/review gates are open. |
 | Modeling and forecasting      | Not implemented                     | M4 and M5 are specified but should not be treated as runnable product features.                                                                                                                                                                  |
 
 The authoritative product requirements live in
@@ -87,8 +87,9 @@ data flow, tenancy, temporal behavior, and failure semantics.
 ```text
 apps/api/                    FastAPI routes and database-backed services
 apps/web/                    Next.js reader and Search Observatory
-workers/                     Job consumer and ingestion pipelines
+workers/                     Job consumer, ingestion pipelines, extraction runtime
 packages/contracts/          Versioned JSON Schema/OpenAPI contracts
+packages/ontology/           SaaS metric ontology, comparability keys, loader
 packages/providers/          Provider protocols and deterministic mocks
 packages/retrieval/          Chunking, retrieval, fusion, traces, and claims
 packages/retrieval-evals/    Retrieval benchmark and evaluation tooling
@@ -96,9 +97,11 @@ db/migrations/               Append-only PostgreSQL migrations
 evals/                       Cross-stack fixtures and graders
 infra/                       Railway service definitions
 specs/                       Canonical product/specification packages
+docs/architecture/           System overview and design
 docs/decisions/              Architecture decision records
 docs/development/            Local setup and testing guides
 docs/handoff/                Agent work queue and status snapshots
+docs/runbooks/               Operator runbooks for deployed services
 ```
 
 ## Development setup
@@ -118,6 +121,13 @@ python3.11 -m venv .venv
 .venv/bin/pip install --upgrade pip
 .venv/bin/pip install -r requirements-dev.txt
 ```
+
+If `python3.11` is not on your `PATH`, do not substitute another interpreter
+silently — `.python-version` pins 3.11 and CI builds against it.
+[`docs/development/local.md`](./docs/development/local.md) is the canonical
+source for the toolchain, including how to obtain 3.11 and what to check if
+`python3` resolves elsewhere. Prefer it over this summary if the two ever
+disagree.
 
 Run the fast, database-independent checks:
 
@@ -157,11 +167,14 @@ configuration is documented in
 
 The nearest critical path is:
 
-1. Resolve the functional blockers on
-   [M3 extraction PR #145](https://github.com/wilsonhj/financial-evidence-lab/pull/145),
-   including durable run binding, strict validation, atomic persistence,
-   enforceable leases/budgets, complete financial validation, worker routing,
-   and audit-data minimization.
+1. Settle two extraction-validation gaps deferred out of the M3 runtime, both of
+   which move persisted identity keys and therefore need an ADR before
+   implementation: unit-case handling is inconsistent across the identity,
+   duplicate, and definition checks
+   ([#153](https://github.com/wilsonhj/financial-evidence-lab/issues/153)), and
+   guidance-range ordering is polarity-blind while never firing at all for
+   free-text metric ids
+   ([#154](https://github.com/wilsonhj/financial-evidence-lab/issues/154)).
 2. Decide how a terminal extraction run relates to queue retries in
    [issue #146](https://github.com/wilsonhj/financial-evidence-lab/issues/146).
 3. Finish the production reader smoke
@@ -208,9 +221,14 @@ public exploit report.
 - [System design](./docs/architecture/system-design.md)
 - [Local development](./docs/development/local.md)
 - [Testing guide](./docs/development/testing.md)
+- [Extraction worker runbook](./docs/runbooks/extraction-worker.md)
 - [Canonical specification](./specs/001-financial-evidence-lab/spec.md)
 - [MVP stack ADR](./docs/decisions/ADR-0002-mvp-stack.md)
 - [Contract package](./packages/contracts/README.md)
+
+`SPEC.md`, `PLAN.md`, and `TASKS.md` at the repository root are pointer stubs
+into [`specs/001-financial-evidence-lab/`](./specs/001-financial-evidence-lab/).
+They carry no normative content — read the spec package instead.
 
 ## License
 

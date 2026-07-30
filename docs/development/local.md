@@ -1,4 +1,4 @@
-# Local development
+# Local development (T0002)
 
 This guide covers three useful setups:
 
@@ -31,8 +31,13 @@ python3.11 -m venv .venv
 .venv/bin/pip install -r requirements-dev.txt
 ```
 
-`make install` is a convenience wrapper, but ensure `python3` resolves to
-Python 3.11 and `pnpm` resolves through Corepack before using it.
+`make install` is a convenience wrapper (it runs `python3 -m venv .venv`, so
+it inherits whatever `python3` resolves to); prefer the explicit
+`python3.11 -m venv .venv` above and confirm first with `python3 --version`
+and `command -v python3.11`. If `python3.11` is missing, see
+[`python3.11` is not installed](#python311-is-not-installed) below — do not
+substitute `python3.12`/`python3.13` for the venv; `.python-version` stays
+pinned to 3.11 because CI builds against it.
 
 ## Option A: fixture UI
 
@@ -72,6 +77,11 @@ done
 Migrations create the application roles and enable RLS. The migration user
 must be able to create extensions and roles. Application requests later switch
 to the non-privileged `fel_app` role inside a transaction.
+
+Reuse this container for [`testing.md`](./testing.md#database-backed-tests)'s
+`fel_test` database too: its default recipe assumes a local Unix-socket
+install, so a Docker-only setup needs the same `postgresql://fel:fel@localhost:5432/...`
+host/port/credentials form instead.
 
 ### Seed a development tenant
 
@@ -123,12 +133,19 @@ export FEL_AUTH_MODE=mock
 export FEL_STORAGE_DIR="$PWD/.local/evidence"
 mkdir -p "$FEL_STORAGE_DIR"
 
-.venv/bin/uvicorn app.main:app \
+PYTHONPATH=apps/api:packages/providers:packages/retrieval:packages/ontology:workers/src \
+  .venv/bin/uvicorn app.main:app \
   --app-dir apps/api \
   --host 127.0.0.1 \
   --port 8000 \
   --reload
 ```
+
+`--app-dir apps/api` only adds `apps/api` to `sys.path`; `app/retrieval.py`
+imports the sibling `packages/providers` and `packages/retrieval` packages, so
+`uvicorn` fails with `ModuleNotFoundError: No module named 'fel_providers'`
+without an explicit `PYTHONPATH`. The value above is the same one the worker
+uses below.
 
 In another terminal:
 
@@ -152,7 +169,8 @@ Deterministic smoke mode:
 export FEL_DATABASE_URL=postgresql://fel:fel@localhost:5432/fel_dev
 export FEL_MOCK_SMOKE=1
 unset FEL_SEC_LIVE
-.venv/bin/python -m fel_workers run
+PYTHONPATH=apps/api:packages/providers:packages/retrieval:packages/ontology:workers/src \
+  .venv/bin/python -m fel_workers run
 ```
 
 Live SEC mode:
@@ -162,18 +180,60 @@ export FEL_SEC_LIVE=1
 unset FEL_MOCK_SMOKE
 export FEL_STORAGE_DIR="$PWD/.local/evidence"
 export FEL_SEC_USER_AGENT="Financial Evidence Lab developer@example.com"
-.venv/bin/python -m fel_workers run
+PYTHONPATH=apps/api:packages/providers:packages/retrieval:packages/ontology:workers/src \
+  .venv/bin/python -m fel_workers run
 ```
+
+`python -m fel_workers` needs the same explicit `PYTHONPATH` as the API above
+— `workers/src` for the `fel_workers` package itself (`No module named
+fel_workers` without it), and `packages/ontology` for the extraction-queue
+import chain the worker loads at startup (`fel_workers.consumer` ->
+`fel_workers.extraction` -> `fel_ontology`; `No module named 'fel_ontology'`
+without it).
 
 Use a real, monitored contact address in `FEL_SEC_USER_AGENT` and follow the
 SEC fair-access policy. Never commit it. The current deployed worker dispatches
 SEC discovery/fetch/company-facts jobs. FRED and market adapters exist, but
 their live job routing is not yet part of the deployed consumer.
 
+### Extraction worker
+
+`--queue extraction` runs the extraction-job consumer instead of the
+ingestion queue above. It requires `FEL_ALLOW_MOCK_LLM=1` to bind the
+deterministic mock structured-model — an `extraction` queue with no model
+bound fails closed at startup (exit 2), and the reverse (the opt-in on any
+other queue) fails closed too. See
+[`docs/runbooks/extraction-worker.md`](../runbooks/extraction-worker.md) for
+the job payload, budgets, and review semantics; this guide only covers
+getting the process running:
+
+```sh
+export FEL_DATABASE_URL=postgresql://fel:fel@localhost:5432/fel_dev
+export FEL_MOCK_SMOKE=1
+export FEL_ALLOW_MOCK_LLM=1
+unset FEL_SEC_LIVE
+PYTHONPATH=apps/api:packages/providers:packages/retrieval:packages/ontology:workers/src \
+  .venv/bin/python -m fel_workers run --queue extraction
+```
+
+`FEL_ALLOW_MOCK_LLM` answers every `extraction_run` job with a deterministic
+mock model that persists FABRICATED proposals to the `needs_review` queue —
+non-production only. `FEL_EXTRACTION_MEMORY_STORES=1` additionally redirects
+extraction output to in-memory stores that are discarded on exit, for
+smoke-testing the pipeline without seeding an `extraction_runs` row; see the
+runbook for when that applies.
+
 ## Option C: Next.js against the real API
 
 The HTTP source calls the composite reader endpoint from the Next.js server.
-It requires one or more entity UUIDs already present in the corpus.
+It requires one or more entity UUIDs already present in the corpus. There is
+no `entities` table to look up directly; entity UUIDs live on ingested rows.
+After running the worker (above) against a populated `FEL_DATABASE_URL`, find
+one with:
+
+```sh
+psql "$FEL_DATABASE_URL" -c "SELECT DISTINCT entity_id FROM documents ORDER BY entity_id LIMIT 5;"
+```
 
 ```sh
 export FEL_EVIDENCE_SOURCE=http
@@ -204,6 +264,8 @@ production, non-loopback API URLs must use HTTPS.
 | `FEL_MOCK_SMOKE`        | Worker      | Explicit deterministic provider mode          |
 | `FEL_SEC_LIVE`          | Worker      | Explicit live SEC mode                        |
 | `FEL_SEC_USER_AGENT`    | Worker      | SEC fair-access identity                      |
+| `FEL_ALLOW_MOCK_LLM`    | Worker      | Explicit opt-in to the mock model on `--queue extraction` |
+| `FEL_EXTRACTION_MEMORY_STORES` | Worker | Extraction smoke option: output to in-memory stores (discarded on exit) |
 | `FEL_EVIDENCE_SOURCE`   | Web         | Exactly `fixture` or `http`                   |
 | `FEL_API_BASE_URL`      | Web         | FastAPI origin in HTTP mode                   |
 | `FEL_API_BEARER_TOKEN`  | Web         | Server-only API token                         |
@@ -216,7 +278,38 @@ Cost limits are controlled by `FEL_USER_DAILY_LIMIT_USD`,
 `FEL_ORG_MONTHLY_SOFT_USD`. Defaults are development-friendly; deployments
 should set them deliberately.
 
+## Provider mocks
+
+`fel_providers` exposes the frozen interfaces (LLM, embeddings <=512 dims,
+storage, market data, SEC, FRED) with deterministic mocks as the default
+binding. Live adapters are integration-credentialed work; the env-var names
+they will use are listed in
+[`docs/handoff/CREDENTIALS.md`](../handoff/CREDENTIALS.md) — never commit
+values. The extraction worker's structured-model mock is a separate,
+narrower opt-in (`FEL_ALLOW_MOCK_LLM`, above) — it is not implied by
+`FEL_MOCK_SMOKE`.
+
 ## Common setup problems
+
+### `python3.11` is not installed
+
+`command -v python3.11` exits 127 on any machine that only ships newer
+Python (e.g. one with `python3.12`/`python3.13` but no `3.11`).
+`.python-version` stays pinned to 3.11 because CI builds against it — do not
+substitute a different local interpreter for the venv.
+
+Get a real 3.11 without installing anything system-wide, using
+[uv](https://github.com/astral-sh/uv):
+
+```sh
+uv venv --python 3.11 --seed .venv
+```
+
+`uv` downloads CPython 3.11 on first use and creates `.venv` with `pip`
+already installed (`--seed`), so the rest of this guide's
+`.venv/bin/pip install ...` commands work unchanged. pyenv or asdf work too
+if you already manage Python versions that way — install/select 3.11 there
+and run the `python3.11 -m venv .venv` line above as normal.
 
 ### `pnpm` reports the wrong version
 
