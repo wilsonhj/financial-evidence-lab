@@ -1,0 +1,15 @@
+[project]
+name = "fel-ontology"
+version = "0.0.0"
+description = "Financial Evidence Lab B2B SaaS metrics ontology (saas-metrics/v1)"
+requires-python = ">=3.11"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["fel_ontology*"]
+
+[tool.setuptools.package-data]
+fel_ontology = ["data/*.json"]

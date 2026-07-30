@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fel.local/workers/extraction/schemas/fact-table-candidates/v1",
+  "title": "FactTableCandidates",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["candidates"],
+  "properties": {
+    "candidates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["source_span_id", "metric_hint", "raw_value"],
+        "properties": {
+          "source_span_id": {
+            "type": "string",
+            "minLength": 8
+          },
+          "metric_hint": {
+            "type": "string",
+            "minLength": 1
+          },
+          "raw_value": {
+            "type": "string"
+          },
+          "table_role": {
+            "type": ["string", "null"]
+          }
+        }
+      }
+    }
+  },
+  "x-fel-version": "1.0.0"
+}

@@ -8,6 +8,7 @@ src = [
     "packages/providers",
     "packages/retrieval",
     "packages/retrieval-evals",
+    "packages/ontology",
 ]
 
 [tool.ruff.lint]
@@ -21,7 +22,7 @@ target-version = ["py311"]
 python_version = "3.11"
 strict = true
 # per-module overrides preferred; global escape hatch removed
-mypy_path = "apps/api:workers/src:evals:packages/providers:packages/retrieval:packages/retrieval-evals"
+mypy_path = "apps/api:workers/src:evals:packages/providers:packages/retrieval:packages/retrieval-evals:packages/ontology"
 
 [tool.pytest.ini_options]
 pythonpath = [
@@ -31,6 +32,7 @@ pythonpath = [
     "packages/providers",
     "packages/retrieval",
     "packages/retrieval-evals",
+    "packages/ontology",
 ]
 testpaths = [
     "apps/api/tests",
@@ -39,6 +41,7 @@ testpaths = [
     "packages/providers/tests",
     "packages/retrieval/tests",
     "packages/retrieval-evals/tests",
+    "packages/ontology/tests",
 ]
 addopts = "-q --import-mode=importlib"
 

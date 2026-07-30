@@ -55,7 +55,18 @@ shared_path_exceptions:
       ]
     rule: mechanical-consequence-of-in-scope-change-only
   - adr: docs/decisions/ADR-0008-python-package-scaffold-edits.md
-    applies_to: [pyproject.toml, Makefile, .github/workflows/ci.yml]
+    # infra/railway/worker.json added by ADR-0008 Amendment 1 (2026-07-29):
+    # appending a first-party ./packages/* path to build.buildCommand's pip
+    # install list ONLY, and only when the worker imports it. The deploy block
+    # (startCommand, restartPolicy, health checks, env wiring), api.json, and
+    # everything else under infra/** stay outside the exception (#84 owns them).
+    applies_to:
+      [
+        pyproject.toml,
+        Makefile,
+        .github/workflows/ci.yml,
+        infra/railway/worker.json,
+      ]
     rule: new-first-party-package-scaffold-registration-only
 defaults:
   status: blocked
@@ -293,7 +304,7 @@ packages:
     depends_on: [M2-RETRIEVAL-BACKEND, READER-CROSS-STACK] # contract inherited; #96 is reader gate
     team: experience
     branch: agent/m2-observatory-ui
-    status: merged # PR #123 (2026-07-21); issue #59; follow-ups #131 (Playwright CI draft) + #134 (E2E in CI) + #135 (live SSE proxy, M3-deferred) + #136 (WCAG/keyboard audit) + #138 (web-layer client telemetry)
+    status: merged # PR #123 (2026-07-21); issue #59; follow-ups #131 (Playwright CI, MERGED 2026-07-21 @ bc6a2a3; declared no closing issue, so #134 never auto-closed and still reads as pending — re-scope or close it) + #134 (E2E in CI) + #135 (live SSE proxy, M3-deferred) + #136 (WCAG/keyboard audit) + #138 (web-layer client telemetry)
     allowed_paths: [apps/web/**, packages/ui/**]
 
   # M3 — extraction.
@@ -325,7 +336,7 @@ packages:
     depends_on: [M2-CLAIMS-VERIFICATION, M3-CONTRACT]
     team: extraction
     branch: agent/m3-extraction-core
-    status: ready # deps satisfied — #58 merged via #122, #101 merged via #112; serialize vs any contracts/migrations owner and blocked #108
+    status: review # PR #145 OPEN (2026-07-28) from main @ eed2140, all 5 checks green, mergeStateStatus CLEAN, no review submitted; review blockers 1-4 + both high-severity findings fixed on-branch; carries 89e4363 (.specify/** + AGENTS.md, shared paths — see #141); follow-ups #146 (terminal-run retry design) + #62 (live OpenAI adapter, deferred). Flip to `merged` with the merge SHA once landed.
     allowed_paths:
       - packages/ontology/**
       - packages/providers/**
@@ -338,7 +349,8 @@ packages:
     tasks: [T0308, T0309]
     depends_on: [M3-EXTRACTION-CORE]
     team: experience
-    branch: agent/m3-review
+    branch: agent/m3-review # not yet created
+    status: blocked # unblocks to `ready` when #60 merges via PR #145; without an explicit key this inherited defaults.status anyway, which contradicted STATUS.md
     allowed_paths: [apps/web/**, apps/api/**]
   - id: M3-CONFIDENCE-GATE # confidence scoring + extraction quality gate
     issue: 62
