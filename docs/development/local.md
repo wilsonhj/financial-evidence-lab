@@ -228,12 +228,30 @@ runbook for when that applies.
 The HTTP source calls the composite reader endpoint from the Next.js server.
 It requires one or more entity UUIDs already present in the corpus. There is
 no `entities` table to look up directly; entity UUIDs live on ingested rows.
-After running the worker (above) against a populated `FEL_DATABASE_URL`, find
-one with:
+Against a populated `FEL_DATABASE_URL`, find one with:
 
 ```sh
 psql "$FEL_DATABASE_URL" -c "SELECT DISTINCT entity_id FROM documents ORDER BY entity_id LIMIT 5;"
 ```
+
+**This returns zero rows if you have only followed the steps above, and that is
+not a mistake on your part.** Two things stand between Option B and a populated
+corpus, and neither is a step this guide can give you:
+
+1. Nothing here enqueues a job. `python -m fel_workers run` drains the `jobs`
+   table and exits; after the Option B steps that table is empty, so the worker
+   correctly reports `0 job(s) completed`.
+2. Mock mode cannot produce documents even with a job queued.
+   `MockSecClient.submissions` (`packages/providers/fel_providers/mocks.py:354`)
+   returns an empty `accessionNumber` list for every CIK by design, so discovery
+   finds nothing to fetch and `documents` is never written.
+
+Populating the corpus therefore requires live SEC ingestion, which needs the
+configured compliant identity and rate limiter — see the `FEL_SEC_LIVE` section
+above, and note that casual use is discouraged. If you only want to see the
+reader render, use **Option A (fixture mode)**, which needs no database and no
+entity ids at all. Option C is for verifying the real HTTP path once you already
+have a populated database.
 
 ```sh
 export FEL_EVIDENCE_SOURCE=http

@@ -206,6 +206,25 @@ The target runs formatting, linting, static types, JS/Python tests, Bandit,
 pip-audit, and the bulk npm advisory check. It can require registry/network
 access for dependency advisory data.
 
+**Known interaction if you obtained Python 3.11 through `uv`.** The `security`
+target's `pip-audit` step builds a disposable venv with
+`venv.EnvBuilder(with_pip=True)`, which defaults to `symlinks=False` and so
+*copies* the interpreter binary. `uv`'s standalone CPython builds resolve
+`libpython3.11.dylib` through an `@rpath` relative to their original install
+location, so the copy cannot load it and the step aborts:
+
+```
+Library not loaded: @rpath/libpython3.11.dylib
+subprocess.CalledProcessError: ... '-m', 'ensurepip' ... died with <Signals.SIGABRT: 6>
+```
+
+This is specific to standalone builds — the same call against a Homebrew or
+system 3.11 works. Every other step in `make ci` passes; only `pip-audit` is
+affected, and CI is unaffected because GitHub Actions provisions its own
+interpreter. Either run the other targets individually
+(`make format-check lint typecheck test`) and let CI cover the advisory scan, or
+use a non-standalone 3.11 for the audit step.
+
 GitHub Actions additionally runs:
 
 1. Gitleaks;
