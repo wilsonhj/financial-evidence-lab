@@ -245,17 +245,30 @@ def _facts(payloads: list[dict[str, Any]]) -> list[_Fact]:
                 metric_id=metric_id,
                 entity_id=str(payload.get("entity_id") or ""),
                 period=canonical_json(payload.get("period")),
-                # Case-folded so 'usd' and 'USD' land in the same slice. Unlike
-                # `currency` (normalize/payload.py:148, folded with `.upper()`
-                # at normalization time), `unit` is free issuer text the
-                # normalizer deliberately leaves exactly as written
-                # (normalize/payload.py:142) — folding it there would change
-                # the stored payload and, with it, `hash_json`/
-                # `raw_payload_hash`/`proposal_id_for` (PR #145 review M2).
-                # Folding only here, at comparison time, changes nothing that
-                # is persisted; it only decides which slice this fact competes
-                # in for an identity.
-                unit=str(payload.get("unit") or "").strip().upper(),
+                # Whitespace-trimmed but deliberately NOT case-folded. Issue
+                # #153 tracks the real defect: 'usd' and 'USD' key different
+                # slices here, so an identity spanning both is skipped rather
+                # than checked.
+                #
+                # Case-folding *only here* was tried and reverted, because it
+                # makes things worse rather than better.
+                # `duplicates.comparability_key_for` does not fold, so folding
+                # this side alone breaks the contract `_sole` relies on: two
+                # rows differing only in unit case merge into one slice, `_sole`
+                # correctly backs off to `validate.conflicts` — and conflicts,
+                # still keyed on the unfolded unit, never sees the pair. A real
+                # identity break then vanishes with no blocker from any checker,
+                # where before the fold it was caught. Both sides have to fold
+                # together, and `comparability_key_for` feeds the conflict
+                # identity, so that is a contract change with persisted-id
+                # consequences — #153, not a one-line edit here.
+                #
+                # `.strip()` stays: whitespace carries no semantic distinction,
+                # so trimming cannot over-merge, and it keeps direct
+                # `identity_errors` callers (the test suite, anything bypassing
+                # the normalizer) from silently dropping a ' USD' row out of
+                # its slice.
+                unit=str(payload.get("unit") or "").strip(),
                 currency=str(payload.get("currency") or ""),
                 dimensions=tuple(sorted((str(k), str(v)) for k, v in dims.items())),
                 # Mantissa + exponent collapsed exactly once, here, so every
@@ -361,6 +374,27 @@ def _check_rpo_balance(facts: list[_Fact], out: dict[int, list[str]]) -> None:
     marker (``_metric_rule_errors`` requires it), not a segment of the balance.
     Keeping it in the key would put every real cRPO row in a different group
     from the RPO it must not exceed, and the identity would never fire.
+
+    Both sides are compared by magnitude, for the same reason
+    ``_check_gross_profit`` discards COGS' polarity. RPO and cRPO are declared
+    ``kind: balance`` in the ontology — a performance-obligation backlog, which
+    is never truly a negative quantity — so a negative value arriving here is a
+    parenthesized-presentation artifact of this PR's own
+    ``normalize/numeric.py`` parens handling, not a claim the balance itself is
+    negative. Left signed, the comparison inverts exactly as the gross-profit
+    identity did before it was fixed, and in both directions:
+    ``rpo=1000, crpo=-1500`` reads ``-1500 > 1000`` as false and certifies a
+    real violation clean, while ``rpo=-1000, crpo=300`` reads ``300 > -1000`` as
+    true and blocks an entirely valid pair. Comparing ``abs()`` restores the
+    only question this identity is asking: is the near-term portion larger than
+    the whole backlog it is a portion of.
+
+    Note that ``_check_segment_sums`` must NOT be given this treatment. It is
+    additive rather than subtractive, so signed magnitudes are already correct
+    there: a contra segment (a returns or allowance line) is legitimately
+    negative, and ``abs()``-ing the parts would make a correct breakdown stop
+    summing to its total. There is deliberately no central polarity pass over
+    ``_Fact`` — the three identities need three different sign conventions.
     """
     ignore = frozenset({"horizon"})
     groups: dict[tuple[Any, ...], list[_Fact]] = {}
@@ -372,7 +406,8 @@ def _check_rpo_balance(facts: list[_Fact], out: dict[int, list[str]]) -> None:
         rpo, crpo = _sole(indexed, "rpo"), _sole(indexed, "crpo")
         if rpo is None or crpo is None:
             continue
-        if crpo.magnitude > rpo.magnitude and not relatively_equal(crpo.magnitude, rpo.magnitude):
+        rpo_size, crpo_size = abs(rpo.magnitude), abs(crpo.magnitude)
+        if crpo_size > rpo_size and not relatively_equal(crpo_size, rpo_size):
             _record(out, (rpo, crpo), f"{IDENTITY_PREFIX}crpo_exceeds_rpo")
 
 

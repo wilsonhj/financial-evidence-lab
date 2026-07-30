@@ -135,6 +135,62 @@ def test_crpo_below_rpo_is_clean() -> None:
     assert identity_errors([kpi("rpo", "900"), kpi("crpo", "500")]) == {}
 
 
+def test_crpo_exceeding_rpo_is_caught_when_crpo_is_contra_presented() -> None:
+    """A parenthesized cRPO must not slip past the balance check.
+
+    Adversarial review of PR #145's B1 fix: `abs()` was applied to
+    `_check_gross_profit` but not here, even though both read the same
+    `_Fact.magnitude` and both became exposed by the same parens handling. Left
+    signed, `-1500 > 1000` is false and a real violation -- a near-term portion
+    half again the size of the whole backlog -- certified clean.
+    """
+    result = identity_errors([kpi("rpo", "1000"), kpi("crpo", "-1500", sign="negative")])
+    assert codes(result, 0) == [f"{IDENTITY_PREFIX}crpo_exceeds_rpo"]
+    assert codes(result, 1) == [f"{IDENTITY_PREFIX}crpo_exceeds_rpo"]
+
+    # Same violation with both sides contra-presented.
+    both = [kpi("rpo", "-1000", sign="negative"), kpi("crpo", "-1500", sign="negative")]
+    assert codes(identity_errors(both), 1) == [f"{IDENTITY_PREFIX}crpo_exceeds_rpo"]
+
+
+def test_contra_presented_rpo_does_not_spuriously_flag_a_valid_pair() -> None:
+    """The other direction of the same defect: a valid pair must stay clean.
+
+    Signed, `300 > -1000` is true, so a perfectly ordinary cRPO of 300 against
+    an RPO of 1,000 was blocked for review. Comparing magnitudes asks the only
+    question this identity is about -- is the portion bigger than the whole.
+    """
+    payloads = [kpi("rpo", "-1000", sign="negative"), kpi("crpo", "300")]
+    assert identity_errors(payloads) == {}
+
+    # And with both contra-presented.
+    both = [kpi("rpo", "-1000", sign="negative"), kpi("crpo", "-300", sign="negative")]
+    assert identity_errors(both) == {}
+
+
+def test_segment_sums_keep_signed_magnitudes_and_are_not_abs_folded() -> None:
+    """`_check_segment_sums` must NOT get the `abs()` treatment the other two need.
+
+    A contra segment -- a returns or allowance line -- is legitimately negative,
+    and the total is the net of its parts. `abs()`-ing the parts would compute
+    1000 + 300 = 1300 against a correct total of 700 and block a correct filing.
+    This pins the asymmetry so a future "consistency" cleanup cannot erase it.
+    """
+    correct = [
+        kpi("arr", "700", dimensions={}),
+        kpi("arr", "1000", dimensions={"segment": "gross"}),
+        kpi("arr", "-300", sign="negative", dimensions={"segment": "allowance"}),
+    ]
+    assert identity_errors(correct) == {}
+
+    broken = [
+        kpi("arr", "750", dimensions={}),  # wrong: parts net to 700
+        kpi("arr", "1000", dimensions={"segment": "gross"}),
+        kpi("arr", "-300", sign="negative", dimensions={"segment": "allowance"}),
+    ]
+    assert codes(identity_errors(broken), 0) == [f"{IDENTITY_PREFIX}segments_do_not_sum"]
+
+
 def test_crpo_rpo_compared_across_different_scales() -> None:
     """$1.2bn RPO vs $900m cRPO: comparing mantissas alone would read 1.2 < 900."""
     payloads = [kpi("rpo", "1.2", scale=9), kpi("crpo", "900", scale=6)]
@@ -301,22 +357,58 @@ def test_gross_profit_identity_still_catches_a_break_with_contra_presented_cogs(
 
 
 # --------------------------------------------------------------------------
-# Identity slice matching: `unit` must be case-folded like `currency` already is
+# Identity slice matching and `unit` case: a known gap, deliberately pinned
 # --------------------------------------------------------------------------
-# PR #145 review M2. normalize/payload.py:148 upper-cases `currency` but line
-# 142 leaves `unit` exactly as the issuer wrote it. `_context` keys the
-# identity slice on that raw string, so 'usd' and 'USD' silently land in two
-# different slices and the identity never runs -- not "clean", just skipped.
+# PR #145 review M2 observed that normalize/payload.py:148 upper-cases
+# `currency` while line 142 leaves `unit` exactly as the issuer wrote it, so
+# 'usd' and 'USD' key different slices in `_context` and an identity spanning
+# both is skipped rather than checked. That observation is correct and the gap
+# is real -- issue #153 owns it.
+#
+# Case-folding in `_facts` alone was tried here and REVERTED, because it makes
+# the system worse: `duplicates.comparability_key_for` does not fold, so
+# folding one side breaks the handoff `_sole` depends on. The two tests below
+# pin both halves of that reasoning so neither can be undone by accident.
 
 
-def test_gross_profit_identity_matches_across_unit_casing() -> None:
+def test_gross_profit_identity_skips_across_unit_casing_known_gap() -> None:
+    """Pins the KNOWN GAP that issue #153 owns: unit case splits the slice.
+
+    This asserts today's failing-open behaviour on purpose. When #153 lands a
+    consistent unit policy this test SHOULD fail -- update it then rather than
+    silencing it, and make sure the duplicate/conflict side folds too.
+    """
     payloads = [
         kpi("revenue", "1000", period=DURATION, unit="USD"),
         kpi("cogs", "300", period=DURATION, unit="usd"),
-        kpi("gross_profit", "600", period=DURATION, unit="USD"),  # deliberately wrong
+        kpi("gross_profit", "600", period=DURATION, unit="USD"),  # wrong: should be 700
+    ]
+    assert identity_errors(payloads) == {}
+
+
+def test_unit_case_split_still_lets_a_break_be_caught_in_its_own_slice() -> None:
+    """Why folding in `_facts` alone was reverted, not just deferred.
+
+    Two `revenue` rows for one economic quantity differing only in unit case --
+    a duplicate extraction from two spans of the same filing. Unfolded, they sit
+    in separate slices, so the 'USD' slice holds exactly one revenue and the
+    genuine gross-profit break IS caught.
+
+    Folding only `_facts` merged them into one slice, `_sole` backed off to
+    `validate.conflicts` as designed, and conflicts -- still keyed on the
+    unfolded unit via `comparability_key_for` -- never saw the pair. The break
+    then disappeared with no blocker from any checker at all, strictly worse
+    than the gap above. If this test ever starts returning `{}`, a one-sided
+    fold has been reintroduced.
+    """
+    payloads = [
+        kpi("revenue", "1000", period=DURATION, unit="USD"),
+        kpi("revenue", "1000", period=DURATION, unit="usd"),
+        kpi("cogs", "400", period=DURATION, unit="USD"),
+        kpi("gross_profit", "700", period=DURATION, unit="USD"),  # wrong: 1000-400=600
     ]
     result = identity_errors(payloads)
-    assert set(result) == {0, 1, 2}
+    assert set(result) == {0, 2, 3}
     assert all(c == [f"{IDENTITY_PREFIX}gross_profit_mismatch"] for c in result.values())
 
 
