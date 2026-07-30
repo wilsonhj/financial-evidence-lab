@@ -330,9 +330,22 @@ onto one shared scale by left-shifting only, so no bound is ever rounded;
 validates a model-declared `scale` against `validate/range.py`'s bound before
 anything trusts it; and cross-checks a declared `sign` against the value's
 own derived sign, correcting the stored sign and reporting the disagreement
-as a blocker rather than silently trusting the declaration. `normalize/period.py`,
-`dimensions.py`, and `currency.py` normalize period shape, dimension key
-ordering, and ISO-4217 currency casing respectively.
+as a blocker rather than silently trusting the declaration. Period shape is
+normalized by `normalize/period.py::normalize_period`, called from
+`payload.py:49`. Dimension key ordering and ISO-4217 currency casing are handled
+inside `payload.py` itself — `_normalize_dimensions` (`payload.py:122`) and the
+inline `currency.upper()` validation in `_normalize_numeric_fields`
+(`payload.py:144-148`).
+
+Note that `normalize/dimensions.py` and `normalize/currency.py` also exist and
+implement similar logic, but **nothing imports them** — verified by import trace
+across `workers/src` and `workers/tests`. They are orphaned duplicates of the
+`payload.py` implementations, not part of the live path. Extend `payload.py`, not
+those modules; changing them has no effect on any payload. This matters for
+[issue #153](https://github.com/wilsonhj/financial-evidence-lab/issues/153),
+whose currency-fold question is about `payload.py`. Consolidating or removing the
+orphans is tracked in
+[issue #155](https://github.com/wilsonhj/financial-evidence-lab/issues/155).
 
 ### Deterministic validators (`extraction/validate/`)
 
@@ -535,6 +548,15 @@ open:
   `stage_output` is a defect (PR #145 review finding M4) was investigated and
   assessed a false positive, but a formal ruling is still pending — see
   [Cost and observability](#cost-and-observability).
+- A second, adjacent question about the same payload is tracked separately in
+  [ADR-0009](../decisions/ADR-0009-checkpoint-payload-in-event-stream.md),
+  **Status: Proposed** — whether `stage_output` carrying evidence text verbatim
+  breaches the metadata-only event guarantee in
+  `specs/003-agentic-extraction/data-model.md` (PR #145 review finding P1-8.2).
+  Distinct from M4: M4 asks whether key substitution *inside* `stage_output`
+  corrupts a resumed run, ADR-0009 asks whether that payload should carry the
+  text at all. Both are open, and their conclusions are consistent — the payload
+  is exempt from truncation, not from key substitution.
 
 ### Reader and corpus acceptance
 
