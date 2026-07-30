@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fel.local/workers/extraction/schemas/role-envelope/v1",
+  "title": "ExtractionRoleEnvelope",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["proposals"],
+  "properties": {
+    "proposals": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "schema_version",
+          "kind",
+          "entity_id",
+          "issuer_label",
+          "metric_id",
+          "raw_value",
+          "period",
+          "dimensions",
+          "qualifiers",
+          "reported_or_derived"
+        ],
+        "propertyNames": {
+          "$comment": "Union of the closed extraction-payload/v1 variants plus the two keys the worker pipeline reads (evidence, source_span_ids). Per-variant closure is enforced in validate/schema.py from the frozen contract itself; workers/tests/extraction/test_payload_schema_enforcement.py fails if this list drifts from it.",
+          "enum": [
+            "category",
+            "currency",
+            "definition",
+            "description",
+            "dimensions",
+            "direction",
+            "entity_id",
+            "evidence",
+            "high",
+            "issuer_label",
+            "kind",
+            "low",
+            "metric_id",
+            "period",
+            "qualifiers",
+            "raw_value",
+            "reported_or_derived",
+            "scale",
+            "schema_version",
+            "shape",
+            "sign",
+            "source_span_ids",
+            "target_metric_ids",
+            "text",
+            "unit",
+            "value"
+          ]
+        }
+      }
+    },
+    "notes": {
+      "type": ["string", "null"]
+    }
+  },
+  "x-fel-version": "1.0.0"
+}

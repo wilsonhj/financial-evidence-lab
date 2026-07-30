@@ -304,7 +304,7 @@ packages:
     depends_on: [M2-RETRIEVAL-BACKEND, READER-CROSS-STACK] # contract inherited; #96 is reader gate
     team: experience
     branch: agent/m2-observatory-ui
-    status: merged # PR #123 (2026-07-21); issue #59; follow-ups #131 (Playwright CI draft) + #134 (E2E in CI) + #135 (live SSE proxy, M3-deferred) + #136 (WCAG/keyboard audit) + #138 (web-layer client telemetry)
+    status: merged # PR #123 (2026-07-21); issue #59; follow-ups #131 (Playwright CI, MERGED 2026-07-21 @ bc6a2a3; declared no closing issue, so #134 never auto-closed and still reads as pending — re-scope or close it) + #134 (E2E in CI) + #135 (live SSE proxy, M3-deferred) + #136 (WCAG/keyboard audit) + #138 (web-layer client telemetry)
     allowed_paths: [apps/web/**, packages/ui/**]
 
   # M3 — extraction.
@@ -336,7 +336,7 @@ packages:
     depends_on: [M2-CLAIMS-VERIFICATION, M3-CONTRACT]
     team: extraction
     branch: agent/m3-extraction-core
-    status: merged # PR #145 @ 61058e4 (2026-07-30); issue #60. Four review rounds; final round fixed the gross-profit polarity inversion, a normalizer-rejected row disabling identity checks for clean siblings, latest-not-greatest wall_seconds_used, and the same polarity defect in _check_rpo_balance. M4 (redaction inside stage_output) assessed a false positive, ruling still open. Follow-ups deferred out: #153 (unit-case unification) and #154 (guidance range ordering) — both move persisted identity keys and need an ADR.
+    status: merged # PR #145 @ 61058e4 (2026-07-30); issue #60. Four review rounds; final round fixed the gross-profit polarity inversion, a normalizer-rejected row disabling identity checks for clean siblings, latest-not-greatest wall_seconds_used, and the same polarity defect in _check_rpo_balance. M4 (redaction inside stage_output) assessed a false positive, ruling still open. 89e4363 (.specify/** + AGENTS.md) was REVERTED on-branch by 7f11bab, so no governance surface moved — verified by hash. Follow-ups: #146 (terminal-run retry design), #62 (live OpenAI adapter, deferred), #153 (unit-case unification), #154 (guidance range ordering); the last two move persisted identity keys and need an ADR.
     allowed_paths:
       - packages/ontology/**
       - packages/providers/**
@@ -349,7 +349,8 @@ packages:
     tasks: [T0308, T0309]
     depends_on: [M3-EXTRACTION-CORE]
     team: experience
-    branch: agent/m3-review
+    branch: agent/m3-review # not yet created
+    status: blocked # unblocks to `ready` when #60 merges via PR #145; without an explicit key this inherited defaults.status anyway, which contradicted STATUS.md
     allowed_paths: [apps/web/**, apps/api/**]
   - id: M3-CONFIDENCE-GATE # confidence scoring + extraction quality gate
     issue: 62

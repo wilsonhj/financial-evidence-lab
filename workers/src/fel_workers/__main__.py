@@ -22,6 +22,16 @@ Two modes:
     and complete them with fabricated output, so they must never point at
     a production database or queue.
 
+  The structured MODEL binding is a separate, equally explicit opt-in:
+  ``FEL_ALLOW_MOCK_LLM`` (see :func:`build_structured_llm`). Nothing else
+  binds a model, so an unconfigured worker cannot answer ``extraction_run``
+  jobs with fabricated financials. The opt-in and the selected queue are
+  cross-checked in BOTH directions at startup
+  (:func:`validate_extraction_model_binding`): the ``extraction`` queue
+  without the opt-in exits 2, and the opt-in on any other queue exits 2 too
+  — a model bound to a non-extraction worker has no legitimate use and only
+  serves to answer misrouted ``extraction_run`` jobs with fabricated output.
+
   Flag parsing is strict and normalized (see :func:`_read_mode_flag`):
   after stripping whitespace, case-insensitive ``1``/``true``/``yes``/``on``
   means set; absent or empty means unset; ANY other non-empty value (e.g.
@@ -45,7 +55,7 @@ from typing import TYPE_CHECKING
 import psycopg
 
 if TYPE_CHECKING:
-    from fel_providers.interfaces import SecClient, StorageProvider
+    from fel_providers.interfaces import SecClient, StorageProvider, StructuredLLMProvider
 
 log = logging.getLogger("fel_workers")
 
@@ -164,6 +174,121 @@ def build_run_providers() -> tuple[SecClient, StorageProvider]:
     return sec, LocalDirStorageProvider(storage_dir)
 
 
+# Queue that carries extraction_run jobs. Named here as a literal, like the
+# 'ingestion' argparse default above, so the configuration gates stay free of
+# the extraction package's import graph; pinned to
+# fel_workers.extraction.handler.DEFAULT_EXTRACTION_QUEUE by a test.
+EXTRACTION_QUEUE = "extraction"
+
+
+def build_structured_llm(queue_name: str) -> StructuredLLMProvider | None:
+    """Bind the structured-model provider for run mode from the environment.
+
+    Returns ``None`` unless BOTH conditions hold: ``FEL_ALLOW_MOCK_LLM`` is
+    set truthy (strict parsing via :func:`_read_mode_flag`) AND the worker is
+    pointed at :data:`EXTRACTION_QUEUE`. The queue argument is not decoration:
+    the opt-in alone used to bind the model on ANY queue, so an ``ingestion``
+    worker carried a model it had no legitimate use for, and ``run_worker``
+    (which never compares queue name to job kind) would answer an
+    ``extraction_run`` claimed from that queue with fabricated output. Binding
+    is therefore scoped to the queue that carries extraction work, and stays
+    correct when the live adapter replaces the mock in #62.
+
+    The mock is deliberately NOT implied by ``FEL_MOCK_SMOKE``: mock SEC
+    ingestion fabricates documents, but the mock model fabricates complete
+    financial PROPOSALS — a fixed ARR figure, period and evidence span ids —
+    which the extraction persist path writes into a tenant's ``needs_review``
+    queue, indistinguishable from genuine model output for a human reviewer.
+    That blast radius gets its own opt-in.
+
+    With no model bound, ``extraction_run`` jobs are failed closed at
+    dispatch by :func:`fel_workers.consumer.run_worker` (missing-capability
+    path) rather than answered with fabricated output.
+    """
+    if not _read_mode_flag("FEL_ALLOW_MOCK_LLM") or queue_name != EXTRACTION_QUEUE:
+        return None
+    from fel_providers.mocks import MockStructuredLLMProvider
+
+    log.warning(
+        "FEL_ALLOW_MOCK_LLM is set: extraction_run jobs will be answered by the"
+        " deterministic MOCK model and will persist FABRICATED proposals into"
+        " the review queue. Non-production smoke option only."
+    )
+    return MockStructuredLLMProvider()
+
+
+def resolve_extraction_memory_stores() -> bool:
+    """Whether ``extraction_run`` output goes to in-memory stores (default: no).
+
+    Durable persistence is the default whenever the worker has a connection;
+    only ``FEL_EXTRACTION_MEMORY_STORES`` set truthy (strict parsing via
+    :func:`_read_mode_flag`) turns it off. This replaces a selection made from
+    payload shape: a payload carrying inline ``evidence`` silently redirected
+    every write to memory, so the run reported ``waiting_review``, the job was
+    marked ``succeeded``, and nothing at all was written. Which output survives
+    is an operator decision, not something an enqueuer can set by accident.
+
+    Its purpose is the smoke run documented in
+    ``docs/runbooks/extraction-worker.md``: exercising the pipeline end to end
+    against inline evidence without seeding an ``extraction_runs`` row or a
+    workspace. Every job run this way is logged as discarding its output.
+    """
+    if not _read_mode_flag("FEL_EXTRACTION_MEMORY_STORES"):
+        return False
+    log.warning(
+        "FEL_EXTRACTION_MEMORY_STORES is set: extraction_run output will be"
+        " written to IN-MEMORY stores and DISCARDED when the process exits —"
+        " no proposals, conflicts, steps or events reach the database, and"
+        " jobs still complete as succeeded. Non-production smoke option only."
+    )
+    return True
+
+
+def validate_extraction_model_binding(queue_name: str) -> None:
+    """Cross-check the model opt-in against the queue the worker will serve.
+
+    ``extraction_run`` jobs are enqueued on :data:`EXTRACTION_QUEUE`, so the
+    selected queue is the one startup-visible signal for "this worker will
+    dispatch extraction". Both directions of the pairing fail closed:
+
+    - extraction queue, no model: the worker can only fail every job it
+      claims, and failing at startup puts that in the deploy log instead of
+      leaving an apparently healthy service to bury it in the job table.
+    - model opt-in, some OTHER queue: the operator asked for a model on a
+      queue that carries no extraction work. Previously this silently bound
+      the mock to an ingestion worker (the gate only looked at the extraction
+      queue, and the binding only looked at the flag), which is how an
+      ``extraction_run`` landing on the ingestion queue got answered with
+      fabricated financial proposals. Refusing to start names the
+      contradiction rather than guessing which half was intended.
+
+    A worker with NEITHER — a live SEC ingestion worker — legitimately needs
+    no model and must still start; an ``extraction_run`` that reaches it
+    anyway is failed closed at dispatch.
+    """
+    opted_in = _read_mode_flag("FEL_ALLOW_MOCK_LLM")
+    if queue_name == EXTRACTION_QUEUE:
+        if opted_in:
+            return
+        raise RuntimeError(
+            f"queue {queue_name!r} carries extraction_run jobs but no model is"
+            " configured — refusing to start. Set FEL_ALLOW_MOCK_LLM=1 to opt in"
+            " explicitly to the deterministic mock model. WARNING: the mock model"
+            " answers every extraction with FABRICATED financial proposals that"
+            " land in the review queue looking like genuine output; it must never"
+            " point at a production database or queue."
+        )
+    if opted_in:
+        raise RuntimeError(
+            f"FEL_ALLOW_MOCK_LLM is set but queue {queue_name!r} does not carry"
+            f" extraction_run jobs (that is queue {EXTRACTION_QUEUE!r}) — refusing"
+            " to start. A model bound to a non-extraction worker has no legitimate"
+            " use and turns any extraction_run misrouted onto this queue into"
+            " fabricated proposals in a tenant's review queue. Point the worker at"
+            f" --queue {EXTRACTION_QUEUE} or unset FEL_ALLOW_MOCK_LLM."
+        )
+
+
 def resolve_provider_mode() -> str:
     """Resolve the explicit provider mode: ``"live"`` or ``"mock"``.
 
@@ -237,15 +362,17 @@ def run_entry(argv: list[str]) -> int:
     (usage to stdout, exit 0) works even on an unconfigured service; the
     fail-closed gate runs immediately after, still before any database
     connection: it enforces an explicit provider mode
-    (:func:`resolve_provider_mode`) and, in live mode, a configured SEC
-    identity (:func:`validate_live_user_agent`), then delegates to
-    :func:`run_main`. Exits 2 on any configuration error.
+    (:func:`resolve_provider_mode`), in live mode a configured SEC identity
+    (:func:`validate_live_user_agent`), and on the extraction queue a
+    configured model (:func:`validate_extraction_model_binding`), then
+    delegates to :func:`run_main`. Exits 2 on any configuration error.
     """
-    parse_run_args(argv)  # -h/--help (and usage errors) resolve here
+    args = parse_run_args(argv)  # -h/--help (and usage errors) resolve here
     _configure()
     try:
         if resolve_provider_mode() == "live":
             validate_live_user_agent()
+        validate_extraction_model_binding(args.queue)
     except RuntimeError as exc:
         log.error("%s", exc)
         return 2
@@ -259,7 +386,9 @@ def run_main(argv: list[str]) -> int:
     :func:`run_entry` (the only deployment path). Called directly, it keeps
     the legacy library/test contract of defaulting to mock providers via
     :func:`build_run_providers` — never expose this function as a service
-    entrypoint without the :func:`run_entry` gate in front of it.
+    entrypoint without the :func:`run_entry` gate in front of it. The
+    structured-model binding has no such default: it is ``None`` unless
+    :func:`build_structured_llm` sees the explicit opt-in, on every path.
     """
     from fel_workers.consumer import run_worker
 
@@ -271,6 +400,8 @@ def run_main(argv: list[str]) -> int:
         return 2
     try:
         sec, storage = build_run_providers()
+        structured_llm = build_structured_llm(args.queue)
+        memory_stores = resolve_extraction_memory_stores()
     except RuntimeError as exc:
         log.error("%s", exc)
         return 2
@@ -282,6 +413,8 @@ def run_main(argv: list[str]) -> int:
             queue_name=args.queue,
             max_iterations=args.max_iterations,
             should_continue=lambda: _running,
+            structured_llm=structured_llm,
+            extraction_memory_stores=memory_stores,
         )
     log.info("worker run mode finished; %d job(s) completed", completed)
     return 0

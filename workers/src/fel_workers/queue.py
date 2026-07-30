@@ -15,6 +15,8 @@ from typing import Any
 import psycopg
 from psycopg.rows import dict_row
 
+from fel_workers.redact import redact_error_text
+
 HEARTBEAT_STALE_SECONDS = 60
 
 
@@ -29,6 +31,9 @@ class ClaimedJob:
     lease: str
     """Per-claim fencing token: every state update requires the lease, so a
     worker whose claim was reaped can no longer write a terminal state."""
+    org_id: str | None = None
+    """Tenant binding from the jobs row when present; handlers should reject
+    payloads whose org_id disagrees with this value."""
 
 
 def enqueue(
@@ -84,7 +89,7 @@ def claim_one(conn: psycopg.Connection, *, queue: str = "default") -> ClaimedJob
         cur = conn.cursor(row_factory=dict_row)
         row = cur.execute(
             """
-            SELECT id, kind, queue, payload, attempts, max_attempts FROM jobs
+            SELECT id, kind, queue, payload, attempts, max_attempts, org_id FROM jobs
             WHERE queue = %s AND status = 'queued'
             ORDER BY priority, created_at
             FOR UPDATE SKIP LOCKED
@@ -100,6 +105,7 @@ def claim_one(conn: psycopg.Connection, *, queue: str = "default") -> ClaimedJob
             " heartbeat_at = now(), lease = %s WHERE id = %s",
             (lease, row["id"]),
         )
+        org_raw = row.get("org_id")
         return ClaimedJob(
             id=str(row["id"]),
             kind=row["kind"],
@@ -108,6 +114,7 @@ def claim_one(conn: psycopg.Connection, *, queue: str = "default") -> ClaimedJob
             attempts=row["attempts"] + 1,
             max_attempts=row["max_attempts"],
             lease=lease,
+            org_id=str(org_raw) if org_raw is not None else None,
         )
 
 
@@ -142,7 +149,18 @@ def fail(conn: psycopg.Connection, job: ClaimedJob, message: str) -> bool:
         (
             "failed" if terminal else "queued",
             terminal,
-            json.dumps({"error": {"code": "JOB_FAILED", "message": message, "request_id": job.id}}),
+            json.dumps(
+                {
+                    "error": {
+                        "code": "JOB_FAILED",
+                        # Handler exceptions interpolate the offending value, so
+                        # this can carry document text and credentials into a
+                        # durable column. Same discipline as the event payloads.
+                        "message": redact_error_text(message),
+                        "request_id": job.id,
+                    }
+                }
+            ),
             job.id,
             job.lease,
         ),

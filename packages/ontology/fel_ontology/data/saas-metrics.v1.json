@@ -1,0 +1,311 @@
+{
+  "schema_version": "saas-metrics/v1",
+  "ontology_id": "saas-metrics",
+  "limitations": [
+    "PR #75 / docs/research/ontology survey is a RESEARCH DRAFT (16/20 accession-cited narrative coverage). This machine contract encodes the 14 metric IDs and qualifier/comparability keys only — it does not claim survey acceptance evidence.",
+    "Aliases assist classification but never collapse issuer definitions into a shared comparability_key."
+  ],
+  "families": [
+    {
+      "id": "recurring_revenue",
+      "name": "ARR / MRR",
+      "metric_ids": ["arr", "mrr"]
+    },
+    {
+      "id": "retention",
+      "name": "Retention",
+      "metric_ids": ["nrr", "grr"]
+    },
+    {
+      "id": "customers",
+      "name": "Customers",
+      "metric_ids": ["cust_total", "cust_threshold"]
+    },
+    {
+      "id": "seats",
+      "name": "Seats / users",
+      "metric_ids": ["seats"]
+    },
+    {
+      "id": "bookings",
+      "name": "Bookings",
+      "metric_ids": ["bookings"]
+    },
+    {
+      "id": "billings",
+      "name": "Billings",
+      "metric_ids": ["billings"]
+    },
+    {
+      "id": "rpo",
+      "name": "Remaining performance obligations",
+      "metric_ids": ["rpo", "crpo"]
+    },
+    {
+      "id": "deferred_revenue",
+      "name": "Deferred revenue",
+      "metric_ids": ["deferred_rev"]
+    },
+    {
+      "id": "margins",
+      "name": "Gross margins",
+      "metric_ids": ["sub_gm", "svc_gm"]
+    }
+  ],
+  "metrics": [
+    {
+      "id": "arr",
+      "canonical_name": "Annual recurring revenue",
+      "family_id": "recurring_revenue",
+      "kind": "point_in_time_snapshot",
+      "value_type": "currency",
+      "unit": "USD/yr",
+      "period_semantics": "instant",
+      "scale_handling": "normalize_thousands_millions_to_base_usd",
+      "aliases": [
+        "annual recurring revenue",
+        "ARR",
+        "annualized run-rate revenue",
+        "annual run-rate revenue"
+      ],
+      "required_qualifiers": ["currency", "construction", "scope"],
+      "comparability_key_fields": ["metric_id", "currency", "construction", "scope"],
+      "derivation_policy": "reported_or_issuer_defined",
+      "review_policy": "monetary_manual_only",
+      "notes": "MRR×12 run-rate vs annualized contract value are not comparable."
+    },
+    {
+      "id": "mrr",
+      "canonical_name": "Monthly recurring revenue",
+      "family_id": "recurring_revenue",
+      "kind": "point_in_time_snapshot",
+      "value_type": "currency",
+      "unit": "USD/mo",
+      "period_semantics": "instant",
+      "scale_handling": "base_usd",
+      "aliases": ["monthly recurring revenue", "MRR", "monthly run-rate revenue"],
+      "required_qualifiers": ["currency", "construction", "scope"],
+      "comparability_key_fields": ["metric_id", "currency", "construction", "scope"],
+      "derivation_policy": "reported_or_issuer_defined",
+      "review_policy": "monetary_manual_only",
+      "notes": "Issuer construction must be preserved verbatim."
+    },
+    {
+      "id": "nrr",
+      "canonical_name": "Net revenue retention",
+      "family_id": "retention",
+      "kind": "ratio",
+      "value_type": "ratio_pct",
+      "unit": "percent",
+      "period_semantics": "trailing_window",
+      "scale_handling": "percent_one_decimal",
+      "aliases": [
+        "net revenue retention",
+        "NRR",
+        "dollar-based net retention rate",
+        "net dollar retention",
+        "net expansion rate",
+        "dollar-based net expansion rate"
+      ],
+      "required_qualifiers": ["base_quantity", "window", "population_scope"],
+      "comparability_key_fields": ["metric_id", "base_quantity", "window", "population_scope"],
+      "derivation_policy": "reported_ratio",
+      "review_policy": "monetary_manual_only",
+      "notes": "ARR vs product revenue vs ACV bases are not comparable; expansion naming ≠ retention inclusions."
+    },
+    {
+      "id": "grr",
+      "canonical_name": "Gross revenue retention",
+      "family_id": "retention",
+      "kind": "ratio",
+      "value_type": "ratio_pct",
+      "unit": "percent",
+      "period_semantics": "trailing_window",
+      "scale_handling": "percent",
+      "aliases": ["gross revenue retention", "GRR", "gross retention"],
+      "required_qualifiers": ["base_quantity", "window", "churn_inclusions"],
+      "comparability_key_fields": ["metric_id", "base_quantity", "window", "churn_inclusions"],
+      "derivation_policy": "reported_ratio",
+      "review_policy": "monetary_manual_only",
+      "notes": "Churn/contraction inclusion differences break comparability."
+    },
+    {
+      "id": "cust_total",
+      "canonical_name": "Total customers",
+      "family_id": "customers",
+      "kind": "point_in_time_snapshot",
+      "value_type": "count",
+      "unit": "count",
+      "period_semantics": "instant",
+      "scale_handling": "unitless_integer",
+      "aliases": ["total customers", "customer count", "customers"],
+      "required_qualifiers": ["customer_definition"],
+      "comparability_key_fields": ["metric_id", "customer_definition"],
+      "derivation_policy": "reported",
+      "review_policy": "manual_review",
+      "notes": "Customer definition must be preserved."
+    },
+    {
+      "id": "cust_threshold",
+      "canonical_name": "Customers above spend threshold",
+      "family_id": "customers",
+      "kind": "point_in_time_snapshot",
+      "value_type": "count",
+      "unit": "count",
+      "period_semantics": "instant",
+      "scale_handling": "unitless_integer",
+      "aliases": [
+        "customers above threshold",
+        "$100k customers",
+        "customers with ARR of $100,000 or more"
+      ],
+      "required_qualifiers": ["threshold_amount", "threshold_basis"],
+      "comparability_key_fields": ["metric_id", "threshold_amount", "threshold_basis"],
+      "derivation_policy": "reported",
+      "review_policy": "manual_review",
+      "notes": "ARR vs TTM revenue vs ACV at the same dollar cutoff are not comparable."
+    },
+    {
+      "id": "seats",
+      "canonical_name": "Seats / paid users / licensed users",
+      "family_id": "seats",
+      "kind": "point_in_time_snapshot",
+      "value_type": "count",
+      "unit": "count",
+      "period_semantics": "instant",
+      "scale_handling": "unitless_integer",
+      "aliases": ["seats", "paid users", "licensed users", "active users"],
+      "required_qualifiers": ["seat_scope"],
+      "comparability_key_fields": ["metric_id", "seat_scope"],
+      "derivation_policy": "reported",
+      "review_policy": "manual_review",
+      "notes": "Paid/licensed/active scopes are not interchangeable."
+    },
+    {
+      "id": "bookings",
+      "canonical_name": "Bookings (total contract value)",
+      "family_id": "bookings",
+      "kind": "flow",
+      "value_type": "currency",
+      "unit": "USD",
+      "period_semantics": "duration",
+      "scale_handling": "base_usd",
+      "aliases": ["bookings", "total contract value", "TCV"],
+      "required_qualifiers": ["currency", "definition_present"],
+      "comparability_key_fields": ["metric_id", "currency", "definition_present"],
+      "derivation_policy": "no_assumed_formula",
+      "review_policy": "monetary_manual_only",
+      "notes": "Often undefined; never invent a formula. Keys on definition_present because an extractor cannot supply a definition digest; the digest travels as the proposal-level definition_hash."
+    },
+    {
+      "id": "billings",
+      "canonical_name": "Calculated billings",
+      "family_id": "billings",
+      "kind": "flow",
+      "value_type": "currency_derived",
+      "unit": "USD",
+      "period_semantics": "duration",
+      "scale_handling": "base_usd",
+      "aliases": ["billings", "calculated billings"],
+      "required_qualifiers": ["currency", "formula"],
+      "comparability_key_fields": ["metric_id", "currency", "formula"],
+      "derivation_policy": "revenue_plus_delta_deferred_when_cited",
+      "review_policy": "monetary_manual_only",
+      "notes": "Derivation only with cited revenue + Δ deferred revenue."
+    },
+    {
+      "id": "rpo",
+      "canonical_name": "Remaining performance obligations",
+      "family_id": "rpo",
+      "kind": "balance",
+      "value_type": "currency",
+      "unit": "USD",
+      "period_semantics": "instant",
+      "scale_handling": "base_usd",
+      "aliases": [
+        "remaining performance obligations",
+        "RPO",
+        "subscription revenue backlog",
+        "transaction price allocated to remaining performance obligations"
+      ],
+      "required_qualifiers": ["currency", "usage_exemption", "label_family"],
+      "comparability_key_fields": ["metric_id", "currency", "usage_exemption", "label_family"],
+      "derivation_policy": "asc606_reported",
+      "review_policy": "monetary_manual_only",
+      "notes": "Human-facing backlog labels are aliases; exemptions break completeness."
+    },
+    {
+      "id": "crpo",
+      "canonical_name": "Current RPO (≤12 months)",
+      "family_id": "rpo",
+      "kind": "balance",
+      "value_type": "currency",
+      "unit": "USD",
+      "period_semantics": "instant",
+      "scale_handling": "base_usd",
+      "aliases": ["current RPO", "cRPO", "current remaining performance obligations"],
+      "required_qualifiers": ["currency", "horizon_months"],
+      "comparability_key_fields": ["metric_id", "currency", "horizon_months"],
+      "derivation_policy": "asc606_slice_verified",
+      "review_policy": "monetary_manual_only",
+      "notes": "≤12-month slice must be verified; not interchangeable with total RPO."
+    },
+    {
+      "id": "deferred_rev",
+      "canonical_name": "Deferred revenue / contract liabilities",
+      "family_id": "deferred_revenue",
+      "kind": "balance",
+      "value_type": "currency",
+      "unit": "USD",
+      "period_semantics": "instant",
+      "scale_handling": "base_usd",
+      "aliases": [
+        "deferred revenue",
+        "contract liabilities",
+        "deferred revenue and contract liabilities"
+      ],
+      "required_qualifiers": ["currency", "current_noncurrent_split", "tag_family"],
+      "comparability_key_fields": [
+        "metric_id",
+        "currency",
+        "tag_family",
+        "current_noncurrent_split"
+      ],
+      "derivation_policy": "asc606_or_legacy_tagged",
+      "review_policy": "monetary_manual_only",
+      "notes": "ASC 606 vs legacy tag families must be distinguished."
+    },
+    {
+      "id": "sub_gm",
+      "canonical_name": "Subscription (or product) gross margin",
+      "family_id": "margins",
+      "kind": "derived",
+      "value_type": "ratio_pct",
+      "unit": "percent",
+      "period_semantics": "duration",
+      "scale_handling": "percent",
+      "aliases": ["subscription gross margin", "product gross margin", "subscription GM"],
+      "required_qualifiers": ["margin_scope"],
+      "comparability_key_fields": ["metric_id", "margin_scope"],
+      "derivation_policy": "sub_revenue_minus_sub_cogs_when_cited",
+      "review_policy": "monetary_manual_only",
+      "notes": "Subscription vs product scope must not be collapsed."
+    },
+    {
+      "id": "svc_gm",
+      "canonical_name": "Professional services & other gross margin",
+      "family_id": "margins",
+      "kind": "derived",
+      "value_type": "ratio_pct",
+      "unit": "percent",
+      "period_semantics": "duration",
+      "scale_handling": "percent",
+      "aliases": ["services gross margin", "professional services gross margin", "services GM"],
+      "required_qualifiers": ["margin_scope"],
+      "comparability_key_fields": ["metric_id", "margin_scope"],
+      "derivation_policy": "services_revenue_minus_services_cogs_when_cited",
+      "review_policy": "monetary_manual_only",
+      "notes": "Frequently negative; never proxy blended company gross margin."
+    }
+  ]
+}

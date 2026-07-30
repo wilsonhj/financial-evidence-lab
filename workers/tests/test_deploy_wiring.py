@@ -71,13 +71,17 @@ def _run_entrypoint(
     """Run ``python -m fel_workers run`` with a scrubbed environment.
 
     The environment is built from scratch (not inherited): the passthrough
-    variables above, PYTHONPATH so the subprocess resolves fel_workers and
-    fel_providers the same way pytest does, the dummy DSN, and the mode
+    variables above, PYTHONPATH so the subprocess resolves fel_workers,
+    fel_providers and fel_ontology the same way pytest does, the dummy DSN, and the mode
     variables under test. Nothing else — production-like.
     """
     env = {key: os.environ[key] for key in _PASSTHROUGH_VARS if key in os.environ}
     env["PYTHONPATH"] = os.pathsep.join(
-        [str(_REPO_ROOT / "workers" / "src"), str(_REPO_ROOT / "packages" / "providers")]
+        [
+            str(_REPO_ROOT / "workers" / "src"),
+            str(_REPO_ROOT / "packages" / "providers"),
+            str(_REPO_ROOT / "packages" / "ontology"),
+        ]
     )
     env["FEL_DATABASE_URL"] = dsn
     env.update(mode_env)
@@ -172,6 +176,70 @@ def test_run_help_exits_0_even_unconfigured() -> None:
     assert proc.returncode == 0, (proc.returncode, proc.stdout, proc.stderr)
     assert "usage" in proc.stdout.lower(), proc.stdout
     assert "--max-iterations" in proc.stdout, proc.stdout
+
+
+def test_extraction_queue_without_model_opt_in_exits_2() -> None:
+    """A worker pointed at the extraction queue with no model bound must
+    refuse to START, not start healthy and fail every job it claims. The
+    mock model fabricates complete financial proposals, so binding it
+    implicitly is the defect this gate closes: the operator must say
+    FEL_ALLOW_MOCK_LLM out loud."""
+    proc = _run_entrypoint(
+        {"FEL_MOCK_SMOKE": "1"},
+        args=("--max-iterations", "1", "--queue", "extraction"),
+    )
+    _assert_config_exit_no_db(proc)
+    assert "FEL_ALLOW_MOCK_LLM" in proc.stderr
+    assert "extraction" in proc.stderr
+
+
+def test_extraction_queue_with_model_opt_in_passes_the_gate() -> None:
+    """The gate must not over-block: with the opt-in set, the extraction
+    worker proceeds to the database step (refused loopback), not a config
+    exit."""
+    proc = _run_entrypoint(
+        {"FEL_MOCK_SMOKE": "1", "FEL_ALLOW_MOCK_LLM": "1"},
+        dsn=REFUSED_DSN,
+        args=("--max-iterations", "1", "--queue", "extraction"),
+    )
+    assert proc.returncode != 2, (proc.stdout, proc.stderr)
+    assert "refusing to start" not in proc.stderr
+    # Taking the opt-in is loud: the fabricated-output warning is on the record.
+    assert "FABRICATED" in proc.stderr, proc.stderr
+    assert "OperationalError" in proc.stderr or "connection" in proc.stderr.lower(), proc.stderr
+
+
+def test_ingestion_queue_starts_without_a_model_binding() -> None:
+    """The gate is scoped to the extraction queue: a live SEC ingestion
+    worker legitimately has no model and must still start. An extraction_run
+    that reaches it anyway is failed closed at dispatch by run_worker."""
+    proc = _run_entrypoint({"FEL_MOCK_SMOKE": "1"}, dsn=REFUSED_DSN)
+    assert proc.returncode != 2, (proc.stdout, proc.stderr)
+    assert "refusing to start" not in proc.stderr
+
+
+def test_model_opt_in_on_a_non_extraction_queue_exits_2() -> None:
+    """The model opt-in and the queue that carries extraction work must be
+    cross-checked, not merely each checked alone.
+
+    ``validate_extraction_model_binding`` only gated STARTUP ON THE EXTRACTION
+    QUEUE, and the binding itself read FEL_ALLOW_MOCK_LLM with no idea which
+    queue the worker was pointed at. So this exact invocation started an
+    'ingestion' worker with the MOCK model bound, and ``run_worker`` — which
+    never compares queue name to job kind — would answer an ``extraction_run``
+    claimed from that queue with FABRICATED financial proposals written into a
+    tenant's review queue. Refusing to start is the fail-closed resolution: the
+    operator asked for a model on a queue that carries no extraction work, and
+    guessing which half they meant is exactly what this module never does."""
+    proc = _run_entrypoint(
+        {"FEL_MOCK_SMOKE": "1", "FEL_ALLOW_MOCK_LLM": "1"},
+        args=("--max-iterations", "1", "--queue", "ingestion"),
+    )
+    _assert_config_exit_no_db(proc)
+    assert "FEL_ALLOW_MOCK_LLM" in proc.stderr
+    assert "ingestion" in proc.stderr
+    # The mock was never bound, so its fabricated-output warning never fired.
+    assert "FABRICATED proposals" not in proc.stderr, proc.stderr
 
 
 def test_live_without_storage_exits_2() -> None:
