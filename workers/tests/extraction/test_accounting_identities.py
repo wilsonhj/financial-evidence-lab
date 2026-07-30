@@ -20,6 +20,7 @@ from typing import Any
 import pytest
 
 from fel_ontology import load_saas_metrics
+from fel_workers.extraction.types import NORMALIZER_BLOCKERS_KEY
 from fel_workers.extraction.validate import validate_proposals
 from fel_workers.extraction.validate.accounting import (
     IDENTITY_PREFIX,
@@ -262,6 +263,92 @@ def test_incomplete_gross_profit_triple_is_skipped() -> None:
 
 
 # --------------------------------------------------------------------------
+# Identity: gross_profit = revenue - cogs, contra-presented (negative) COGS
+# --------------------------------------------------------------------------
+# PR #145 review B1. This PR's own parenthesized-negative fix
+# (normalize/numeric.py:135) makes a parenthesized COGS line -- '(300)', the
+# standard contra-account presentation for a cost that reduces the total above
+# it -- parse to Decimal('-300'). COGS is a cost; the parens are a
+# presentation convention, not a claim that the cost itself is negative, so
+# the identity must strip that polarity before subtracting. Left unstripped,
+# `revenue - cogs` computes `revenue - (-300) = revenue + 300`, which flags an
+# entirely ordinary income statement as broken *and* would certify a doctored
+# one where the reported gross profit exceeds revenue.
+
+
+def test_gross_profit_identity_accepts_contra_presented_cogs() -> None:
+    """'Revenue 1,000 / Cost of revenue (300) / Gross profit 700' is correct."""
+    payloads = [
+        kpi("revenue", "1000", period=DURATION),
+        kpi("cogs", "-300", period=DURATION, sign="negative"),
+        kpi("gross_profit", "700", period=DURATION),
+    ]
+    assert identity_errors(payloads) == {}
+
+
+def test_gross_profit_identity_still_catches_a_break_with_contra_presented_cogs() -> None:
+    """Stripping COGS polarity must not make the identity pass unconditionally
+    once cogs is negative -- a genuine break underneath is still caught.
+    """
+    payloads = [
+        kpi("revenue", "1000", period=DURATION),
+        kpi("cogs", "-300", period=DURATION, sign="negative"),
+        kpi("gross_profit", "1300", period=DURATION),
+    ]
+    result = identity_errors(payloads)
+    assert set(result) == {0, 1, 2}
+    assert all(c == [f"{IDENTITY_PREFIX}gross_profit_mismatch"] for c in result.values())
+
+
+# --------------------------------------------------------------------------
+# Identity slice matching: `unit` must be case-folded like `currency` already is
+# --------------------------------------------------------------------------
+# PR #145 review M2. normalize/payload.py:148 upper-cases `currency` but line
+# 142 leaves `unit` exactly as the issuer wrote it. `_context` keys the
+# identity slice on that raw string, so 'usd' and 'USD' silently land in two
+# different slices and the identity never runs -- not "clean", just skipped.
+
+
+def test_gross_profit_identity_matches_across_unit_casing() -> None:
+    payloads = [
+        kpi("revenue", "1000", period=DURATION, unit="USD"),
+        kpi("cogs", "300", period=DURATION, unit="usd"),
+        kpi("gross_profit", "600", period=DURATION, unit="USD"),  # deliberately wrong
+    ]
+    result = identity_errors(payloads)
+    assert set(result) == {0, 1, 2}
+    assert all(c == [f"{IDENTITY_PREFIX}gross_profit_mismatch"] for c in result.values())
+
+
+# --------------------------------------------------------------------------
+# A normalizer-rejected sibling must not disable an identity for clean facts
+# --------------------------------------------------------------------------
+# PR #145 review M1. `_sole` correctly backs off an identity when a slice holds
+# two competing facts for the same metric -- that is a value disagreement
+# `validate.conflicts` owns, not a broken identity. But a row the normalizer
+# itself already rejected is not a competing fact, it is noise the pipeline
+# decided not to trust; left in, it looks exactly like a second competing fact
+# to `_sole`, and the identity silently switches off for every clean sibling
+# sharing its slice too.
+
+
+def test_identity_errors_excludes_indices_marked_normalizer_rejected() -> None:
+    payloads = [
+        kpi("revenue", "1000", period=DURATION),
+        kpi("cogs", "300", period=DURATION),
+        kpi("gross_profit", "600", period=DURATION),  # deliberately wrong: should be 700
+        kpi("cogs", "999", period=DURATION),  # a second "cogs" fact in the same slice
+    ]
+    # Without exclusion, two "cogs" facts in one slice make `_sole` ambiguous
+    # and the whole gross-profit identity is silently skipped -- the bug.
+    assert identity_errors(payloads) == {}
+
+    result = identity_errors(payloads, excluded_indices=frozenset({3}))
+    assert set(result) == {0, 1, 2}
+    assert all(c == [f"{IDENTITY_PREFIX}gross_profit_mismatch"] for c in result.values())
+
+
+# --------------------------------------------------------------------------
 # Identities reach the live validate path.
 # --------------------------------------------------------------------------
 
@@ -319,6 +406,44 @@ def test_clean_slice_carries_no_identity_blocker() -> None:
     )
     for draft in result.proposals:
         assert not [b for b in draft.validation_summary["blockers"] if IDENTITY_PREFIX in b]
+
+
+def test_normalizer_rejected_sibling_does_not_disable_identity_for_clean_rows() -> None:
+    """PR #145 review M1, reproduced end-to-end through the real pipeline.
+
+    Four proposals reach ``validate_proposals``: a clean revenue/cogs/gross_profit
+    triple with a deliberately wrong gross profit, plus a fourth "cogs" payload
+    the normalizer already rejected (carrying ``NORMALIZER_BLOCKERS_KEY``, the
+    channel ``workflow._stage_normalize`` uses to carry a rejected payload
+    forward for review rather than dropping it silently). ``pipeline.py``
+    strips that `_`-prefixed key into ``clean`` before appending to
+    ``cleaned_payloads`` (so schema validation and persistence never see it),
+    which is exactly the mechanism that let a rejected duplicate masquerade as
+    a second competing "cogs" fact and switch the identity off for its three
+    clean siblings.
+    """
+    payloads = [
+        kpi("revenue", "1000", period=DURATION),
+        kpi("cogs", "300", period=DURATION),
+        kpi("gross_profit", "600", period=DURATION),  # deliberately wrong: should be 700
+    ]
+    rejected_duplicate_cogs = kpi("cogs", "999", period=DURATION)
+    rejected_duplicate_cogs[NORMALIZER_BLOCKERS_KEY] = [
+        "sign contradicts value: declared positive, value is negative"
+    ]
+
+    result = validate_proposals(
+        run_id="00000000-0000-4000-8000-0000000000a6",
+        payloads=[*payloads, rejected_duplicate_cogs],
+    )
+    assert len(result.proposals) == 4
+
+    def identity_blockers(draft: Any) -> list[str]:
+        return [b for b in draft.validation_summary["blockers"] if IDENTITY_PREFIX in b]
+
+    for draft in result.proposals[:3]:
+        assert identity_blockers(draft) == [f"{IDENTITY_PREFIX}gross_profit_mismatch"]
+    assert identity_blockers(result.proposals[3]) == []
 
 
 # --------------------------------------------------------------------------

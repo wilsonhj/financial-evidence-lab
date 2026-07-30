@@ -53,6 +53,13 @@ def validate_proposals(
     evidence_by_span = evidence_by_span or {}
     drafts: list[ProposalDraft] = []
     cleaned_payloads: list[dict[str, Any]] = []
+    # Positions in `cleaned_payloads` (== positions in `drafts`) whose *raw*
+    # payload carried NORMALIZER_BLOCKERS_KEY — a row the normalizer itself
+    # rejected, not merely one this pass finds other blockers for. Collected so
+    # `_mark_identity_violations` can exclude these rows from identity
+    # consideration (PR #145 review M1) even though the key that identifies
+    # them is stripped out of `clean` below and never reaches `cleaned_payloads`.
+    normalizer_rejected_indices: set[int] = set()
 
     for payload in payloads:
         # Strip internal normalizer metadata before schema check / persist.
@@ -66,8 +73,8 @@ def validate_proposals(
         # sign that contradicts the value) travel on the stripped `_` metadata
         # key, so they survive a crash-resume with the checkpointed payload.
         carried = payload.get(NORMALIZER_BLOCKERS_KEY)
-        blockers = [str(b) for b in carried] if isinstance(carried, list) else []
-        blockers.extend(_collect_blockers(clean, ontology, evidence_by_span))
+        normalizer_blockers = [str(b) for b in carried] if isinstance(carried, list) else []
+        blockers = [*normalizer_blockers, *_collect_blockers(clean, ontology, evidence_by_span)]
         # The normalizer's scale check and range_errors deliberately overlap
         # (defense in depth on either side of normalization) and word the finding
         # identically, so collapse exact repeats — a reviewer reading the summary
@@ -86,9 +93,11 @@ def validate_proposals(
             raise IntegrityError(f"proposal state must be needs_review, got {draft.state!r}")
         drafts.append(draft)
         cleaned_payloads.append(clean)
+        if normalizer_blockers:
+            normalizer_rejected_indices.add(len(cleaned_payloads) - 1)
 
     _mark_duplicates(drafts, cleaned_payloads)
-    _mark_identity_violations(drafts, cleaned_payloads)
+    _mark_identity_violations(drafts, cleaned_payloads, normalizer_rejected_indices)
     return ValidationResult(proposals=drafts, conflicts=detect_conflicts(drafts))
 
 
@@ -287,7 +296,9 @@ def _evidence_rows(
 
 
 def _mark_identity_violations(
-    drafts: list[ProposalDraft], cleaned_payloads: list[dict[str, Any]]
+    drafts: list[ProposalDraft],
+    cleaned_payloads: list[dict[str, Any]],
+    normalizer_rejected_indices: set[int],
 ) -> None:
     """Attach cross-payload accounting identity breaks (M3-VAL-001).
 
@@ -295,8 +306,17 @@ def _mark_identity_violations(
     of proposals, not of any one of them: ``accounting_errors`` never sees the
     RPO row while it is validating the cRPO row. Every member of a broken
     identity is blocked, since nothing here can tell which figure is wrong.
+
+    ``normalizer_rejected_indices`` excludes rows the normalizer already
+    rejected from identity consideration (PR #145 review M1): such a row is
+    not a competing fact and must not read as one to ``identity_errors``' own
+    ambiguity handling — see that function's docstring for why leaving it in
+    would silently disable the identity for its clean siblings too.
     """
-    for index, codes in identity_errors(cleaned_payloads).items():
+    codes_by_index = identity_errors(
+        cleaned_payloads, excluded_indices=frozenset(normalizer_rejected_indices)
+    )
+    for index, codes in codes_by_index.items():
         summary = drafts[index].validation_summary
         blockers = _dedupe([*(summary.get("blockers") or []), *codes])
         summary["blockers"] = blockers

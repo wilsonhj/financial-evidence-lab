@@ -245,7 +245,17 @@ def _facts(payloads: list[dict[str, Any]]) -> list[_Fact]:
                 metric_id=metric_id,
                 entity_id=str(payload.get("entity_id") or ""),
                 period=canonical_json(payload.get("period")),
-                unit=str(payload.get("unit") or ""),
+                # Case-folded so 'usd' and 'USD' land in the same slice. Unlike
+                # `currency` (normalize/payload.py:148, folded with `.upper()`
+                # at normalization time), `unit` is free issuer text the
+                # normalizer deliberately leaves exactly as written
+                # (normalize/payload.py:142) — folding it there would change
+                # the stored payload and, with it, `hash_json`/
+                # `raw_payload_hash`/`proposal_id_for` (PR #145 review M2).
+                # Folding only here, at comparison time, changes nothing that
+                # is persisted; it only decides which slice this fact competes
+                # in for an identity.
+                unit=str(payload.get("unit") or "").strip().upper(),
                 currency=str(payload.get("currency") or ""),
                 dimensions=tuple(sorted((str(k), str(v)) for k, v in dims.items())),
                 # Mantissa + exponent collapsed exactly once, here, so every
@@ -281,14 +291,30 @@ def _record(out: dict[int, list[str]], facts: Iterable[_Fact], code: str) -> Non
             codes.append(code)
 
 
-def identity_errors(payloads: list[dict[str, Any]]) -> dict[int, list[str]]:
+def identity_errors(
+    payloads: list[dict[str, Any]],
+    *,
+    excluded_indices: frozenset[int] = frozenset(),
+) -> dict[int, list[str]]:
     """Cross-payload arithmetic identities (M3-VAL-001), keyed by payload index.
 
     Every member of a broken identity is flagged, not just the outlier: nothing
     here can tell which figure is wrong, and guessing would send a reviewer to
     the wrong row.
+
+    ``excluded_indices`` drops specific payloads from identity consideration
+    entirely, before a single ``_Fact`` is built for them. ``validate.pipeline``
+    passes the indices of rows the *normalizer* already rejected
+    (``NORMALIZER_BLOCKERS_KEY``) here. Without this, such a row still produces
+    a ``_Fact``, and a slice holding one clean fact plus one rejected one looks
+    exactly like two genuinely competing facts to ``_sole`` — which correctly
+    backs off an identity for *that* case, since two competing real facts are a
+    value disagreement for ``validate.conflicts`` to own, not a broken
+    identity. A normalizer-rejected row never earned that seat at the table:
+    left in, it silently disables the identity for every clean sibling sharing
+    its slice too (PR #145 review M1).
     """
-    facts = _facts(payloads)
+    facts = [fact for fact in _facts(payloads) if fact.index not in excluded_indices]
     out: dict[int, list[str]] = {}
     _check_rpo_balance(facts, out)
     _check_segment_sums(facts, out)
@@ -373,7 +399,34 @@ def _check_segment_sums(facts: list[_Fact], out: dict[int, list[str]]) -> None:
 
 
 def _check_gross_profit(facts: list[_Fact], out: dict[int, list[str]]) -> None:
-    """gross_profit = revenue − cogs, within one entity/period/currency slice."""
+    """gross_profit = revenue − |cogs|, within one entity/period/currency slice.
+
+    ``cogs`` is compared by magnitude, not by its signed value. This PR's own
+    parenthesized-negative fix (normalize/numeric.py:135) makes the standard
+    contra-account presentation for a cost line — 'Cost of revenue (300)' —
+    parse to ``Decimal('-300')``: the parens there are a typesetting
+    convention meaning "this reduces the total above", not a claim that the
+    cost itself is a negative number. Comparing the signed value computes
+    ``revenue - (-300) = revenue + 300``, which flags an entirely ordinary
+    income statement as broken *and* would certify a doctored one where the
+    reported gross profit exceeds revenue (PR #145 review B1).
+
+    ``abs()`` is applied here, at comparison time only — not by having the
+    normalizer rewrite the stored value or ``sign``. ``cogs.sign`` must keep
+    describing the value exactly as extracted: ``normalize/payload.py``'s
+    ``_resolve_sign`` derives it from that same signed value and is the thing
+    that catches a genuinely mis-signed figure (a declared sign contradicting
+    the parsed value). This function is the one place that knows COGS is
+    always a subtraction from revenue, regardless of how the issuer chose to
+    typeset it, so it is the right and only place to normalize the polarity.
+
+    A COGS fact that is negative for a reason *other* than contra-presentation
+    — a genuine net credit/reversal for the period, which does happen but is
+    rare — is indistinguishable from ordinary parenthesized presentation using
+    magnitude and sign alone; both look identical at this layer, and this
+    function does not attempt that distinction. It folds every negative COGS
+    the same way rather than guess.
+    """
     groups: dict[tuple[Any, ...], list[_Fact]] = {}
     for fact in facts:
         if fact.metric_id in {_REVENUE_ID, _COGS_ID, _GROSS_PROFIT_ID}:
@@ -384,7 +437,7 @@ def _check_gross_profit(facts: list[_Fact], out: dict[int, list[str]]) -> None:
         if any(member is None for member in members):
             continue
         revenue, cogs, gross_profit = (m.magnitude for m in members if m is not None)
-        if not relatively_equal(gross_profit, revenue - cogs):
+        if not relatively_equal(gross_profit, revenue - abs(cogs)):
             _record(
                 out,
                 [m for m in members if m is not None],
