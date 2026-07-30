@@ -32,7 +32,11 @@ from decimal import Decimal
 import psycopg
 import pytest
 
-from fel_workers.extraction.persist import PostgresPersistStore, UsageSnapshot
+from fel_workers.extraction.persist import (
+    PostgresEventStore,
+    PostgresPersistStore,
+    UsageSnapshot,
+)
 
 from .test_postgres_crash_resume import (
     _ORG,
@@ -180,3 +184,48 @@ def test_concurrent_writers_do_not_lose_each_others_usage(extraction_db_url: str
     assert input_tokens == 6000
     assert output_tokens == 1500
     assert cost == Decimal("1.90"), "a concurrent writer clobbered the higher spend"
+
+
+@requires_db
+def test_a_later_smaller_budget_updated_event_does_not_erase_wall_seconds(
+    extraction_db_url: str,
+) -> None:
+    """``wall_seconds_used`` has no column of its own (frozen 0004), so it rides
+    the ``budget_updated`` event log instead of the run row the four counters
+    above are merged on — but it has the identical monotonic-from-zero,
+    stale-writer race, because ``BudgetState.elapsed_seconds()`` is cumulative
+    just like those columns. ``_load_wall_seconds`` must therefore aggregate
+    over every event the same way ``record_usage`` aggregates over every
+    write, not just read back whichever row was inserted last.
+
+    The event appended SECOND here (higher ``id``, so ``ORDER BY id DESC LIMIT
+    1`` would pick it) carries the SMALLER value — modelling a stale worker's
+    flush landing after a faster worker's larger one. Latest-wins would
+    return 30.0 and silently reopen 90 seconds of an already-spent wall-clock
+    budget for ``precheck`` to re-grant.
+    """
+    request = _request(str(uuid.uuid4()))
+    with psycopg.connect(extraction_db_url, autocommit=True) as conn:
+        conn.execute("SELECT set_config('app.org_id', %s, false)", (_ORG,))
+        _seed_parents(conn)
+        _seed_run(conn, request)
+        store = PostgresPersistStore(conn)
+        store.mark_running(run_id=request.run_id, org_id=_ORG)
+
+        events = PostgresEventStore(conn=conn)
+        events.append(
+            org_id=_ORG,
+            run_id=request.run_id,
+            event_type="budget_updated",
+            payload={"wall_seconds_used": 120.5},
+        )
+        events.append(
+            org_id=_ORG,
+            run_id=request.run_id,
+            event_type="budget_updated",
+            payload={"wall_seconds_used": 30.0},
+        )
+
+        wall_seconds = store._load_wall_seconds(run_id=request.run_id, org_id=_ORG)
+
+    assert wall_seconds == 120.5, "a later, smaller event erased the larger wall-clock total"

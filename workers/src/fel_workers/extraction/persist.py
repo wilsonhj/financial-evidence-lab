@@ -386,14 +386,40 @@ class PostgresPersistStore:
         )
 
     def _load_wall_seconds(self, *, run_id: str, org_id: str) -> float:
-        """Frozen 0004 has no wall-clock column; it rides the budget_updated event."""
+        """Frozen 0004 has no wall-clock column, so this counter rides the
+        ``budget_updated`` event log instead of a row on ``extraction_runs`` —
+        but ``BudgetState.elapsed_seconds()`` (``budget.py``) is cumulative from
+        zero exactly like ``calls_used``/``input_tokens_used``/etc, so it is
+        exposed to the identical stale-writer race ``record_usage`` guards
+        against with ``GREATEST``: a worker whose heartbeat connection dies
+        keeps running while the reaper hands its job to a second worker, both
+        flush usage for the same run, and whichever flush lands LAST used to
+        win regardless of size. ``ORDER BY id DESC LIMIT 1`` picked exactly that
+        — the most recently appended event, not the largest value — so a slow
+        worker's stale, smaller snapshot could erase a faster worker's larger
+        one. ``MAX`` merges the same way ``GREATEST`` does for the four
+        columns: read every event this run has appended, not just the last one.
+
+        The ``~`` filter excludes any row whose ``wall_seconds_used`` is
+        absent, JSON ``null``, or not a bare numeric literal, before the cast
+        ever runs: ``'not-a-number'::float`` raises and would fail the whole
+        query for every event of the run, and a key that is missing or JSON
+        ``null`` makes ``payload->>'wall_seconds_used'`` SQL NULL, against
+        which ``~`` itself evaluates to NULL — which WHERE treats as false, so
+        those rows are dropped rather than erroring either way. One malformed
+        or pre-this-field historical event must not take down every later
+        attempt's usage read. ``MAX`` over zero matching rows still returns
+        exactly one row with a NULL aggregate, not zero rows, so the
+        ``row[0] is None`` guard below covers "no budget_updated event yet"
+        and "every event's value was unusable" the same way it already covered
+        "no event yet" before this change.
+        """
         row = self.conn.execute(
             """
-            SELECT payload->>'wall_seconds_used'
+            SELECT MAX((payload->>'wall_seconds_used')::float)
               FROM extraction_run_events
              WHERE org_id = %s AND run_id = %s AND event_type = 'budget_updated'
-             ORDER BY id DESC
-             LIMIT 1
+               AND payload->>'wall_seconds_used' ~ '^-?[0-9]+(\\.[0-9]+)?([eE][+-]?[0-9]+)?$'
             """,
             (org_id, run_id),
         ).fetchone()
