@@ -153,6 +153,37 @@ def test_crpo_exceeding_rpo_is_caught_when_crpo_is_contra_presented() -> None:
     assert codes(identity_errors(both), 1) == [f"{IDENTITY_PREFIX}crpo_exceeds_rpo"]
 
 
+def test_crpo_exactly_equal_to_rpo_is_clean_in_every_sign_combination() -> None:
+    """cRPO may legitimately equal RPO, in any combination of presented signs.
+
+    When every remaining obligation falls inside the horizon, the near-term
+    portion *is* the whole backlog, so an exact match is clean rather than a
+    violation. No other test here ever feeds the identity two equal figures.
+
+    The four sign combinations are the point. Mutation testing confirms this is
+    the only test in the file that fails for **all three** ways the polarity fix
+    can be undone -- dropping `abs()` entirely, and applying it to either side
+    alone -- because the opposite-sign equal-magnitude pairs are exactly the
+    inputs a half-applied `abs()` still gets wrong.
+
+    Note for anyone tightening this: `>` vs `>=` on the size comparison is NOT
+    what this test guards, and is not worth guarding. `and not
+    relatively_equal(...)` already short-circuits an exact match, so the two
+    operators are behaviourally identical here -- verified, not assumed.
+    """
+    for rpo_value, crpo_value, rpo_sign, crpo_sign in (
+        ("1000", "1000", "positive", "positive"),
+        ("1000", "-1000", "positive", "negative"),
+        ("-1000", "1000", "negative", "positive"),
+        ("-1000", "-1000", "negative", "negative"),
+    ):
+        payloads = [
+            kpi("rpo", rpo_value, sign=rpo_sign),
+            kpi("crpo", crpo_value, sign=crpo_sign),
+        ]
+        assert identity_errors(payloads) == {}, f"rpo={rpo_value} crpo={crpo_value}"
+
+
 def test_contra_presented_rpo_does_not_spuriously_flag_a_valid_pair() -> None:
     """The other direction of the same defect: a valid pair must stay clean.
 
