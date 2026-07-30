@@ -523,8 +523,10 @@ From the repo root, with no dependencies beyond the standard library and the in-
 3. Drive `run_model_step` with `fel_providers.mocks.MockStructuredLLMProvider`
    (`provider_ref="mock"`, `model_ref="mock-structured-v1"`) across: an envelope schema whose `required` ⊆
    `{schema_name, schema_version}` (happy path), a schema requiring an absent key
-   (two-attempt boundary → `SchemaInvalid` after exactly 2 calls), evidence text containing
-   `REFUSE` (→ `ProviderRefused`), and `RunBudget` variants (call caps 0/1, small
+   (two-attempt boundary → `SchemaInvalid` after exactly 2 calls), provider refusal via
+   `MockStructuredLLMProvider(refuse=True)` (→ `ProviderRefused`; refusal is
+   configuration, never evidence content, so untrusted filing text cannot
+   trigger it), and `RunBudget` variants (call caps 0/1, small
    `max_output_tokens`, `max_wall_seconds=0`).
    To exercise pin enforcement — which the stock mock cannot, since it always returns
    `provider="mock"`/`model="mock-structured-v1"` matching the pin — also drive a stub that

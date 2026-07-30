@@ -86,8 +86,8 @@ def test_structured_llm_deterministic_and_records_metadata() -> None:
 
 
 def test_structured_llm_refusal_path() -> None:
-    provider = MockStructuredLLMProvider()
-    result = provider.generate_structured(_structured_request(content="REFUSE this"))
+    provider = MockStructuredLLMProvider(refuse=True)
+    result = provider.generate_structured(_structured_request())
     assert result.refused is True
     assert result.parsed is None
     assert result.refusal is not None and result.refusal.startswith("mock-refusal:")
