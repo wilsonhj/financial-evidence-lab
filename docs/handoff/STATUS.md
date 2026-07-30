@@ -1,11 +1,11 @@
 # Implementation status
 
-Last updated: 2026-07-21
+Last updated: 2026-07-29
 
 ## Repository
 
 - Default and implementation base: `main`.
-- Current main tip: `ad1717b` (PR #128 js-yaml override; prior notable tips PR #127 DB-GUARD-HARDENING @ `e55eea8`, PR #119 M2-RETRIEVAL-BACKEND merge @ `c546ec2`).
+- Current main tip: `21750b1` (PR #150 corpus-QA renderer proposal; prior notable tips PR #147 ADR-0008 Amendment 1 @ `355d2b6`, PR #144 postcss/brace-expansion remediation @ `eed2140`, PR #127 DB-GUARD-HARDENING @ `e55eea8`).
 - Canonical product spec: `specs/001-financial-evidence-lab/spec.md` v1.2.
 - M2 implementation design: `specs/002-observable-hybrid-retrieval/` plus ADR-0006 (live on main).
 - M3 implementation design: `specs/003-agentic-extraction/` plus ADR-0007 (live on main).
@@ -34,6 +34,13 @@ Last updated: 2026-07-21
 - Contract-change issues #100 (M2 v0.3.0) and #101 (M3 v0.4.0) created with serialized shared-path ownership.
 - M2/M3 implementation design PR #102 merged to main @ `052836d` (Spec Kit packages, ADR-0006/0007, research reconciliation, contract gates documented).
 
+### Merged since 2026-07-21
+
+- Dependency and CI-hygiene remediation: PR #140 (fast-uri/sharp advisories + fail-closed audit-gate triage), PR #142 (postcss override globalized for GHSA-r28c-9q8g-f849), PR #144 (postcss floor `^8.5.23` + brace-expansion GHSA-mh99-v99m-4gvg). Note `eca02df`: the first brace-expansion `^5.0.8` override was reverted before the scoped remediation landed — do not reinstate it without re-reading #144. Recurrence prevention is tracked on #143 (scheduled advisory refresh), still open.
+- Research recovered to trunk: PR #117 — FinRobot cherry-pick studies (M4 calc-engine port, M3 extraction-role pattern).
+- ADR-0008 Amendment 1: PR #147 @ `355d2b6` — adds `infra/railway/worker.json` to the scaffold-registration exception, install-list append only. Ratified in the carrying commit with date, actor and PR number, matching the ADR-0005/0006 convention; supersedes the earlier "Proposed, ratified on merge" wording that had reopened finding I2.
+- Corpus-QA report renderer proposal: PR #150 @ `21750b1` — `docs/research/evals-report-renderer-proposal.md`. Proposal only; authorizes no code change. Registered below as `EVALS-REPORT-RENDER`; size-lever decision recorded there.
+
 ### Tracker note — #96 residual owned by #108
 
 Issue #96 remains **open** as a tracker only. Package `READER-CROSS-STACK` is `merged` via #105 for its `evals/**` mock/stack scope. Remaining acceptance **criterion #11** (production worker → Postgres → FastAPI → real `HttpEvidenceSource` → production Next.js reader + browser/hosted artifacts) is owned by **READER-PROD-SMOKE (#108)**. Do not re-dispatch #96; do not treat #96-open as blocking #57.
@@ -50,9 +57,18 @@ None. No package currently `active`.
 
 ## Ready (post-#122/#123 reconciliation)
 
-1. **Ready:** M3-EXTRACTION-CORE (#60) — `packages/ontology/**`, `packages/providers/**`, `workers/src/fel_workers/extraction/**`, `workers/src/fel_workers/consumer.py`, `workers/src/fel_workers/__main__.py`, `workers/tests/**`; deps satisfied (M2-CLAIMS-VERIFICATION merged via #122; M3-CONTRACT merged via #112).
+1. **Ready, in review:** M3-EXTRACTION-CORE (#60) — `packages/ontology/**`, `packages/providers/**`, `workers/src/fel_workers/extraction/**`, `workers/src/fel_workers/consumer.py`, `workers/src/fel_workers/__main__.py`, `workers/tests/**`; deps satisfied (M2-CLAIMS-VERIFICATION merged via #122; M3-CONTRACT merged via #112).
+   - PR #145 is **open with an unresolved blocking review** at head `a08ba50`. One blocker plus four majors, all reproduced by the reviewer and **none caught by the suite** (1036 tests pass, linters clean):
+     - **B1 (blocking)** — `validate/accounting.py:387` computes `revenue - cogs`, but this PR's own parens fix (`normalize/numeric.py:135`) makes negative COGS reachable, so parenthesized-contra presentation yields `1000 − (−300) = 1300`. Correct statements are flagged and gross profit above revenue certifies clean. No negative-COGS test exists.
+     - **M1** — a normalizer-rejected row is indistinguishable from a clean one by the time `_mark_identity_violations` runs (`validate/pipeline.py:59` strips `NORMALIZER_BLOCKERS_KEY`), so one rejected row disables the identity checks for its clean siblings.
+     - **M2** — `unit` is not case-folded (`normalize/payload.py:142`) while `currency` is, so `usd` vs `USD` splits the slice and every identity silently skips.
+     - **M3** — `wall_seconds_used` is read latest-not-greatest (`extraction/persist.py` `_load_wall_seconds`), so a stale worker can erase it; `precheck` reads it for the wall cap.
+     - **M4** — sensitive-key redaction fires inside `stage_output`; the reviewer calls this payload corruption on resume, while the `events.py` docstring states it is intentional. Contested — needs an integration-lead ruling, not a silent change.
+   - Do not merge #145 until B1 is fixed with tests covering **both** COGS polarities.
 
-Serialization notes: #60 must serialize with any contracts/migrations owner. Blocked #108 overlaps `apps/api/**` + `apps/web/**` + `evals/**` — if #108 unblocks, do not run it concurrently with any package holding those paths.
+2. **Ready:** EVALS-REPORT-RENDER (#151) — `evals/reporting/**`, `evals/tests/**`; stdlib-only corpus-QA Markdown + SVG renderer per `docs/research/evals-report-renderer-proposal.md` (PR #150). Independent of #60: no path overlap.
+
+Serialization notes: #60 must serialize with any contracts/migrations owner. Blocked #108 overlaps `apps/api/**` + `apps/web/**` + `evals/**` — if #108 unblocks, do not run it concurrently with any package holding those paths. EVALS-REPORT-RENDER holds `evals/**` subtrees; every other non-merged `evals/**` claimant (#108, #62, #67, #68) is currently blocked, so there is no live contention — but serialize it against whichever of those unblocks first.
 
 ## Blocked (registered, not dispatchable)
 
@@ -64,8 +80,20 @@ Serialization notes: #60 must serialize with any contracts/migrations owner. Blo
 
 ## Next (after ready merges)
 
-1. M3-EXTRACTION-CORE (#60) on #58 + #101 (both merged) — now ready; then #61/#62.
-2. READER-PROD-SMOKE (#108) remains blocked until credentials + integrity residual cleared (does **not** gate #60).
+1. **Clear PR #145's blocking review** (B1 first). It is the critical path: #61 and #62 both depend on M3-EXTRACTION-CORE, and until #145 lands the only other dispatchable package is EVALS-REPORT-RENDER.
+2. **Rule on M4** (redaction inside `stage_output`). The reviewer and the `events.py` docstring disagree about whether current behaviour is a defect or deliberate. Decide explicitly and record it here — either the docstring or the code is wrong, and leaving the contradiction on trunk invites the next agent to "fix" the wrong side.
+3. EVALS-REPORT-RENDER (#151) — dispatchable now; does not gate and is not gated by #60.
+4. READER-PROD-SMOKE (#108) remains blocked until credentials + integrity residual cleared (does **not** gate #60).
+
+### Decision record — EVALS-REPORT-RENDER size lever (2026-07-29)
+
+The proposal offers a lever: drop the committed golden SVG (−110 lines) and prove SVG determinism with a render-twice byte-equality assertion plus structural assertions instead.
+
+**Decision: leave the lever. Commit both goldens.**
+
+Rationale: render-twice equality proves the renderer is deterministic *within one process*, which is strictly weaker than a committed golden. Only the committed artifact catches cross-version serialization drift — precisely the risk the proposal itself flags when it verifies that `ET.tostring` preserves attribute insertion order on Python 3.11. A future interpreter upgrade that reorders attributes would pass render-twice and fail golden comparison, and that is the regression worth catching in an evidence product. The `docs/handoff/README.md:35` figure is a stated preference ("prefer PRs below roughly 600 changed lines"), not a gate; of the ~640 changed lines about 150 are golden fixtures rather than review-bearing code, leaving hand-written code near 490.
+
+Accordingly AC8 keeps both goldens and the allowed-paths list keeps the SVG.
 
 ### M2 follow-ups (issues opened 2026-07-21)
 

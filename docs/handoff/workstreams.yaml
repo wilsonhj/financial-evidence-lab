@@ -420,3 +420,20 @@ packages:
       - packages/export/**
       - evals/**
       - docs/release/**
+  - id: EVALS-REPORT-RENDER # stdlib-only corpus-QA report renderer (Markdown + SVG)
+    issue: 151
+    # Deliberately empty: no Spec Kit task covers eval-report rendering. The
+    # proposal (PR #150) documents reading T0001-T0513 and finding no owner, so
+    # this is an unallocated package, not a missing task reference.
+    tasks: []
+    depends_on: [M1-CORPUS-QA]
+    team: trust
+    branch: agent/evals-report-render
+    # Narrower than the `evals/**` the proposal suggested: this package only
+    # writes the renderer and its tests, so scoping to those two subtrees keeps
+    # it non-overlapping with the other evals/** claimants (#108, #62, #67, #68)
+    # should any of them unblock. Spec: docs/research/evals-report-renderer-proposal.md.
+    status: ready # deps satisfied — M1-CORPUS-QA merged via #86; size lever declined (both goldens committed), see STATUS.md decision record
+    allowed_paths:
+      - evals/reporting/**
+      - evals/tests/**
