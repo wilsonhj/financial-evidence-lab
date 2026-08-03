@@ -1,11 +1,12 @@
 # Implementation status
 
-Last updated: 2026-07-28
+Last updated: 2026-08-03
 
 ## Repository
 
 - Default and implementation base: `main`.
-- Current `origin/main` tip: `eed2140` (#144 postcss/brace-expansion advisory remediation, stacked on #142). Note: local `main` may sit at `89e4363`, which is **not** on `origin/main` — it reached the remote only via `agent/m3-extraction-core` and lands with PR #145. Always resolve trunk against `origin/main`.
+- Current `origin/main` tip: `eed2140` (#144 postcss/brace-expansion advisory remediation, stacked on #142). Always resolve trunk against `origin/main`.
+- **`89e4363` does NOT land with PR #145.** It reached the remote only via `agent/m3-extraction-core` and was **reverted on that branch by `7f11bab`**, per the integration-lead ruling recorded on #60: it amends the constitution (1.1.0 -> 1.2.0), rewrites `AGENTS.md` document precedence, and flips 14 task checkboxes including 12 lead-reserved ones — all `shared_paths`, with no `contract-change` label and no ADR. Verified byte-identical to `origin/main` on both sides of the revert. Re-landing it requires its own `contract-change` PR (#141). This line previously said it "lands with PR #145" — true when written, wrong after the revert.
 - In review: M3-EXTRACTION-CORE (#60) on `agent/m3-extraction-core` (PR #145). Next dispatch after it merges is M3-REVIEW (#61).
 - Canonical product spec: `specs/001-financial-evidence-lab/spec.md` v1.2.
 - M2 implementation design: `specs/002-observable-hybrid-retrieval/` plus ADR-0006 (live on main).
@@ -48,9 +49,15 @@ Still research-draft (not a dispatch blocker): recovered benchmark needs SEC tim
 
 ## Active
 
-1. **In review:** M3-EXTRACTION-CORE (#60) — branch `agent/m3-extraction-core`, PR **#145** OPEN from `main` @ `eed2140`. All five checks green, `mergeStateStatus: CLEAN`, no review submitted (GitHub disallows self-approval, so `reviewDecision` is empty despite four blockers having been raised and resolved). Nothing else may claim its paths until this merges.
+1. **In review:** M3-EXTRACTION-CORE (#60) — branch `agent/m3-extraction-core`, PR **#145** OPEN from `main` @ `eed2140`, carrying the `contract-change` label (`docs/decisions/**` addition, `AGENTS.md:41`). No review submitted, because GitHub disallows self-approval — `reviewDecision` is empty despite every blocker below having been raised and resolved on-branch.
 
-   Scope delivered: `packages/ontology` saas-metrics/v1 (14 metrics / 9 families), bounded durable extraction workflow (budgets, checkpoints, five typed roles), Decimal normalize/validate, `extraction_run` consumer dispatch, proposals always `needs_review`. Review remediation on-branch: numeric parser truncation (`4200000` → `420`), evidence truncated to 64 chars on resume, mock model bound unconditionally in the production entrypoint, worker packaging, budget reset per retry, runs stuck `running` after untyped escapes. Two defects found by first real-Postgres coverage: four of five terminal paths never wrote their terminal event (0004 rejects child inserts once a run row is terminal), and content-triggered mock controls (`ABSTAIN`/`REFUSE`) were reachable from untrusted filing text. Live OpenAI deferred to #62; terminal-run retry semantics to #146.
+   Scope delivered: `packages/ontology` saas-metrics/v1 (14 metrics / 9 families), bounded durable extraction workflow (budgets, checkpoints, five typed roles), Decimal normalize/validate, `extraction_run` consumer dispatch, proposals always `needs_review`.
+
+   Review remediation on-branch, by round: numeric parser truncation (`4200000` → `420`); evidence truncated to 64 chars on resume; mock model bound unconditionally in the production entrypoint; worker packaging; budget reset per retry; runs stuck `running` after untyped escapes. Then the magnitude/scale round — the suffix table (`bn`/`MM`/`trillion`), partial numbers failing closed, the declared `scale` validated instead of collapsed to 0 (mantissa + exponent per the frozen fixture, ADR-0001), `sign` cross-checked against the value, and the step commit made atomic with its output-carrying event. Then durability defaults, `citation_status` from evidence rather than model output, currency in the comparability key, and refusing to attach to an adjudicated conflict. Then the accounting-cluster round: the gross-profit identity inverted for parenthesized (negative) COGS and the same polarity bug in cRPO/RPO; a normalizer-rejected row silently disabling identities for its clean siblings; and `wall_seconds_used` read latest-wins rather than `MAX`. Finally the checkpoint payload: substitution inside `stage_output` corrupting `raw_payload_hash` for issuer keys named like secrets, and the event/log redaction helpers split so telemetry cannot inherit the carve-out.
+
+   Two defects found by the first real-Postgres coverage: four of five terminal paths never wrote their terminal event (0004 rejects child inserts once a run row is terminal), and content-triggered mock controls (`ABSTAIN`/`REFUSE`) were reachable from untrusted filing text.
+
+   Known gaps left open deliberately, with issues: **#153** (unit-case handling — the identity slice keys on the raw string, so `usd`/`USD` skip the check; the one-sided fold was tried and reverted as net-harmful, and unifying it touches the persisted conflict identity); **#146** (terminal-run retry semantics); **#62** (live OpenAI adapter); and the `steps.output` column that ADR-0009 names as the correct fix for the checkpoint-in-event-stream trade.
 
    Move this record into **Completed** when PR #145 lands, and flip `workstreams.yaml` `status: review` -> `merged` with the merge SHA.
 

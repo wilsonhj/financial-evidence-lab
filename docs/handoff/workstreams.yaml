@@ -336,7 +336,7 @@ packages:
     depends_on: [M2-CLAIMS-VERIFICATION, M3-CONTRACT]
     team: extraction
     branch: agent/m3-extraction-core
-    status: review # PR #145 OPEN (2026-07-28) from main @ eed2140, all 5 checks green, mergeStateStatus CLEAN, no review submitted; review blockers 1-4 + both high-severity findings fixed on-branch; carries 89e4363 (.specify/** + AGENTS.md, shared paths — see #141); follow-ups #146 (terminal-run retry design) + #62 (live OpenAI adapter, deferred). Flip to `merged` with the merge SHA once landed.
+    status: review # PR #145 OPEN from main @ eed2140; carries the `contract-change` label (docs/decisions/** addition, AGENTS.md:41). Review rounds, all fixed on-branch and independently verified: blockers 1-4 + both high-severity findings; the numeric/scale/atomicity round; the accounting-cluster round (B1 COGS + cRPO polarity, M1 normalizer-rejected rows excluded from identities, M3 wall_seconds via MAX, M4 checkpoint substitution). M2 (unit case) deliberately NOT fixed here — the one-sided fold is net-harmful, tracked as #153. 89e4363 was REVERTED by 7f11bab and does NOT land with this PR; it re-lands via #141. Follow-ups: #146 (terminal-run retry), #62 (live OpenAI adapter, deferred), #153 (unit-case unification), plus the steps.output column ADR-0009 names as the correct fix. Flip to `merged` with the merge SHA once landed.
     allowed_paths:
       - packages/ontology/**
       - packages/providers/**
