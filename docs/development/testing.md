@@ -145,12 +145,17 @@ with the repository scripts and committed with their source contract changes.
 Run:
 
 ```sh
-corepack pnpm --filter @fel/contracts test
+# Run from the repo root, not via --filter: the root vitest config's `include`
+# globs are repo-root-relative, and `--filter` changes cwd to
+# packages/contracts, so `corepack pnpm --filter @fel/contracts test` reports
+# "No test files found" (exit 1) despite the suite being real.
+corepack pnpm exec vitest run packages/contracts
 ```
 
-If a package-local command reports no tests, use the root commands and inspect
-the scripts under `packages/contracts`; root CI is authoritative. Confirm that
-the generated-drift job leaves the worktree clean.
+Root CI is authoritative. The drift gate is not a separate workflow job: it
+runs in-suite as the `generated client drift (check:generated in-suite)` case
+in `packages/contracts/contracts.test.ts`, reached through the `javascript`
+job's `corepack pnpm run test`. Confirm that case passes.
 
 Contract changes require:
 

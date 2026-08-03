@@ -12,8 +12,8 @@ The project is deliberately **mock-first**. You can explore the reader and
 Search Observatory without credentials, then add PostgreSQL and live providers
 when you need the complete data path.
 
-> This is active pre-release software. The reader and hybrid-retrieval
-> foundations are implemented; extraction is under review, while financial
+> This is active pre-release software. The reader, hybrid-retrieval, and
+> structured-extraction foundations are implemented mock-first, while financial
 > modeling and forecasting remain roadmap work.
 
 ## What works today
@@ -94,13 +94,17 @@ packages/providers/          Provider protocols and deterministic mocks
 packages/retrieval/          Chunking, retrieval, fusion, traces, and claims
 packages/retrieval-evals/    Retrieval benchmark and evaluation tooling
 db/migrations/               Append-only PostgreSQL migrations
+db/seeds/                    Seed data for local and test databases
 evals/                       Cross-stack fixtures and graders
 infra/                       Railway service definitions
+scripts/                     Repository tooling invoked by make and CI
 specs/                       Canonical product/specification packages
+.specify/                    Constitution and Spec Kit memory
 docs/architecture/           System overview and design
 docs/decisions/              Architecture decision records
 docs/development/            Local setup and testing guides
 docs/handoff/                Agent work queue and status snapshots
+docs/research/               Research studies and package proposals
 docs/runbooks/               Operator runbooks for deployed services
 ```
 
