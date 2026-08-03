@@ -7,7 +7,8 @@ Last updated: 2026-07-30
 - Default and implementation base: `main`.
 - Current `origin/main` tip: `61058e4` (PR #145, M3-EXTRACTION-CORE). Prior notable tips: PR #150 corpus-QA renderer proposal @ `21750b1`, PR #147 ADR-0008 Amendment 1 @ `355d2b6`, PR #144 postcss/brace-expansion remediation @ `eed2140`, PR #127 DB-GUARD-HARDENING @ `e55eea8`. Always resolve trunk against `origin/main`.
 - The earlier warning about local `main` sitting at `89e4363` is retired: that commit was reverted on-branch by `7f11bab` before #145 merged, so no `.specify/**` or `AGENTS.md` change landed. Verified by hash — both files are byte-identical either side of `61058e4`.
-- Next dispatch: M3-REVIEW (#61) and M3-CONFIDENCE-GATE (#62) are unblocked now that #60 has merged; neither is flipped to `ready` yet.
+- Next dispatch: M3-REVIEW (#61) is unblocked now that #60 has merged, and is not yet flipped to `ready`. M3-CONFIDENCE-GATE (#62) is **not** unblocked — it `depends_on: [M3-REVIEW]`, so it waits on #61 merging, not on #60.
+- ADR-0009 (`docs/decisions/ADR-0009-checkpoint-payload-in-event-stream.md`, Status: **Proposed**) landed with #145 under shared `docs/decisions/**`. It covers whether `stage_output` should carry evidence text verbatim, which is adjacent to the open M4 ruling below.
 - Canonical product spec: `specs/001-financial-evidence-lab/spec.md` v1.2.
 - M2 implementation design: `specs/002-observable-hybrid-retrieval/` plus ADR-0006 (live on main).
 - M3 implementation design: `specs/003-agentic-extraction/` plus ADR-0007 (live on main).
@@ -44,6 +45,7 @@ Last updated: 2026-07-30
 - ADR-0008 Amendment 1: PR #147 @ `355d2b6` — adds `infra/railway/worker.json` to the scaffold-registration exception, install-list append only. Ratified in the carrying commit with date, actor and PR number, matching the ADR-0005/0006 convention; supersedes the earlier "Proposed, ratified on merge" wording that had reopened finding I2.
 - Corpus-QA report renderer proposal: PR #150 @ `21750b1` — `docs/research/evals-report-renderer-proposal.md`. Proposal only; authorizes no code change. Registered below as `EVALS-REPORT-RENDER`; size-lever decision recorded there.
 - **M3-EXTRACTION-CORE full package: PR #145 @ `61058e4` (2026-07-30) — issue #60, 115 files, +15,326.** SaaS ontology package, five typed extraction roles, durable workflow FSM with checkpoint/resume over the event log, normalization, deterministic validators, atomic persistence, hard budgets, and audit redaction. Ships `packages/ontology/**` (a new first-party package), `workers/src/fel_workers/extraction/**`, `docs/runbooks/extraction-worker.md` and `workers/src/fel_workers/extraction/OPERATOR.md`.
+  - Scope delivered: `packages/ontology` saas-metrics/v1 (14 metrics / 9 families), bounded durable extraction workflow (budgets, checkpoints, five typed roles), Decimal normalize/validate, `extraction_run` consumer dispatch, proposals always `needs_review`. Earlier on-branch remediation: numeric parser truncation (`4200000` → `420`), evidence truncated to 64 chars on resume, mock model bound unconditionally in the production entrypoint, worker packaging, budget reset per retry, runs stuck `running` after untyped escapes. Two defects found by first real-Postgres coverage: four of five terminal paths never wrote their terminal event (0004 rejects child inserts once a run row is terminal), and content-triggered mock controls (`ABSTAIN`/`REFUSE`) were reachable from untrusted filing text. Live OpenAI deferred to #62; terminal-run retry semantics to #146.
   - Merged after four review rounds. Final round fixed one blocker and three majors that the suite did not catch: the gross-profit identity inverted for contra-presented COGS, a normalizer-rejected row disabling identity checks for clean siblings, `wall_seconds_used` read latest-not-greatest, and the same polarity defect unfixed in `_check_rpo_balance`. M4 (redaction inside `stage_output`) was investigated and assessed a **false positive** — the frozen schemas intersect `_REDACT_KEYS` at exactly `{"text"}`, already exempted — and is still awaiting a formal ruling.
   - Deliberately deferred out of the PR: **#153** (unify unit-case handling across identity, duplicate and definition checks — a one-sided fold was tried and reverted because it made a real break invisible) and **#154** (guidance range ordering: polarity-blind `check_range`, plus no ordering check at all for free-text `metric_id`s). Both move persisted identity keys and need an ADR.
   - Verified at merge: 1047 passed, 0 skipped against Postgres 17 + pgvector with `TEST_DATABASE_URL` set; five CI jobs green.
@@ -60,21 +62,15 @@ Still research-draft (not a dispatch blocker): recovered benchmark needs SEC tim
 
 ## Active
 
-1. **In review:** M3-EXTRACTION-CORE (#60) — branch `agent/m3-extraction-core`, PR **#145** OPEN from `main` @ `eed2140`. All five checks green, `mergeStateStatus: CLEAN`, no review submitted (GitHub disallows self-approval, so `reviewDecision` is empty despite four blockers having been raised and resolved). Nothing else may claim its paths until this merges.
+1. **In review:** DOCS-ONBOARDING (#148) — branch `agent/developer-docs`, PR **#149** open at `11145c5`, all five checks green, `mergeStateStatus: CLEAN`. Paths `README.md`, `docs/architecture/**`, `docs/development/**`. Nothing else may claim its paths until this merges.
 
-   Scope delivered: `packages/ontology` saas-metrics/v1 (14 metrics / 9 families), bounded durable extraction workflow (budgets, checkpoints, five typed roles), Decimal normalize/validate, `extraction_run` consumer dispatch, proposals always `needs_review`. Review remediation on-branch: numeric parser truncation (`4200000` → `420`), evidence truncated to 64 chars on resume, mock model bound unconditionally in the production entrypoint, worker packaging, budget reset per retry, runs stuck `running` after untyped escapes. Two defects found by first real-Postgres coverage: four of five terminal paths never wrote their terminal event (0004 rejects child inserts once a run row is terminal), and content-triggered mock controls (`ABSTAIN`/`REFUSE`) were reachable from untrusted filing text. Live OpenAI deferred to #62; terminal-run retry semantics to #146.
+   Refreshed against `61058e4` on 2026-07-30, which cleared what was previously recorded against it here: the six assertions that the M3 runtime was unmerged (including `system-design.md`'s "downstream code must not assume that PR's runtime is available on `main`"), four developer commands that could not run as written, `packages/ontology` missing from both the repository map and the static-check lists, the unreferenced `docs/runbooks/`, and the `eed2140` test-count baseline. Re-verified on-branch at `11145c5`.
 
-1. **Ready:** EVALS-REPORT-RENDER (#151) — `evals/reporting/**`, `evals/tests/**`; stdlib-only corpus-QA Markdown + SVG renderer per `docs/research/evals-report-renderer-proposal.md` (PR #150). No path overlap with any other non-blocked package.
+## Ready
 
-2. **Ready:** DOCS-ONBOARDING (#148) — `README.md`, `docs/architecture/**`, `docs/development/**`; developer onboarding, architecture, system-design and testing guides. PR #149 is open at `de3a496` but was branched from `eed2140`, so its extraction-status prose predates the #145 merge and must be refreshed before it lands — see the note below.
+1. **EVALS-REPORT-RENDER (#151)** — `evals/reporting/**`, `evals/tests/**`; stdlib-only corpus-QA Markdown + SVG renderer per `docs/research/evals-report-renderer-proposal.md` (PR #150). Dependency M1-CORPUS-QA is `merged`; dispatchable now.
 
-Serialization notes: blocked #108 overlaps `apps/api/**` + `apps/web/**` + `evals/**` — if #108 unblocks, do not run it concurrently with any package holding those paths. EVALS-REPORT-RENDER holds `evals/**` subtrees; every other non-merged `evals/**` claimant (#108, #62, #67, #68) is currently blocked, so there is no live contention — but serialize it against whichever of those unblocks first. DOCS-ONBOARDING overlaps nothing.
-
-### PR #149 must be refreshed before merge
-
-`README.md`, `docs/architecture/overview.md` and `docs/architecture/system-design.md` on `agent/developer-docs` assert in six places that the M3 extraction runtime is unmerged and carries unresolved blockers — `system-design.md` states outright that "downstream code must not assume that PR's runtime is available on `main`". All of that was true when written on 2026-07-29 and false since `61058e4`. Merging it unchanged would put a document on `main` denying the existence of the largest subsystem beside it.
-
-Also stale there: `packages/ontology` is missing from the repository map; `docs/runbooks/` is not referenced anywhere; the static-check commands in `docs/development/testing.md` omit `packages/ontology`, so a contributor copying them skips lint, type and format checks on a whole package that CI does gate; and the test-count baseline is pinned to `eed2140`.
+Serialization notes: blocked #108 claims `apps/api/**` + `apps/web/**` + `evals/**` + `workers/**` + `.github/**` — if #108 unblocks, do not run it concurrently with any package holding those paths. EVALS-REPORT-RENDER's `evals/reporting/**` and `evals/tests/**` are **subtrees of** the `evals/**` claimed by #108, #62, #67 and #68, so they do overlap; all four are blocked today, so there is no live contention, but serialize against whichever unblocks first. DOCS-ONBOARDING overlaps nothing.
 
 ## Blocked (registered, not dispatchable)
 
@@ -86,12 +82,13 @@ Also stale there: `packages/ontology` is missing from the repository map; `docs/
 
 ## Next (after ready merges)
 
-1. **M3-REVIEW (#61) and M3-CONFIDENCE-GATE (#62)** are unblocked now that #60 is merged — they were the packages waiting on it. #61 uses branch `agent/m3-review` (not yet created; paths `apps/web/**`, `apps/api/**`); #62 also owns the live OpenAI adapter that #60 deferred. Both still inherit `defaults.status: blocked` in `workstreams.yaml` — flip both keys at the same time when dispatching.
-2. **Refresh PR #149 before merging it.** Its extraction-status prose predates `61058e4` — see the note under Ready. The content is otherwise a genuine improvement over the scaffold-era docs it replaces.
-3. **Rule on M4** (redaction inside `stage_output`). Investigation says false positive with evidence; either close it as not-a-defect or change `events.py`'s docstring and the three tests that currently encode the behaviour as intentional. Leaving the contradiction on trunk invites the next agent to "fix" the wrong side.
-4. EVALS-REPORT-RENDER (#151) — dispatchable now, overlaps nothing.
-5. **#153 and #154** — both deferred out of #145, both move persisted identity keys, both need an ADR before implementation.
-6. READER-PROD-SMOKE (#108) remains blocked until credentials + the integrity residual are cleared.
+1. **M3-REVIEW (#61)** is unblocked now that #60 is merged — it was the only package waiting directly on it. Branch `agent/m3-review` (not yet created; paths `apps/web/**`, `apps/api/**`). It carries an **explicit** `status: blocked` in `workstreams.yaml`; flip that one key to `ready` when dispatching.
+2. **M3-CONFIDENCE-GATE (#62) is not yet unblocked.** `workstreams.yaml` gives it `depends_on: [M3-REVIEW]`, and `docs/handoff/README.md:26-28` makes a package ready only when *every* `depends_on` package is `merged` — so #62 waits on #61 landing, not on #60. It has **no** `status` key and inherits `defaults.status: blocked`, so dispatching it means adding a key rather than flipping one. #62 owns the live OpenAI adapter #60 deferred; note its `allowed_paths` do not currently include `packages/providers/**`, where the provider protocol lives.
+3. **Merge PR #149** (DOCS-ONBOARDING) once reviewed. The refresh against `61058e4` is complete — see Active.
+4. **Rule on M4** (redaction inside `stage_output`). Investigation says false positive with evidence; either close it as not-a-defect or change `events.py`'s docstring and the three tests that currently encode the behaviour as intentional. Leaving the contradiction on trunk invites the next agent to "fix" the wrong side. ADR-0009 (Proposed) covers the adjacent question and should be ruled on with it.
+5. EVALS-REPORT-RENDER (#151) — dispatchable now; no live contention, but its paths are `evals/**` subtrees, so serialize against #108/#62/#67/#68 if any unblocks.
+6. **#153 and #154** — both deferred out of #145, both move persisted identity keys, both need an ADR before implementation.
+7. READER-PROD-SMOKE (#108) remains blocked until credentials + the integrity residual are cleared.
 
 ### Decision record — EVALS-REPORT-RENDER size lever (2026-07-29)
 

@@ -76,6 +76,8 @@ defaults:
 
 # Queue restructure (architecture audit, 2026-07): 41 packages consolidated to 19
 # milestone-scoped packages (18 pending once the completed M0-SCAFFOLD merges).
+# The file has since grown to 32 entries as contract waves and unallocated
+# packages were registered; the 19/18 figures are historical, not current.
 # Issues #57-#62 refreshed and contract waves #100/#101 added 2026-07-16. Each package's `issue:` field points at its
 # GitHub issue (#51-#68); legacy issues #9-#49 are closed. Deferred post-MVP and
 # removed from the queue: T0211-T0213 (Embedding Atlas) and T0506 (analogues).
@@ -434,7 +436,7 @@ packages:
     # Matches the allowed paths #148's own body states. None is a shared path,
     # so no contract-change label is required — confirmed against the
     # shared_paths inventory at the top of this file.
-    status: ready # PR #149 open at de3a496, but branched from eed2140: its extraction-status prose predates the #145 merge and must be refreshed before it lands. See STATUS.md.
+    status: review # PR #149 open at 11145c5, five checks green, mergeStateStatus CLEAN. Refreshed against 61058e4: the stale extraction-status prose and the four broken developer commands are fixed on-branch. `review`, not `ready` — an open PR holds these paths, so nothing else may be dispatched against them.
     allowed_paths:
       - README.md
       - docs/architecture/**
@@ -449,9 +451,12 @@ packages:
     team: trust
     branch: agent/evals-report-render
     # Narrower than the `evals/**` the proposal suggested: this package only
-    # writes the renderer and its tests, so scoping to those two subtrees keeps
-    # it non-overlapping with the other evals/** claimants (#108, #62, #67, #68)
-    # should any of them unblock. Spec: docs/research/evals-report-renderer-proposal.md.
+    # writes the renderer and its tests. These are still SUBTREES of the
+    # `evals/**` claimed by #108, #62, #67 and #68, so they do overlap — the
+    # narrowing shrinks the contended surface, it does not remove it. All four
+    # are blocked today, so there is no live contention; serialize against
+    # whichever unblocks first.
+    # Spec: docs/research/evals-report-renderer-proposal.md.
     status: ready # deps satisfied — M1-CORPUS-QA merged via #86; size lever declined (both goldens committed), see STATUS.md decision record
     allowed_paths:
       - evals/reporting/**
