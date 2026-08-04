@@ -1,0 +1,159 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" role="img" viewBox="0 0 672 568" width="672" height="568">
+  <title>Corpus QA documents by issuer: 2026-07-14-synthetic-cohort</title>
+  <desc>Horizontal stacked bar chart for the synthetic run 2026-07-14-synthetic-cohort. One row per cohort issuer, in cohort order, on a shared axis of documents; each bar is segmented into documents_parsed, ingested-but-not-parsed, and documents_quarantined, and the absolute document count is printed at the end of the bar. The TOTAL row below the separator is the whole-cohort composition drawn on its own scale, not a magnitude comparable to the issuer rows. Single snapshot; no time series. A row label marked with an asterisk has span_hash_verification_rate 'unavailable'; its bar is drawn from document counts only.</desc>
+  <text x="16" y="24" font-family="monospace" font-size="13" fill="#1b1f24" text-anchor="start">Corpus QA: 2026-07-14-synthetic-cohort (mode synthetic)</text>
+  <g id="legend">
+    <rect x="16" y="38" width="10" height="10" fill="#2f6f4f" />
+    <text x="30" y="47" font-family="monospace" font-size="11" fill="#1b1f24" text-anchor="start">documents_parsed</text>
+    <rect x="152" y="38" width="10" height="10" fill="#9aa3b0" />
+    <text x="166" y="47" font-family="monospace" font-size="11" fill="#1b1f24" text-anchor="start">ingested not parsed</text>
+    <rect x="309" y="38" width="10" height="10" fill="#a33a3a" />
+    <text x="323" y="47" font-family="monospace" font-size="11" fill="#1b1f24" text-anchor="start">documents_quarantined</text>
+  </g>
+  <g id="axis">
+    <line x1="128" y1="68" x2="128" y2="472" stroke="#d5d9e0" stroke-width="1" />
+    <text x="128" y="485" font-family="monospace" font-size="11" fill="#1b1f24" text-anchor="middle">0</text>
+    <line x1="248" y1="68" x2="248" y2="472" stroke="#d5d9e0" stroke-width="1" />
+    <text x="248" y="485" font-family="monospace" font-size="11" fill="#1b1f24" text-anchor="middle">1</text>
+    <line x1="368" y1="68" x2="368" y2="472" stroke="#d5d9e0" stroke-width="1" />
+    <text x="368" y="485" font-family="monospace" font-size="11" fill="#1b1f24" text-anchor="middle">2</text>
+    <line x1="488" y1="68" x2="488" y2="472" stroke="#d5d9e0" stroke-width="1" />
+    <text x="488" y="485" font-family="monospace" font-size="11" fill="#1b1f24" text-anchor="middle">3</text>
+    <line x1="608" y1="68" x2="608" y2="472" stroke="#d5d9e0" stroke-width="1" />
+    <text x="608" y="485" font-family="monospace" font-size="11" fill="#1b1f24" text-anchor="middle">4</text>
+    <text x="368" y="499" font-family="monospace" font-size="11" fill="#1b1f24" text-anchor="middle">documents per issuer</text>
+  </g>
+  <g id="rows">
+    <text x="120" y="82" font-family="monospace" font-size="11" fill="#1b1f24" text-anchor="end">CRM</text>
+    <rect x="128" y="72" width="360" height="12" fill="#2f6f4f">
+      <title>parsed 3</title>
+    </rect>
+    <text x="616" y="82" font-family="monospace" font-size="11" fill="#1b1f24" text-anchor="start">3</text>
+    <text x="120" y="102" font-family="monospace" font-size="11" fill="#1b1f24" text-anchor="end">NOW</text>
+    <rect x="128" y="92" width="240" height="12" fill="#2f6f4f">
+      <title>parsed 2</title>
+    </rect>
+    <text x="616" y="102" font-family="monospace" font-size="11" fill="#1b1f24" text-anchor="start">2</text>
+    <text x="120" y="122" font-family="monospace" font-size="11" fill="#1b1f24" text-anchor="end">WDAY</text>
+    <rect x="128" y="112" width="240" height="12" fill="#2f6f4f">
+      <title>parsed 2</title>
+    </rect>
+    <text x="616" y="122" font-family="monospace" font-size="11" fill="#1b1f24" text-anchor="start">2</text>
+    <text x="120" y="142" font-family="monospace" font-size="11" fill="#1b1f24" text-anchor="end">TEAM</text>
+    <rect x="128" y="132" width="240" height="12" fill="#2f6f4f">
+      <title>parsed 2</title>
+    </rect>
+    <rect x="368" y="132" width="120" height="12" fill="#a33a3a">
+      <title>quarantined 1</title>
+    </rect>
+    <text x="616" y="142" font-family="monospace" font-size="11" fill="#1b1f24" text-anchor="start">3</text>
+    <text x="120" y="162" font-family="monospace" font-size="11" fill="#1b1f24" text-anchor="end">HUBS</text>
+    <rect x="128" y="152" width="240" height="12" fill="#2f6f4f">
+      <title>parsed 2</title>
+    </rect>
+    <text x="616" y="162" font-family="monospace" font-size="11" fill="#1b1f24" text-anchor="start">2</text>
+    <text x="120" y="182" font-family="monospace" font-size="11" fill="#1b1f24" text-anchor="end">ZS</text>
+    <rect x="128" y="172" width="360" height="12" fill="#2f6f4f">
+      <title>parsed 3</title>
+    </rect>
+    <rect x="488" y="172" width="120" height="12" fill="#a33a3a">
+      <title>quarantined 1</title>
+    </rect>
+    <text x="616" y="182" font-family="monospace" font-size="11" fill="#1b1f24" text-anchor="start">4</text>
+    <text x="120" y="202" font-family="monospace" font-size="11" fill="#1b1f24" text-anchor="end">OKTA</text>
+    <rect x="128" y="192" width="240" height="12" fill="#2f6f4f">
+      <title>parsed 2</title>
+    </rect>
+    <text x="616" y="202" font-family="monospace" font-size="11" fill="#1b1f24" text-anchor="start">2</text>
+    <text x="120" y="222" font-family="monospace" font-size="11" fill="#1b1f24" text-anchor="end">DDOG</text>
+    <rect x="128" y="212" width="240" height="12" fill="#2f6f4f">
+      <title>parsed 2</title>
+    </rect>
+    <text x="616" y="222" font-family="monospace" font-size="11" fill="#1b1f24" text-anchor="start">2</text>
+    <text x="120" y="242" font-family="monospace" font-size="11" fill="#1b1f24" text-anchor="end">MDB</text>
+    <rect x="128" y="232" width="240" height="12" fill="#2f6f4f">
+      <title>parsed 2</title>
+    </rect>
+    <text x="616" y="242" font-family="monospace" font-size="11" fill="#1b1f24" text-anchor="start">2</text>
+    <text x="120" y="262" font-family="monospace" font-size="11" fill="#1b1f24" text-anchor="end">SNOW</text>
+    <rect x="128" y="252" width="240" height="12" fill="#2f6f4f">
+      <title>parsed 2</title>
+    </rect>
+    <text x="616" y="262" font-family="monospace" font-size="11" fill="#1b1f24" text-anchor="start">2</text>
+    <text x="120" y="282" font-family="monospace" font-size="11" fill="#1b1f24" text-anchor="end">TWLO</text>
+    <rect x="128" y="272" width="360" height="12" fill="#2f6f4f">
+      <title>parsed 3</title>
+    </rect>
+    <rect x="488" y="272" width="120" height="12" fill="#a33a3a">
+      <title>quarantined 1</title>
+    </rect>
+    <text x="616" y="282" font-family="monospace" font-size="11" fill="#1b1f24" text-anchor="start">4</text>
+    <text x="120" y="302" font-family="monospace" font-size="11" fill="#1b1f24" text-anchor="end">ZM</text>
+    <rect x="128" y="292" width="240" height="12" fill="#2f6f4f">
+      <title>parsed 2</title>
+    </rect>
+    <text x="616" y="302" font-family="monospace" font-size="11" fill="#1b1f24" text-anchor="start">2</text>
+    <text x="120" y="322" font-family="monospace" font-size="11" fill="#1b1f24" text-anchor="end">DOCU</text>
+    <rect x="128" y="312" width="240" height="12" fill="#2f6f4f">
+      <title>parsed 2</title>
+    </rect>
+    <rect x="368" y="312" width="120" height="12" fill="#a33a3a">
+      <title>quarantined 1</title>
+    </rect>
+    <text x="616" y="322" font-family="monospace" font-size="11" fill="#1b1f24" text-anchor="start">3</text>
+    <text x="120" y="342" font-family="monospace" font-size="11" fill="#1b1f24" text-anchor="end">PD</text>
+    <rect x="128" y="332" width="240" height="12" fill="#2f6f4f">
+      <title>parsed 2</title>
+    </rect>
+    <text x="616" y="342" font-family="monospace" font-size="11" fill="#1b1f24" text-anchor="start">2</text>
+    <text x="120" y="362" font-family="monospace" font-size="11" fill="#1b1f24" text-anchor="end">ESTC</text>
+    <rect x="128" y="352" width="240" height="12" fill="#2f6f4f">
+      <title>parsed 2</title>
+    </rect>
+    <text x="616" y="362" font-family="monospace" font-size="11" fill="#1b1f24" text-anchor="start">2</text>
+    <text x="120" y="382" font-family="monospace" font-size="11" fill="#1b1f24" text-anchor="end">FIVN</text>
+    <rect x="128" y="372" width="360" height="12" fill="#2f6f4f">
+      <title>parsed 3</title>
+    </rect>
+    <text x="616" y="382" font-family="monospace" font-size="11" fill="#1b1f24" text-anchor="start">3</text>
+    <text x="120" y="402" font-family="monospace" font-size="11" fill="#1b1f24" text-anchor="end">APPF</text>
+    <rect x="128" y="392" width="240" height="12" fill="#2f6f4f">
+      <title>parsed 2</title>
+    </rect>
+    <text x="616" y="402" font-family="monospace" font-size="11" fill="#1b1f24" text-anchor="start">2</text>
+    <text x="120" y="422" font-family="monospace" font-size="11" fill="#1b1f24" text-anchor="end">PCTY</text>
+    <rect x="128" y="412" width="240" height="12" fill="#2f6f4f">
+      <title>parsed 2</title>
+    </rect>
+    <rect x="368" y="412" width="120" height="12" fill="#a33a3a">
+      <title>quarantined 1</title>
+    </rect>
+    <text x="616" y="422" font-family="monospace" font-size="11" fill="#1b1f24" text-anchor="start">3</text>
+    <text x="120" y="442" font-family="monospace" font-size="11" fill="#1b1f24" text-anchor="end">PAYC</text>
+    <rect x="128" y="432" width="240" height="12" fill="#2f6f4f">
+      <title>parsed 2</title>
+    </rect>
+    <text x="616" y="442" font-family="monospace" font-size="11" fill="#1b1f24" text-anchor="start">2</text>
+    <text x="120" y="462" font-family="monospace" font-size="11" fill="#1b1f24" text-anchor="end">BILL</text>
+    <rect x="128" y="452" width="240" height="12" fill="#2f6f4f">
+      <title>parsed 2</title>
+    </rect>
+    <rect x="368" y="452" width="120" height="12" fill="#a33a3a">
+      <title>quarantined 1</title>
+    </rect>
+    <text x="616" y="462" font-family="monospace" font-size="11" fill="#1b1f24" text-anchor="start">3</text>
+  </g>
+  <g id="totals">
+    <line x1="16" y1="508" x2="656" y2="508" stroke="#d5d9e0" stroke-width="1" />
+    <text x="120" y="526" font-family="monospace" font-size="11" fill="#1b1f24" text-anchor="end">TOTAL</text>
+    <rect x="128" y="516" width="422" height="12" fill="#2f6f4f">
+      <title>parsed 44</title>
+    </rect>
+    <rect x="550" y="516" width="57" height="12" fill="#a33a3a">
+      <title>quarantined 6</title>
+    </rect>
+    <text x="616" y="526" font-family="monospace" font-size="11" fill="#1b1f24" text-anchor="start">50</text>
+    <text x="368" y="542" font-family="monospace" font-size="11" fill="#1b1f24" text-anchor="middle">TOTAL: cohort composition, own scale (not comparable to the rows above)</text>
+  </g>
+</svg>
