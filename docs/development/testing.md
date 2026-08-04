@@ -287,17 +287,35 @@ test` and `.venv/bin/pytest` before trusting a stale figure; treat GitHub
 Actions, not this paragraph, as the source of truth for whether the suite is
 green.
 
-Measured on `main` at `61058e4` (#145, M3-EXTRACTION-CORE ontology + worker
-FSM — the commit that added `packages/ontology` and the extraction worker):
+Each figure below records the commit it was measured at. If your run
+disagrees, compare SHAs first — a different SHA means the number is merely
+stale, the same SHA means one of the two runs is wrong.
+
+Measured on `main` at `a25bf7c` (#152, the handoff reconciliation commit):
 
 - 31 JavaScript/TypeScript test files and 258 tests passed
   (`corepack pnpm run test`).
-- 861 Python tests passed and 186 database-gated tests skipped without
-  `TEST_DATABASE_URL` (`.venv/bin/pytest`).
-- 1047 Python tests passed and 0 skipped with `TEST_DATABASE_URL` set against
-  a migrated Postgres 17 (`.venv/bin/pytest`).
-- `main`'s CI run for that commit had all five jobs green
+- 881 Python tests passed and 187 database-gated tests skipped without
+  `TEST_DATABASE_URL` (`.venv/bin/pytest`). Every skip in that run is gated on
+  `TEST_DATABASE_URL`; nothing skips for any other reason.
+- 1068 Python tests collected in total — the 881 above plus the 187 a database
+  unlocks.
+- `main`'s CI run for that commit had all five jobs green — `secrets`,
+  `javascript`, `web-e2e`, `python`, `database`
   (`gh run view --json conclusion,jobs`).
+
+The full-database pass count is deliberately **not** published here. Reaching
+it needs pgvector >= 0.8.2, because `0003_retrieval_core.sql` uses halfvec and
+HNSW and enforces that version at apply time. The environment used for this
+pass could not supply it, so the number was not measured and is not quoted.
+
+What was measured at `a25bf7c`, against a plain Postgres 16 with only
+`0001_platform_core.sql` and `0002_corpus_core.sql` applied: 1012 passed and
+56 errored, every error tracing to `extension "vector" is not available`. That
+exercises 131 of the 187 database-gated tests and leaves 56 unexecuted, so
+treat it as a floor rather than the full-database figure. CI's `python` job
+(`pgvector/pgvector:0.8.5-pg17`) is the run that covers all 187 — take the
+full-database result from there, not from this page.
 
 Behavioral gates and zero unresolved high/medium review findings matter more
 than maintaining an exact test count.
