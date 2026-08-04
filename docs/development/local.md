@@ -269,27 +269,32 @@ corepack pnpm --filter @fel/web dev
 All these variables are server-only. Do not prefix bearer tokens with
 `NEXT_PUBLIC_` or import runtime configuration into client components.
 
-The HTTP source fails startup when required configuration is absent. In
-production, non-loopback API URLs must use HTTPS.
+The HTTP source fails **closed at request time** when required configuration is
+absent — it does not fail at startup. `FEL_EVIDENCE_SOURCE=http` with nothing
+else set still reaches "Ready"; the first request then renders an explicit
+"Evidence source is not configured" state rather than falling back to fixture
+data. The guarantee is that there is no silent fixture fallback in production,
+not that the process refuses to boot. In production, non-loopback API URLs must
+use HTTPS.
 
 ## Useful environment variables
 
-| Variable                | Service     | Purpose                                       |
-| ----------------------- | ----------- | --------------------------------------------- |
-| `FEL_DATABASE_URL`      | API, worker | PostgreSQL connection URL                     |
-| `FEL_AUTH_MODE`         | API         | `mock` is the only implemented verifier mode  |
-| `FEL_STORAGE_DIR`       | API, worker | Shared canonical evidence-object directory    |
-| `FEL_MOCK_SMOKE`        | Worker      | Explicit deterministic provider mode          |
-| `FEL_SEC_LIVE`          | Worker      | Explicit live SEC mode                        |
-| `FEL_SEC_USER_AGENT`    | Worker      | SEC fair-access identity                      |
-| `FEL_ALLOW_MOCK_LLM`    | Worker      | Explicit opt-in to the mock model on `--queue extraction` |
-| `FEL_EXTRACTION_MEMORY_STORES` | Worker | Extraction smoke option: output to in-memory stores (discarded on exit) |
-| `FEL_EVIDENCE_SOURCE`   | Web         | Exactly `fixture` or `http`                   |
-| `FEL_API_BASE_URL`      | Web         | FastAPI origin in HTTP mode                   |
-| `FEL_API_BEARER_TOKEN`  | Web         | Server-only API token                         |
-| `FEL_ENTITY_IDS`        | Web         | Comma-separated entity UUIDs                  |
-| `FEL_AS_OF`             | Web         | Optional RFC 3339 cutoff with explicit offset |
-| `FEL_CORPUS_VERSION_ID` | Web         | Optional immutable corpus version UUID        |
+| Variable                       | Service     | Purpose                                                                 |
+| ------------------------------ | ----------- | ----------------------------------------------------------------------- |
+| `FEL_DATABASE_URL`             | API, worker | PostgreSQL connection URL                                               |
+| `FEL_AUTH_MODE`                | API         | `mock` is the only implemented verifier mode                            |
+| `FEL_STORAGE_DIR`              | API, worker | Shared canonical evidence-object directory                              |
+| `FEL_MOCK_SMOKE`               | Worker      | Explicit deterministic provider mode                                    |
+| `FEL_SEC_LIVE`                 | Worker      | Explicit live SEC mode                                                  |
+| `FEL_SEC_USER_AGENT`           | Worker      | SEC fair-access identity                                                |
+| `FEL_ALLOW_MOCK_LLM`           | Worker      | Explicit opt-in to the mock model on `--queue extraction`               |
+| `FEL_EXTRACTION_MEMORY_STORES` | Worker      | Extraction smoke option: output to in-memory stores (discarded on exit) |
+| `FEL_EVIDENCE_SOURCE`          | Web         | Exactly `fixture` or `http`                                             |
+| `FEL_API_BASE_URL`             | Web         | FastAPI origin in HTTP mode                                             |
+| `FEL_API_BEARER_TOKEN`         | Web         | Server-only API token                                                   |
+| `FEL_ENTITY_IDS`               | Web         | Comma-separated entity UUIDs                                            |
+| `FEL_AS_OF`                    | Web         | Optional RFC 3339 cutoff with explicit offset                           |
+| `FEL_CORPUS_VERSION_ID`        | Web         | Optional immutable corpus version UUID                                  |
 
 Cost limits are controlled by `FEL_USER_DAILY_LIMIT_USD`,
 `FEL_ORG_MONTHLY_LIMIT_USD`, `FEL_USER_DAILY_SOFT_USD`, and

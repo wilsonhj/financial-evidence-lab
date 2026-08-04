@@ -20,13 +20,13 @@ when you need the complete data path.
 
 Status as of **2026-07-30** on `main` (`61058e4`):
 
-| Area                          | State                               | What that means                                                                                                                                                                                                                                  |
-| ----------------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Platform foundation           | Implemented                         | Workspace APIs, mock authentication, tenant-scoped RLS, audit/cost primitives, PostgreSQL jobs, and CI are in place.                                                                                                                             |
-| Evidence ingestion and reader | Implemented, with live gates open   | SEC ingestion, immutable document versions, canonical spans/facts, a composite reader API, and the Next.js evidence reader work in tests and mock mode. The 20-issuer live corpus gate and hosted end-to-end smoke are still open.               |
-| Hybrid retrieval and claims   | Implemented, mock-first             | Dense, lexical, fact, and table lanes, deterministic planning/RRF, replayable traces, feedback, claim decomposition, and the Search Observatory are present. Live embedding/generation selection and the 65-question acceptance run remain open. |
-| Structured extraction         | Implemented, mock-first             | The v0.4 API/database/provider foundation, the `packages/ontology` SaaS metric ontology, and the durable extraction worker are all on `main`: typed extraction roles, a checkpointed workflow FSM, normalization, deterministic validators, hard budget enforcement, and atomic persistence. Live-provider extraction and the confidence/review gates are open. |
-| Modeling and forecasting      | Not implemented                     | M4 and M5 are specified but should not be treated as runnable product features.                                                                                                                                                                  |
+| Area                          | State                             | What that means                                                                                                                                                                                                                                                                                                                                                 |
+| ----------------------------- | --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Platform foundation           | Implemented                       | Workspace APIs, mock authentication, tenant-scoped RLS, audit/cost primitives, PostgreSQL jobs, and CI are in place.                                                                                                                                                                                                                                            |
+| Evidence ingestion and reader | Implemented, with live gates open | SEC ingestion, immutable document versions, canonical spans/facts, a composite reader API, and the Next.js evidence reader work in tests and mock mode. The 20-issuer live corpus gate and hosted end-to-end smoke are still open.                                                                                                                              |
+| Hybrid retrieval and claims   | Implemented, mock-first           | Dense, lexical, fact, and table lanes, deterministic planning/RRF, replayable traces, feedback, claim decomposition, and the Search Observatory are present. Live embedding/generation selection and the 65-question acceptance run remain open.                                                                                                                |
+| Structured extraction         | Implemented, mock-first           | The v0.4 API/database/provider foundation, the `packages/ontology` SaaS metric ontology, and the durable extraction worker are all on `main`: typed extraction roles, a checkpointed workflow FSM, normalization, deterministic validators, hard budget enforcement, and atomic persistence. Live-provider extraction and the confidence/review gates are open. |
+| Modeling and forecasting      | Not implemented                   | M4 and M5 are specified but should not be treated as runnable product features.                                                                                                                                                                                                                                                                                 |
 
 The authoritative product requirements live in
 [`specs/001-financial-evidence-lab/`](./specs/001-financial-evidence-lab/).
@@ -99,7 +99,9 @@ evals/                       Cross-stack fixtures and graders
 infra/                       Railway service definitions
 scripts/                     Repository tooling invoked by make and CI
 specs/                       Canonical product/specification packages
+.github/                     CI workflows (ci.yml is the authoritative gate)
 .specify/                    Constitution and Spec Kit memory
+.agents/                     Spec Kit agent skills
 docs/architecture/           System overview and design
 docs/decisions/              Architecture decision records
 docs/development/            Local setup and testing guides

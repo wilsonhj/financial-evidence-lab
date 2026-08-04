@@ -68,12 +68,14 @@ name while iterating, but run the workspace command before handoff.
 # All tests; DB-gated suites skip without TEST_DATABASE_URL
 .venv/bin/pytest
 
-# Focused packages
+# Focused packages — all seven of pyproject.toml's testpaths
 .venv/bin/pytest apps/api/tests
 .venv/bin/pytest workers/tests
 .venv/bin/pytest packages/retrieval/tests
 .venv/bin/pytest packages/retrieval-evals/tests
 .venv/bin/pytest packages/ontology/tests
+.venv/bin/pytest packages/providers/tests
+.venv/bin/pytest evals/tests
 
 # Static checks (matches the Makefile's format-check/lint/typecheck targets
 # and ci.yml's python job exactly — packages/ontology joined the tree in #145)
@@ -87,6 +89,15 @@ name while iterating, but run the workspace command before handoff.
   packages/ontology/fel_ontology
 .venv/bin/black --check \
   apps workers evals packages/providers packages/retrieval packages/retrieval-evals packages/ontology
+
+# Security gates. CI runs these too — bandit and pip-audit in ci.yml's python
+# job, audit-bulk in its javascript job. They are the three gate commands most
+# often missed locally, because the sections above stop at the static checks.
+.venv/bin/bandit -q -r \
+  apps workers evals packages/providers packages/retrieval packages/retrieval-evals packages/ontology \
+  -c pyproject.toml
+.venv/bin/pip-audit -r requirements-dev.txt
+node scripts/audit-bulk.mjs
 ```
 
 ## Database-backed tests
@@ -214,7 +225,7 @@ access for dependency advisory data.
 **Known interaction if you obtained Python 3.11 through `uv`.** The `security`
 target's `pip-audit` step builds a disposable venv with
 `venv.EnvBuilder(with_pip=True)`, which defaults to `symlinks=False` and so
-*copies* the interpreter binary. `uv`'s standalone CPython builds resolve
+_copies_ the interpreter binary. `uv`'s standalone CPython builds resolve
 `libpython3.11.dylib` through an `@rpath` relative to their original install
 location, so the copy cannot load it and the step aborts:
 

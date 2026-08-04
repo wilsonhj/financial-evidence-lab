@@ -66,8 +66,12 @@ Every research action resolves an **effective cutoff**. A valid source must be
 known by that instant:
 
 ```text
-available_at <= effective_as_of
+published_at <= effective_as_of
 ```
+
+`published_at` is the real column name — on `documents` (`db/migrations/0002_corpus_core.sql`)
+and in every cutoff predicate (`apps/api/app/reader.py`). There is no
+`available_at` anywhere in the schema or the code; grep for the name you see here.
 
 The rule applies to both collection endpoints and direct reads. A user must not
 be able to bypass a cutoff by guessing a document or version URL.
@@ -255,10 +259,14 @@ This section covers the architecture.
   the payload's qualifiers, failing closed (`KeyError`) on any missing
   required qualifier so an incomplete extraction is never silently treated as
   comparable to anything else. PR #75's golden tests assert
-  *non*-comparability across construction/scope/window/alias-collision axes,
+  _non_-comparability across construction/scope/window/alias-collision axes,
   plus a positive control.
 
-### Typed roles (`extraction/roles/`)
+### Typed roles (`extraction/`)
+
+`roles/` itself holds only `__init__.py` and `base.py`; the prompts, schemas and
+tool allowlist named below are its siblings under `extraction/`, which is why
+`base.py` resolves them from `_PKG = ...parent.parent`.
 
 Exactly five roles are registered (`extraction/types.py::Role`):
 `classifier`, `fact_candidates`, `kpi`, `guidance`, `driver_mapper`. Each is a
@@ -290,7 +298,7 @@ checks the queue lease, cancellation, and the wall-clock budget before the
 stage runs; every stage's durable write is re-fenced immediately beforehand
 (`_commit_fence`), so a lease lost mid-stage commits nothing and the run's
 real owner replays the (idempotent, content-hash-keyed) stage rather than
-reading a zombie's output. Terminal outcomes append their event *before*
+reading a zombie's output. Terminal outcomes append their event _before_
 writing run status: migration `0004`'s `fel_assert_extraction_run_open`
 rejects any child insert once a run row is terminal, so writing status first
 silently drops the terminal event and replaces the real exception with the
@@ -355,13 +363,13 @@ orphans is tracked in
   that no field rides through beyond what the contract's
   `additionalProperties: false` closes.
 - `accounting.py` carries per-payload rules (the `svc_gm` blended-margin
-  prohibition, percent plausibility computed on the *scaled* magnitude,
+  prohibition, percent plausibility computed on the _scaled_ magnitude,
   billings-derivation lineage, cRPO timing verification) and cross-payload
   arithmetic identities required by spec M3-VAL-001
   (`identity_errors`: cRPO never exceeds RPO, single-dimension segments sum to
   their total, gross profit equals revenue minus |COGS|). Every comparison
   reconstructs a magnitude from the stored mantissa + scale pair
-  (`_magnitude`) and compares within a *relative* tolerance, so two payloads
+  (`_magnitude`) and compares within a _relative_ tolerance, so two payloads
   for the same figure restated at different scales, or with routine reporting
   noise, do not false-positive; each identity applies `abs()` only where the
   arithmetic requires it (the subtracted COGS term; both sides of the
@@ -425,16 +433,16 @@ own identity.
 Every item below was a design requirement before the runtime existed; each
 now has a concrete implementation to point to.
 
-| Requirement                                                    | How it is met                                                                                     |
-| ---------------------------------------------------------------| --------------------------------------------------------------------------------------------------|
-| Bind execution to immutable database-owned run/evidence inputs | `RunPins`/`SpanPin` (`persist.py`) read the run and cited spans back from Postgres rather than trusting the queue payload |
-| Validate the complete structured output, not only top-level keys | `validate/schema.py` closes every payload variant against the frozen contract; `accounting.py`/`range.py`/`definitions.py`/`citations.py` grade content |
-| Persist a logical batch and its provenance atomically           | `persist_outputs_atomic` (proposals + evidence + conflicts, one transaction); `commit_succeeded_atomic` (step row + `step_completed` event, one transaction) |
-| Fence late provider responses after lease loss/cancellation    | `_boundary` (stage entry) and `_commit_fence` (stage exit) both check `lease_check`/`cancel_check` |
-| Enforce wall-clock, attempt, token, and cost budgets durably    | `RunBudget.precheck`/`record` (`budget.py`), usage merged with `GREATEST` across queue attempts    |
-| Treat missing/invalid citations and financial normalization as blockers | `citations.py` (uncited/unverified proposals blocked); `normalize/payload.py` fails closed on unparseable/out-of-range values |
-| Preserve scale, unit, period, currency, and magnitude in duplicate/conflict identity | `duplicates.py::comparability_key_for` + `value_fingerprint`; `accounting.py::_magnitude` |
-| Minimize sensitive/raw provider data in audit records           | `redact.py` (queue-owned error sinks) and `events.py::redact_payload` (extraction event payloads); see the M4 open question under Known gaps |
+| Requirement                                                                          | How it is met                                                                                                                                                |
+| ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Bind execution to immutable database-owned run/evidence inputs                       | `RunPins`/`SpanPin` (`persist.py`) read the run and cited spans back from Postgres rather than trusting the queue payload                                    |
+| Validate the complete structured output, not only top-level keys                     | `validate/schema.py` closes every payload variant against the frozen contract; `accounting.py`/`range.py`/`definitions.py`/`citations.py` grade content      |
+| Persist a logical batch and its provenance atomically                                | `persist_outputs_atomic` (proposals + evidence + conflicts, one transaction); `commit_succeeded_atomic` (step row + `step_completed` event, one transaction) |
+| Fence late provider responses after lease loss/cancellation                          | `_boundary` (stage entry) and `_commit_fence` (stage exit) both check `lease_check`/`cancel_check`                                                           |
+| Enforce wall-clock, attempt, token, and cost budgets durably                         | `RunBudget.precheck`/`record` (`budget.py`), usage merged with `GREATEST` across queue attempts                                                              |
+| Treat missing/invalid citations and financial normalization as blockers              | `citations.py` (uncited/unverified proposals blocked); `normalize/payload.py` fails closed on unparseable/out-of-range values                                |
+| Preserve scale, unit, period, currency, and magnitude in duplicate/conflict identity | `duplicates.py::comparability_key_for` + `value_fingerprint`; `accounting.py::_magnitude`                                                                    |
+| Minimize sensitive/raw provider data in audit records                                | `redact.py` (queue-owned error sinks) and `events.py::redact_payload` (extraction event payloads); see the M4 open question under Known gaps                 |
 
 ## Failure, concurrency, and idempotency semantics
 
@@ -474,7 +482,7 @@ those columns can carry document-derived text such as
 `extraction/events.py::redact_payload` (key-based masking for extraction
 event payloads, with one deliberate exception: a `step_completed` event's
 `stage_output` is the durable checkpoint payload — migration `0004` has no
-`steps.output` column — so it is exempted from *truncation*, though its
+`steps.output` column — so it is exempted from _truncation_, though its
 sensitive-key substitution still runs). Whether that sensitive-key
 substitution running inside `stage_output` is itself a defect (it can corrupt
 `raw_payload_hash` on rehydration if an issuer-supplied qualifier or dimension
@@ -510,7 +518,7 @@ open:
   (`validate/definitions.py::_unit_errors`) checkers. A one-sided fold
   (`_facts` only) was tried during PR #145 review and reverted: it merged
   `'usd'`/`'USD'` rows into one identity slice, `_sole` correctly backed off
-  to `validate/conflicts.py`, but conflicts is keyed on the *unfolded* unit
+  to `validate/conflicts.py`, but conflicts is keyed on the _unfolded_ unit
   and never saw the pair — a real identity break became invisible with no
   blocker from any checker, strictly worse than the under-merge gap the fold
   was meant to close. A correct fix needs one canonical unit policy applied
@@ -523,7 +531,7 @@ open:
   same parens-aware parser as every other numeric field, an ordinary
   worsening margin range (e.g. `svc_gm` guidance of `-5%` to `-15%`, written
   `low="(5)"`, `high="(15)"` in filing order) normalizes to `low=-5,
-  high=-15` and is spuriously blocked as `range_low_gt_high` — no schema or
+high=-15` and is spuriously blocked as `range_low_gt_high` — no schema or
   prompt anywhere actually states that `low` must be the numerically smaller
   bound. Separately, `check_range` never runs at all for a `guidance`
   payload whose `metric_id` is free text (real income-statement guidance
@@ -553,7 +561,7 @@ open:
   **Status: Proposed** — whether `stage_output` carrying evidence text verbatim
   breaches the metadata-only event guarantee in
   `specs/003-agentic-extraction/data-model.md` (PR #145 review finding P1-8.2).
-  Distinct from M4: M4 asks whether key substitution *inside* `stage_output`
+  Distinct from M4: M4 asks whether key substitution _inside_ `stage_output`
   corrupts a resumed run, ADR-0009 asks whether that payload should carry the
   text at all. Both are open, and their conclusions are consistent — the payload
   is exempt from truncation, not from key substitution.

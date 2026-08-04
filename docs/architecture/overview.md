@@ -54,19 +54,19 @@ retrieval indexes, runs, and audit records live in PostgreSQL.
 
 ## Containers and responsibilities
 
-| Container/package                   | Responsibility                                                                                         | Current maturity                                       |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------ |
-| `apps/web`                          | Evidence Reader, Search Observatory, run comparison, server-side API integration                       | Implemented in fixture and HTTP modes                  |
-| `apps/api`                          | Authentication boundary, RLS transaction setup, workspaces, corpus/reader, retrieval and feedback APIs | Implemented; production auth is pending                |
-| `workers`                           | Durable job claiming, SEC discovery/fetch/company-facts ingestion, leases and retries                  | Implemented for SEC paths                              |
-| `packages/retrieval`                | Chunking, lane retrieval, deterministic plan/fusion, traces, claims, replay                            | Implemented, mock-provider first                       |
-| `packages/providers`                | Stable external-provider protocols and deterministic mocks                                             | Interfaces/mocks implemented; live coverage is partial |
-| `packages/contracts`                | Versioned JSON Schemas, OpenAPI descriptions, generated TypeScript types                               | Implemented through M3 contract v0.4                   |
-| `db/migrations`                     | Tenant, corpus, retrieval, extraction, queue, and RLS schema                                           | Implemented through migration `0005`                   |
-| `evals`, `packages/retrieval-evals` | Cross-stack fixtures, graders, and retrieval benchmarks                                                | Synthetic gates implemented; live gates open           |
-| `packages/ontology`                 | saas-metrics/v1 ontology (9 families / 14 metrics), comparability keys                                 | Implemented                                             |
-| Extraction runtime (`workers/.../extraction`) | Durable worker FSM: typed roles, normalization, validators, budget enforcement, atomic persistence | Implemented (`61058e4`, PR #145); known gaps below      |
-| Calculation/forecast packages       | Scenario model, forecast, backtest, release UI                                                         | Planned                                                |
+| Container/package                             | Responsibility                                                                                         | Current maturity                                       |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------ |
+| `apps/web`                                    | Evidence Reader, Search Observatory, run comparison, server-side API integration                       | Implemented in fixture and HTTP modes                  |
+| `apps/api`                                    | Authentication boundary, RLS transaction setup, workspaces, corpus/reader, retrieval and feedback APIs | Implemented; production auth is pending                |
+| `workers`                                     | Durable job claiming, SEC discovery/fetch/company-facts ingestion, leases and retries                  | Implemented for SEC paths                              |
+| `packages/retrieval`                          | Chunking, lane retrieval, deterministic plan/fusion, traces, claims, replay                            | Implemented, mock-provider first                       |
+| `packages/providers`                          | Stable external-provider protocols and deterministic mocks                                             | Interfaces/mocks implemented; live coverage is partial |
+| `packages/contracts`                          | Versioned JSON Schemas, OpenAPI descriptions, generated TypeScript types                               | Implemented through M3 contract v0.4                   |
+| `db/migrations`                               | Tenant, corpus, retrieval, extraction, queue, and RLS schema                                           | Implemented through migration `0005`                   |
+| `evals`, `packages/retrieval-evals`           | Cross-stack fixtures, graders, and retrieval benchmarks                                                | Synthetic gates implemented; live gates open           |
+| `packages/ontology`                           | saas-metrics/v1 ontology (9 families / 14 metrics), comparability keys                                 | Implemented                                            |
+| Extraction runtime (`workers/.../extraction`) | Durable worker FSM: typed roles, normalization, validators, budget enforcement, atomic persistence     | Implemented (`61058e4`, PR #145); known gaps below     |
+| Calculation/forecast packages                 | Scenario model, forecast, backtest, release UI                                                         | Planned                                                |
 
 ## Architectural layers
 
