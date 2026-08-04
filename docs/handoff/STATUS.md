@@ -1,12 +1,14 @@
 # Implementation status
 
-Last updated: 2026-07-28
+Last updated: 2026-08-03
 
 ## Repository
 
 - Default and implementation base: `main`.
-- Current `origin/main` tip: `eed2140` (#144 postcss/brace-expansion advisory remediation, stacked on #142). Note: local `main` may sit at `89e4363`, which is **not** on `origin/main` — it reached the remote only via `agent/m3-extraction-core` and lands with PR #145. Always resolve trunk against `origin/main`.
-- In review: M3-EXTRACTION-CORE (#60) on `agent/m3-extraction-core` (PR #145). Next dispatch after it merges is M3-REVIEW (#61).
+- Current `origin/main` tip: `61058e4` (#145 M3-EXTRACTION-CORE, squash-merged 2026-07-30; #150 and #147 landed just before it). Always resolve trunk against `origin/main`.
+- **`89e4363` did NOT land with PR #145.** It reached the remote only via `agent/m3-extraction-core` and was **reverted on that branch by `7f11bab`**, per the integration-lead ruling recorded on #60: it amends the constitution (1.1.0 -> 1.2.0), rewrites `AGENTS.md` document precedence, and flips 14 task checkboxes including 12 lead-reserved ones — all `shared_paths`, with no `contract-change` label and no ADR. Verified byte-identical to `origin/main` on both sides of the revert. Re-landing it requires its own `contract-change` PR (#141). An earlier version of this line said it "lands with PR #145" — true when written, wrong after the revert, and wrong now that #145 has merged without it.
+- **`agent/m3-extraction-core` is merged and closed.** #145 was squashed, so its branch tip `04da0fb` is **not** an ancestor of `main`. Do not push follow-up work to that branch — a merged PR cannot track it. M3 follow-ups branch from `main`.
+- Next dispatch: M3-REVIEW (#61), now unblocked.
 - Canonical product spec: `specs/001-financial-evidence-lab/spec.md` v1.2.
 - M2 implementation design: `specs/002-observable-hybrid-retrieval/` plus ADR-0006 (live on main).
 - M3 implementation design: `specs/003-agentic-extraction/` plus ADR-0007 (live on main).
@@ -48,19 +50,28 @@ Still research-draft (not a dispatch blocker): recovered benchmark needs SEC tim
 
 ## Active
 
-1. **In review:** M3-EXTRACTION-CORE (#60) — branch `agent/m3-extraction-core`, PR **#145** OPEN from `main` @ `eed2140`. All five checks green, `mergeStateStatus: CLEAN`, no review submitted (GitHub disallows self-approval, so `reviewDecision` is empty despite four blockers having been raised and resolved). Nothing else may claim its paths until this merges.
+1. **M3 post-merge follow-up** — branch `claude/repo-analysis-g0fvjy` from `main` @ `61058e4`. M3-EXTRACTION-CORE (#60) itself is **merged**; three items its review raised were still open when it landed and are carried here, off `main`, because a merged PR cannot track follow-up work:
 
-   Scope delivered: `packages/ontology` saas-metrics/v1 (14 metrics / 9 families), bounded durable extraction workflow (budgets, checkpoints, five typed roles), Decimal normalize/validate, `extraction_run` consumer dispatch, proposals always `needs_review`. Review remediation on-branch: numeric parser truncation (`4200000` → `420`), evidence truncated to 64 chars on resume, mock model bound unconditionally in the production entrypoint, worker packaging, budget reset per retry, runs stuck `running` after untyped escapes. Two defects found by first real-Postgres coverage: four of five terminal paths never wrote their terminal event (0004 rejects child inserts once a run row is terminal), and content-triggered mock controls (`ABSTAIN`/`REFUSE`) were reachable from untrusted filing text. Live OpenAI deferred to #62; terminal-run retry semantics to #146.
+   - **Review M4** — sensitive-key *substitution* still ran inside `step_completed.stage_output`, so an issuer-supplied `qualifiers`/`dimensions` key named `token`, or a payload field named `raw`, became `"[redacted]"` in the durable checkpoint and broke `raw_payload_hash` / `definition_hash` / `proposal_id` on resume. The exemption is now total and positional, lifted outside `_redact` so no later rule can reach it, and bound to `event_type == "step_completed"`.
+   - **`queue.fail` redaction reverted** — `redact_error_text` masks quoted runs positionally, so on the shared terminal path it erased job kinds, tickers, accession numbers and FRED series ids from `jobs.error` for four ingestion kinds M3 does not own. The helper stays, applied to `extraction_run_steps.error`. Narrowing the shared-path rule belongs to worker-infra.
+   - **ADR-0009's four pre-ratification corrections** — `Amends:` extended to `packages/contracts/**` (the guarantee ships in the generated client) with the major-vs-minor question posed; Decision points 1 and 2 corrected against what the code does; the event and log redaction helpers split so `telemetry.emit` cannot inherit the checkpoint carve-out; and the "truncate and re-fetch" rejection re-argued after its stated premise turned out false. Plus named revisit triggers.
 
-   Move this record into **Completed** when PR #145 lands, and flip `workstreams.yaml` `status: review` -> `merged` with the merge SHA.
+   Scope #145 delivered: `packages/ontology` saas-metrics/v1 (14 metrics / 9 families), bounded durable extraction workflow (budgets, checkpoints, five typed roles), Decimal normalize/validate, `extraction_run` consumer dispatch, proposals always `needs_review`.
+
+   Review remediation that landed with it, by round: numeric parser truncation (`4200000` → `420`); evidence truncated to 64 chars on resume; mock model bound unconditionally in the production entrypoint; worker packaging; budget reset per retry; runs stuck `running` after untyped escapes. Then the magnitude/scale round — the suffix table (`bn`/`MM`/`trillion`), partial numbers failing closed, the declared `scale` validated instead of collapsed to 0 (mantissa + exponent per the frozen fixture, ADR-0001), `sign` cross-checked against the value, and the step commit made atomic with its output-carrying event. Then durability defaults, `citation_status` from evidence rather than model output, currency in the comparability key, and refusing to attach to an adjudicated conflict. Then the accounting-cluster round: the gross-profit identity inverted for parenthesized (negative) COGS and the same polarity bug in cRPO/RPO; a normalizer-rejected row silently disabling identities for its clean siblings; and `wall_seconds_used` read latest-wins rather than `MAX`. Finally the checkpoint payload: substitution inside `stage_output` corrupting `raw_payload_hash` for issuer keys named like secrets, and the event/log redaction helpers split so telemetry cannot inherit the carve-out.
+
+   Two defects found by the first real-Postgres coverage: four of five terminal paths never wrote their terminal event (0004 rejects child inserts once a run row is terminal), and content-triggered mock controls (`ABSTAIN`/`REFUSE`) were reachable from untrusted filing text.
+
+   Known gaps left open deliberately, with issues: **#153** (unit-case handling — the identity slice keys on the raw string, so `usd`/`USD` skip the check; the one-sided fold was tried and reverted as net-harmful, and unifying it touches the persisted conflict identity); **#146** (terminal-run retry semantics); **#62** (live OpenAI adapter); and the `steps.output` column that ADR-0009 names as the correct fix for the checkpoint-in-event-stream trade.
+
+   `workstreams.yaml` M3-EXTRACTION-CORE is already flipped to `merged` with `61058e4`. Move the #145 scope narrative into **Completed** once this follow-up lands; the three items above are the only thing keeping the record here.
 
 Serialization notes: blocked #108 overlaps `apps/api/**` + `apps/web/**` + `evals/**` — if #108 unblocks, do not run it concurrently with any package holding those paths.
 
 ## Ready
 
-None — #61 and #62 both depend on #60, which has not merged yet.
-
-On #145 merging, M3-REVIEW (#61) becomes ready (branch `agent/m3-review`, not yet created; paths `apps/web/**`, `apps/api/**`), then M3-CONFIDENCE-GATE (#62), which also owns the live OpenAI adapter #60 deferred. Flip both `status:` keys in `workstreams.yaml` at the same time — they currently inherit `defaults.status: blocked`.
+- **M3-REVIEW (#61)** — unblocked by #145 merging. Branch `agent/m3-review` (not yet created); paths `apps/web/**`, `apps/api/**`. Its `status:` key still inherits `defaults.status: blocked` and needs flipping to `ready` at dispatch. **Gate:** #146 (terminal-run retry semantics) should be resolved before #61 lands the producer, and ADR-0009's amendment must land before #61 exposes the SSE surface — #61 is the trigger that turns the event stream's false published guarantee into one a consumer relies on.
+- **M3-CONFIDENCE-GATE (#62)** — after #61. Also owns the live OpenAI adapter #60 deferred.
 
 ## Blocked (registered, not dispatchable)
 

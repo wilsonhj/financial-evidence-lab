@@ -336,7 +336,7 @@ packages:
     depends_on: [M2-CLAIMS-VERIFICATION, M3-CONTRACT]
     team: extraction
     branch: agent/m3-extraction-core
-    status: review # PR #145 OPEN (2026-07-28) from main @ eed2140, all 5 checks green, mergeStateStatus CLEAN, no review submitted; review blockers 1-4 + both high-severity findings fixed on-branch; carries 89e4363 (.specify/** + AGENTS.md, shared paths — see #141); follow-ups #146 (terminal-run retry design) + #62 (live OpenAI adapter, deferred). Flip to `merged` with the merge SHA once landed.
+    status: merged # PR #145 squash-merged to main @ 61058e4 (2026-07-30), from main @ eed2140, with the `contract-change` label (docs/decisions/** addition, AGENTS.md:41). Branch tip at merge: 04da0fb — squashed, so that SHA is NOT an ancestor of main. Review rounds, all fixed on-branch and independently verified: blockers 1-4 + both high-severity findings; the numeric/scale/atomicity round; the durability/citation/conflict round; the accounting-cluster round (B1 COGS + cRPO polarity, M1 normalizer-rejected rows excluded from identities, M3 wall_seconds via MAX). 89e4363 was REVERTED by 7f11bab and did NOT land; it re-lands via #141. Landed with three items still open, now follow-up work off main (not on the merged branch): review M4 (substitution inside stage_output corrupting raw_payload_hash), the queue.fail redaction revert, and ADR-0009's four pre-ratification corrections. Other follow-ups: #153 (unit-case unification — the one-sided fold is net-harmful and was reverted), #146 (terminal-run retry), #62 (live OpenAI adapter, deferred), plus the steps.output column ADR-0009 names as the correct fix.
     allowed_paths:
       - packages/ontology/**
       - packages/providers/**

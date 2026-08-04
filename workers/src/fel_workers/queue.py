@@ -15,8 +15,6 @@ from typing import Any
 import psycopg
 from psycopg.rows import dict_row
 
-from fel_workers.redact import redact_error_text
-
 HEARTBEAT_STALE_SECONDS = 60
 
 
@@ -153,10 +151,25 @@ def fail(conn: psycopg.Connection, job: ClaimedJob, message: str) -> bool:
                 {
                     "error": {
                         "code": "JOB_FAILED",
-                        # Handler exceptions interpolate the offending value, so
-                        # this can carry document text and credentials into a
-                        # durable column. Same discipline as the event payloads.
-                        "message": redact_error_text(message),
+                        # NOT redacted here, deliberately. `redact_error_text`
+                        # was applied at this call site and reverted: `fail` is
+                        # the shared terminal path for every job kind, and that
+                        # helper masks quoted runs positionally, so it turned
+                        # `unknown job kind 'sec_filing_fetch'` into `unknown job
+                        # kind '[redacted]'` and erased tickers, accession
+                        # numbers, and FRED series ids from `jobs.error` for four
+                        # ingestion kinds this package does not own. It is still
+                        # applied to `extraction_run_steps.error` (workflow.py),
+                        # a sink this package does own.
+                        #
+                        # The underlying concern is real — a normalizer error
+                        # like f"cannot normalize raw_value {value!r}" embeds
+                        # filing text in a durable column — but the fix belongs
+                        # at the source (those messages should not interpolate
+                        # document text) or in a narrowed rule owned by
+                        # worker-infra, not in an untargeted sink-side mask on a
+                        # shared contract. See PR #145 review.
+                        "message": message,
                         "request_id": job.id,
                     }
                 }

@@ -14,7 +14,7 @@ import pytest
 
 from fel_providers.mocks import MockStructuredLLMProvider
 from fel_workers.extraction.errors import IntegrityError
-from fel_workers.extraction.events import MemoryEventStore, redact_payload
+from fel_workers.extraction.events import MemoryEventStore, redact_event_payload
 from fel_workers.extraction.handler import _evidence_from_payload, request_from_payload
 from fel_workers.extraction.hashing import sha256_hex
 from fel_workers.extraction.persist import MemoryPersistStore
@@ -85,7 +85,7 @@ def test_long_span_text_survives_event_round_trip() -> None:
     payload = sample_payload(text=LONG_SPAN_TEXT)
     request = request_from_payload(payload)
     evidence = _evidence_from_payload(payload)
-    stored = redact_payload(
+    stored = redact_event_payload(
         {
             "step_name": "assemble_evidence",
             "input_hash": sha256_hex("assemble_evidence"),
@@ -101,7 +101,8 @@ def test_long_span_text_survives_event_round_trip() -> None:
                     for b in evidence
                 ]
             ),
-        }
+        },
+        event_type="step_completed",
     )
 
     state = WorkflowState(request=request)

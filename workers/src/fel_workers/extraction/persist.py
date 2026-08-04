@@ -13,7 +13,11 @@ import psycopg
 
 from fel_workers.extraction.checkpoint import MemoryCheckpointStore
 from fel_workers.extraction.errors import StepFailed
-from fel_workers.extraction.events import ExtractionEvent, MemoryEventStore, redact_payload
+from fel_workers.extraction.events import (
+    ExtractionEvent,
+    MemoryEventStore,
+    redact_event_payload,
+)
 from fel_workers.extraction.hashing import proposal_id_for
 from fel_workers.extraction.types import ConflictDraft, ProposalDraft, StageRecord
 
@@ -867,6 +871,11 @@ class PostgresEventStore:
             INSERT INTO extraction_run_events (org_id, run_id, event_type, payload)
             VALUES (%s, %s, %s, %s::jsonb)
             """,
-            (org_id, run_id, event_type, json.dumps(redact_payload(payload))),
+            (
+                org_id,
+                run_id,
+                event_type,
+                json.dumps(redact_event_payload(payload, event_type=event_type)),
+            ),
         )
         return event

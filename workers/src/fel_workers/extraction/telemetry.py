@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from fel_workers.extraction.events import redact_payload
+from fel_workers.extraction.events import redact_log_payload
 
 log = logging.getLogger("fel_workers.extraction.telemetry")
 
@@ -18,7 +18,7 @@ def emit(
     **fields: Any,
 ) -> None:
     """Emit a structured log line with sensitive keys redacted."""
-    payload = redact_payload(
+    payload = redact_log_payload(
         {
             "event": event,
             "run_id": run_id,

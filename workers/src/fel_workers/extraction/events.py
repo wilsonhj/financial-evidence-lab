@@ -3,8 +3,25 @@
 Source text is redacted too, with one deliberate and bounded exception: a
 ``step_completed`` event's ``stage_output`` is the durable checkpoint payload
 (frozen migration 0004 has no ``steps.output`` column), so it carries the pinned
-span text and the stage payloads verbatim — see ``redact_payload``. Prompts,
-messages and secrets are stripped everywhere, ``stage_output`` included.
+span text and the stage payloads verbatim — see ``redact_event_payload``.
+Everywhere else, in every other event type, and in **every** log line, prompts,
+messages, source text and secrets are stripped.
+
+Two entry points, deliberately not one:
+
+* :func:`redact_event_payload` — the event sink (``MemoryEventStore.append`` and
+  ``PostgresEventStore.append``). Takes ``event_type``, and grants the
+  ``stage_output`` exemption only to ``step_completed``.
+* :func:`redact_log_payload` — the log sink (``telemetry.emit``). Has no
+  exemption of any kind and cannot be given one.
+
+They are separate functions because the exemption's whole justification is that
+``extraction_run_events`` is an org-scoped, RLS-protected durable record that a
+resume reads back and re-hashes. A log line is none of those things: process
+stdout is not RLS'd and nothing rehydrates from it, so filing text there would
+be a real leak rather than a bounded false-guarantee. When both sinks shared one
+function, telemetry was one accidental ``stage_output`` field away from
+inheriting an exemption written for a database row (ADR-0009).
 """
 
 from __future__ import annotations
@@ -50,15 +67,16 @@ _REDACT_KEYS = frozenset(
 )
 
 
-def redact_payload(payload: dict[str, Any]) -> dict[str, Any]:
-    """Drop known sensitive keys and truncate unexpected long strings.
+def redact_event_payload(payload: dict[str, Any], *, event_type: str) -> dict[str, Any]:
+    """Redact an event payload bound for ``extraction_run_events``.
 
-    Checkpoint payloads under ``stage_output`` are the exception, and they are
-    exempted from *truncation* wholesale rather than key by key: migration 0004
-    has no ``steps.output`` column, so the ``step_completed`` event payload IS the
-    durable stage output, and every string in it is either restored verbatim on
-    resume or hashed. Truncating any of them corrupts a resumed run silently.
-    Precisely, inside ``stage_output``:
+    Drops known sensitive keys and truncates unexpected long strings, with one
+    exception: on a ``step_completed`` event, the ``stage_output`` subtree passes
+    through **untouched**. Migration 0004 has no ``steps.output`` column, so that
+    subtree IS the durable stage output, and every string in it is either
+    restored verbatim on resume or hashed. Altering any of them — by truncation
+    or by substitution — corrupts a resumed run silently. Precisely, inside
+    ``stage_output``:
 
     * ``workflow._restore_output`` rebuilds ``EvidenceBlock.text`` (checked
       against ``text_hash``), ``state.classification``, ``state.candidates``,
@@ -68,21 +86,67 @@ def redact_payload(payload: dict[str, Any]) -> dict[str, Any]:
       over every field (``raw_payload_hash``, and ``proposal_id_for`` on top of
       it) and ``sha256_hex(definition)`` (``definition_hash``).
     * ``hashing.stage_input_hash`` hashes the same payloads again as the
-      ``normalize`` / ``validate`` stage inputs, so a truncated string breaks
+      ``normalize`` / ``validate`` stage inputs, so an altered string breaks
       checkpoint identity as well as the proposal ids.
 
-    That set is not a closed list of field names: ``dimensions`` and
-    ``qualifiers`` carry issuer-supplied keys with arbitrary values and are
-    hashed too, so any per-key allowlist would miss them — which is how
-    ``description`` / ``definition`` prose stayed truncated while only ``text``
-    was exempt. The rule is therefore positional: no length truncation anywhere
-    under ``stage_output``. Redaction of sensitive keys still applies there, and
-    truncation still applies to every other (genuinely incidental) event string.
+    The exemption is **positional, and total**. Two earlier attempts scoped it by
+    field name and both leaked: first only ``text`` was exempt, so ``definition``
+    and ``description`` prose stayed truncated; then truncation was suppressed
+    wholesale but *substitution* was not, so a ``qualifiers``/``dimensions`` key
+    an issuer happened to name ``token`` — or a payload field named ``raw`` —
+    still became ``"[redacted]"`` and still broke ``raw_payload_hash`` (PR #145
+    review M4). ``dimensions`` and ``qualifiers`` hold issuer-supplied keys with
+    arbitrary names, which is exactly why no per-key rule can work here: the
+    check has to be *where the data sits*, not *what it is called*.
+
+    Nothing under ``stage_output`` needs a key-based rule anyway.
+    ``serialize_stage_output`` serializes one stage's return value — evidence
+    blocks, classification, candidates, and normalized payloads. Provider
+    credentials and prompts are never part of a stage's return; they live on the
+    provider call, and ``model_step`` (which does carry per-attempt request
+    hashes) is a *sibling* of ``stage_output``, not inside it, so it is still
+    redacted normally.
+
+    Other event types get no exemption even if they somehow carry a
+    ``stage_output`` key: the argument above is specifically about the one
+    payload a resume reads back. The exemption is also applied only at the top
+    level of that payload, which is the only place ``workflow`` writes the key —
+    a nested ``stage_output`` deeper in some future payload is not the durable
+    checkpoint and gets no pass.
     """
-    return _redact(payload, checkpoint=False)
+    if event_type != "step_completed":
+        return _redact(payload)
+    exempt = payload.get("stage_output")
+    if not isinstance(exempt, (dict, list)):
+        return _redact(payload)
+    # Redact everything except the checkpoint subtree, then reattach it verbatim.
+    # Splitting it out rather than special-casing inside `_redact` is what makes
+    # the guarantee structural: no rule added to `_redact` later can reach it.
+    rest = _redact({k: v for k, v in payload.items() if k != "stage_output"})
+    return {**rest, "stage_output": exempt}
 
 
-def _redact(payload: dict[str, Any], *, checkpoint: bool) -> dict[str, Any]:
+def redact_log_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    """Redact a payload bound for a log line — no exemptions, ever.
+
+    Separate from :func:`redact_event_payload` on purpose. The ``stage_output``
+    exemption is justified by properties a log line does not have: an
+    org-scoped RLS'd table that a resume reads back and re-hashes. Process
+    stdout is not tenant-scoped and nothing rehydrates from it, so the same
+    filing text there is a genuine leak rather than a bounded false guarantee
+    (``spec.md:180``, ``OPERATOR.md:16``). Keeping the exemption structurally
+    unreachable from this path is cheaper than remembering not to pass a
+    checkpoint payload to a logger (ADR-0009).
+    """
+    return _redact(payload)
+
+
+def _redact(payload: dict[str, Any]) -> dict[str, Any]:
+    """Unconditional redaction: sensitive keys masked, long strings truncated.
+
+    Has no notion of an exemption, by design — the checkpoint carve-out is
+    applied by ``redact_event_payload`` *around* this function, never inside it.
+    """
     cleaned: dict[str, Any] = {}
     for key, value in payload.items():
         lowered = key.lower()
@@ -90,37 +154,19 @@ def _redact(payload: dict[str, Any], *, checkpoint: bool) -> dict[str, Any]:
             lowered in {"secret", "api_key", "password", "token"}
             or "secret" in lowered
             or "password" in lowered
+            or lowered in _REDACT_KEYS
         ):
             cleaned[key] = "[redacted]"
             continue
-        if key == "stage_output" and isinstance(value, (dict, list)):
-            cleaned[key] = _redact_stage_output(value)
-            continue
-        if lowered in _REDACT_KEYS:
-            if checkpoint and lowered == "text" and isinstance(value, str):
-                # Span text survives redaction inside a checkpoint payload: it is
-                # restored verbatim and the stored text_hash must keep describing it.
-                cleaned[key] = value
-            else:
-                cleaned[key] = "[redacted]"
-            continue
         if isinstance(value, dict):
-            cleaned[key] = _redact(value, checkpoint=checkpoint)
+            cleaned[key] = _redact(value)
         elif isinstance(value, list):
-            cleaned[key] = [
-                (_redact(v, checkpoint=checkpoint) if isinstance(v, dict) else v) for v in value
-            ]
-        elif not checkpoint and isinstance(value, str) and len(value) > 256:
+            cleaned[key] = [(_redact(v) if isinstance(v, dict) else v) for v in value]
+        elif isinstance(value, str) and len(value) > 256:
             cleaned[key] = value[:64] + "…[truncated]"
         else:
             cleaned[key] = value
     return cleaned
-
-
-def _redact_stage_output(value: dict[str, Any] | list[Any]) -> dict[str, Any] | list[Any]:
-    if isinstance(value, list):
-        return [_redact(v, checkpoint=True) if isinstance(v, dict) else v for v in value]
-    return _redact(value, checkpoint=True)
 
 
 @dataclass
@@ -143,7 +189,7 @@ class MemoryEventStore:
             raise ValueError(f"unknown event_type {event_type!r}")
         event = ExtractionEvent(
             event_type=event_type,
-            payload=redact_payload(payload),
+            payload=redact_event_payload(payload, event_type=event_type),
             id=len(self.events) + 1,
         )
         self.events.append(event)
@@ -154,5 +200,6 @@ __all__ = [
     "ALLOWED_EVENT_TYPES",
     "ExtractionEvent",
     "MemoryEventStore",
-    "redact_payload",
+    "redact_event_payload",
+    "redact_log_payload",
 ]
