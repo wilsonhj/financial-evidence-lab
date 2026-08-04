@@ -157,10 +157,11 @@ def test_handler_exception_requeues_until_attempts_exhausted(
 
 
 def test_fetch_payload_validation_fails_closed(corpus_conn: psycopg.Connection) -> None:
-    with pytest.raises(ValueError, match="url/accession/cik"):
-        handle_sec_filing_fetch(
-            corpus_conn, MockStorageProvider(), FixtureSecClient(), {"cik": "9999999"}
-        )
+    payload = {"cik": "9999999", "api_key": "sk-must-not-be-echoed"}
+    with pytest.raises(ValueError, match="url/accession/cik") as excinfo:
+        handle_sec_filing_fetch(corpus_conn, MockStorageProvider(), FixtureSecClient(), payload)
+    assert "sk-must-not-be-echoed" not in str(excinfo.value)
+    assert "api_key" not in str(excinfo.value)
 
 
 # --- Lease-contract regression tests (re-review finding 1) -----------------

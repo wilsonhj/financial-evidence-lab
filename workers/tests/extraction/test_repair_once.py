@@ -141,3 +141,70 @@ def test_root_input_hash_stable_across_repair() -> None:
     assert provider.calls == 2
     assert result.root_input_hash == result.attempt_request_hashes[0]
     assert result.attempt_request_hashes[0] != result.attempt_request_hashes[1]
+
+
+@pytest.mark.parametrize(
+    ("role", "step_name", "parsed"),
+    [
+        (
+            Role.CLASSIFIER,
+            "classify",
+            {
+                "document_type": "10-Q",
+                "sections": [],
+                "relevant_modes": ["kpi"],
+                "api_key": "sk-provider-secret",
+            },
+        ),
+        (
+            Role.CLASSIFIER,
+            "classify",
+            {
+                "document_type": "10-Q",
+                "sections": [
+                    {
+                        "source_span_id": "22222222-2222-4222-8222-222222222222",
+                        "label": "Metrics",
+                        "prompt": "hidden system prompt",
+                    }
+                ],
+                "relevant_modes": ["kpi"],
+            },
+        ),
+        (
+            Role.FACT_CANDIDATES,
+            "collect_candidates",
+            {
+                "candidates": [
+                    {
+                        "source_span_id": "22222222-2222-4222-8222-222222222222",
+                        "metric_hint": "ARR",
+                        "raw_value": "$100 million",
+                        "messages": ["secret provider context"],
+                    }
+                ]
+            },
+        ),
+    ],
+)
+def test_closed_role_schemas_reject_unexpected_checkpoint_fields(
+    role: Role, step_name: str, parsed: dict[str, Any]
+) -> None:
+    provider = _ScriptedProvider([_ok(parsed), _ok(parsed)])
+
+    with pytest.raises(SchemaInvalid):
+        run_model_step(
+            provider=provider,  # type: ignore[arg-type]
+            spec=ROLE_SPECS[role],
+            evidence_blocks=[
+                {"source_span_id": "22222222-2222-4222-8222-222222222222", "text": "x"}
+            ],
+            budget=RunBudget(),
+            run_id="00000000-0000-4000-8000-000000000001",
+            step_name=step_name,
+            workflow_version="extraction-workflow/v1",
+            provider_ref="mock",
+            model_ref="mock-structured-v1",
+        )
+
+    assert provider.calls == 2

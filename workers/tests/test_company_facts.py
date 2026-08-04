@@ -562,10 +562,13 @@ def test_consumer_fails_job_when_client_lacks_capability(
 
 @requires_db
 def test_handler_payload_validation_fails_closed(corpus_conn: psycopg.Connection) -> None:
-    with pytest.raises(ValueError, match="missing cik"):
+    payload = {"api_key": "sk-must-not-be-echoed"}
+    with pytest.raises(ValueError, match="missing cik") as excinfo:
         handle_sec_company_facts(
-            corpus_conn, MockStorageProvider(), FixtureCompanyFactsClient(), {}
+            corpus_conn, MockStorageProvider(), FixtureCompanyFactsClient(), payload
         )
+    assert "sk-must-not-be-echoed" not in str(excinfo.value)
+    assert "api_key" not in str(excinfo.value)
 
 
 @requires_db

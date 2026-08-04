@@ -15,6 +15,8 @@ from typing import Any
 import psycopg
 from psycopg.rows import dict_row
 
+from fel_workers.redact import redact_job_error_text
+
 HEARTBEAT_STALE_SECONDS = 60
 
 
@@ -151,25 +153,11 @@ def fail(conn: psycopg.Connection, job: ClaimedJob, message: str) -> bool:
                 {
                     "error": {
                         "code": "JOB_FAILED",
-                        # NOT redacted here, deliberately. `redact_error_text`
-                        # was applied at this call site and reverted: `fail` is
-                        # the shared terminal path for every job kind, and that
-                        # helper masks quoted runs positionally, so it turned
-                        # `unknown job kind 'sec_filing_fetch'` into `unknown job
-                        # kind '[redacted]'` and erased tickers, accession
-                        # numbers, and FRED series ids from `jobs.error` for four
-                        # ingestion kinds this package does not own. It is still
-                        # applied to `extraction_run_steps.error` (workflow.py),
-                        # a sink this package does own.
-                        #
-                        # The underlying concern is real — a normalizer error
-                        # like f"cannot normalize raw_value {value!r}" embeds
-                        # filing text in a durable column — but the fix belongs
-                        # at the source (those messages should not interpolate
-                        # document text) or in a narrowed rule owned by
-                        # worker-infra, not in an untargeted sink-side mask on a
-                        # shared contract. See PR #145 review.
-                        "message": message,
+                        # Queue-specific sanitization keeps quoted operational
+                        # identifiers readable while masking credential forms.
+                        # Arbitrary payload/document values are removed at the
+                        # source; the queue remains a defense-in-depth boundary.
+                        "message": redact_job_error_text(message),
                         "request_id": job.id,
                     }
                 }
