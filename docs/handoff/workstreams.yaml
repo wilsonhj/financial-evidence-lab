@@ -76,8 +76,10 @@ defaults:
 
 # Queue restructure (architecture audit, 2026-07): 41 packages consolidated to 19
 # milestone-scoped packages (18 pending once the completed M0-SCAFFOLD merges).
+# The file has since grown to 32 entries as contract waves and unallocated
+# packages were registered; the 19/18 figures are historical, not current.
 # Issues #57-#62 refreshed and contract waves #100/#101 added 2026-07-16. Each package's `issue:` field points at its
-# GitHub issue (#51-#68); legacy issues #9-#49 are closed. Deferred post-MVP and
+# GitHub issue (#9 and #51-#151, not a contiguous range); legacy issues #10-#49 are closed. Deferred post-MVP and
 # removed from the queue: T0211-T0213 (Embedding Atlas) and T0506 (analogues).
 # T0214 is split: T0214a (50-100-question smoke benchmark, M2) and T0214b (frozen
 # 300-question adjudicated benchmark, M5 release). T0215 keeps the retrieval and
@@ -336,7 +338,7 @@ packages:
     depends_on: [M2-CLAIMS-VERIFICATION, M3-CONTRACT]
     team: extraction
     branch: agent/m3-extraction-core
-    status: merged # PR #145 squash-merged to main @ 61058e4 (2026-07-30), from main @ eed2140, with the `contract-change` label (docs/decisions/** addition, AGENTS.md:41). Branch tip at merge: 04da0fb — squashed, so that SHA is NOT an ancestor of main. Review rounds, all fixed on-branch and independently verified: blockers 1-4 + both high-severity findings; the numeric/scale/atomicity round; the durability/citation/conflict round; the accounting-cluster round (B1 COGS + cRPO polarity, M1 normalizer-rejected rows excluded from identities, M3 wall_seconds via MAX). 89e4363 was REVERTED by 7f11bab and did NOT land; it re-lands via #141. Landed with three items still open, now follow-up work off main (not on the merged branch): review M4 (substitution inside stage_output corrupting raw_payload_hash), the queue.fail redaction revert, and ADR-0009's four pre-ratification corrections. Other follow-ups: #153 (unit-case unification — the one-sided fold is net-harmful and was reverted), #146 (terminal-run retry), #62 (live OpenAI adapter, deferred), plus the steps.output column ADR-0009 names as the correct fix.
+    status: merged # PR #145 squash-merged to main @ 61058e4 (2026-07-30) from main @ eed2140, with the `contract-change` label (docs/decisions/** addition, AGENTS.md:41); issue #60. Branch tip at merge: 04da0fb — squashed, so that SHA is NOT an ancestor of main; do not push follow-ups to that branch. Review rounds, all fixed on-branch and independently verified: blockers 1-4 + both high-severity findings; the numeric/scale/atomicity round; the durability/citation/conflict round; the accounting-cluster round (gross-profit polarity inversion, the same polarity defect in _check_rpo_balance, a normalizer-rejected row disabling identity checks for clean siblings, latest-not-greatest wall_seconds_used). M4 (substitution inside stage_output corrupting raw_payload_hash) was FIXED by PR #156 @ 263bff8 — an earlier assessment recorded it as a false positive; that was wrong (the intersection was computed over the schema's enumerated property names, but _redact walks every key at every depth and the frozen contract opens dimensions/qualifiers to arbitrary issuer keys). #156 also reverted the queue.fail redaction (restored by #160 @ 5ec4c08 after #159 was filed against it) and applied ADR-0009's four pre-ratification corrections. 89e4363 (.specify/** + AGENTS.md) was REVERTED on-branch by 7f11bab, so no governance surface moved — verified by hash; it re-lands via #141. Follow-ups: #146 (terminal-run retry design), #62 (live OpenAI adapter, deferred), #153 (unit-case unification), #154 (guidance range ordering) — the last two move persisted identity keys and need an ADR; #157 (steps.output column, the fix ADR-0009 names) and #158 (checkpoint hash verification).
     allowed_paths:
       - packages/ontology/**
       - packages/providers/**
@@ -421,3 +423,41 @@ packages:
       - packages/export/**
       - evals/**
       - docs/release/**
+  - id: DOCS-ONBOARDING # developer onboarding, architecture, system design, testing guides
+    issue: 148
+    # Deliberately empty: documentation work has no Spec Kit task. Registered
+    # retroactively — the branch was cut 16 minutes after #148 was filed and the
+    # dispatch checklist's registration step was never run, so the durable queue
+    # had no record this package existed while PR #149 was open against it.
+    tasks: []
+    depends_on: []
+    team: platform
+    branch: agent/developer-docs
+    # Matches the allowed paths #148's own body states. None is a shared path,
+    # so no contract-change label is required — confirmed against the
+    # shared_paths inventory at the top of this file.
+    status: merged # PR #149 merged @ 52c787a. Refreshed against 61058e4 (stale extraction-status prose + four broken developer commands fixed on-branch), then an integration-lead pass executed every documented command and corrected three more: the phantom `available_at` identifier, an overstated "fails startup" guarantee, and the extraction/roles/ scope mislabel. Paths are free to claim again.
+    allowed_paths:
+      - README.md
+      - docs/architecture/**
+      - docs/development/**
+  - id: EVALS-REPORT-RENDER # stdlib-only corpus-QA report renderer (Markdown + SVG)
+    issue: 151
+    # Deliberately empty: no Spec Kit task covers eval-report rendering. The
+    # proposal (PR #150) documents reading T0001-T0513 and finding no owner, so
+    # this is an unallocated package, not a missing task reference.
+    tasks: []
+    depends_on: [M1-CORPUS-QA]
+    team: trust
+    branch: agent/evals-report-render
+    # Narrower than the `evals/**` the proposal suggested: this package only
+    # writes the renderer and its tests. These are still SUBTREES of the
+    # `evals/**` claimed by #108, #62, #67 and #68, so they do overlap — the
+    # narrowing shrinks the contended surface, it does not remove it. All four
+    # are blocked today, so there is no live contention; serialize against
+    # whichever unblocks first.
+    # Spec: docs/research/evals-report-renderer-proposal.md.
+    status: ready # deps satisfied — M1-CORPUS-QA merged via #86; size lever declined (both goldens committed), see STATUS.md decision record
+    allowed_paths:
+      - evals/reporting/**
+      - evals/tests/**
