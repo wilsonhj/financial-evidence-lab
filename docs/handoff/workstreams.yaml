@@ -436,7 +436,7 @@ packages:
     # Matches the allowed paths #148's own body states. None is a shared path,
     # so no contract-change label is required — confirmed against the
     # shared_paths inventory at the top of this file.
-    status: review # PR #149 open. Refreshed against 61058e4 (stale extraction-status prose + four broken developer commands fixed on-branch), then an integration-lead pass executed every documented command and corrected three more: the phantom `available_at` identifier, an overstated "fails startup" guarantee, and the extraction/roles/ scope mislabel. `review`, not `ready` — an open PR holds these paths, so nothing else may be dispatched against them.
+    status: merged # PR #149 merged @ 52c787a. Refreshed against 61058e4 (stale extraction-status prose + four broken developer commands fixed on-branch), then an integration-lead pass executed every documented command and corrected three more: the phantom `available_at` identifier, an overstated "fails startup" guarantee, and the extraction/roles/ scope mislabel. Paths are free to claim again.
     allowed_paths:
       - README.md
       - docs/architecture/**

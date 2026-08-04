@@ -5,7 +5,7 @@ Last updated: 2026-08-04
 ## Repository
 
 - Default and implementation base: `main`.
-- Current `origin/main` tip: `263bff8` (PR #156, the M3 post-merge follow-up). Prior notable tips: PR #145 M3-EXTRACTION-CORE @ `61058e4`, PR #150 corpus-QA renderer proposal @ `21750b1`, PR #147 ADR-0008 Amendment 1 @ `355d2b6`, PR #144 postcss/brace-expansion remediation @ `eed2140`, PR #127 DB-GUARD-HARDENING @ `e55eea8`. Always resolve trunk against `origin/main`.
+- Current `origin/main` tip: `5ec4c08` (PR #160, durable job-error sanitization). Prior notable tips: PR #149 developer onboarding + architecture guides @ `52c787a`, PR #156 M3 post-merge follow-up @ `263bff8`, PR #145 M3-EXTRACTION-CORE @ `61058e4`, PR #150 corpus-QA renderer proposal @ `21750b1`, PR #147 ADR-0008 Amendment 1 @ `355d2b6`, PR #144 postcss/brace-expansion remediation @ `eed2140`, PR #127 DB-GUARD-HARDENING @ `e55eea8`. Always resolve trunk against `origin/main`.
 - The earlier warning about local `main` sitting at `89e4363` is retired: that commit was reverted on-branch by `7f11bab` before #145 merged, so no `.specify/**` or `AGENTS.md` change landed. Verified by hash — both are byte-identical either side of `61058e4`. Re-landing it requires its own `contract-change` PR (#141).
 - **`agent/m3-extraction-core` is merged and closed.** #145 was squashed, so its branch tip `04da0fb` is **not** an ancestor of `main`. Do not push follow-up work to that branch — a merged PR cannot track it. M3 follow-ups branch from `main`.
 - Next dispatch: M3-REVIEW (#61) is unblocked now that #60 has merged, and is not yet flipped to `ready`. M3-CONFIDENCE-GATE (#62) is **not** unblocked — it `depends_on: [M3-REVIEW]`, so it waits on #61 merging, not on #60.
@@ -50,6 +50,8 @@ Last updated: 2026-08-04
   - Merged after four review rounds. Final round fixed one blocker and three majors that the suite did not catch: the gross-profit identity inverted for contra-presented COGS, a normalizer-rejected row disabling identity checks for clean siblings, `wall_seconds_used` read latest-not-greatest, and the same polarity defect unfixed in `_check_rpo_balance`. M4 (redaction inside `stage_output`) is **FIXED by PR #156** @ `263bff8`. An earlier investigation here assessed it a false positive on the grounds that the frozen schemas intersect `_REDACT_KEYS` at exactly `{"text"}`. That reasoning was computed over the schema's *enumerated* property names, but `_redact` walks every key at **every depth**, and the frozen contract opens `dimensions` (`additionalProperties: {type: string}`) and `qualifiers` (`additionalProperties: true`) to arbitrary issuer-supplied names. A payload passing `validate_payload_item` with zero errors had `qualifiers.token` rewritten to `"[redacted]"` in the durable checkpoint, breaking `raw_payload_hash` on resume; end-to-end on real Postgres this produced two proposals with two hashes for one fact in one run. A top-level key named `raw` *is* rejected by the schema, so that part of the original doubt was correct.
   - Deliberately deferred out of the PR: **#153** (unify unit-case handling across identity, duplicate and definition checks — a one-sided fold was tried and reverted because it made a real break invisible) and **#154** (guidance range ordering: polarity-blind `check_range`, plus no ordering check at all for free-text `metric_id`s). Both move persisted identity keys and need an ADR.
   - Verified at merge: 1047 passed, 0 skipped against Postgres 17 + pgvector with `TEST_DATABASE_URL` set; five CI jobs green.
+- **DOCS-ONBOARDING: PR #149 @ `52c787a` (2026-08-04) — issue #148.** Developer onboarding, architecture, system-design and testing guides. Landed after the refresh against `61058e4` and the integration-lead pass that executed every documented command; both are described under its Completed record below rather than repeated here.
+- **Durable job-error sanitization: PR #160 @ `5ec4c08`.** Extends the redaction discipline to the durable job-error column. Closes the last sink where handler exceptions could carry issuer text or credentials into storage outside the treatment the event payloads already apply.
 
 ### Tracker note — #96 residual owned by #108
 
@@ -63,7 +65,9 @@ Still research-draft (not a dispatch blocker): recovered benchmark needs SEC tim
 
 ## Active
 
-1. **In review:** DOCS-ONBOARDING (#148) — branch `agent/developer-docs`, PR **#149**. Paths `README.md`, `docs/architecture/**`, `docs/development/**`. Nothing else may claim its paths until this merges.
+None. DOCS-ONBOARDING (#148) merged as `52c787a` while this reconciliation was open; its record moved to Completed and its `workstreams.yaml` status is now `merged`, so its paths are free to claim.
+
+Completed detail for DOCS-ONBOARDING, retained because it records what was verified rather than merely asserted:
 
    Refreshed against `61058e4`, which cleared what was previously recorded against it here: the six assertions that the M3 runtime was unmerged (including `system-design.md`'s "downstream code must not assume that PR's runtime is available on `main`"), four developer commands that could not run as written, `packages/ontology` missing from both the repository map and the static-check lists, the unreferenced `docs/runbooks/`, and the `eed2140` test-count baseline.
 
@@ -89,11 +93,10 @@ Nine packages are `blocked` in `workstreams.yaml`. Only #108 is enumerated below
 
 1. **M3-REVIEW (#61)** is unblocked now that #60 is merged — it was the only package waiting directly on it. Branch `agent/m3-review` (not yet created; paths `apps/web/**`, `apps/api/**`). It carries an **explicit** `status: blocked` in `workstreams.yaml`; flip that one key to `ready` when dispatching.
 2. **M3-CONFIDENCE-GATE (#62) is not yet unblocked.** `workstreams.yaml` gives it `depends_on: [M3-REVIEW]`, and `docs/handoff/README.md:26-28` makes a package ready only when *every* `depends_on` package is `merged` — so #62 waits on #61 landing, not on #60. It has **no** `status` key and inherits `defaults.status: blocked`, so dispatching it means adding a key rather than flipping one. #62 owns the live OpenAI adapter #60 deferred; note its `allowed_paths` do not currently include `packages/providers/**`, where the provider protocol lives.
-3. **Merge PR #149** (DOCS-ONBOARDING) once reviewed. The refresh against `61058e4` is complete — see Active.
-4. **Rule on the ADR-0009 / #157 fork.** M4 itself needs no ruling — it was a real defect and PR #156 fixed it. What is still open is mutually exclusive: ADR-0009 (**Proposed**) would amend the six published "metadata-only" statements *down* to match the code, while **#157** adds the `steps.output` column so those statements stay true. Only one should land. #156 corrected four false statements in ADR-0009 but deliberately did not ratify it. **#158** (verify the restored checkpoint against a hash) is independent of the fork and needs no contract change.
-5. EVALS-REPORT-RENDER (#151) — dispatchable now; no live contention, but its paths are `evals/**` subtrees, so serialize against #108/#62/#67/#68 if any unblocks.
-6. **#153 and #154** — both deferred out of #145, both move persisted identity keys, both need an ADR before implementation.
-7. READER-PROD-SMOKE (#108) remains blocked until credentials + the integrity residual are cleared.
+3. **Rule on the ADR-0009 / #157 fork.** M4 itself needs no ruling — it was a real defect and PR #156 fixed it. What is still open is mutually exclusive: ADR-0009 (**Proposed**) would amend the six published "metadata-only" statements *down* to match the code, while **#157** adds the `steps.output` column so those statements stay true. Only one should land. #156 corrected four false statements in ADR-0009 but deliberately did not ratify it. **#158** (verify the restored checkpoint against a hash) is independent of the fork and needs no contract change.
+4. EVALS-REPORT-RENDER (#151) — dispatchable now; no live contention, but its paths are `evals/**` subtrees, so serialize against #108/#62/#67/#68 if any unblocks.
+5. **#153 and #154** — both deferred out of #145, both move persisted identity keys, both need an ADR before implementation.
+6. READER-PROD-SMOKE (#108) remains blocked until credentials + the integrity residual are cleared.
 
 ### Decision record — EVALS-REPORT-RENDER size lever (2026-07-29)
 
