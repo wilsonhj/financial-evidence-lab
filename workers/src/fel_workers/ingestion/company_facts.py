@@ -854,7 +854,9 @@ def handle_sec_company_facts(
     """Handle one ``sec_company_facts`` job: fetch the snapshot and ingest it."""
     cik = str(payload.get("cik") or "")
     if not cik:
-        raise ValueError(f"sec_company_facts payload is missing cik: {payload!r}")
+        # The exception is copied into the durable jobs.error envelope; do not
+        # interpolate arbitrary payload keys or values here.
+        raise ValueError("sec_company_facts payload is missing cik")
     fetched = sec.company_facts(cik)
     raw = canonical_company_facts_bytes(fetched)
     return ingest_company_facts(

@@ -49,13 +49,97 @@ class StepResult:
     instructions_hash: str
 
 
+def _matches_type(value: object, expected: object) -> bool:
+    types = expected if isinstance(expected, list) else [expected]
+    for type_name in types:
+        if type_name == "null" and value is None:
+            return True
+        if type_name == "object" and isinstance(value, dict):
+            return True
+        if type_name == "array" and isinstance(value, list):
+            return True
+        if type_name == "string" and isinstance(value, str):
+            return True
+        if type_name == "boolean" and isinstance(value, bool):
+            return True
+        if type_name == "integer" and isinstance(value, int) and not isinstance(value, bool):
+            return True
+        if (
+            type_name == "number"
+            and isinstance(value, (int, float))
+            and not isinstance(value, bool)
+        ):
+            return True
+    return False
+
+
+def _schema_errors(value: object, schema: dict[str, object], *, path: str = "$") -> list[str]:
+    """Validate the closed subset of JSON Schema used by role envelopes.
+
+    Provider SDK structured-output modes are not a trust boundary: mocks and
+    future providers can still return extra fields. Validating only ``required``
+    let those fields ride into the verbatim durable checkpoint. The committed
+    role schemas use a small subset (type/required/properties/items/closure,
+    enum, minLength and uniqueItems), implemented here without adding a runtime
+    dependency.
+    """
+    errors: list[str] = []
+    expected_type = schema.get("type")
+    if expected_type is not None and not _matches_type(value, expected_type):
+        return [f"{path}: expected {expected_type!r}"]
+
+    enum = schema.get("enum")
+    if isinstance(enum, list) and value not in enum:
+        errors.append(f"{path}: value is not in the allowed enum")
+
+    if isinstance(value, str):
+        minimum = schema.get("minLength")
+        if isinstance(minimum, int) and len(value) < minimum:
+            errors.append(f"{path}: string is shorter than {minimum}")
+
+    if isinstance(value, dict):
+        required = schema.get("required", [])
+        if isinstance(required, list):
+            missing = [str(key) for key in required if key not in value]
+            if missing:
+                errors.append(f"{path}: missing required keys: {missing}")
+
+        properties_raw = schema.get("properties", {})
+        properties = properties_raw if isinstance(properties_raw, dict) else {}
+        if schema.get("additionalProperties") is False:
+            unknown = sorted(str(key) for key in value if key not in properties)
+            if unknown:
+                errors.append(f"{path}: unexpected keys: {unknown}")
+
+        names_raw = schema.get("propertyNames")
+        if isinstance(names_raw, dict):
+            allowed_names = names_raw.get("enum")
+            if isinstance(allowed_names, list):
+                unknown = sorted(str(key) for key in value if key not in allowed_names)
+                if unknown:
+                    errors.append(f"{path}: unexpected keys: {unknown}")
+
+        for key, child in value.items():
+            child_schema = properties.get(key)
+            if isinstance(child_schema, dict):
+                errors.extend(_schema_errors(child, child_schema, path=f"{path}.{key}"))
+
+    if isinstance(value, list):
+        item_schema = schema.get("items")
+        if isinstance(item_schema, dict):
+            for index, item in enumerate(value):
+                errors.extend(_schema_errors(item, item_schema, path=f"{path}[{index}]"))
+        if schema.get("uniqueItems") is True:
+            markers = [json.dumps(item, sort_keys=True, default=str) for item in value]
+            if len(markers) != len(set(markers)):
+                errors.append(f"{path}: items must be unique")
+
+    return errors
+
+
 def _envelope_errors(parsed: dict[str, object], schema: dict[str, object]) -> list[str]:
-    """Envelope-root required-key check (items validated separately for step-output)."""
-    required = schema.get("required", [])
-    if not isinstance(required, list):
-        return []
-    missing = [str(k) for k in required if k not in parsed]
-    return [f"missing required keys: {missing}"] if missing else []
+    """Validate the complete closed role envelope before checkpointing it."""
+    return _schema_errors(parsed, schema)
 
 
 def _is_empty_proposals(parsed: dict[str, object]) -> bool:
