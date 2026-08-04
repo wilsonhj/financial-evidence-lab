@@ -145,7 +145,9 @@ def handle_sec_filing_fetch(
     accession = str(payload.get("accession") or "")
     cik = str(payload.get("cik") or "")
     if not url or not accession or not cik:
-        raise ValueError(f"sec_filing_fetch payload is missing url/accession/cik: {payload!r}")
+        # Never echo an untrusted job payload into the exception: the worker's
+        # terminal queue error is durable and tenant-readable.
+        raise ValueError("sec_filing_fetch payload is missing url/accession/cik")
     form = str(payload["form"]) if payload.get("form") else None
     filed_on_text = str(payload.get("filed_on") or "")
     filed_at = datetime.fromisoformat(filed_on_text)

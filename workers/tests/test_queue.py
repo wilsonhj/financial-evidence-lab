@@ -70,6 +70,31 @@ def test_fail_requeues_until_max_attempts(conn: psycopg.Connection) -> None:
     assert row[0] == "failed" and row[1]["error"]["code"] == "JOB_FAILED"
 
 
+def test_fail_redacts_credentials_but_keeps_operational_identifiers(
+    conn: psycopg.Connection,
+) -> None:
+    queue.enqueue(conn, kind="sec_filing_fetch", payload={}, max_attempts=1)
+    job = queue.claim_one(conn)
+    assert job is not None
+    message = (
+        "job kind 'sec_filing_fetch', ticker 'CRM', accession '0001-25-000001'; "
+        "Authorization: Bearer top-secret; FEL_OPENAI_API_KEY=sk-live-abcdef; "
+        "access_token='token with spaces'"
+    )
+
+    assert queue.fail(conn, job, message) is True
+
+    row = conn.execute("SELECT error FROM jobs WHERE id = %s", (job.id,)).fetchone()
+    assert row is not None
+    stored = row[0]["error"]["message"]
+    assert "top-secret" not in stored
+    assert "sk-live-abcdef" not in stored
+    assert "token with spaces" not in stored
+    assert "sec_filing_fetch" in stored
+    assert "CRM" in stored
+    assert "0001-25-000001" in stored
+
+
 def test_reap_stale(conn: psycopg.Connection) -> None:
     queue.enqueue(conn, kind="stuck", payload={})
     job = queue.claim_one(conn)
