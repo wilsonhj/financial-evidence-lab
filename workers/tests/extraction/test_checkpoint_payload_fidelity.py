@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fel_workers.extraction.events import redact_payload
+from fel_workers.extraction.events import redact_event_payload, redact_log_payload
 from fel_workers.extraction.hashing import hash_json, sha256_hex, stage_input_hash
 from fel_workers.extraction.serialize import serialize_stage_output
 
@@ -55,7 +55,9 @@ def test_long_prose_survives_the_checkpoint_event_verbatim() -> None:
     }
     stage_output = {"proposals": [driver]}
 
-    stored = redact_payload(_step_completed_payload(stage_output))
+    stored = redact_event_payload(
+        _step_completed_payload(stage_output), event_type="step_completed"
+    )
     restored = stored["stage_output"]["proposals"][0]
 
     for key, original in driver.items():
@@ -79,7 +81,7 @@ def test_long_prose_survives_the_checkpoint_event_verbatim() -> None:
 def test_long_span_text_still_survives_the_checkpoint_event() -> None:
     """The exemption that already worked must keep working."""
     long_text = _PINNED_TEXT * 10
-    stored = redact_payload(
+    stored = redact_event_payload(
         _step_completed_payload(
             [
                 {
@@ -88,26 +90,102 @@ def test_long_span_text_still_survives_the_checkpoint_event() -> None:
                     "text_hash": sha256_hex(long_text),
                 }
             ]
-        )
+        ),
+        event_type="step_completed",
     )
     block = stored["stage_output"][0]
     assert block["text"] == long_text
     assert sha256_hex(block["text"]) == block["text_hash"]
 
 
-def test_secrets_are_still_stripped_inside_a_checkpoint_payload() -> None:
-    """Exempting truncation must not exempt redaction."""
-    stored = redact_payload(
-        _step_completed_payload({"prompt": "system prompt", "api_key": "sk-live", "ok": True})
-    )
-    assert stored["stage_output"]["prompt"] == "[redacted]"
-    assert stored["stage_output"]["api_key"] == "[redacted]"
+def test_sensitive_keys_outside_stage_output_are_still_redacted() -> None:
+    """The exemption is positional: siblings of `stage_output` are unaffected.
+
+    This replaces an earlier assertion that `prompt` / `api_key` were redacted
+    *inside* `stage_output` too. That was the M4 defect rather than the
+    guarantee — see
+    `test_issuer_supplied_key_named_like_a_secret_survives_inside_stage_output`.
+    """
+    payload = _step_completed_payload({"ok": True})
+    payload["prompt"] = "system prompt"
+    payload["api_key"] = "sk-live"
+    payload["model_step"] = {"api_key": "sk-live", "attempts": 1}
+
+    stored = redact_event_payload(payload, event_type="step_completed")
+
+    assert stored["prompt"] == "[redacted]"
+    assert stored["api_key"] == "[redacted]"
+    # `model_step` is a sibling of `stage_output`, not inside it.
+    assert stored["model_step"]["api_key"] == "[redacted]"
+    assert stored["model_step"]["attempts"] == 1
     assert stored["stage_output"]["ok"] is True
+
+
+def test_issuer_supplied_key_named_like_a_secret_survives_inside_stage_output() -> None:
+    """PR #145 review M4: substitution inside `stage_output` broke the hashes.
+
+    `dimensions` and `qualifiers` carry issuer-supplied keys with arbitrary
+    names, so a cohort qualifier an issuer happened to call `token` — and a
+    payload field named `raw` — were replaced with `"[redacted]"` on the way into
+    the durable checkpoint. A resume then rehydrated the substituted value and
+    recomputed a `raw_payload_hash` / `proposal_id` that no longer matched the
+    run that produced it.
+    """
+    driver = {
+        "kind": "kpi",
+        "metric_id": "nrr",
+        "value": "118",
+        "scale": 0,
+        "raw": "118% net revenue retention",
+        "qualifiers": {"token": "annual-cohort", "basis": "dollar"},
+        "dimensions": {"token": "FY25", "segment": "enterprise"},
+    }
+
+    stored = redact_event_payload(
+        _step_completed_payload({"proposals": [driver]}), event_type="step_completed"
+    )
+    restored = stored["stage_output"]["proposals"][0]
+
+    assert restored["qualifiers"]["token"] == "annual-cohort"
+    assert restored["dimensions"]["token"] == "FY25"
+    assert restored["raw"] == "118% net revenue retention"
+    # The hash a resumed run recomputes must still describe the same payload.
+    assert hash_json(restored) == hash_json(driver)
+
+
+def test_log_payloads_get_no_stage_output_exemption() -> None:
+    """`telemetry.emit` must not inherit the event sink's carve-out (ADR-0009).
+
+    Same payload through both helpers: the event sink preserves the checkpoint
+    subtree, the log sink redacts through it. A log line is not RLS'd and nothing
+    rehydrates from it, so filing text there is a real leak rather than a bounded
+    false guarantee.
+    """
+    payload = _step_completed_payload({"text": _PINNED_TEXT})
+
+    as_event = redact_event_payload(payload, event_type="step_completed")
+    as_log = redact_log_payload(payload)
+
+    assert as_event["stage_output"]["text"] == _PINNED_TEXT
+    assert as_log["stage_output"]["text"] == "[redacted]"
+
+
+def test_stage_output_exemption_is_scoped_to_step_completed() -> None:
+    """Only the one payload a resume reads back is exempt."""
+    payload = _step_completed_payload({"text": _PINNED_TEXT})
+
+    exempt = redact_event_payload(payload, event_type="step_completed")
+    assert exempt["stage_output"]["text"] == _PINNED_TEXT
+    for other in ("step_failed", "run_succeeded", "heartbeat"):
+        stored = redact_event_payload(payload, event_type=other)
+        assert stored["stage_output"]["text"] == "[redacted]", other
 
 
 def test_incidental_event_strings_outside_stage_output_are_still_truncated() -> None:
     """The redaction intent is kept for strings nothing restores or hashes."""
-    stored = redact_payload({"rationale": "x" * 400, "step_name": "normalize"})
+    stored = redact_event_payload(
+        {"rationale": "x" * 400, "step_name": "normalize"}, event_type="step_completed"
+    )
     assert stored["rationale"].endswith("…[truncated]")
     assert len(stored["rationale"]) < 100
     assert stored["step_name"] == "normalize"

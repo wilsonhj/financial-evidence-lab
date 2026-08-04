@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from fel_providers.mocks import MockStructuredLLMProvider
-from fel_workers.extraction.events import redact_payload
+from fel_workers.extraction.events import redact_log_payload
 from fel_workers.extraction.handler import handle_extraction_run
 from fel_workers.extraction.telemetry import emit
 
@@ -90,6 +90,6 @@ def test_telemetry_redacts_sensitive_keys(caplog: Any) -> None:
         )
     assert "SECRET PROMPT TEXT" not in caplog.text
     assert "filing body" not in caplog.text
-    cleaned = redact_payload({"prompt": "x", "run_id": "abc", "tokens": 3})
+    cleaned = redact_log_payload({"prompt": "x", "run_id": "abc", "tokens": 3})
     assert cleaned["prompt"] == "[redacted]"
     assert cleaned["run_id"] == "abc"
