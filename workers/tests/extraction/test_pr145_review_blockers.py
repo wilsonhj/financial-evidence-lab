@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from fel_workers.extraction.errors import StepFailed
-from fel_workers.extraction.events import redact_payload
+from fel_workers.extraction.events import redact_event_payload
 from fel_workers.extraction.hashing import sha256_hex
 from fel_workers.extraction.persist import PostgresPersistStore
 from fel_workers.extraction.serialize import serialize_stage_output
@@ -29,7 +29,7 @@ def test_stage_output_keeps_span_text_under_redaction() -> None:
         ],
         "api_key": "should-go",
     }
-    cleaned = redact_payload(payload)
+    cleaned = redact_event_payload(payload, event_type="step_completed")
     assert cleaned["api_key"] == "[redacted]"
     assert cleaned["stage_output"][0]["text"] == "ARR was $100 million"
 

@@ -9,7 +9,7 @@ import pytest
 
 from fel_providers.mocks import MockStructuredLLMProvider
 from fel_workers.extraction.checkpoint import MemoryCheckpointStore
-from fel_workers.extraction.events import MemoryEventStore, redact_payload
+from fel_workers.extraction.events import MemoryEventStore, redact_log_payload
 from fel_workers.extraction.handler import JOB_KIND_EXTRACTION_RUN, handle_extraction_run
 from fel_workers.extraction.hashing import sha256_hex
 from fel_workers.extraction.persist import MemoryPersistStore
@@ -160,7 +160,7 @@ def test_handler_memory_path_and_job_kind_constant() -> None:
 
 
 def test_redaction_strips_prompt_dumps() -> None:
-    cleaned = redact_payload(
+    cleaned = redact_log_payload(
         {
             "prompt": "SECRET SYSTEM",
             "messages": [{"role": "user", "content": "filing text"}],
