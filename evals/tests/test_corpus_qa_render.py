@@ -16,8 +16,10 @@ inside the test body -- see :func:`test_schema_constants_match_the_harness`.
 from __future__ import annotations
 
 import ast
+import os
 import pathlib
 import re
+import subprocess
 import sys
 from typing import Any
 
@@ -272,6 +274,57 @@ def test_two_independent_renders_are_byte_identical() -> None:
     second = render.load_report(COMMITTED_REPORT)
     assert render.render_markdown(first) == render.render_markdown(second)
     assert render.render_svg(first) == render.render_svg(second)
+
+
+# Four seeds rather than two: PYTHONHASHSEED perturbs str/bytes hashing, and on
+# an input this small two seeds can happen to agree on iteration order even when
+# the renderer is hash-dependent.
+DETERMINISM_HASH_SEEDS = ("0", "7", "12345", "99999")
+
+# Runs in a fresh interpreter, so it may not import anything from this module.
+_DIGEST_PROGRAM = """\
+import hashlib
+import pathlib
+import sys
+
+from reporting import corpus_qa_render as render
+
+report = render.load_report(pathlib.Path(sys.argv[1]))
+for text in (render.render_markdown(report), render.render_svg(report)):
+    print(hashlib.sha256(text.encode("utf-8")).hexdigest())
+"""
+
+
+def _digests_under_hash_seed(seed: str) -> str:
+    """Render the committed report in a FRESH interpreter at ``PYTHONHASHSEED=seed``."""
+    completed = subprocess.run(
+        [sys.executable, "-c", _DIGEST_PROGRAM, str(COMMITTED_REPORT)],
+        capture_output=True,
+        text=True,
+        check=True,
+        env={**os.environ, "PYTHONHASHSEED": seed, "PYTHONPATH": str(REPO_ROOT / "evals")},
+    )
+    return completed.stdout
+
+
+def test_output_is_identical_across_hash_seeds_in_separate_processes() -> None:
+    """The only check here that can catch hash-order dependence.
+
+    ``PYTHONHASHSEED`` is fixed for an interpreter's lifetime, so
+    :func:`test_two_independent_renders_are_byte_identical` renders twice under
+    one seed and agrees with itself however the renderer iterates. Replace a
+    ``sorted(...)`` with bare ``set`` iteration and that test still passes;
+    this one fails. Separate processes at differing seeds are the only way to
+    observe the difference, which is why the guarantee cannot be asserted
+    in-process no matter how many times a single interpreter re-renders.
+    """
+    by_seed = {seed: _digests_under_hash_seed(seed) for seed in DETERMINISM_HASH_SEEDS}
+    detail = "\n".join(
+        f"  seed {seed}: {digests.split()}" for seed, digests in sorted(by_seed.items())
+    )
+    assert (
+        len(set(by_seed.values())) == 1
+    ), f"renderer output depends on PYTHONHASHSEED -- iteration is hash-ordered:\n{detail}"
 
 
 def test_goldens_end_with_exactly_one_newline_and_use_unix_line_endings() -> None:
