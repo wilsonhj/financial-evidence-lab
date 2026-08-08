@@ -1,35 +1,74 @@
-"""Currency identification only — no FX conversion (M3-NRM-003)."""
+"""Currency identification only — no FX conversion (M3-NRM-003).
+
+The single implementation of currency handling in the normalizer, called from
+``payload.py::_normalize_numeric_fields``. It previously sat here unimported
+next to a near-duplicate inline in ``payload.py`` (issue #155), and the two
+behaved differently: the orphan *nulled* a malformed currency and inferred one
+from the unit, while the live code raised and inferred nothing. The live
+semantics are kept — a malformed currency is issuer data that must not be
+silently discarded, and a currency the issuer never stated must not be invented
+— and only the one rule the live path was missing is added
+(``currency_missing_for_monetary``).
+"""
 
 from __future__ import annotations
 
 import re
+from typing import Any
 
-_CCY = re.compile(r"^[A-Z]{3}$")
+# ISO-4217 alpha-3, uppercase only. Lowercase is *rejected*, not folded, so the
+# ``.upper()`` below is a no-op today. Whether ``"usd"`` should fold to
+# ``"USD"`` rather than raise is issue #153's question, and this is now the one
+# place that would have to change to answer it.
+_ISO_4217 = re.compile(r"^[A-Z]{3}$")
+
+# The contract types ``unit`` as a free-form non-empty string; payloads in this
+# repo write the ISO code itself (``"USD"``) where the ontology writes
+# ``"USD/yr"``. ``"currency"`` is accepted as the generic monetary unit.
+_MONETARY_UNIT = "currency"
 
 
-def identify_currency(
-    *,
-    currency: str | None,
-    unit: str | None,
-    monetary: bool,
-) -> tuple[str | None, list[str]]:
-    """Identify currency; never convert. Missing monetary currency → blocker."""
+def normalize_currency(*, currency: Any, unit: str | None) -> tuple[str | None, list[str]]:
+    """Validate a declared currency and report a monetary figure that lacks one.
+
+    Returns ``(currency, blockers)``. ``None`` means the payload declared no
+    currency and the caller must leave the field exactly as it found it — an
+    absent key stays absent, an explicit ``null`` stays ``null``. Nothing is
+    inferred from ``unit``: filling in a currency the issuer did not state is a
+    silent repair of a reported financial figure, and the blocker puts the same
+    fact in front of a reviewer instead.
+
+    Raises ``ValueError`` for a malformed currency, matching how ``payload.py``
+    treats every other structural violation — ``pipeline.normalize_payload``
+    turns that into a blocker and carries the payload forward, so nothing is
+    dropped.
+    """
     blockers: list[str] = []
-    identified = currency
-    if identified is None and unit and _CCY.fullmatch(unit):
-        identified = unit
-    if identified is not None and not _CCY.fullmatch(identified):
-        blockers.append("currency_invalid")
-        identified = None
-    if monetary and identified is None:
-        blockers.append("currency_missing_for_monetary")
-    return identified, blockers
+    if currency is None:
+        if _is_monetary_unit(unit):
+            # Not redundant with ``validate/definitions.py::_unit_errors``,
+            # which reports "currency metric <id> declares no currency" only for
+            # a metric the ontology resolves. Guidance and revenue drivers carry
+            # free-text metric labels by design, so a "$120 million" guidance
+            # point with a null currency cleared every check before this.
+            blockers.append("currency_missing_for_monetary")
+        return None, blockers
+    if not isinstance(currency, str) or not _ISO_4217.fullmatch(currency):
+        raise ValueError(f"currency must be ISO-4217 alpha-3 or null: {currency!r}")
+    return currency.upper(), blockers
 
 
-def is_monetary_unit(unit: str | None) -> bool:
-    if not unit:
+def _is_monetary_unit(unit: str | None) -> bool:
+    """True when ``unit`` denominates money and therefore needs a currency.
+
+    Any ISO-4217-shaped unit qualifies rather than a fixed list of codes: the
+    version this replaced enumerated six currencies, which would have read a
+    CHF, SEK or INR amount as non-monetary and let it through with no currency.
+    """
+    if not isinstance(unit, str):
         return False
-    return unit.upper() in {"USD", "EUR", "GBP", "CAD", "AUD", "JPY"} or unit == "currency"
+    text = unit.strip()
+    return text == _MONETARY_UNIT or _ISO_4217.fullmatch(text) is not None
 
 
-__all__ = ["identify_currency", "is_monetary_unit"]
+__all__ = ["normalize_currency"]
