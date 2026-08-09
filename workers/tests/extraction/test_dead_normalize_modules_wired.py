@@ -243,6 +243,27 @@ def test_a_missing_currency_does_not_disturb_the_declared_scale() -> None:
     assert out["value"] == "100"
 
 
+def test_a_currency_blocker_does_not_gate_a_scale_that_needed_restating() -> None:
+    """The case that can actually fail if currency blockers gate `scale`.
+
+    The test above cannot: `out["scale"]` is only ever overwritten under
+    `if not blockers`, and its fixture's restated exponent already equals the
+    declared 6, so the value is 6 whether the gate assigns it or not. Moving
+    `blockers.extend(currency_blockers)` above that gate leaves it green.
+
+    Here the restated exponent (6) and the declared one (9) disagree, so the
+    assignment is load-bearing. Under the regression the declared 9 survives
+    and 900M / 1.2B is published as 900B / 1.2T -- a 1000x overstatement of a
+    reported financial figure, reaching review with no blocker naming it.
+    """
+    out = normalize_payload(
+        _guidance(shape="range", low="900 million", high="1.2 billion", scale=9, currency=None)
+    )
+    assert out["scale"] == 6
+    assert (out["low"], out["high"]) == ("900", "1200")
+    assert "currency_missing_for_monetary" in out[NORMALIZER_BLOCKERS_KEY]
+
+
 def test_normalizing_twice_does_not_duplicate_the_new_blockers() -> None:
     once = normalize_payload(_kpi(currency=None, dimensions={"segment": 42}))
     twice = normalize_payload(once)
