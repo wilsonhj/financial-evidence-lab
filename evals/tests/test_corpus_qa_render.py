@@ -889,6 +889,43 @@ def test_an_inconsistent_record_cannot_draw_outside_the_plot() -> None:
     assert max(int(x) + int(width) for x, width in rects) <= plot_right_edge
 
 
+def test_a_control_character_is_refused_rather_than_written_as_broken_xml() -> None:
+    """XML 1.0 cannot represent most C0 controls, and ET emits them raw.
+
+    The document that results does not re-parse, so writing it and exiting 0
+    publishes a corrupt artifact as a success. Fail closed instead.
+    """
+    rows = [issuer("A\x0bB\x00C", "0000000001")]
+    with pytest.raises(render.RenderError) as refused:
+        render.render_svg(report(rows, totals=totals_for(rows)))
+    assert "cannot be represented in XML" in str(refused.value)
+
+
+def test_an_absent_jobs_array_is_not_reported_as_zero() -> None:
+    """`0` means "we counted none"; it must not also mean "we could not tell"."""
+    present = render.render_markdown(report())
+    assert "`failures (count)` | 0" in present
+
+    document = report()
+    del document["pipeline"]["jobs"]["failures"]
+    assert "`failures (count)` | `absent`" in render.render_markdown(document)
+
+    document = report()
+    document["pipeline"]["jobs"]["failures"] = 7
+    assert "`failures (count)` | `unreadable (int)`" in render.render_markdown(document)
+
+
+def test_quarantined_documents_with_no_distribution_are_not_reported_as_none() -> None:
+    """ "none" over a non-zero count contradicts the totals table above it."""
+    rows = [issuer("AAA", "0000000001", ingested=6, parsed=2, quarantined=4)]
+    totals = totals_for(rows)
+    assert totals["documents_quarantined"] == 4
+    markdown = render.render_markdown(report(rows, totals=totals))
+    section = markdown.split("## Quarantine reasons\n", 1)[1].split("\n## ", 1)[0]
+    assert "none" not in section
+    assert "not accounted for" in section and "4 document(s) quarantined" in section
+
+
 def test_totals_row_is_separated_and_drawn_on_its_own_scale() -> None:
     rows = [
         issuer("AAA", "0000000001", ingested=4, parsed=4),

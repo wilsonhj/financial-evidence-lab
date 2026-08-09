@@ -303,10 +303,19 @@ def _acceptance_section(report: Mapping[str, Any]) -> list[str]:
     return lines
 
 
-def _quarantine_section(distribution: object) -> list[str]:
+def _quarantine_section(distribution: object, quarantined: object = None) -> list[str]:
     lines = ["## Quarantine reasons", ""]
     if not isinstance(distribution, Mapping) or not distribution:
-        lines.append("none")
+        # "none" is only true when nothing was quarantined. Said over a
+        # non-zero count it contradicts the totals table two sections above and
+        # reads as the healthier of the two possibilities.
+        if isinstance(quarantined, int) and not isinstance(quarantined, bool) and quarantined > 0:
+            lines.append(
+                f"not accounted for: {quarantined} document(s) quarantined, "
+                "but the reason distribution is missing or unreadable"
+            )
+        else:
+            lines.append("none")
         return lines
     # sorted(): reason codes are an unordered string-keyed map, so key order
     # is pinned here rather than inherited from JSON/dict insertion order.
@@ -327,8 +336,17 @@ def _jobs_rows(jobs: Mapping[str, Any]) -> list[list[str]]:
     rows.append([_code("backlog_after_run"), _value(jobs.get("backlog_after_run"))])
     for field in _JOBS_ARRAYS:
         value = jobs.get(field)
-        count = len(value) if isinstance(value, Sequence) and not isinstance(value, str) else 0
-        rows.append([_code(f"{field} (count)"), _value(count)])
+        # A missing or unreadable array is not an empty one. Rendering both as
+        # `0` resolves every gap toward the reassuring reading: "no failures"
+        # and "we could not tell" become the same cell, in the section a
+        # reader consults precisely to find out which it is.
+        if isinstance(value, Sequence) and not isinstance(value, str):
+            cell = _value(len(value))
+        elif value is None:
+            cell = _value("absent")
+        else:
+            cell = _value(f"unreadable ({type(value).__name__})")
+        rows.append([_code(f"{field} (count)"), cell])
     return rows
 
 
@@ -367,7 +385,11 @@ def _render_report_markdown(report: Mapping[str, Any]) -> str:
     lines.extend(_table(ISSUER_COLUMNS, issuer_rows))
     lines.append("")
 
-    lines.extend(_quarantine_section(totals.get("quarantine_reason_distribution")))
+    lines.extend(
+        _quarantine_section(
+            totals.get("quarantine_reason_distribution"), totals.get("documents_quarantined")
+        )
+    )
     lines.append("")
 
     lines.extend(["## Jobs", ""])
@@ -584,9 +606,33 @@ def _segment(
     return x + width
 
 
+def _reject_unrenderable(text: str, where: str) -> str:
+    """Refuse text that XML cannot represent, instead of emitting a broken file.
+
+    XML 1.0 defines no escape for most C0 control characters, so ElementTree
+    serializes them raw and the resulting SVG does not re-parse. Writing that
+    to disk and exiting 0 publishes a corrupt artifact as a success, which is
+    the one outcome a fail-closed renderer must not produce -- so this raises
+    and lands on the same exit-2 path as the schema gate.
+
+    Checked here rather than by parsing the finished document: this module
+    builds XML and never parses it, which is what makes its bandit B405
+    suppression justified. Parsing to validate would retract that.
+    """
+    for char in text:
+        code = ord(char)
+        if code in (0x09, 0x0A, 0x0D):
+            continue
+        if 0x20 <= code <= 0xD7FF or 0xE000 <= code <= 0xFFFD or 0x10000 <= code <= 0x10FFFF:
+            continue
+        raise RenderError(f"{where}: character U+{code:04X} cannot be represented in XML")
+    return text
+
+
 def _text_node(
     parent: ET.Element, x: int, y: int, content: str, *, anchor: str = "start", size: int = 11
 ) -> ET.Element:
+    content = _reject_unrenderable(content, "svg text")
     node = ET.SubElement(parent, "text")
     node.set("x", str(x))
     node.set("y", str(y))
