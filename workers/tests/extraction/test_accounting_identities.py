@@ -709,3 +709,68 @@ def test_live_path_reports_billings_lineage_blocker() -> None:
     assert (
         "billings_derivation_inputs_missing" in result.proposals[0].validation_summary["blockers"]
     )
+
+
+def _sum_breaks(draft: Any) -> list[str]:
+    return [b for b in draft.validation_summary["blockers"] if "segments_do_not_sum" in b]
+
+
+def test_a_withheld_segment_does_not_fabricate_a_sum_break_for_its_clean_siblings() -> None:
+    """The mirror image of the PR #145 review M1 case above.
+
+    There, a normalizer-rejected row had to be dropped so a *comparison*
+    identity could still run for its clean siblings. An *aggregation* is the
+    opposite: a dropped row is a missing addend, not an absent competitor.
+
+    100 against segments of 50 + 30 + 20 balances exactly. Withhold the 20 and
+    the survivors sum to 80, which still satisfies every precondition
+    ``_check_segment_sums`` tests -- so it convicts the three rows that are
+    individually correct of a shortfall that is purely an artefact of the
+    exclusion, while the withheld row itself is flagged with nothing.
+    """
+    total = kpi("arr", "100", period=DURATION)
+    emea = kpi("arr", "50", period=DURATION, dimensions={"segment": "emea"})
+    apac = kpi("arr", "30", period=DURATION, dimensions={"segment": "apac"})
+    amer = kpi("arr", "20", period=DURATION, dimensions={"segment": "amer"})
+    amer[NORMALIZER_BLOCKERS_KEY] = ["dimensions_non_string"]
+
+    result = validate_proposals(
+        run_id="00000000-0000-4000-8000-0000000000a7",
+        payloads=[total, emea, apac, amer],
+    )
+
+    assert len(result.proposals) == 4
+    for draft in result.proposals:
+        assert _sum_breaks(draft) == []
+
+
+def test_suppressing_one_slice_does_not_silence_a_real_break_in_another() -> None:
+    """Withholding is scoped to the slice that lost a member.
+
+    Without this, the fix for the case above could be satisfied by disabling
+    the segment-sum identity globally whenever any row is withheld. The ``arr``
+    slice here has a withheld segment and must stay silent; the ``revenue``
+    slice is entirely clean, genuinely does not sum (50 + 30 != 100), and must
+    still report.
+    """
+    withheld_slice = [
+        kpi("arr", "100", period=DURATION),
+        kpi("arr", "50", period=DURATION, dimensions={"segment": "emea"}),
+        kpi("arr", "30", period=DURATION, dimensions={"segment": "apac"}),
+        kpi("arr", "20", period=DURATION, dimensions={"segment": "amer"}),
+    ]
+    withheld_slice[3][NORMALIZER_BLOCKERS_KEY] = ["dimensions_non_string"]
+    broken_slice = [
+        kpi("revenue", "100", period=DURATION),
+        kpi("revenue", "50", period=DURATION, dimensions={"segment": "emea"}),
+        kpi("revenue", "30", period=DURATION, dimensions={"segment": "apac"}),
+    ]
+
+    result = validate_proposals(
+        run_id="00000000-0000-4000-8000-0000000000a8",
+        payloads=[*withheld_slice, *broken_slice],
+    )
+
+    arr_rows, revenue_rows = result.proposals[:4], result.proposals[4:]
+    assert [_sum_breaks(draft) for draft in arr_rows] == [[], [], [], []]
+    assert all(_sum_breaks(draft) for draft in revenue_rows)

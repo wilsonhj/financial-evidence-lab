@@ -327,10 +327,27 @@ def identity_errors(
     left in, it silently disables the identity for every clean sibling sharing
     its slice too (PR #145 review M1).
     """
-    facts = [fact for fact in _facts(payloads) if fact.index not in excluded_indices]
+    built = _facts(payloads)
+    facts = [fact for fact in built if fact.index not in excluded_indices]
+    # Withholding behaves differently for a SUM than for a COMPARISON, so only
+    # `_check_segment_sums` is told about it.
+    #
+    # The relational identities (rpo/crpo, gross profit) compare named members
+    # of a slice. Dropping a rejected row there is what restores a clean 1:1
+    # match for `_sole`, and is exactly the fix PR #145 review M1 made: a
+    # rejected sibling must not disable the identity for its clean rows.
+    #
+    # A segment sum is arithmetic over every member, so a dropped row is a
+    # MISSING ADDEND, not an absent competitor. The remaining rows still
+    # satisfy every precondition the check tests, so it evaluates a partial
+    # breakdown and reports `segments_do_not_sum` for a shortfall that is
+    # purely an artefact of the exclusion -- convicting the clean siblings
+    # while the row that actually had the problem goes unflagged. That group
+    # cannot be evaluated at all, so it is suppressed rather than guessed at.
+    withheld = [fact for fact in built if fact.index in excluded_indices]
     out: dict[int, list[str]] = {}
     _check_rpo_balance(facts, out)
-    _check_segment_sums(facts, out)
+    _check_segment_sums(facts, out, withheld)
     _check_gross_profit(facts, out)
     return out
 
@@ -411,11 +428,22 @@ def _check_rpo_balance(facts: list[_Fact], out: dict[int, list[str]]) -> None:
             _record(out, (rpo, crpo), f"{IDENTITY_PREFIX}crpo_exceeds_rpo")
 
 
-def _check_segment_sums(facts: list[_Fact], out: dict[int, list[str]]) -> None:
+def _check_segment_sums(
+    facts: list[_Fact], out: dict[int, list[str]], withheld: Iterable[_Fact] = ()
+) -> None:
     """A reported total must equal the sum of its single-dimension segments."""
+
+    def slice_of(fact: _Fact) -> tuple[Any, ...]:
+        return (fact.metric_id, fact.entity_id, fact.period, fact.unit, fact.currency)
+
+    # A withheld row is a missing addend, not an absent one: summing without it
+    # understates the breakdown and convicts its clean siblings.
+    suppressed = {slice_of(fact) for fact in withheld}
     groups: dict[tuple[Any, ...], list[_Fact]] = {}
     for fact in facts:
-        key = (fact.metric_id, fact.entity_id, fact.period, fact.unit, fact.currency)
+        key = slice_of(fact)
+        if key in suppressed:
+            continue
         groups.setdefault(key, []).append(fact)
     for group in groups.values():
         totals = [f for f in group if not f.dimensions]
