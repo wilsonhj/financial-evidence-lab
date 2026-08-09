@@ -529,10 +529,26 @@ def _draw_bar(parent: ET.Element, row: _Row, y: int, scale: int) -> None:
     only -- never from ``span_hash_verification_rate``, which may be the
     ``unavailable`` sentinel."""
     _text_node(parent, _MARGIN_LEFT - 8, y + 10, row.text, anchor="end")
+    # The axis is pinned to max(documents_ingested) (AC7), but the segments are
+    # driven by parsed + unparsed + quarantined. Those agree only for a
+    # self-consistent record: `parsed + quarantined > ingested` -- which
+    # `check_schema` accepts -- otherwise runs the bar past the plot and off
+    # the canvas entirely, overpainting the count label beyond it. Clamped so a
+    # malformed record cannot draw outside its own chart; the absolute count
+    # printed at the end of every row remains the source of truth.
+    limit = _MARGIN_LEFT + _PLOT_WIDTH
     x = _MARGIN_LEFT
-    x = _segment(parent, x, y, _px(row.parsed, scale), _COLOR_PARSED, f"parsed {row.parsed}")
     x = _segment(
-        parent, x, y, _px(row.unparsed, scale), _COLOR_UNPARSED, f"unparsed {row.unparsed}"
+        parent, x, y, _px(row.parsed, scale), _COLOR_PARSED, f"parsed {row.parsed}", limit=limit
+    )
+    x = _segment(
+        parent,
+        x,
+        y,
+        _px(row.unparsed, scale),
+        _COLOR_UNPARSED,
+        f"unparsed {row.unparsed}",
+        limit=limit,
     )
     _segment(
         parent,
@@ -541,12 +557,21 @@ def _draw_bar(parent: ET.Element, row: _Row, y: int, scale: int) -> None:
         _px(row.quarantined, scale),
         _COLOR_QUARANTINED,
         f"quarantined {row.quarantined}",
+        limit=limit,
     )
     _text_node(parent, _MARGIN_LEFT + _PLOT_WIDTH + 8, y + 10, str(row.total))
 
 
-def _segment(parent: ET.Element, x: int, y: int, width: int, color: str, label: str) -> int:
-    """Emit one bar segment, skipping zero-width rects. Returns the next x."""
+def _segment(
+    parent: ET.Element, x: int, y: int, width: int, color: str, label: str, *, limit: int
+) -> int:
+    """Emit one bar segment, skipping zero-width rects. Returns the next x.
+
+    ``limit`` is the right edge of the plot. A segment is truncated at it
+    rather than allowed to run past, so an inconsistent record cannot paint
+    over the labels outside the plot or off the canvas.
+    """
+    width = min(width, limit - x)
     if width <= 0:
         return x
     rect = ET.SubElement(parent, "rect")

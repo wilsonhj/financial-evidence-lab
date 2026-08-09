@@ -871,6 +871,24 @@ def test_segments_are_clamped_so_inconsistent_counts_cannot_go_negative() -> Non
     assert 'width="-' not in svg
 
 
+def test_an_inconsistent_record_cannot_draw_outside_the_plot() -> None:
+    """`parsed + quarantined > ingested` must not run the bar off the canvas.
+
+    The axis is pinned to max(documents_ingested), so a record where the
+    segments sum past it -- which `check_schema` accepts -- used to emit a rect
+    ending at x=1088 on a 672px canvas, painting over the absolute count at
+    x=616 and off the image. Asserting only that no width is negative, as the
+    test above does, passes throughout.
+    """
+    rows = [issuer("AAA", "0000000001", ingested=4, parsed=4, quarantined=4)]
+    svg = render.render_svg(report(rows, totals=totals_for(rows)))
+
+    plot_right_edge = 128 + 480  # _MARGIN_LEFT + _PLOT_WIDTH
+    rects = re.findall(r'<rect x="(\d+)" y="\d+" width="(\d+)"', svg)
+    assert rects, "expected at least one bar segment"
+    assert max(int(x) + int(width) for x, width in rects) <= plot_right_edge
+
+
 def test_totals_row_is_separated_and_drawn_on_its_own_scale() -> None:
     rows = [
         issuer("AAA", "0000000001", ingested=4, parsed=4),
@@ -895,8 +913,13 @@ def test_cli_accepts_exactly_one_report_and_has_no_comparison_flag() -> None:
         render.main(["a.json", "b.json", "--out-dir", "out"])
     assert excinfo.value.code == 2
     for flag in ("--compare", "--since", "--baseline", "--glob", "--reports-dir"):
-        with pytest.raises(SystemExit):
-            render.main([str(COMMITTED_REPORT), flag, "x"])
+        # `--out-dir` is supplied on purpose. Without it argparse exits 2 for
+        # the missing REQUIRED argument before it ever looks at `flag`, so the
+        # loop passed identically against a parser that genuinely accepted
+        # `--compare` -- an inert guard on what AC9 calls a hard constraint.
+        with pytest.raises(SystemExit) as rejected:
+            render.main([str(COMMITTED_REPORT), "--out-dir", "out", flag, "x"])
+        assert rejected.value.code == 2
 
 
 def test_output_has_no_trend_or_delta_vocabulary() -> None:
