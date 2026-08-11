@@ -344,6 +344,21 @@ def identity_errors(
     # purely an artefact of the exclusion -- convicting the clean siblings
     # while the row that actually had the problem goes unflagged. That group
     # cannot be evaluated at all, so it is suppressed rather than guessed at.
+    #
+    # LIMIT OF THIS SUPPRESSION, so the next reader does not over-trust it:
+    # `_check_segment_sums` matches a withheld row to its siblings by
+    # `(metric_id, entity_id, period, unit, currency)`. That works only when
+    # the fields forming the key SURVIVED normalization -- which is not
+    # guaranteed for exactly the rows that get withheld. A segment whose
+    # `currency` is absent keys on `""` and never matches its `USD` siblings;
+    # one rejected outright yields no `_Fact` at all (`_facts` skips a payload
+    # whose `dimensions` is not a mapping) and so never reaches `withheld`.
+    # Both still convict the clean siblings. Neither is a regression -- `main`
+    # behaves identically -- but neither is fixed here, and closing them means
+    # keying the suppression on something the withheld row cannot corrupt,
+    # which has to be weighed against silencing a real break in a genuinely
+    # different currency slice (see
+    # `test_suppressing_one_slice_does_not_silence_a_real_break_in_another`).
     withheld = [fact for fact in built if fact.index in excluded_indices]
     out: dict[int, list[str]] = {}
     _check_rpo_balance(facts, out)
@@ -429,7 +444,7 @@ def _check_rpo_balance(facts: list[_Fact], out: dict[int, list[str]]) -> None:
 
 
 def _check_segment_sums(
-    facts: list[_Fact], out: dict[int, list[str]], withheld: Iterable[_Fact] = ()
+    facts: list[_Fact], out: dict[int, list[str]], withheld: Iterable[_Fact]
 ) -> None:
     """A reported total must equal the sum of its single-dimension segments."""
 

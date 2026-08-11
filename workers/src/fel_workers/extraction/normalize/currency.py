@@ -64,11 +64,26 @@ def _is_monetary_unit(unit: str | None) -> bool:
     Any ISO-4217-shaped unit qualifies rather than a fixed list of codes: the
     version this replaced enumerated six currencies, which would have read a
     CHF, SEK or INR amount as non-monetary and let it through with no currency.
+
+    Only the numerator decides, so the ontology's own per-period spellings
+    (``USD/yr``, ``USD/mo``) count: an amount per unit time is still an amount
+    of money, and a rate needs a currency for exactly the same reason a level
+    does. Checking the bare code alone read every one of them as non-monetary
+    — "net new ARR per rep" reported as ``120`` with ``unit: "USD/yr"`` and no
+    currency cleared every check, which is the hole this rule exists to close.
+    A non-monetary numerator is unaffected: ``count/mo`` stays non-monetary
+    because ``count`` is not ISO-shaped.
+
+    Lowercase is deliberately NOT folded here — ``usd`` is rejected upstream
+    rather than accepted, and whether it should fold is issue #153's question.
     """
     if not isinstance(unit, str):
         return False
     text = unit.strip()
-    return text == _MONETARY_UNIT or _ISO_4217.fullmatch(text) is not None
+    if text == _MONETARY_UNIT:
+        return True
+    numerator = text.split("/", 1)[0]
+    return _ISO_4217.fullmatch(numerator) is not None
 
 
 __all__ = ["normalize_currency"]

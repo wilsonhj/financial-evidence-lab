@@ -368,8 +368,10 @@ Extend these modules, not `payload.py`: as of
 they are the live path, and the private duplicates are gone. In particular the
 currency-fold question in
 [issue #153](https://github.com/wilsonhj/financial-evidence-lab/issues/153)
-is now answered in `normalize/currency.py`, where the `.upper()` call is
-marked as the single line that decision would change.
+is now localized to `normalize/currency.py`. The line that decision would
+change is the `_ISO_4217` pattern, which rejects `"usd"` before the
+subsequent `.upper()` is ever reached — that `.upper()` is a no-op today and
+changing it alone would do nothing.
 
 ### Deterministic validators (`extraction/validate/`)
 

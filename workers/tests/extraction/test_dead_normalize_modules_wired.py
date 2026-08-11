@@ -228,6 +228,40 @@ def test_a_non_monetary_unit_needs_no_currency() -> None:
     assert _carried(out) == []
 
 
+@pytest.mark.parametrize(
+    ("unit", "monetary"),
+    [
+        # Every unit the ontology actually declares (saas-metrics.v1.json).
+        ("USD", True),
+        ("USD/yr", True),
+        ("USD/mo", True),
+        ("count", False),
+        ("percent", False),
+        # The generic monetary unit, and a non-major currency the deleted
+        # six-code allowlist would have missed.
+        ("currency", True),
+        ("CHF", True),
+        ("SEK/yr", True),
+        # A non-monetary numerator stays non-monetary however it is rated.
+        ("count/mo", False),
+        # Lowercase is rejected upstream rather than folded (issue #153), so it
+        # is deliberately not treated as monetary here.
+        ("usd", False),
+    ],
+)
+def test_the_monetary_unit_boundary_is_pinned_per_spelling(unit: str, monetary: bool) -> None:
+    """The classification boundary, spelling by spelling.
+
+    Bare membership assertions on `currency_missing_for_monetary` cannot see
+    this boundary, which is how `USD/yr` and `USD/mo` — two of the ontology's
+    five declared units — went unclassified: a guidance point for "net new ARR
+    per rep" reported as 120 with `unit: "USD/yr"` and a null currency cleared
+    every check, in the rule advertised as closing exactly that hole.
+    """
+    out = normalize_payload(_kpi(unit=unit, currency=None))
+    assert ("currency_missing_for_monetary" in _carried(out)) is monetary
+
+
 def test_a_malformed_currency_still_raises_rather_than_being_nulled() -> None:
     """The orphan dropped the issuer's value and continued; the live path does not."""
     with pytest.raises(ValueError, match="ISO-4217"):
