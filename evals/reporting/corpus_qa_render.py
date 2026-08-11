@@ -125,7 +125,16 @@ def _text(value: object) -> str:
     if isinstance(value, str):
         return value
     if isinstance(value, float):
-        return f"{value:.6f}"
+        # repr(), not a fixed 6 places. The schema types every rate as a
+        # string, so a float here is already out-of-schema -- but rounding it
+        # to 6 places turns 0.9999995 into "1.000000", i.e. a not-quite-
+        # perfect span-hash verification rate reads as perfect. That is the
+        # exact hazard the schema's string rule exists to prevent, and AC3
+        # says a rate is never re-rounded. repr() round-trips, so the reader
+        # sees the value that was actually in the file. (`_as_int` already
+        # refuses floats outright for chart geometry; this keeps the table
+        # from being the laxer of the two.)
+        return repr(value)
     return json.dumps(value, sort_keys=True, ensure_ascii=False)
 
 
@@ -327,11 +336,22 @@ def _quarantine_section(distribution: object, quarantined: object = None) -> lis
 def _jobs_rows(jobs: Mapping[str, Any]) -> list[list[str]]:
     rows = [[_code(field), _value(jobs.get(field))] for field in _JOBS_SCALARS]
     terminal = jobs.get("terminal_counts")
-    if isinstance(terminal, Mapping) and terminal:
+    # Same distinction the arrays below draw, for the same reason: a status
+    # map that is absent or unreadable is not an empty one. `none` is the
+    # truthful cell only when the map was present and genuinely carried no
+    # statuses -- it is the one place a reader learns how many jobs `failed`,
+    # so collapsing "could not read it" into "no job reached any terminal
+    # status" resolves the gap toward the reassuring reading.
+    if isinstance(terminal, Mapping):
         # sorted(): status -> count is an unordered string-keyed map.
-        summary = ", ".join(f"{status}={_text(terminal[status])}" for status in sorted(terminal))
+        summary = (
+            ", ".join(f"{status}={_text(terminal[status])}" for status in sorted(terminal))
+            or "none"
+        )
+    elif terminal is None:
+        summary = "absent"
     else:
-        summary = "none"
+        summary = f"unreadable ({type(terminal).__name__})"
     rows.append([_code("terminal_counts"), _value(summary)])
     rows.append([_code("backlog_after_run"), _value(jobs.get("backlog_after_run"))])
     for field in _JOBS_ARRAYS:
@@ -443,11 +463,40 @@ def is_failure_report(report: Mapping[str, Any]) -> bool:
     return report.get("schema") == FAILURE_SCHEMA
 
 
+def _reject_unencodable(text: str, where: str) -> str:
+    """Refuse text UTF-8 cannot encode, instead of leaving a truncated file.
+
+    A lone surrogate survives ``json.loads``: ``"\\ud800"`` is a well-formed
+    escape in a pure-ASCII JSON file, and Python carries the result in a
+    ``str`` without complaint. It fails only at ``encode("utf-8")`` -- which
+    happens *inside* ``write_text``, after the file has been created and
+    truncated. The resulting ``UnicodeEncodeError`` is a ``ValueError`` and
+    NOT an ``OSError``, so it escaped both handlers in :func:`main`: the CLI
+    printed a raw traceback, exited 1 rather than 2, and left a 0-byte
+    ``.md`` behind for a downstream ``*.md`` glob to pick up as though it
+    were a report.
+
+    ``render_svg`` was already covered -- surrogates fall outside every range
+    :func:`_reject_unrenderable` allows -- but that guard is reached only via
+    ``_text_node``, so Markdown-only fields (``provenance_note``, acceptance
+    ``reasons``, ``cohort.*``) and failure reports, which render no SVG at
+    all, had nothing checking them. Refusing here keeps the render-then-write
+    split honest: nothing is written unless everything encodes.
+    """
+    try:
+        text.encode("utf-8")
+    except UnicodeEncodeError as exc:
+        raise RenderError(
+            f"{where}: character U+{ord(text[exc.start]):04X} cannot be encoded as UTF-8"
+        ) from exc
+    return text
+
+
 def render_markdown(report: Mapping[str, Any]) -> str:
     """Render one validated report to GitHub-flavored Markdown."""
     if is_failure_report(report):
-        return _render_failure_markdown(report)
-    return _render_report_markdown(report)
+        return _reject_unencodable(_render_failure_markdown(report), "markdown")
+    return _reject_unencodable(_render_report_markdown(report), "markdown")
 
 
 # --------------------------------------------------------------------------
@@ -556,8 +605,17 @@ def _draw_bar(parent: ET.Element, row: _Row, y: int, scale: int) -> None:
     # self-consistent record: `parsed + quarantined > ingested` -- which
     # `check_schema` accepts -- otherwise runs the bar past the plot and off
     # the canvas entirely, overpainting the count label beyond it. Clamped so a
-    # malformed record cannot draw outside its own chart; the absolute count
-    # printed at the end of every row remains the source of truth.
+    # malformed record cannot draw outside its own chart.
+    #
+    # The number printed at the end of the row is `row.total`, i.e. the sum of
+    # the three segments -- NOT `documents_ingested`. For a self-consistent
+    # record they are equal. For an inconsistent one they are not: with
+    # ingested=4, parsed=4, quarantined=4 the chart prints 8 while the
+    # Markdown table shows documents_ingested = 4. It is the total the bar
+    # actually depicts, so it is the honest label FOR THE BAR, but it is not
+    # the report's own figure -- read the table for that. (Whether such a
+    # record should be rendered at all, or refused like a negative count, is
+    # `check_schema`'s call to make, not this function's.)
     limit = _MARGIN_LEFT + _PLOT_WIDTH
     x = _MARGIN_LEFT
     x = _segment(
@@ -690,8 +748,15 @@ def render_svg(report: Mapping[str, Any]) -> str:
     root.set("width", str(width))
     root.set("height", str(height))
 
-    ET.SubElement(root, "title").text = f"Corpus QA documents by issuer: {label}"
-    ET.SubElement(root, "desc").text = (
+    # Routed through the guard like every other node that carries report
+    # text. `label`/`mode` do also reach `_text_node` below, so today an
+    # unrenderable one is refused before serialization either way -- but that
+    # is a property of the call order, not of this code, and reordering the
+    # two would silently reopen the hole. Checking here makes it structural.
+    ET.SubElement(root, "title").text = _reject_unrenderable(
+        f"Corpus QA documents by issuer: {label}", "svg title"
+    )
+    ET.SubElement(root, "desc").text = _reject_unrenderable(
         f"Horizontal stacked bar chart for the {mode} run {label}. One row per cohort issuer, "
         "in cohort order, on a shared axis of documents; each bar is segmented into "
         "documents_parsed, ingested-but-not-parsed, and documents_quarantined, and the absolute "
@@ -699,7 +764,8 @@ def render_svg(report: Mapping[str, Any]) -> str:
         "the whole-cohort composition drawn on its own scale, not a magnitude comparable to the "
         "issuer rows. Single snapshot; no time series. A row label marked with an asterisk has "
         f"span_hash_verification_rate {RATE_UNAVAILABLE!r}; its bar is drawn from document counts "
-        "only."
+        "only.",
+        "svg desc",
     )
 
     _text_node(root, 16, 24, f"Corpus QA: {label} (mode {mode})", size=13)

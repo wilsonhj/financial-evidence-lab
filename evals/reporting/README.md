@@ -31,7 +31,8 @@ stdlib-only proof. This tool opens no database and no socket.
 | Code | Meaning |
 | --- | --- |
 | 0 | Rendered. A **failure report renders successfully too**: it produces Markdown, no SVG, and a one-line note on stderr. |
-| 2 | Refusal: unreadable path, malformed JSON, non-object document, or a schema this tool does not render. One line on stderr, nothing written, no traceback. |
+| 2 | Refusal: unreadable path, malformed JSON, non-object document, a schema this tool does not render, or text that cannot be represented in XML / encoded as UTF-8. One line on stderr, no traceback. **Nothing is written** — every refusal is raised during rendering, which completes before the first byte is written. |
+| 2 | Write failure (`OSError`): one line on stderr, no traceback. Here a partial artifact *is* possible — the Markdown is written before the SVG, so a failure on the second write leaves the first file in place. The refusal path above is the one that guarantees nothing is written. |
 
 The schema gate is fail-closed and accepts exactly two shapes:
 `corpus-qa-report/v1` **with `schema_version == 1`**, and

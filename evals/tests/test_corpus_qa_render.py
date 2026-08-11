@@ -16,6 +16,7 @@ inside the test body -- see :func:`test_schema_constants_match_the_harness`.
 from __future__ import annotations
 
 import ast
+import json
 import os
 import pathlib
 import re
@@ -29,6 +30,11 @@ from reporting import corpus_qa_render as render
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 RENDERER_SOURCE = REPO_ROOT / "evals" / "reporting" / "corpus_qa_render.py"
+# The package __init__ is scanned alongside the module: "stdlib-only" (AC10)
+# is a property of everything importing `reporting` pulls in, not of one file.
+# It is docstring-only today, so it contributes nothing -- which is precisely
+# why an import added there would otherwise go unnoticed.
+RENDERER_PACKAGE_INIT = REPO_ROOT / "evals" / "reporting" / "__init__.py"
 REPORTS_DIR = REPO_ROOT / "evals" / "reports" / "corpus-qa"
 COMMITTED_REPORT = REPORTS_DIR / "2026-07-14-synthetic-cohort.json"
 GOLDEN_DIR = pathlib.Path(__file__).resolve().parent / "golden" / "corpus-qa"
@@ -205,13 +211,14 @@ def markdown_table_rows(markdown: str, heading: str) -> list[list[str]]:
 
 
 def renderer_import_roots() -> set[str]:
-    tree = ast.parse(RENDERER_SOURCE.read_text(encoding="utf-8"))
     roots: set[str] = set()
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            roots.update(alias.name.split(".")[0] for alias in node.names)
-        elif isinstance(node, ast.ImportFrom) and node.module is not None and node.level == 0:
-            roots.add(node.module.split(".")[0])
+    for source in (RENDERER_SOURCE, RENDERER_PACKAGE_INIT):
+        tree = ast.parse(source.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                roots.update(alias.name.split(".")[0] for alias in node.names)
+            elif isinstance(node, ast.ImportFrom) and node.module is not None and node.level == 0:
+                roots.add(node.module.split(".")[0])
     return roots
 
 
@@ -362,6 +369,25 @@ def test_live_accepted_banner_differs_from_the_synthetic_one() -> None:
     assert "**LIVE RUN.**" in banner
     assert "Accepted: **yes**." in banner
     assert "NOT AN ACCEPTANCE ARTIFACT" not in banner
+
+
+def test_a_live_run_that_was_not_accepted_says_so_in_the_banner() -> None:
+    """The banner must not read as an acceptance artifact on the strength of
+    `mode == "live"` alone -- acceptance is a separate field, and this is the
+    branch where the two disagree."""
+    document = report(mode="live", acceptance={"accepted": False, "reasons": ["span drift"]})
+    banner = render.render_markdown(document).split("## Provenance", 1)[0]
+    assert "**LIVE RUN. NOT ACCEPTED.**" in banner
+    assert "Accepted: **no**." in banner
+
+
+def test_an_unrecognized_mode_is_called_out_rather_than_rendered_as_normal() -> None:
+    """An unknown mode is not silently treated as live or synthetic: nothing
+    downstream could then tell whether the figures describe real filings."""
+    document = report(mode="staging")
+    banner = render.render_markdown(document).split("## Provenance", 1)[0]
+    assert "UNRECOGNIZED MODE 'staging'" in banner
+    assert "unattributed" in banner
 
 
 def test_provenance_note_is_a_blockquote_and_survives_multiple_lines() -> None:
@@ -866,9 +892,21 @@ def test_all_zero_report_floors_the_axis_at_one() -> None:
 
 
 def test_segments_are_clamped_so_inconsistent_counts_cannot_go_negative() -> None:
+    """`parsed + quarantined > ingested` clamps the gap to 0, not a negative.
+
+    `width="-" not in svg` alone does not pin this. `_segment` returns early
+    on any non-positive width, so a negative segment is never emitted and
+    that assertion passes with the clamp deleted -- verified by mutation.
+    What the clamp actually changes is the absolute count printed at the end
+    of the bar, so this pins that number too.
+    """
     rows = [issuer("AAA", "0000000001", ingested=2, parsed=2, quarantined=2)]
     svg = render.render_svg(report(rows, totals=totals_for(rows)))
     assert 'width="-' not in svg
+    # 2 parsed + 0 unparsed (clamped from -2) + 2 quarantined = 4. Unclamped
+    # this prints 2, under-reporting the documents the row accounts for.
+    printed = re.findall(r'<text x="616"[^>]*>(\d+)</text>', svg)
+    assert printed == ["4", "4"], printed
 
 
 def test_an_inconsistent_record_cannot_draw_outside_the_plot() -> None:
@@ -913,6 +951,77 @@ def test_an_absent_jobs_array_is_not_reported_as_zero() -> None:
     document = report()
     document["pipeline"]["jobs"]["failures"] = 7
     assert "`failures (count)` | `unreadable (int)`" in render.render_markdown(document)
+
+
+def test_an_unreadable_terminal_counts_is_not_reported_as_no_terminal_jobs() -> None:
+    """`none` means "the map was there and empty", never "we could not read it".
+
+    `terminal_counts` is the only place a reader learns how many jobs
+    `failed` (SCHEMA.md:157). Rendering an absent or malformed map as `none`
+    says "no job reached any terminal status" -- indistinguishable from a
+    clean empty map, and it hides e.g. `failed=17` inside a RUN FAILURE
+    report. Same distinction the `(count)` rows below it already draw.
+    """
+    present = render.render_markdown(report())
+    assert "`terminal_counts` | `succeeded=" in present
+
+    document = report()
+    document["pipeline"]["jobs"]["terminal_counts"] = {}
+    assert "`terminal_counts` | `none`" in render.render_markdown(document)
+
+    document = report()
+    del document["pipeline"]["jobs"]["terminal_counts"]
+    assert "`terminal_counts` | `absent`" in render.render_markdown(document)
+
+    document = report()
+    document["pipeline"]["jobs"]["terminal_counts"] = None
+    assert "`terminal_counts` | `absent`" in render.render_markdown(document)
+
+    document = report()
+    document["pipeline"]["jobs"]["terminal_counts"] = 7
+    assert "`terminal_counts` | `unreadable (int)`" in render.render_markdown(document)
+
+    document = report()
+    document["pipeline"]["jobs"]["terminal_counts"] = ["succeeded"]
+    assert "`terminal_counts` | `unreadable (list)`" in render.render_markdown(document)
+
+
+def test_a_float_rate_is_not_re_rounded_into_looking_perfect() -> None:
+    """AC3: a rate is never re-rounded.
+
+    The schema types every rate as a string, so a JSON number here is already
+    out-of-schema — but rounding it to six places turns 0.9999995 into
+    `1.000000`, and a not-quite-perfect span-hash verification rate then
+    reads as perfect. That is the hazard the string rule exists to prevent.
+    `_as_int` already refuses floats outright for chart geometry; the table
+    must not be the laxer of the two.
+    """
+    baseline = render.render_markdown(report())
+    document = report()
+    document["totals"]["span_hash_verification_rate"] = 0.9999995
+    markdown = render.render_markdown(document)
+    assert "0.9999995" in markdown
+    # `1.000000` still appears for the issuer rows, whose rates are STRINGS
+    # exactly as the schema types them. What must change is that the totals
+    # cell is no longer one of them: rounded, the float would have joined
+    # them and been indistinguishable from a genuinely perfect rate.
+    assert markdown.count("1.000000") == baseline.count("1.000000") - 1
+
+
+def test_a_lone_surrogate_in_markdown_is_refused_rather_than_half_written() -> None:
+    """A field that never reaches the SVG must still fail closed.
+
+    `"\\ud800"` is a well-formed escape in a pure-ASCII JSON file, so
+    `load_report` accepts it and Python carries the lone surrogate in a
+    `str`. It fails only at `encode("utf-8")` -- inside `write_text`, after
+    the file is created and truncated. `UnicodeEncodeError` is a
+    `ValueError`, not an `OSError`, so it escaped both handlers in `main`.
+    """
+    document = report()
+    document["provenance_note"] = "note \ud800"
+    with pytest.raises(render.RenderError) as excinfo:
+        render.render_markdown(document)
+    assert "U+D800" in str(excinfo.value)
 
 
 def test_quarantined_documents_with_no_distribution_are_not_reported_as_none() -> None:
@@ -982,6 +1091,34 @@ def test_cli_writes_both_outputs_and_exits_zero(
     assert markdown.read_text(encoding="utf-8") == GOLDEN_MARKDOWN.read_text(encoding="utf-8")
     assert svg.read_text(encoding="utf-8") == GOLDEN_SVG.read_text(encoding="utf-8")
     assert capsys.readouterr().err == ""
+
+
+def test_cli_refuses_a_lone_surrogate_with_exit_2_and_leaves_no_empty_file(
+    tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """AC6 end to end for the one input that used to escape both handlers.
+
+    The fixture written here is pure ASCII -- `json.dumps` emits the lone
+    surrogate as the six-character escape `\\ud800` -- so this is a
+    well-formed UTF-8 JSON file, not a corrupt one. Before the guard, this
+    exited 1 with a raw traceback and left a 0-byte `.md` that a downstream
+    `*.md` glob would pick up as a report.
+    """
+    document = report()
+    document["provenance_note"] = "note \ud800"
+    source = tmp_path / "run.json"
+    payload = json.dumps(document, ensure_ascii=True)
+    assert "\\ud800" in payload
+    source.write_text(payload, encoding="ascii")
+
+    out = tmp_path / "out"
+    assert render.main([str(source), "--out-dir", str(out)]) == 2
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err.splitlines() == [
+        "corpus-qa-render: markdown: character U+D800 cannot be encoded as UTF-8"
+    ]
+    assert not out.exists() or list(out.iterdir()) == []
 
 
 def test_cli_output_names_come_from_the_input_stem_not_the_report_label(
