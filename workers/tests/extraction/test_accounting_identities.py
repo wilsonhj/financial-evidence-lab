@@ -14,13 +14,18 @@ deliberately express the same magnitude at different scales.
 
 from __future__ import annotations
 
+import ast
 from decimal import Decimal
+from pathlib import Path
 from typing import Any
 
 import pytest
 
 from fel_ontology import load_saas_metrics
-from fel_workers.extraction.types import NORMALIZER_BLOCKERS_KEY
+from fel_workers.extraction.types import (
+    NON_MAGNITUDE_NORMALIZER_BLOCKERS,
+    NORMALIZER_BLOCKERS_KEY,
+)
 from fel_workers.extraction.validate import validate_proposals
 from fel_workers.extraction.validate.accounting import (
     IDENTITY_PREFIX,
@@ -472,6 +477,136 @@ def test_identity_errors_excludes_indices_marked_normalizer_rejected() -> None:
 
 
 # --------------------------------------------------------------------------
+# A cosmetic normalizer blocker must not withdraw an identity
+# --------------------------------------------------------------------------
+# `NORMALIZER_BLOCKERS_KEY` was built to carry scale/sign contradictions --
+# findings that make a row's NUMBER untrustworthy, so dropping it from the
+# arithmetic is right. #162 routed two advisories onto the same key that say
+# nothing about the number. `validate/pipeline.py` excluded on mere presence,
+# so one of those silently withdrew a check `main` performs.
+
+
+def test_a_cosmetic_normalizer_blocker_does_not_withdraw_an_accounting_identity() -> None:
+    """cRPO $900m against RPO $500m is arithmetically impossible either way.
+
+    It went entirely unreported because one dimension value arrived as `12`
+    rather than `"12"`: `dimensions_non_string` landed on the blockers key,
+    `validate/pipeline.py` marked the row normalizer-rejected, and
+    `identity_errors` dropped it from `_check_rpo_balance`. The reviewer saw a
+    cosmetic typing note on the cRPO row and a completely clean RPO row.
+
+    Both codes must survive together -- the advisory AND the arithmetic.
+    """
+    for cosmetic in ("dimensions_non_string", "currency_missing_for_monetary"):
+        crpo = kpi(
+            "crpo",
+            "900",
+            qualifiers={"currency": "USD", "horizon_months": "12"},
+            dimensions={"horizon": "12m"},
+        )
+        crpo[NORMALIZER_BLOCKERS_KEY] = [cosmetic]
+        result = validate_proposals(
+            run_id="00000000-0000-4000-8000-0000000000c1",
+            payloads=[
+                kpi(
+                    "rpo",
+                    "500",
+                    qualifiers={
+                        "currency": "USD",
+                        "usage_exemption": "none",
+                        "label_family": "rpo",
+                    },
+                ),
+                crpo,
+            ],
+        )
+        blockers = [
+            blocker
+            for proposal in result.proposals
+            for blocker in proposal.validation_summary.get("blockers", [])
+        ]
+        assert f"{IDENTITY_PREFIX}crpo_exceeds_rpo" in blockers, cosmetic
+        assert cosmetic in blockers, cosmetic
+
+
+def test_a_magnitude_normalizer_blocker_still_withdraws_the_row() -> None:
+    """The other direction, so the fix above cannot be "stop excluding at all".
+
+    A declared sign that contradicts the value means the row's magnitude is
+    not established. Arithmetic over it is meaningless, and a row like that
+    also looks to `_sole` exactly like a second competing fact -- the PR #145
+    review M1 contract. This must keep excluding.
+    """
+    crpo = kpi(
+        "crpo",
+        "900",
+        qualifiers={"currency": "USD", "horizon_months": "12"},
+        dimensions={"horizon": "12m"},
+    )
+    crpo[NORMALIZER_BLOCKERS_KEY] = ["sign contradicts value: declared positive, value is negative"]
+    result = validate_proposals(
+        run_id="00000000-0000-4000-8000-0000000000c2",
+        payloads=[
+            kpi(
+                "rpo",
+                "500",
+                qualifiers={
+                    "currency": "USD",
+                    "usage_exemption": "none",
+                    "label_family": "rpo",
+                },
+            ),
+            crpo,
+        ],
+    )
+    blockers = [
+        blocker
+        for proposal in result.proposals
+        for blocker in proposal.validation_summary.get("blockers", [])
+    ]
+    assert f"{IDENTITY_PREFIX}crpo_exceeds_rpo" not in blockers
+
+
+def test_every_normalizer_blocker_code_is_deliberately_classified() -> None:
+    """A new stable blocker code must be classified, not defaulted into gating.
+
+    The default is "this blocker withdraws the row from the identities", which
+    is correct for a magnitude finding and wrong for an advisory -- that
+    default is exactly how the cRPO regression above shipped. Scanning for the
+    literals the normalizer appends makes the next omission a test failure
+    rather than a silently withdrawn accounting check.
+
+    Only stable identifier codes are scanned. The scale/sign findings are
+    interpolated sentences, not literals, and they gate by design.
+    """
+    normalize_dir = Path(__file__).resolve().parents[2] / "src" / "fel_workers"
+    normalize_dir = normalize_dir / "extraction" / "normalize"
+    found: set[str] = set()
+    for module in sorted(normalize_dir.glob("*.py")):
+        tree = ast.parse(module.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
+                continue
+            if node.func.attr != "append":
+                continue
+            target = node.func.value
+            if not isinstance(target, ast.Name) or target.id != "blockers":
+                continue
+            for arg in node.args:
+                if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
+                    found.add(arg.value)
+
+    assert found, "scan found no blocker literals -- the scan itself has rotted"
+    unclassified = found - set(NON_MAGNITUDE_NORMALIZER_BLOCKERS)
+    assert unclassified == set(), (
+        f"normalizer blocker code(s) {sorted(unclassified)} are not classified in "
+        "NON_MAGNITUDE_NORMALIZER_BLOCKERS. Decide deliberately: does this finding "
+        "impugn the row's magnitude (leave it out, it gates the accounting "
+        "identities) or not (add it)?"
+    )
+
+
+# --------------------------------------------------------------------------
 # Identities reach the live validate path.
 # --------------------------------------------------------------------------
 
@@ -709,3 +844,68 @@ def test_live_path_reports_billings_lineage_blocker() -> None:
     assert (
         "billings_derivation_inputs_missing" in result.proposals[0].validation_summary["blockers"]
     )
+
+
+def _sum_breaks(draft: Any) -> list[str]:
+    return [b for b in draft.validation_summary["blockers"] if "segments_do_not_sum" in b]
+
+
+def test_a_withheld_segment_does_not_fabricate_a_sum_break_for_its_clean_siblings() -> None:
+    """The mirror image of the PR #145 review M1 case above.
+
+    There, a normalizer-rejected row had to be dropped so a *comparison*
+    identity could still run for its clean siblings. An *aggregation* is the
+    opposite: a dropped row is a missing addend, not an absent competitor.
+
+    100 against segments of 50 + 30 + 20 balances exactly. Withhold the 20 and
+    the survivors sum to 80, which still satisfies every precondition
+    ``_check_segment_sums`` tests -- so it convicts the three rows that are
+    individually correct of a shortfall that is purely an artefact of the
+    exclusion, while the withheld row itself is flagged with nothing.
+    """
+    total = kpi("arr", "100", period=DURATION)
+    emea = kpi("arr", "50", period=DURATION, dimensions={"segment": "emea"})
+    apac = kpi("arr", "30", period=DURATION, dimensions={"segment": "apac"})
+    amer = kpi("arr", "20", period=DURATION, dimensions={"segment": "amer"})
+    amer[NORMALIZER_BLOCKERS_KEY] = ["dimensions_non_string"]
+
+    result = validate_proposals(
+        run_id="00000000-0000-4000-8000-0000000000a7",
+        payloads=[total, emea, apac, amer],
+    )
+
+    assert len(result.proposals) == 4
+    for draft in result.proposals:
+        assert _sum_breaks(draft) == []
+
+
+def test_suppressing_one_slice_does_not_silence_a_real_break_in_another() -> None:
+    """Withholding is scoped to the slice that lost a member.
+
+    Without this, the fix for the case above could be satisfied by disabling
+    the segment-sum identity globally whenever any row is withheld. The ``arr``
+    slice here has a withheld segment and must stay silent; the ``revenue``
+    slice is entirely clean, genuinely does not sum (50 + 30 != 100), and must
+    still report.
+    """
+    withheld_slice = [
+        kpi("arr", "100", period=DURATION),
+        kpi("arr", "50", period=DURATION, dimensions={"segment": "emea"}),
+        kpi("arr", "30", period=DURATION, dimensions={"segment": "apac"}),
+        kpi("arr", "20", period=DURATION, dimensions={"segment": "amer"}),
+    ]
+    withheld_slice[3][NORMALIZER_BLOCKERS_KEY] = ["dimensions_non_string"]
+    broken_slice = [
+        kpi("revenue", "100", period=DURATION),
+        kpi("revenue", "50", period=DURATION, dimensions={"segment": "emea"}),
+        kpi("revenue", "30", period=DURATION, dimensions={"segment": "apac"}),
+    ]
+
+    result = validate_proposals(
+        run_id="00000000-0000-4000-8000-0000000000a8",
+        payloads=[*withheld_slice, *broken_slice],
+    )
+
+    arr_rows, revenue_rows = result.proposals[:4], result.proposals[4:]
+    assert [_sum_breaks(draft) for draft in arr_rows] == [[], [], [], []]
+    assert all(_sum_breaks(draft) for draft in revenue_rows)

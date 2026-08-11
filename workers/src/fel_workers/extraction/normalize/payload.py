@@ -6,12 +6,13 @@ import copy
 from decimal import Decimal
 from typing import Any
 
+from fel_workers.extraction.normalize.currency import normalize_currency
+from fel_workers.extraction.normalize.dimensions import normalize_dimensions
 from fel_workers.extraction.normalize.numeric import format_decimal, parse_numeric
 from fel_workers.extraction.normalize.period import normalize_period
 from fel_workers.extraction.types import NORMALIZER_BLOCKERS_KEY, NORMALIZER_VERSION
 from fel_workers.extraction.validate.range import scale_blockers
 
-_CURRENCY_RE_OK = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
 _DRIVER_CATEGORIES = frozenset(
     {
         "price",
@@ -47,7 +48,11 @@ def normalize_payload(raw: dict[str, Any]) -> dict[str, Any]:
 
     if "period" in out:
         out["period"] = normalize_period(out.get("period"))
-    out["dimensions"] = _normalize_dimensions(out.get("dimensions"))
+    out["dimensions"], dimension_blockers = normalize_dimensions(out.get("dimensions"))
+    # Recorded here rather than inside `_normalize_numeric_fields`, which is the
+    # only other place that records blockers but never runs for qualitative
+    # guidance or a revenue driver — both of which carry `dimensions`.
+    _record_blockers(out, dimension_blockers)
     out["qualifiers"] = _normalize_qualifiers(out.get("qualifiers"))
 
     if kind == "kpi":
@@ -119,14 +124,6 @@ def _reconcile_scale(mantissas: dict[str, tuple[Decimal, int]]) -> tuple[dict[st
     return restated, common
 
 
-def _normalize_dimensions(dims: Any) -> dict[str, str]:
-    if dims is None:
-        return {}
-    if not isinstance(dims, dict):
-        raise ValueError("dimensions must be an object")
-    return {str(k): str(v) for k, v in sorted(dims.items(), key=lambda kv: str(kv[0]))}
-
-
 def _normalize_qualifiers(quals: Any) -> dict[str, Any]:
     if quals is None:
         return {}
@@ -141,12 +138,14 @@ def _normalize_numeric_fields(out: dict[str, Any], *, value_keys: tuple[str, ...
         raise ValueError("unit required for numeric payloads")
     out["unit"] = unit.strip()
 
-    currency = out.get("currency")
+    # Never converts currencies, and never infers one from the unit. The
+    # blockers are kept out of `blockers` below on purpose: that list gates the
+    # declared `scale`, and a missing currency says nothing about the exponent.
+    currency, currency_blockers = normalize_currency(currency=out.get("currency"), unit=out["unit"])
     if currency is not None:
-        if not isinstance(currency, str) or len(currency) != 3 or set(currency) - _CURRENCY_RE_OK:
-            raise ValueError(f"currency must be ISO-4217 alpha-3 or null: {currency!r}")
-        out["currency"] = currency.upper()
-    # Never convert currencies.
+        # Assigned only when present, so an absent key stays absent and an
+        # explicit null stays null — the schema check grades both.
+        out["currency"] = currency
 
     # Validate the DECLARED exponent before anything uses it. A model-supplied
     # scale=99 or scale=-3 is a wrong-magnitude claim, so it is rejected as a
@@ -198,6 +197,7 @@ def _normalize_numeric_fields(out: dict[str, Any], *, value_keys: tuple[str, ...
     # Re-normalizing a normalized payload is a no-op: the mantissa carries no
     # suffix of its own, so the declared scale round-trips unchanged.
     blockers.extend(_resolve_sign(out, restated[value_keys[0]]))
+    blockers.extend(currency_blockers)
     _record_blockers(out, blockers)
 
 

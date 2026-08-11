@@ -11,6 +11,7 @@ from fel_ontology.models import OntologyDocument
 from fel_workers.extraction.errors import IntegrityError
 from fel_workers.extraction.hashing import hash_json, proposal_id_for, sha256_hex
 from fel_workers.extraction.types import (
+    NON_MAGNITUDE_NORMALIZER_BLOCKERS,
     NORMALIZER_BLOCKERS_KEY,
     ConflictDraft,
     ExtractionMode,
@@ -54,11 +55,21 @@ def validate_proposals(
     drafts: list[ProposalDraft] = []
     cleaned_payloads: list[dict[str, Any]] = []
     # Positions in `cleaned_payloads` (== positions in `drafts`) whose *raw*
-    # payload carried NORMALIZER_BLOCKERS_KEY — a row the normalizer itself
-    # rejected, not merely one this pass finds other blockers for. Collected so
-    # `_mark_identity_violations` can exclude these rows from identity
-    # consideration (PR #145 review M1) even though the key that identifies
-    # them is stripped out of `clean` below and never reaches `cleaned_payloads`.
+    # payload carried a NORMALIZER_BLOCKERS_KEY entry that impugns the row's
+    # MAGNITUDE. Collected so `_mark_identity_violations` can exclude these rows
+    # from identity consideration (PR #145 review M1) even though the key that
+    # identifies them is stripped out of `clean` below and never reaches
+    # `cleaned_payloads`.
+    #
+    # Membership is decided by kind, not by mere presence. This key was built
+    # when it carried only scale/sign contradictions — findings that say the
+    # row's number cannot be trusted, so arithmetic over it is meaningless.
+    # It now also carries advisories that say nothing about the number at all,
+    # and excluding a row for one of those silently WITHDRAWS a deterministic
+    # accounting check that would otherwise fire: an issuer reporting cRPO
+    # $900m against RPO $500m — arithmetically impossible — went entirely
+    # unreported because one dimension value arrived as `12` rather than
+    # `"12"`. A cosmetic typing note must not disarm the arithmetic.
     normalizer_rejected_indices: set[int] = set()
 
     for payload in payloads:
@@ -93,7 +104,7 @@ def validate_proposals(
             raise IntegrityError(f"proposal state must be needs_review, got {draft.state!r}")
         drafts.append(draft)
         cleaned_payloads.append(clean)
-        if normalizer_blockers:
+        if any(b not in NON_MAGNITUDE_NORMALIZER_BLOCKERS for b in normalizer_blockers):
             normalizer_rejected_indices.add(len(cleaned_payloads) - 1)
 
     _mark_duplicates(drafts, cleaned_payloads)

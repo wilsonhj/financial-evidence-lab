@@ -340,20 +340,38 @@ anything trusts it; and cross-checks a declared `sign` against the value's
 own derived sign, correcting the stored sign and reporting the disagreement
 as a blocker rather than silently trusting the declaration. Period shape is
 normalized by `normalize/period.py::normalize_period`, called from
-`payload.py:49`. Dimension key ordering and ISO-4217 currency casing are handled
-inside `payload.py` itself — `_normalize_dimensions` (`payload.py:122`) and the
-inline `currency.upper()` validation in `_normalize_numeric_fields`
-(`payload.py:144-148`).
+`payload.py`. Dimensions and currency each have one live implementation in
+their own module, alongside `period.py`:
 
-Note that `normalize/dimensions.py` and `normalize/currency.py` also exist and
-implement similar logic, but **nothing imports them** — verified by import trace
-across `workers/src` and `workers/tests`. They are orphaned duplicates of the
-`payload.py` implementations, not part of the live path. Extend `payload.py`, not
-those modules; changing them has no effect on any payload. This matters for
-[issue #153](https://github.com/wilsonhj/financial-evidence-lab/issues/153),
-whose currency-fold question is about `payload.py`. Consolidating or removing the
-orphans is tracked in
-[issue #155](https://github.com/wilsonhj/financial-evidence-lab/issues/155).
+- `normalize/dimensions.py::normalize_dimensions`, called from `payload.py`.
+  It **reports** a non-string dimension value as a `dimensions_non_string`
+  blocker instead of coercing it. The private `payload.py` variant it replaced
+  ran `str()` over every key and value first, so `{"segment": 42}` reached
+  review as a schema-clean `{"segment": "42"}` and the contract's own
+  `{string: string}` check in `validate/schema.py` could never fire. Offending
+  keys are dropped individually; valid siblings survive, which matters because
+  `dimensions` is part of the duplicate/conflict identity key.
+- `normalize/currency.py::normalize_currency`, called from
+  `_normalize_numeric_fields`. It keeps the ISO-4217 validation that was
+  inline before and adds `currency_missing_for_monetary`, which had existed
+  as unreferenced code. `validate/definitions.py` only covers a metric the
+  ontology resolves, so guidance and revenue drivers — which carry free-text
+  metric labels by design — could previously report a monetary amount with a
+  null currency and clear every check.
+
+Both blockers travel on the non-aborting `NORMALIZER_BLOCKERS_KEY` channel, so
+an affected payload reaches review named and explained rather than being
+dropped.
+
+Extend these modules, not `payload.py`: as of
+[issue #155](https://github.com/wilsonhj/financial-evidence-lab/issues/155)
+they are the live path, and the private duplicates are gone. In particular the
+currency-fold question in
+[issue #153](https://github.com/wilsonhj/financial-evidence-lab/issues/153)
+is now localized to `normalize/currency.py`. The line that decision would
+change is the `_ISO_4217` pattern, which rejects `"usd"` before the
+subsequent `.upper()` is ever reached — that `.upper()` is a no-op today and
+changing it alone would do nothing.
 
 ### Deterministic validators (`extraction/validate/`)
 

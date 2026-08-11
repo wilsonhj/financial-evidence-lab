@@ -26,6 +26,30 @@ VALIDATOR_VERSION = "validate/v1"
 # and the validator can share the key without importing each other.
 NORMALIZER_BLOCKERS_KEY = "_normalizer_blockers"
 
+# Normalizer blockers that say nothing about the row's MAGNITUDE.
+#
+# `validate/pipeline.py` excludes a row from the accounting identities when the
+# normalizer impugned its number — a scale or sign that contradicts the value,
+# or an outright rejection, which leaves the payload carried forward
+# unnormalized. Those rows cannot be used in arithmetic. The codes below are
+# different in kind: they report a malformed *dimension value* or a *missing
+# currency*, neither of which makes the row's figure less trustworthy. A row
+# carrying only these must keep participating, or a cosmetic typing note
+# silently withdraws a deterministic check — cRPO $900m against RPO $500m is
+# arithmetically impossible and went unreported because one dimension value
+# arrived as `12` rather than `"12"`.
+#
+# Classification is deliberate and exhaustive: every stable blocker code the
+# normalizer can emit is either listed here or gates. A new code that is
+# neither is caught by
+# `test_every_normalizer_blocker_code_is_deliberately_classified`.
+NON_MAGNITUDE_NORMALIZER_BLOCKERS = frozenset(
+    {
+        "dimensions_non_string",
+        "currency_missing_for_monetary",
+    }
+)
+
 STAGE_ORDER: tuple[str, ...] = (
     "validate_request",
     "assemble_evidence",
