@@ -4,11 +4,27 @@ This directory is the restart point for all implementation agents. Fable must be
 
 ## Current state
 
-- Specification (v1.2) and architecture (ADR-0002) are approved.
-- The monorepo scaffold (T0001, PR #50) and CI gates (T0009, PR #69) are
-  merged to `integration/m0`; every push and PR is CI-gated.
-- The `G0` remainder is the contract freeze: `M0-CONTRACTS` (#52) is ready.
-- Provider credentials are intentionally unavailable. M0 must use mocks.
+- Specification (v1.2) and architecture (ADR-0002) are approved. Contracts are
+  frozen at OpenAPI `v0.4.0` with migrations through `0005`.
+- `main` is the only implementation base; `integration/m0` is retired. Every
+  push and PR is CI-gated.
+- M0, M1 and M2 are complete. The M3 core landed as `M3-EXTRACTION-CORE` (#60,
+  PR #145 @ `61058e4`), with follow-up fixes in #156 and #160.
+- Next dispatchable package is `M3-REVIEW` (#61). #145 unblocked it, but it
+  carries an explicit `status: blocked` in `workstreams.yaml` that must be
+  flipped. Gate: #146 (terminal-run retry semantics) should resolve first.
+  `M3-CONFIDENCE-GATE` (#62) is not unblocked — it `depends_on: [M3-REVIEW]`.
+- In review, both unreviewed: PR #162 (#155) and PR #164 (#151, so
+  `EVALS-REPORT-RENDER` is in review despite still reading `ready` in
+  `workstreams.yaml`). PR #166 proposes relicensing MIT → Apache-2.0.
+- Unresolved fork: ADR-0009 (Proposed) and #157 are mutually exclusive and need
+  an integration-lead ruling before #61 exposes the SSE surface.
+- Provider credentials are intentionally unavailable. Work stays mock-first;
+  hosted smoke (#108) credentials are not provisioned.
+- Trunk health: `main` @ `ace7b83` fails the fail-closed `audit-bulk` gate on
+  `js-yaml` GHSA-5p4m-2wfm-xmqj and `nanoid` GHSA-2v37-7h3g-55p8. PR #167 fixes
+  both and is green; until it merges, every branch inherits the red JS/TS job.
+  Check the latest CI run on `main` before assuming a red branch is your doing.
 
 Read `STATUS.md` for live state and `workstreams.yaml` for the authoritative dependency graph. External agents doing parallel preparation work start from `EXTERNAL_AGENT_BRIEF.md`.
 
