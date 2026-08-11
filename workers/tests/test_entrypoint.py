@@ -165,24 +165,35 @@ def test_build_structured_llm_rejects_typo_opt_in(monkeypatch: pytest.MonkeyPatc
     assert "FEL_ALLOW_MOCK_LLM" in str(excinfo.value)
 
 
-def test_extraction_memory_stores_defaults_to_durable(monkeypatch: pytest.MonkeyPatch) -> None:
-    """No FEL_EXTRACTION_MEMORY_STORES => durable stores.
+def test_extraction_memory_stores_defaults_to_durable(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """No FEL_EXTRACTION_MEMORY_STORES => durable stores, and no warning.
 
     In-memory stores discard every proposal, conflict, step and event when
     the process exits while the job still completes as ``succeeded``, so the
     default has to be the one whose failure is visible. Selection used to be
     inferred from payload shape — inline ``evidence`` chose memory — which is
     how production runs silently wrote nothing at all.
+
+    The silence is asserted, not incidental. A discard warning that also fired
+    on every durable boot would train operators to filter it out, which costs
+    nothing to a passing test and costs everything to the one run that really
+    did discard its output.
     """
     monkeypatch.delenv("FEL_EXTRACTION_MEMORY_STORES", raising=False)
-    assert resolve_extraction_memory_stores() is False
+    with caplog.at_level(logging.WARNING, logger="fel_workers"):
+        assert resolve_extraction_memory_stores() is False
+    assert [r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING] == []
 
 
 def test_extraction_memory_stores_accepts_documented_truthy_spellings(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The opt-in shares the strict mode-flag parser: the documented set of
-    'set' spellings is accepted after strip + casefold, and nothing else."""
+    'set' spellings is accepted after strip + lower-casing. That the set is
+    *closed* is pinned separately, by
+    ``test_extraction_memory_stores_rejects_falsy_and_typo_values``."""
     for spelling in ("1", "true", "TRUE", "yes", "on", "  on  "):
         monkeypatch.setenv("FEL_EXTRACTION_MEMORY_STORES", spelling)
         assert resolve_extraction_memory_stores() is True, spelling
@@ -195,9 +206,9 @@ def test_extraction_memory_stores_warns_that_output_is_discarded(
 
     The run reports ``waiting_review`` and the job is marked ``succeeded``
     either way, so nothing downstream distinguishes a discarded run from a
-    persisted one. This log line is the operator's only signal that a job
-    which looks successful wrote nothing, which makes it part of the
-    behaviour and not decoration.
+    persisted one. This log line is the operator's first signal at startup
+    that a job which looks successful wrote nothing (``consumer.py`` repeats
+    it per job), which makes it part of the behaviour and not decoration.
     """
     monkeypatch.setenv("FEL_EXTRACTION_MEMORY_STORES", "1")
     with caplog.at_level(logging.WARNING, logger="fel_workers"):
@@ -213,15 +224,27 @@ def test_extraction_memory_stores_warns_that_output_is_discarded(
 def test_extraction_memory_stores_rejects_falsy_and_typo_values(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """``0``/``false``/``off`` and typos like ``ture`` fail closed.
+    """``0``/``false``/``no``/``off`` and typos like ``ture`` fail closed.
 
     Falsy spellings are rejected rather than read as unset for the same
     reason as the other mode flags: ``FEL_EXTRACTION_MEMORY_STORES=false``
     from an operator who believes they configured something must not become
     indistinguishable from an unset variable. The error names the variable
     and the value received so the deploy log says which one to fix.
+
+    ``no`` is the entry that matters most, and is listed as rejected by
+    ``_read_mode_flag`` itself. It is the one spelling whose mis-parse fails
+    in the *dangerous* direction: were it ever admitted to the truthy set — by
+    a "be lenient with booleans" change, or by swapping in a generic parser
+    that recognises it — an operator writing "no, don't use memory stores"
+    would select exactly the stores that discard everything. ``0``/``false``/
+    ``off`` flipping truthy is caught by the entries beside it.
+
+    The padded ``' ture '`` pins a separate property: the message echoes the
+    raw value, whitespace and all, so an operator sees the stray padding that
+    a stripped echo would hide.
     """
-    for value in ("0", "false", "off", "ture"):
+    for value in ("0", "false", "no", "off", "ture", " ture "):
         monkeypatch.setenv("FEL_EXTRACTION_MEMORY_STORES", value)
         with pytest.raises(RuntimeError) as excinfo:
             resolve_extraction_memory_stores()
@@ -253,6 +276,26 @@ def test_run_main_selects_durable_extraction_stores_without_the_flag(
     captured = _capture_run_worker_kwargs(monkeypatch)
     assert run_main(["--max-iterations", "1"]) == 0
     assert captured["extraction_memory_stores"] is False
+
+
+def test_run_main_forwards_the_extraction_memory_stores_opt_in(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The opt-in reaches the queue loop too, not just the resolver.
+
+    Without this, ``run_main`` could drop the resolved value on the floor and
+    still look correct from the outside: the scary warning is emitted by the
+    resolver, and the process still exits 0. The documented smoke run
+    (``docs/runbooks/extraction-worker.md``) would quietly persist to Postgres
+    instead of memory, which is the opposite of what the operator asked for.
+    """
+    monkeypatch.setenv("FEL_DATABASE_URL", "postgresql://unused.invalid/never-connected")
+    monkeypatch.delenv("FEL_SEC_LIVE", raising=False)
+    monkeypatch.delenv("FEL_ALLOW_MOCK_LLM", raising=False)
+    monkeypatch.setenv("FEL_EXTRACTION_MEMORY_STORES", "1")
+    captured = _capture_run_worker_kwargs(monkeypatch)
+    assert run_main(["--max-iterations", "1"]) == 0
+    assert captured["extraction_memory_stores"] is True
 
 
 def test_run_main_exits_two_on_unrecognized_extraction_memory_stores(
