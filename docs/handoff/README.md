@@ -4,27 +4,45 @@ This directory is the restart point for all implementation agents. Fable must be
 
 ## Current state
 
+- Trunk is `5b4b77c` (PR #162). This block was last reconciled 2026-08-20; the
+  revision before it was pinned to `ace7b83` and was wrong within hours, so
+  re-resolve against `origin/main` rather than trusting this line.
 - Specification (v1.2) and architecture (ADR-0002) are approved. Contracts are
   frozen at OpenAPI `v0.4.0` with migrations through `0005`.
 - `main` is the only implementation base; `integration/m0` is retired. Every
   push and PR is CI-gated.
+- **The project is Apache-2.0, not MIT.** PR #166 @ `5394c64` relicensed it and
+  added a `NOTICE` file; `LICENSE` is byte-identical to the canonical
+  Apache-2.0 text. Contributions carry the patent grant and the NOTICE
+  obligation.
 - M0, M1 and M2 are complete. The M3 core landed as `M3-EXTRACTION-CORE` (#60,
-  PR #145 @ `61058e4`), with follow-up fixes in #156 and #160.
-- Next dispatchable package is `M3-REVIEW` (#61). #145 unblocked it, but it
-  carries an explicit `status: blocked` in `workstreams.yaml` that must be
-  flipped. Gate: #146 (terminal-run retry semantics) should resolve first.
-  `M3-CONFIDENCE-GATE` (#62) is not unblocked — it `depends_on: [M3-REVIEW]`.
-- In review, both unreviewed: PR #162 (#155) and PR #164 (#151, so
-  `EVALS-REPORT-RENDER` is in review despite still reading `ready` in
-  `workstreams.yaml`). PR #166 proposes relicensing MIT → Apache-2.0.
+  PR #145 @ `61058e4`), with follow-up fixes in #156, #160, #170 (#169) and
+  #162 (#155, the orphaned normalize modules — now wired in).
+- **Nothing reads `ready` in `workstreams.yaml`, and there are zero open PRs.**
+  `EVALS-REPORT-RENDER` (#151) merged as PR #164 @ `a23514e`; its entry read
+  `ready` for nine days afterwards, so an agent reading the queue in that
+  window would have re-taken finished work. Do not infer dispatchability from
+  a stale `ready` — confirm the issue is open on GitHub first.
+- Two packages have every `depends_on` satisfied and neither is flipped, both
+  by deliberate choice. `M4-MODEL-CALC` (#63) is uncontended — its only
+  dependency is merged and `packages/calculation-engine/**` overlaps nothing —
+  and inherits `blocked`, so dispatching means adding a key. `M3-REVIEW` (#61)
+  carries an explicit `status: blocked` that must be flipped; its dependency is
+  satisfied, and what actually holds it is two open rulings, not #60.
+  `M3-CONFIDENCE-GATE` (#62) is genuinely not unblocked — it
+  `depends_on: [M3-REVIEW]`.
 - Unresolved fork: ADR-0009 (Proposed) and #157 are mutually exclusive and need
-  an integration-lead ruling before #61 exposes the SSE surface.
+  an integration-lead ruling before #61 exposes the SSE surface. #146
+  (terminal-run retry semantics) is the other open ruling gating #61. ADR-0010
+  (PR #165) is also **Proposed** and ratifies nothing.
 - Provider credentials are intentionally unavailable. Work stays mock-first;
   hosted smoke (#108) credentials are not provisioned.
-- Trunk health: `main` @ `ace7b83` fails the fail-closed `audit-bulk` gate on
-  `js-yaml` GHSA-5p4m-2wfm-xmqj and `nanoid` GHSA-2v37-7h3g-55p8. PR #167 fixes
-  both and is green; until it merges, every branch inherits the red JS/TS job.
-  Check the latest CI run on `main` before assuming a red branch is your doing.
+- Trunk health: `main` @ `5b4b77c` is **green** — all five GitHub Actions check
+  runs pass. The `audit-bulk` red at `ace7b83` (`js-yaml`
+  GHSA-5p4m-2wfm-xmqj, `nanoid` GHSA-2v37-7h3g-55p8) was fixed by PR #167 @
+  `7eba341`, so a red branch is now your own doing. Ignore the `cursor`,
+  `claude`, `supabase` and `vercel` check *suites*: they sit permanently
+  `queued` and never resolve, which makes green trunk look pending.
 
 Read `STATUS.md` for live state and `workstreams.yaml` for the authoritative dependency graph. External agents doing parallel preparation work start from `EXTERNAL_AGENT_BRIEF.md`.
 

@@ -352,7 +352,7 @@ packages:
     depends_on: [M3-EXTRACTION-CORE]
     team: experience
     branch: agent/m3-review # not yet created
-    status: blocked # unblocks to `ready` when #60 merges via PR #145; without an explicit key this inherited defaults.status anyway, which contradicted STATUS.md
+    status: blocked # NOT a dependency block any more: depends_on [M3-EXTRACTION-CORE] is SATISFIED — #60 merged via PR #145 @ 61058e4 (2026-07-30). Held instead by two unresolved rulings, both integration-lead calls: #146 (terminal-run retry semantics — job retries can outlive a run's terminal state) should be settled before #61 lands the producer, and the mutually exclusive ADR-0009 (Proposed) vs #157 (add extraction_run_steps.output) fork should be ruled on before #61 exposes the SSE surface, because #61 is the trigger that turns a false published guarantee into one a consumer relies on. Deliberately left `blocked` by the 5b4b77c reconciliation: flipping this key is a dispatch decision reserved to the integration lead, not a documentation fix. Note the key is explicit, so dispatching means flipping it rather than adding one.
     allowed_paths: [apps/web/**, apps/api/**]
   - id: M3-CONFIDENCE-GATE # confidence scoring + extraction quality gate
     issue: 62
@@ -457,7 +457,7 @@ packages:
     # are blocked today, so there is no live contention; serialize against
     # whichever unblocks first.
     # Spec: docs/research/evals-report-renderer-proposal.md.
-    status: ready # deps satisfied — M1-CORPUS-QA merged via #86; size lever declined (both goldens committed), see STATUS.md decision record
+    status: merged # PR #164 squash-merged to main @ a23514e (2026-08-11); issue #151 closed by merge. Shipped evals/reporting/corpus_qa_render.py + its README, evals/tests/test_corpus_qa_render.py, and BOTH committed goldens (.md + .svg) — the size lever was declined, see the STATUS.md decision record. Merged at +2531/-0 across 6 files, roughly fourfold the ~640 changed lines that decision record projected (1161 lines are the test module, 255 the two goldens); docs/handoff/README.md's "below roughly 600 changed lines" is a stated preference, not a gate. This entry still read `ready` for nine days after the merge — an agent reading the queue in that window would have re-taken finished work; reconciled at 5b4b77c. evals/reporting/** and evals/tests/** are free to claim again, still as SUBTREES of the evals/** claimed by #108/#62/#67/#68.
     allowed_paths:
       - evals/reporting/**
       - evals/tests/**
