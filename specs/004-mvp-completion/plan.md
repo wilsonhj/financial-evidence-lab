@@ -5,44 +5,58 @@
 **Input**: Feature specification from `/specs/004-mvp-completion/spec.md`
 
 > **Subordinate plan.** `specs/001-financial-evidence-lab/plan.md` remains the canonical implementation plan under the constitution. This file plans **release sequencing only** — the order in which already-specified packages are dispatched, and the preconditions each requires. It introduces no architecture and no requirement. Where the two disagree, `001/plan.md` governs. The constitutional disposition this requires is recorded as finding **C-1** in [`clarify-analyse.md`](./clarify-analyse.md).
+>
+> **Branch prefix.** `spec/*` is not one of the prefixes `workstreams.yaml` exhibits (`agent/`, `contract/`, `feat/`, `fix/`, `chore/`, `test/`), and the constitution names `agent/*` for *implementation* work. `spec/*` is used here for a planning-only branch; if the integration lead prefers, rename to `agent/004-mvp-completion` or sanction `spec/*` as the planning prefix.
 
 ## Summary
 
 Nine registered packages and one unregistered workstream stand between `main` @ `5b4b77c` and the immutable MVP release artifact (`T0513`). Twenty-nine of sixty-seven in-scope Spec Kit tasks are outstanding. The critical path is six deep and terminates at `M5-AUDIT-RELEASE` (#68).
 
-The technical approach is not new construction but **sequencing under two constraints the existing graph does not encode**: path-exclusivity between concurrently dispatched packages, and a credential precondition that no `depends_on` edge can express. The plan's substantive contribution is to make the second constraint explicit by registering `RELEASE-LIVE-CUTOVER` and giving #68 a dependency on it, so that the terminal node stops being unreachable.
+The technical approach is not new construction but **sequencing under two constraints the existing graph does not encode**: path-exclusivity between concurrently dispatched packages, and a credential precondition that no `depends_on` edge can express. The plan's substantive contribution is to make the second constraint explicit by registering `RELEASE-LIVE-CUTOVER` and giving #68 a dependency on it, so the terminal node stops being unreachable.
 
 ## Technical Context
 
-**Language/Version**: Python 3.11 (`.python-version`, `ruff`/`black`/`mypy` all pinned `py311`); Node 22 (`.node-version`); TypeScript with React 19
+> **Deliberate omission.** Constitution principle V states the locked MVP stack "is recorded in `docs/decisions/ADR-0002-mvp-stack.md` and MUST NOT be restated elsewhere." `plan-template.md` nonetheless mandates a Technical Context block enumerating language, dependencies, storage and platform — so filling this section as written would restate the stack and breach principle V, inside the very section that then self-certifies stack compliance. This is a genuine template-versus-constitution conflict, recorded as finding **A-12**. It is resolved here by *pointing* rather than restating, and by keeping only the facts release sequencing actually depends on.
 
-**Primary Dependencies**: Next.js 16 App Router; FastAPI + Pydantic modular monolith plus one Python worker; Supabase Postgres/pgvector ≥ 0.8.2, Auth, RLS, Storage; ECharts and React Flow. Per ADR-0002 (Accepted)
+**Stack of record**: `docs/decisions/ADR-0002-mvp-stack.md` (Status: Accepted). Not restated here, per principle V.
 
-**Storage**: Supabase Postgres; `halfvec` embeddings ≤ 512 dimensions; jobs on a PostgreSQL table claimed `FOR UPDATE SKIP LOCKED` with heartbeat and stale-job reaper. Migrations frozen through `0005`; OpenAPI frozen at `v0.4.0`
+**Language/Version**: Python 3.11 (`.python-version`; `ruff`, `black` and `mypy` all pinned `py311`); Node 22 (`.node-version`)
 
-**Testing**: pytest (`pythonpath` spanning `apps/api`, `workers/src`, `evals`, four `packages/*`); vitest for JS/TS; Playwright for web E2E; property, contract, golden-file and evaluation suites per parent §20.1
+**Primary Dependencies**: per ADR-0002
 
-**Target Platform**: Railway hosts web, API and worker from one monorepo; GitHub Actions for CI and deployment gates
+**Storage**: per ADR-0002. Sequencing-relevant fact only: migrations are frozen through `0005` and OpenAPI at `v0.4.0`, so no package in any wave proposes a contract change
 
-**Project Type**: Web application — modular monolith plus one worker process. No new services introduced by this plan
+**Testing**: pytest, with `pythonpath` spanning `apps/api`, `workers/src`, `evals`, and four `packages/*` (`providers`, `retrieval`, `retrieval-evals`, `ontology`); vitest for JS/TS; Playwright for web E2E
 
-**Performance Goals**: 5,000-node p95 recalculation (`T0410`); retrieval Recall@10 ≥ 90.0% and the remaining nine parent §19.6 gates; forecast interval coverage 75–85%
+**Target Platform**: per ADR-0002
 
-**Constraints**: `defaults.credentials: mock-only` — **the binding constraint of this plan** (§5 of the spec). Path-exclusivity: no two concurrently dispatched packages may share an `allowed_paths` glob. Shared-path edits require `contract-change` plus an authorization record per #141. Contracts are frozen; this plan proposes no contract change
+**Project Type**: Web application — modular monolith plus one worker. **No new service, package or module is introduced by this plan**
 
-**Scale/Scope**: 10 packages, 29 tasks, 16 release-blocking issues, 8 dispatch waves. No new product surface
+**Performance Goals**: sequencing-relevant only — `T0410`'s 5,000-node p95 recalculation target gates #63, and the ten parent §19.6 gates gate #68
+
+**Constraints**: `defaults.credentials: mock-only` — **the binding constraint of this plan** (spec §5). Path-exclusivity: no two concurrently dispatched packages may share an `allowed_paths` glob. **This PR is itself a `specs/**` shared-path change** and therefore carries `contract-change` plus an authorization record per #141; separately, it proposes no OpenAPI, JSON-schema or migration change
+
+**Scale/Scope**: 10 packages, 29 tasks, 16 release-blocking backlog issues, 8 dispatch waves. No new product surface
 
 ## Constitution Check
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-- [x] **Evidence and temporal-cutoff behavior is explicit and testable.** This plan adds no evidence path. It preserves the parent's temporal-validity gate (100%) as a release blocker and routes `T0112` — the only outstanding ingestion work — through `RELEASE-LIVE-CUTOVER` where cutoff behavior is already covered by the merged M1 test suites (`T0111`).
+- [x] **Evidence and temporal-cutoff behavior is explicit and testable.** This plan adds no evidence path. It preserves the parent's 100% temporal-validity gate as a release blocker and routes `T0112` — the only outstanding ingestion work — through `RELEASE-LIVE-CUTOVER`, where cutoff behavior is already covered by the merged M1 suites (`T0111`).
 - [x] **Financial calculations are deterministic, decimal, typed, and source-linked.** Unchanged. `M4-MODEL-CALC` (#63) carries the decimal-engine and property-test obligations verbatim from `T0403`/`T0409`; this plan neither relaxes nor reinterprets them.
-- [x] **Tests and numeric evaluation gates precede implementation tasks.** Wave 0 places the #171 regression test and the `tasks.md` reconciliation *before* any dispatch, so no package is built on a ledger that misreports its own dependencies' completion.
-- [ ] **Tenant isolation, secrets, auditability, prompt-injection defenses, and cost ceilings are covered.** — **BLOCKED, see Complexity Tracking.** Cannot be asserted: every credential in `CREDENTIALS.md` reads "Not requested," so the approved secret-management flow required by constitution principle IV has never been exercised. This is the gap `RELEASE-LIVE-CUTOVER` exists to close, and it must be re-checked before wave 6.
-- [ ] **The design stays within the approved modular-monolith stack or includes an approved complexity ADR.** — **BLOCKED, see Complexity Tracking.** The replace-OpenAI directive recorded in #132 substitutes `claude-opus-4-8` for the "OpenAI for generation" of ADR-0002 (Accepted), with no superseding ADR and no benchmark evidence. Constitution principle V requires both.
+- [x] **Tests and numeric evaluation gates precede implementation tasks.** Wave 0 places the #171 red-green regression test and the `tasks.md` reconciliation *before* any package dispatch.
+- [ ] **Tenant isolation, secrets, auditability, prompt-injection defenses, and cost ceilings are covered.** — **FAILS.** Cannot be asserted: every credential group in `CREDENTIALS.md` reads "Not requested", so the approved secret-management flow required by principle IV has never been exercised. Re-check required before wave 6.
+- [ ] **The design stays within the approved modular-monolith stack or includes an approved complexity ADR.** — **FAILS.** The replace-OpenAI directive in #132 substitutes `claude-opus-4-8` for ADR-0002's accepted "OpenAI for generation", with no superseding ADR and no benchmark evidence. Principle V requires both.
 
-**Gate result: FAILS as of 2026-08-25.** Two of five checks cannot be asserted. Both failures are pre-existing conditions of the repository that this plan surfaces rather than introduces, and both have named remediations below. Per the constitution's Governance section a failed mandatory gate blocks merge — for *implementation* work. This plan is a planning artifact that proposes the remediation for both failures; ratifying it is the mechanism by which they get owners.
+**Feature-specific check** (added because the five template items are the five Core Principles, and the clause this feature actually strains lives in Development and Review Workflow rather than in any principle):
+
+- [ ] **Development and Review Workflow: `specs/001-financial-evidence-lab/` holds the sole canonical `spec.md`, `plan.md` and `tasks.md`.** — **FAILS.** This file is the repository's second `plan.md`. See finding **C-1**, which also records that `002/` and `003/` have each shipped their own `spec.md` and `tasks.md` since July, so a literal reading of "sole canonical" has not held for two months.
+
+### Gate result
+
+**FAILS — three of six.** The constitution's Governance section is unqualified: *"Unjustified complexity or a failed mandatory gate blocks merge."* It draws no distinction between implementation and planning artifacts, and this plan does not claim one.
+
+Therefore: **this PR cannot be merged on its own authority.** Merging it requires an explicit integration-lead waiver recorded on the pull request, or prior remediation of the three failures. All three are pre-existing repository conditions that this plan surfaces and assigns owners to rather than introduces — but that is an argument for granting the waiver, not a reason the gate does not apply.
 
 ## Project Structure
 
@@ -55,11 +69,11 @@ specs/004-mvp-completion/
 └── clarify-analyse.md   # Clarification resolutions + cross-artifact analysis
 ```
 
-No `research.md`, `data-model.md`, `quickstart.md` or `contracts/`: this feature adds no data model, no contract and no developer-facing entry point. No `tasks.md` **by deliberate choice** — the outstanding work already carries canonical IDs (`T0112`, `T0306`–`T0513`) in `specs/001-financial-evidence-lab/tasks.md`, and a second copy of those rows would reproduce the exact drift documented in spec §4.2.
+No `research.md`, `data-model.md`, `quickstart.md` or `contracts/`: this feature adds no data model, no contract and no developer-facing entry point. No `tasks.md` **by deliberate choice** — the outstanding work already carries canonical IDs (`T0112`, `T0306`–`T0513`) in `specs/001-financial-evidence-lab/tasks.md`, and a second copy would reproduce the drift documented in spec §4.2.
 
 ### Source Code (repository root)
 
-This plan modifies **no source code**. It sequences work against directories that already exist and whose ownership is already fixed by `allowed_paths`:
+This plan modifies **no source code**. It sequences work across directories whose ownership is already fixed by `allowed_paths`:
 
 ```text
 apps/
@@ -67,41 +81,38 @@ apps/
 └── api/                          # #61, #64 M4-FACT-SCENARIOS, #68 M5-AUDIT-RELEASE
 workers/src/fel_workers/
 ├── extraction/                   # #62 M3-CONFIDENCE-GATE
-└── forecasting/                  # #66, #67 M5-BACKTEST   (directory not yet created)
+└── forecasting/                  # #66, #67 M5-BACKTEST      (exists; __init__.py on trunk)
 packages/
-├── calculation-engine/           # #63 M4-MODEL-CALC, #64   (directory not yet created)
-├── export/                       # #68                      (directory not yet created)
+├── calculation-engine/           # #63 M4-MODEL-CALC, #64     (exists as .gitkeep; NOT on pythonpath)
+├── export/                       # #68                        (absent from trunk)
 └── ui/                           # #65, #66
 evals/                            # #62, #67, #68, RELEASE-LIVE-CUTOVER
-docs/release/                     # #68                      (directory not yet created)
+docs/release/                     # #68                        (absent from trunk)
 ```
 
-**Structure Decision**: No structural change. Five of the directories above (`workers/src/fel_workers/forecasting/`, `packages/calculation-engine/`, `packages/export/`, `docs/release/`) do not yet exist and are created by their owning package under ADR-0008's scaffold-registration exception, which permits the owning PR to carry the `pyproject.toml`, `Makefile` and `ci.yml` dir-list edits needed to make a new first-party package visible to the shared gates — **dir-list registration only**. Dependency additions remain outside that exception and require per-dispatch authorization.
+**Structure Decision**: No structural change, and no new module. Two of the directories above are genuinely absent from trunk — `packages/export/` and `docs/release/` — and are created by `M5-AUDIT-RELEASE` (#68).
+
+ADR-0008's scaffold-registration exception reaches **only** `packages/export/`, because the ADR scopes itself to "when a package's core deliverable is a new directory under `packages/**`". It does **not** reach `docs/release/` (a documentation tree, needing no registration) or `workers/src/fel_workers/forecasting/` (already inside `workers/src`, which is on `pythonpath`, and already present on trunk).
+
+`packages/calculation-engine/` is a distinct case: the directory exists on trunk as a `.gitkeep` placeholder, but it is **absent from `pyproject.toml`**, so #63 still needs the ADR-0008 registration edits even though it creates no directory. The registration surface is the `pyproject.toml` and `Makefile` dir-lists, the `ci.yml` python-job dir-lists, and — per Amendment 1, ratified 2026-07-29 on merge of PR #147 — appending the package path to `infra/railway/worker.json`'s `buildCommand` install list, and only when the worker imports it. **Dir-list registration only.** Dependency additions (`requirements-dev.txt` and the `pyproject.toml` dependency tables) remain fully gated and require per-dispatch integration-lead authorization.
 
 ## Phasing
 
-Phases correspond to spec §6.2 waves. A wave opens only when every package in the prior wave is `merged`.
+Wave contents are defined in **spec §6.2, which is authoritative**; this section states only the rules governing them, to avoid two divergent copies of the same list.
 
-| Wave | Content | Opens when |
-|---|---|---|
-| 0 | Integration-lead actions: merge #172; fix #171 with a red-green test; reconcile 17 `tasks.md` boxes; register `RELEASE-LIVE-CUTOVER`; rule #146 and ADR-0009/#157; land the ADR for finding A-1; re-scope #134 | Now |
-| 1 | #61 ∥ #63 (disjoint paths) | #61: after the two rulings. #63: now |
-| 2 | #62 | #61 merged |
-| 3 | #64 | #62 and #63 merged |
-| 4 | #65, then #66 — serialized on `apps/web/**`, `packages/ui/**` | #64 merged |
-| 5 | #67 | #66 merged |
-| 6 | `RELEASE-LIVE-CUTOVER`, then #108 | Credentials provisioned; `evals/**` free |
-| 7 | #68 | #67 and `RELEASE-LIVE-CUTOVER` merged |
-
-Wave 0 is the only wave that can start today, and #63 is the only package dispatchable today.
+- Wave 0 is a set of integration-lead actions, not a package dispatch. It spans **several pull requests** (this one; the #171 fix; the `tasks.md` reconciliation; the `RELEASE-LIVE-CUTOVER` registration), which may land in any order.
+- Of wave 0, only the **#171 fix gates wave 1** — it is the defect #62 is later built to measure. The remaining wave-0 items unblock #61 (the #146 and ADR-0009/#157 rulings) or improve ledger accuracy without blocking dispatch.
+- For package-bearing waves (1 onward), a wave opens only when every package in the prior wave reads `merged`.
+- **`M4-MODEL-CALC` (#63) is wave-0-concurrent.** It is listed in wave 1 for dependency ordering, but requires no ruling, contends with nothing, and can be dispatched today alongside wave-0 work.
 
 ## Complexity Tracking
 
-> Two Constitution Check items fail. Both are pre-existing repository conditions, not complexity this plan introduces; both are recorded here because the template requires a justification for any failed check that a plan proceeds past.
+> The template asks for justification of Constitution Check violations "that must be justified" — that is, complexity a plan *chooses*. This plan chooses none. The entries below are **pre-existing gate failures** the plan inherits and assigns owners to; they are recorded here because the template offers no other place to disclose a failed check, and disclosing them is preferable to leaving the failures unexplained.
 
-| Violation | Why Needed | Simpler Alternative Rejected Because |
-|-----------|------------|-------------------------------------|
-| Principle IV cannot be asserted: the approved secret-management flow has never been exercised (all five credential groups read "Not requested") | The parent's §19.6 gates and §26 item 2 require evaluation against real filings and a dual-adjudicated ≥300-question benchmark. No mock-only configuration can satisfy them, so the flow must be exercised before release | "Stay mock-only through release" was rejected because it makes `T0513` unachievable by construction — the terminal package cannot meet acceptance criteria its own inherited `credentials: mock-only` forbids. Deferring the check to wave 6 without registering an owner was rejected because that is the status quo that produced the gap |
-| Principle V cannot be asserted: the replace-OpenAI directive (#132) substitutes an AI provider against ADR-0002 (Accepted) with no superseding ADR and no benchmark evidence | The directive is already recorded in an open issue and is shaping provider work; leaving it unreconciled means `RELEASE-LIVE-CUTOVER` would select a provider in violation of the constitution whichever way it chose | "Silently follow the directive" was rejected — principle V names additional AI providers explicitly and ADR-0002's change rule requires benchmark evidence that the current default fails a requirement. "Silently follow ADR-0002" was rejected because it contradicts a standing directive without surfacing the conflict. Only a superseding ADR resolves it |
+| Violation | Why it stands | Simpler Alternative Rejected Because |
+|-----------|---------------|-------------------------------------|
+| Principle IV: the approved secret-management flow has never been exercised (all five credential groups read "Not requested") | The parent's §19.6 gates and §26 item 2 require evaluation against real filings and a dual-adjudicated ≥300-question benchmark; no mock-only configuration satisfies them | "Stay mock-only through release" makes `T0513` unachievable by construction — the terminal package cannot meet acceptance criteria its inherited `credentials: mock-only` does not provide for. "Defer to wave 6 without an owner" is the status quo that produced the gap |
+| Principle V: the replace-OpenAI directive (#132) substitutes an AI provider against ADR-0002 (Accepted) with no superseding ADR and no benchmark evidence | The directive is recorded in an open issue and is already shaping provider work; unreconciled, `RELEASE-LIVE-CUTOVER` would violate the constitution whichever provider it chose | "Silently follow the directive" breaches principle V, which names additional AI providers explicitly. "Silently follow ADR-0002" contradicts a standing directive without surfacing it. Only a superseding ADR resolves it |
+| Development and Review Workflow: this is the repository's second `plan.md` | The feature needs a sequencing artifact, and `/speckit.plan` produces exactly this file | "Drop `plan.md` and follow the 002/003 precedent" was offered and declined (Q-4). "Amend the constitution first" remains available and is arguably cheapest, since one MINOR amendment would also retroactively legitimise `002/` and `003/` — see C-1 |
 
-Neither violation is remediated by this plan. Both are assigned owners by it: the first to `RELEASE-LIVE-CUTOVER` (spec §5.1), the second to a superseding ADR that must precede it (finding A-1).
+Remediations, in order: land the A-1 ADR; register `RELEASE-LIVE-CUTOVER` and provision credentials; rule C-1 (waiver, amendment, or drop `plan.md`).

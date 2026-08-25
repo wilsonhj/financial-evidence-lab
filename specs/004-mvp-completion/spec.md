@@ -4,7 +4,7 @@
 **Version:** 1.0.0
 **Date:** 2026-08-25
 **Parent specification:** `specs/001-financial-evidence-lab/spec.md` v1.2
-**Scope:** T0306–T0310, T0401–T0410, T0501–T0513, T0214b, and the residual T0112. No new product surface.
+**Scope:** T0306–T0310, T0401–T0410, T0501–T0513 excluding the deferred T0506, T0214b, and the residual T0112. No new product surface.
 **Baseline measured:** `origin/main` @ `5b4b77c`, CI green
 **Canonical task ledger:** `specs/001-financial-evidence-lab/tasks.md`. **This feature directory deliberately ships no `tasks.md`** — see §1.2.
 
@@ -24,6 +24,8 @@ This directory is **subordinate** to `specs/001-financial-evidence-lab/`, which 
 
 - It defines **no new requirements**. Every gate cited here is quoted from parent §19.5, §19.6 or §26.
 - It ships **no `tasks.md`**. The 29 outstanding units of work already carry canonical IDs (`T0112`, `T0306`–`T0513`) in the parent ledger. A fourth copy of those rows would drift exactly as §4.2 documents — that risk is the single most load-bearing finding in this spec, and duplicating the ledger to describe it would be self-defeating.
+- It does not follow `.specify/templates/spec-template.md`. That template marks "User Scenarios & Testing", "Requirements" and "Success Criteria" as mandatory; this document has none of them, because it specifies no product behaviour — it inventories work already specified elsewhere and sequences it. The omission is deliberate and declared here rather than left for a reader to discover.
+- The constitution's "sole canonical" clause is **already strained by existing practice, not first by this directory**: `002-observable-hybrid-retrieval/` and `003-agentic-extraction/` have each shipped their own `spec.md` and `tasks.md` since July 2026, and the clause speaks of "*the* active Spec Kit feature directory" in the singular where four now exist. See **C-1**.
 - Its `plan.md` is a **release-sequencing plan**, not a competing implementation plan. Where it and `001/plan.md` disagree, `001/plan.md` governs. See `clarify-analyse.md` finding **C-1** for the constitutional disposition this requires from the integration lead.
 
 ### 1.3 What this document does not do
@@ -34,7 +36,9 @@ It authorizes nothing. Flipping any package `status`, provisioning any credentia
 
 ## 2. Evidence basis
 
-Every quantitative claim below was produced by a command run against `origin/main` on 2026-08-23 and re-confirmed 2026-08-25 — not read from a status document. Re-run these to re-verify:
+Every **count, status and identifier** below was produced by a command run against `origin/main` on 2026-08-23 and re-confirmed 2026-08-25 — not read from a status document. Re-run these to re-verify.
+
+Statements of *judgement* are not covered by that claim and are marked where they appear: the severity classes in §4.3, the reading that a defect is untested, and characterisations of review outcomes. Those rest on reading the artefacts, not on any command below.
 
 | Claim | Command |
 |---|---|
@@ -92,7 +96,7 @@ Plus **one package this spec proposes registering** (§5.1): `RELEASE-LIVE-CUTOV
 
 ### 4.2 Ledger drift — the canonical ledger under-reports by 17 tasks
 
-`workstreams.yaml` names `specs/001-financial-evidence-lab/tasks.md` as `canonical_tasks`. It reports **21 of 67** in-scope tasks checked. Measured against merged packages, the true figure is **38 of 67**. Seventeen tasks are delivered on trunk and still read `[ ]`:
+`workstreams.yaml` names `specs/001-financial-evidence-lab/tasks.md` as `canonical_tasks`. It reports **21 of 67** in-scope tasks checked. Measured against merged packages, **38 of 67** are delivered by a package marked `merged`. Seventeen tasks are delivered on trunk and still read `[ ]`:
 
 | Tasks | Owning package | Landed |
 |---|---|---|
@@ -128,7 +132,7 @@ Per the scope decision recorded in `clarify-analyse.md` **Q-1**, **every open no
 | #134 | CI | Parent §20.2; consumed by `T0511`. **Its work merged as PR #131 @ `bc6a2a3`** — re-scope or close |
 | #133 | Test validity | Numeric identity tautology behind the accuracy gate |
 | #132 | Exit gate | **M2's exit criterion (M2-024) is not met**; see §5 |
-| #81 | Benchmark | §19.5 category coverage (≥ 8 distinct stress features) |
+| #81 | Benchmark | §19.5 category coverage. The "≥ 8 distinct stress features" bar is #81's own wording, not §19.5's — §19.5 requires ten categories with ≥ 30 cases each |
 
 Five milestone epics (#4–#8) and two reader trackers (#87, #96) close by rollup and are not separately actionable.
 
@@ -143,10 +147,12 @@ Verified:
 1. `workstreams.yaml:73` sets `defaults.credentials: mock-only`.
 2. Exactly one package overrides it — `READER-PROD-SMOKE` (#108), line 255, `credentials: hosted-required`. Every other package, **including `M5-AUDIT-RELEASE` (#68), inherits mock-only.**
 3. `CREDENTIALS.md` lists five credential groups. **All five read "Not requested"**: Supabase URL + public key, Supabase service-role key, OpenAI API key, Alpha Vantage API key, Sentry DSN.
-4. #68 owns `T0214b` — the frozen, dual-adjudicated benchmark of ≥ 300 questions across ≥ 20 real US-listed B2B SaaS issuers — and `T0513`, the immutable release artifact and signed evaluation report.
-5. Parent §26 item 2 requires ingesting and inspecting **at least eight quarters of real SEC filings and XBRL facts**.
+4. #68 owns `T0214b` — parent §19.5's frozen, dual-adjudicated benchmark of "at least 300 adjudicated questions across at least 20 US-listed B2B SaaS issuers" — and `T0513`, the immutable release artifact and signed evaluation report.
+5. Parent §26 item 2 requires ingesting and inspecting "at least eight quarters of SEC filings and XBRL facts".
 
-A mock-only package cannot produce a dual-adjudicated benchmark over real issuers, nor evaluate ten numeric gates against it. **The dependency graph terminates at a package whose own inherited credential policy forbids it from meeting its acceptance criteria.**
+*(Neither quotation contains the word "real"; that these must be genuine filings rather than mocks is an inference from §19.5's adjudication requirement and §26's end-to-end framing, not a phrase either section uses.)*
+
+A mock-only package cannot produce a dual-adjudicated benchmark over real issuers, nor evaluate ten numeric gates against it. **The dependency graph terminates at a package whose inherited credential setting does not provide what its acceptance criteria require.** (`credentials:` is a provisioning descriptor, not a prohibition — `workstreams.yaml`'s own comment on #108 reads "names only until lead provisions". Nothing in the file forbids anything; the gap is that nothing supplies it either.)
 
 This is a class of defect the schema cannot express: `depends_on` orders packages against each other, but there is no vocabulary for "this package depends on something outside the repository existing." The graph therefore reports itself complete and internally consistent while pointing at an unreachable terminal node.
 
@@ -157,7 +163,7 @@ Per `clarify-analyse.md` **Q-2**, register a new package that owns the provision
 ```yaml
   - id: RELEASE-LIVE-CUTOVER
     issue: <new>
-    tasks: [T0112]           # residual from M1-CORPUS-QA (#56)
+    tasks: [T0112]           # MUST be deallocated from M1-CORPUS-QA in the same edit
     depends_on: [M2-CLAIMS-VERIFICATION, M3-EXTRACTION-CORE]
     team: trust
     branch: agent/release-live-cutover
@@ -170,6 +176,15 @@ Per `clarify-analyse.md` **Q-2**, register a new package that owns the provision
 ```
 
 `M5-AUDIT-RELEASE` then becomes `depends_on: [M5-BACKTEST, RELEASE-LIVE-CUTOVER]`.
+
+**`T0112` must be deallocated in the same edit.** `M1-CORPUS-QA` (#56) currently declares `tasks: [T0111, T0112]`. Adding `T0112` to the new package without removing it there would make it the only task in the entire file owned by two packages, leaving §4.2's reconciliation ambiguous about who closes it. The registration edit is therefore two hunks, not one:
+
+```yaml
+  - id: M1-CORPUS-QA
+    tasks: [T0111]           # was [T0111, T0112]; T0112 moves to RELEASE-LIVE-CUTOVER
+```
+
+**`issue:` must be a real number before the block lands.** Every other `issue:` in the file is an integer; `<new>` is a valid YAML string but would make this the one entry a typed consumer cannot read. File the issue first and inline its number.
 
 **Path contention warning.** `evals/**` is already claimed by #62, #67 and #68, and `workers/tests/**` by #62, #66 and #67. This package therefore cannot run concurrently with any of them, which is why §6.2 places it in its own wave. Registering it is a `workstreams.yaml` edit and so is itself a shared-path change requiring `contract-change` + authorization per #141.
 
@@ -198,7 +213,7 @@ Three outstanding packages have every dependency merged. Measured pairwise overl
 | `M4-MODEL-CALC` (#63) ∥ `READER-PROD-SMOKE` (#108) | **disjoint** |
 | `M3-REVIEW` (#61) ∥ `READER-PROD-SMOKE` (#108) | contends on `apps/web/**`, `apps/api/**` |
 
-**`M4-MODEL-CALC` (#63) contends with nothing currently dispatchable.** Its sole path, `packages/calculation-engine/**`, is claimed by exactly one other package in the entire queue — #64, which depends on it. The only exclusion among the three is #61 vs #108.
+**`M4-MODEL-CALC` (#63) contends with nothing currently dispatchable.** Its sole path, `packages/calculation-engine/**`, is claimed by exactly one other *unmerged* package — #64, which depends on it. (M0-SCAFFOLD claims `packages/**`, which contains it, but is merged and so cannot contend. That containment is invisible to exact-string comparison — the very blindness the caveat below describes.) The only exclusion among the three is #61 vs #108.
 
 Downstream contention is heavy: #62/#67/#68 all claim `evals/**`; #65/#66 both claim `apps/web/**` and `packages/ui/**`; #66/#67 both claim `workers/src/fel_workers/forecasting/**`; #61/#64/#68 all claim `apps/api/**`.
 
@@ -208,16 +223,16 @@ Downstream contention is heavy: #62/#67/#68 all claim `evals/**`; #65/#66 both c
 
 | Wave | Dispatch | Precondition |
 |---|---|---|
-| **0** | Merge #172; fix #171; reconcile `tasks.md`; register `RELEASE-LIVE-CUTOVER`; resolve #141, #143, #146, ADR-0009/#157; re-scope #134 | None — all are integration-lead actions |
+| **0** | Merge #172; fix #171; reconcile `tasks.md`; register `RELEASE-LIVE-CUTOVER`; land the ADR for **A-1**; rule #146 and ADR-0009/#157; resolve #141 and #143; re-scope #134 | None — all are integration-lead actions, spanning several PRs. **Only the #171 fix gates wave 1** |
 | **1** | #61 ∥ #63 | #61 needs the #146 and ADR-0009/#157 rulings; #63 needs nothing |
 | **2** | #62 | #61 merged |
 | **3** | #64 | #62 and #63 merged |
 | **4** | #65, #66 — **contended** on `apps/web/**` and `packages/ui/**`; serialize | #64 merged |
 | **5** | #67 | #66 merged |
-| **6** | `RELEASE-LIVE-CUTOVER` + #108 | Credentials provisioned; `evals/**` free |
+| **6** | `RELEASE-LIVE-CUTOVER`, **then** #108 — contended, serialize | Credentials provisioned; `evals/**` free |
 | **7** | #68 | #67 and `RELEASE-LIVE-CUTOVER` merged |
 
-Waves 6 and 7 are separate because `RELEASE-LIVE-CUTOVER` and #68 both claim `evals/**`.
+Within wave 6, `RELEASE-LIVE-CUTOVER` and #108 must serialize: the former claims `evals/**` and `workers/tests/**`, the latter claims `evals/**` and `workers/**`, which contains `workers/tests/**`. Waves 6 and 7 are separate because `RELEASE-LIVE-CUTOVER` and #68 both claim `evals/**`.
 
 ### 6.3 The #62 → #61 edge — ruled real, kept
 
@@ -233,13 +248,13 @@ Every package inherits `defaults.required_evidence: [tests, telemetry-if-applica
 
 - **#61 `M3-REVIEW`** — accept/edit/reject/merge/rerun workflows (`FR-EXT-003`); versioned approved records with correction history. Must not expose the SSE surface until the ADR-0009/#157 fork is ruled.
 - **#63 `M4-MODEL-CALC`** — node types; dependency edges, cycle detection, versioned graph snapshots (`FR-MOD-001`); server-side decimal engine with typed units (`FR-MOD-002`); property tests for decimal arithmetic, units, periods, cycles and scenario immutability; **5,000-node p95 recalculation target** (`T0410`).
-- **#62 `M3-CONFIDENCE-GATE`** — deterministic `isotonic-v1` calibration recording dataset/ontology/workflow/prompt/model/version hashes, breakpoints, counts, ECE and Brier; 0.85 record / 0.80 field thresholds; exhaustive no-auto-approval tests for monetary facts, guidance and assumptions; insufficient data yields confidence 0 and high priority; owner-only, bounded, versioned, audited threshold changes. Contradiction detection stays M2-owned — reference its report, add no detector.
+- **#62 `M3-CONFIDENCE-GATE`** (criteria below from #62's issue body, not the parent spec) — deterministic `isotonic-v1` calibration recording dataset/ontology/workflow/prompt/model/version hashes, breakpoints, counts, ECE and Brier; 0.85 record / 0.80 field thresholds; exhaustive no-auto-approval tests for monetary facts, guidance and assumptions; insufficient data yields confidence 0 and high priority; owner-only, bounded, versioned, audited threshold changes. Contradiction detection stays M2-owned — reference its report, add no detector.
 - **#64 `M4-FACT-SCENARIOS`** — approved extractions to source-backed model nodes (`FR-EXT-004`); sparse bull/base/bear layers (`FR-MOD-003`).
 - **#65 `M4-MODEL-UI`** — interactive driver graph; price-volume-mix bridges, waterfalls, heatmaps, tornado charts; formula, dependency, assumption, citation, diff and restore views (`MOD-002`, `MOD-004`).
 - **#66 `M5-FORECASTING`** — common fit/predict/backtest interface and immutable forecast-run contract (`FR-FOR-001`, `FR-FOR-002`); last-value and seasonal-naive quarterly baselines; analyst driver forecasts for revenue, ARR where disclosed, and gross profit.
-- **#67 `M5-BACKTEST`** — rolling-origin backtests over one-to-eight-quarter horizons; 50%, 80% and 95% intervals with calibration metrics; advanced models stay non-default unless they beat the seasonal-naive median-MAE gate.
+- **#67 `M5-BACKTEST`** — rolling-origin backtests over one-to-eight-quarter horizons; 50%, 80% and 95% intervals with calibration metrics; advanced models stay non-default unless they beat the seasonal-naive median-MAE gate, which parent §19.6 scopes to **the supported one-to-four-quarter horizon** — a narrower window than the backtests themselves span.
 - **`RELEASE-LIVE-CUTOVER`** — credentials provisioned and recorded in `CREDENTIALS.md`; embeddings provider selected by benchmark; `T0112` twenty benchmark issuers ingested with corpus-quality metrics; #132 live 65-question M2 exit gate passed; #81 stress cohort restored; #137 hygiene items closed.
-- **#68 `M5-AUDIT-RELEASE`** — complete source-to-export audit traversal; Markdown/PDF briefs, CSV/XLSX tables, JSON evidence bundles and workspace manifests; accessibility, security, load, restore, provider-failure and browser suites; the frozen benchmark (`T0214b`); verification of every §19.6 gate and §26 item (`T0512`); the immutable release artifact and signed evaluation report (`T0513`).
+- **#68 `M5-AUDIT-RELEASE`** — complete source-to-export audit traversal; Markdown/PDF briefs, CSV/XLSX tables, JSON evidence bundles and workspace manifests; accessibility, security, load, restore, provider-failure and browser suites; the frozen benchmark (`T0214b`); verification of every §19.6 gate and §26 item (`T0512`); the immutable release artifact and signed evaluation report (`T0513`). **`FOR-004`** — exports distinguish reported, modeled and user-supplied values — is unowned by any task and belongs here (**A-11**).
 
 ---
 
@@ -252,7 +267,7 @@ Four decisions were resolved in `clarify-analyse.md` (Q-1 through Q-4). These re
 3. **#146** — terminal-run retry semantics; the other ruling gating #61.
 4. **Dispatch #63** — zero contention, independent of items 2 and 3; requires adding a `status:` key.
 5. **Register `RELEASE-LIVE-CUTOVER`** and file its issue (§5.1), then answer its four questions (§5.2).
-6. **Reconcile `tasks.md`** — 17 checkboxes, with the `T0215` caveat in §4.2.
+6. **Reconcile `tasks.md`** — 17 checkboxes, with the `T0215` caveat in §4.2. While there, **cite `FOR-004` on `T0510`**: it is the only parent-spec requirement no task references, and it carries constitution principle II's provenance guarantee into exports (finding **A-11**).
 7. **Re-scope or close #134** — its work merged as PR #131 @ `bc6a2a3`.
 8. **Ratify this spec**, or return it with scope changes.
 
@@ -282,7 +297,8 @@ Four decisions were resolved in `clarify-analyse.md` (Q-1 through Q-4). These re
 | Packages outstanding | 9 registered + 1 to register = **10** |
 | Spec Kit tasks outstanding | **29 of 67** in scope |
 | Critical path depth | **6** (edge #62→#61 ruled real and kept) |
-| Dispatchable today with no ruling required | **1** — #63, contends with nothing |
+| Packages with every dependency merged | **3** — #61, #63, #108 |
+| Of those, dispatchable today with no ruling and no credential | **1** — #63, contends with nothing |
 | Safe parallel pairs among the 3 dispatchable | 2 of 3 (#61∥#63, #63∥#108; #61 vs #108 contends) |
 | Open issues | 33 — 16 release-blocking, 5 epics, 2 rollup trackers, 10 package issues |
 | Release gates to satisfy | 10 numeric + 11 definition-of-done items |
