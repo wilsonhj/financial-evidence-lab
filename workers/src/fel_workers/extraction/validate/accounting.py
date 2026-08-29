@@ -346,7 +346,8 @@ def identity_errors(
     # cannot be evaluated at all, so it is suppressed rather than guessed at.
     #
     # LIMIT OF THIS SUPPRESSION, so the next reader does not over-trust it:
-    # `_check_segment_sums` matches a withheld row to its siblings by
+    # `_check_segment_sums` matches a withheld addend -- a single-dimension
+    # row, the only shape that can be one -- to its siblings by
     # `(metric_id, entity_id, period, unit, currency)`. That works only when
     # the fields forming the key SURVIVED normalization -- which is not
     # guaranteed for exactly the rows that get withheld. A segment whose
@@ -452,8 +453,13 @@ def _check_segment_sums(
         return (fact.metric_id, fact.entity_id, fact.period, fact.unit, fact.currency)
 
     # A withheld row is a missing addend, not an absent one: summing without it
-    # understates the breakdown and convicts its clean siblings.
-    suppressed = {slice_of(fact) for fact in withheld}
+    # understates the breakdown and convicts its clean siblings. Only a
+    # single-dimension row is ever an addend, so no other shape suppresses: a
+    # multi-dimension row could never have been summed, and a withheld total is
+    # either the group's only total -- `len(totals) != 1` skips it anyway -- or
+    # a competitor to a surviving one, which is what `excluded_indices` exists
+    # to unblock.
+    suppressed = {slice_of(fact) for fact in withheld if len(fact.dimensions) == 1}
     groups: dict[tuple[Any, ...], list[_Fact]] = {}
     for fact in facts:
         key = slice_of(fact)

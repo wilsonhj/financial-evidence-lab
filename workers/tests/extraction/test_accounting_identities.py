@@ -909,3 +909,53 @@ def test_suppressing_one_slice_does_not_silence_a_real_break_in_another() -> Non
     arr_rows, revenue_rows = result.proposals[:4], result.proposals[4:]
     assert [_sum_breaks(draft) for draft in arr_rows] == [[], [], [], []]
     assert all(_sum_breaks(draft) for draft in revenue_rows)
+
+
+def test_a_withheld_multi_dimension_row_does_not_silence_a_real_break() -> None:
+    """Over-suppression, the direction the two tests above do not cover.
+
+    ``_check_segment_sums`` only ever sums single-dimension segments against a
+    zero-dimension total, so a row carrying two dimensions is inert: it can
+    never be an addend, and withholding it removes nothing from the sum. Keyed
+    on ``(metric_id, entity_id, period, unit, currency)`` alone, though, it
+    suppressed the whole slice -- and 400 + 300 against a reported 1,000 went
+    unreported for three rows the exclusion never touched.
+    """
+    payloads = [
+        kpi("arr", "1000"),
+        kpi("arr", "400", dimensions={"segment": "enterprise"}),
+        kpi("arr", "300", dimensions={"segment": "smb"}),
+        kpi("arr", "250", dimensions={"segment": "enterprise", "geography": "emea"}),
+    ]
+    # The multi-dimension row changes nothing while it is present, which is the
+    # whole point: withholding it must not change anything either.
+    assert set(identity_errors(payloads)) == {0, 1, 2}
+
+    result = identity_errors(payloads, excluded_indices=frozenset({3}))
+    assert set(result) == {0, 1, 2}
+    assert all(c == [f"{IDENTITY_PREFIX}segments_do_not_sum"] for c in result.values())
+
+
+def test_a_withheld_total_does_not_silence_a_break_against_the_surviving_total() -> None:
+    """Why the suppression filter is ``== 1`` and not ``<= 1``.
+
+    A zero-dimension row is the sum's target, never one of its addends, so
+    withholding one cannot understate the breakdown. Suppressing on it is
+    either redundant -- when it was the group's only total, ``len(totals) != 1``
+    skips the group regardless -- or actively wrong, as here: the rejected row
+    is a second, competing total, and leaving it to gate the check is the exact
+    "a rejected sibling silently disables the identity for its clean rows"
+    failure ``excluded_indices`` was added to end.
+    """
+    payloads = [
+        kpi("arr", "900"),  # normalizer-rejected, and not the total to trust
+        kpi("arr", "1000"),
+        kpi("arr", "400", dimensions={"segment": "enterprise"}),
+        kpi("arr", "300", dimensions={"segment": "smb"}),
+    ]
+    # Two totals in one slice is ambiguous, so the check backs off entirely.
+    assert identity_errors(payloads) == {}
+
+    result = identity_errors(payloads, excluded_indices=frozenset({0}))
+    assert set(result) == {1, 2, 3}
+    assert all(c == [f"{IDENTITY_PREFIX}segments_do_not_sum"] for c in result.values())
