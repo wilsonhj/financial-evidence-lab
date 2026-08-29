@@ -335,6 +335,15 @@ serious alternative, and the case for it is genuine:
 - *Neither route is contract-free.* This ADR still moves the version pins and
   still edits `data-model.md:19`, so "no contract change" would be a false claim
   for it.
+- *The risk is asymmetric in the other direction too.* This route rewrites the
+  crash-resume path — the exact code where PR #145's silent checkpoint-corruption
+  bug lived, and where two earlier key-based scopings already failed
+  (`ADR-0009:75-86`). A botched implementation here produces a **correctness
+  incident**: a resume that silently loses or mis-attributes an extraction.
+  ADR-0009's route produces, at worst, a documentation defect. Measured by
+  worst-case severity rather than by which document is true, ADR-0009 is the
+  conservative choice, and this ADR is asking to take on execution risk in
+  exchange for a guarantee that is currently costing nobody anything.
 
 **Rejected because** the deciding factor is not which document is currently true,
 but which end-state is worth having. The amendment's cost lands in an already
@@ -348,7 +357,14 @@ an implementation, when the implementation can be fixed for this price, inverts
 the direction the constitution's principle IV points. The interim-window
 objection is real and is answered by sequencing, not by argument: this must land
 before #61, and if it cannot, the fallback is to reopen ADR-0009 rather than to
-ship #61 over the gap.
+ship #61 over the gap. The execution-risk objection is the strongest one against
+this ADR and is not dismissed: it is why the "Verification" section below demands
+a crash-resume test with the `step_completed` row deleted, and why the
+implementing PR must be reviewed as a correctness change on the resume path
+rather than as a schema addition. If the integration lead judges that risk
+unacceptable while #61 is the immediate priority, ratifying ADR-0009 and
+deferring this is a defensible call — it should just be made knowingly, rather
+than by leaving the fork open.
 
 **Store stage output in object storage and reference it by key.** Rejected now;
 ADR-0009's objection (`ADR-0009:138-140`) is unchanged and this ADR endorses it —
