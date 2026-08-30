@@ -1,16 +1,19 @@
 # ADR-0011: Add `extraction_run_steps.output` so the checkpoint stops riding on the event payload
 
-Status: Proposed
+Status: Accepted
 Date: 2026-08-29
+Accepted: 2026-08-30 by integration lead on PR #175
 Supersedes: ADR-0009 (`docs/decisions/ADR-0009-checkpoint-payload-in-event-stream.md`,
-Status: Proposed, never ratified) — on ratification of this ADR, ADR-0009's
-proposed amendment is withdrawn unexecuted.
+Status: Proposed, never ratified) — ADR-0009's proposed amendment is withdrawn
+unexecuted.
 Occasioned by: issue #157 (`contract-change`, `agent-task`, open), filed as the
 follow-up ADR-0009 names in its own "Alternatives rejected".
-Blocks: #61 (M3-REVIEW), which owns the SSE surface — see "Consequences".
+Blocks: #61 SSE until the *implementing* PR for migration 0006 lands. Non-SSE
+#61 work still waits on unimplemented #146 Option 1 (terminal runs final), which
+is a separate ruling.
 
 All file:line references verified against this branch's base, `origin/main` @
-`5b4b77c`. Where a reference could not be verified, the text says so.
+`a4bb356`. Where a reference could not be verified, the text says so.
 
 ## Context
 
@@ -28,10 +31,11 @@ later (`gh pr view 145 -R wilsonhj/financial-evidence-lab`; `gh issue view 60`).
 "Out of scope for #60" has no remaining referent. Issue #157 is the
 `contract-change` issue ADR-0009 asks for; this is the ADR.
 
-**Nothing has been amended yet.** ADR-0009 is `Status: Proposed` (`ADR-0009:3`)
-and states plainly that it "proposes the change and does not make it"
+**Nothing has been amended yet.** At the time of this decision ADR-0009 was
+`Status: Proposed` (historical; now `Superseded by ADR-0011`) and stated plainly
+that it "proposes the change and does not make it"
 (`ADR-0009:199-200`). All six guarantee statements are byte-unchanged at
-`5b4b77c` — each verified individually:
+`a4bb356` — each verified individually:
 
 - `specs/003-agentic-extraction/data-model.md:23`
 - `specs/003-agentic-extraction/contracts/extraction-api.yaml:180`
@@ -104,7 +108,7 @@ unrelated cost test — no extraction API surface exists yet at all. This ADR is
 contract-honesty and future-proofing decision made while it is still cheap.
 
 **Hash coupling (why in-place redaction is not available).** Verified at
-`5b4b77c`, with corrected line numbers — see "Notes" on ADR-0009's citation
+`a4bb356`, with corrected line numbers — see "Notes" on ADR-0009's citation
 drift. `hash_json(clean)` produces `raw_hash` (`validate/pipeline.py:187`), which
 becomes `raw_payload_hash` (`:196`) and feeds `proposal_id_for` (`:208-209`);
 `stage_input_hash` covers the same payloads as stage input
@@ -117,13 +121,15 @@ redactor.
 
 ## Decision
 
-Proposed for integration-lead ratification. On ratification:
+This document is accepted. Items 2–7 below remain the work of a follow-up
+`contract-change` PR against #157 (migration `0006` plus the persist/resume
+rewrite). This ratifying PR does not add `0006` or edit `persist.py`.
 
 1. **Supersede ADR-0009.** Its Context, hash-coupling analysis and
    `stage_output`-must-not-be-altered reasoning are retained as the record of why
    the coupling existed; its Decision — amending the six statements to a weaker
    guarantee — is withdrawn unexecuted. The ratifying PR sets ADR-0009's status
-   to `Superseded by ADR-0011`. **This ADR does not edit ADR-0009.**
+   to `Superseded by ADR-0011` (status header only).
 2. **Add a nullable `output jsonb` column to `extraction_run_steps` via a new
    forward migration, `db/migrations/0006_extraction_step_output.sql`.** Migration
    `0004` stays byte-identical. `db/migrations/README.md:7-9` is explicit:
@@ -441,16 +447,19 @@ The implementing PR must show:
 
 **ADR-0009's line citations have drifted, and the drift is worth recording
 because a reviewer checking them will otherwise conclude the analysis is wrong.**
-Checked individually at `5b4b77c`:
+Checked individually at `a4bb356` (rebase base after #174; #174 touched only
+`accounting.py` and its test — load-bearing citations below are unchanged):
 
 *Still exact:* all six guarantee locations; `0004:143-171`, `0004:661`,
 `0004:692-695`; `spec.md:61`; `handler.py:263-304`; `persist.py:82`;
-`events.py:1-8`; `OPERATOR.md:16`.
+`events.py:1-8`; `OPERATOR.md:16`; `workflow.py:528-534` (`stage_output` write);
+`persist.py:701-729` (`_load_stage_output`).
 
-*No longer resolving:* `validate/pipeline.py:157,178-180` — the hash chain is now
-at `:187`, `:196`, `:208-209`. `workflow.py:370-375` for `stage_input_hash` — now
-`:477-482`; `:370-375` is a docstring in `_is_recoverable`. `workflow.py:484` for
-the `sha256_hex` re-check — now `:612-618`. `events.py:53-81` for the redaction
+*No longer resolving (relative to ADR-0009's original coords):*
+`validate/pipeline.py:157,178-180` — the hash chain is now at `:187`, `:196`,
+`:208-209`. `workflow.py:370-375` for `stage_input_hash` — now `:477-482`;
+`:370-375` is a docstring in `_is_recoverable`. `workflow.py:484` for the
+`sha256_hex` re-check — now `:612-618`. `events.py:53-81` for the redaction
 docstring — now `:71-116`; `:53-81` is the `_SENSITIVE_KEYS` literal.
 `persist.py:536-552` — now conflict-upsert code; the checkpoint rationale is at
 `:709` and `:822-838`.
@@ -459,12 +468,14 @@ docstring — now `:71-116`; `:53-81` is the `_SENSITIVE_KEYS` literal.
 consistent with PR #156 (merged `2026-08-04T02:09:06Z`) landing the corrections
 its revision history records, and with subsequent merges to `main`. Issue #157's
 citations were taken against `61058e4` and have drifted for the same reason. This
-ADR's citations are against `5b4b77c` and will drift too — which is an argument
+ADR's citations are against `a4bb356` and will drift too — which is an argument
 for the machine-checked assertions in "Verification" items 4 and 5 over prose
 citations wherever a guarantee can be expressed as a test.
 
 Per `AGENTS.md:20,41`, amending `specs/**`, `packages/contracts/**`,
 `db/migrations/**` and `docs/handoff/**` requires the `contract-change` label and
-an accepted ADR, so **this ADR proposes the change and does not make it.** No
-migration, contract, spec, handoff file, or prior ADR is edited by the PR that
-carries this document.
+an accepted ADR. **This PR ratifies ADR-0011 and marks ADR-0009 superseded
+(status header only).** It still does not implement migration `0006`, edit
+`persist.py` / `workflow.py` / `events.py`, or change contracts, specs, or
+handoff. Those remain the work of the follow-up `contract-change` PR against
+#157.

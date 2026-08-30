@@ -1,9 +1,10 @@
 # ADR-0009: `step_completed.stage_output` carries evidence text, and the event stream is not metadata-only
 
-Status: Proposed
+Status: Superseded by ADR-0011
 Date: 2026-07-29
 Revised: 2026-08-03 — four corrections required by the integration-lead review of
 PR #145 (`7f11bab..a08ba50`). See "Revision history".
+Superseded: 2026-08-30 by integration lead on PR #175
 Occasioned by: M3-EXTRACTION-CORE (#60), PR #145 review finding P1-8.2
 Amends: the event-payload guarantee in `specs/003-agentic-extraction/data-model.md`,
 `specs/003-agentic-extraction/contracts/extraction-api.yaml`,
