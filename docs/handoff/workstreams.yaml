@@ -306,7 +306,7 @@ packages:
     depends_on: [M2-RETRIEVAL-BACKEND, READER-CROSS-STACK] # contract inherited; #96 is reader gate
     team: experience
     branch: agent/m2-observatory-ui
-    status: merged # PR #123 (2026-07-21); issue #59; follow-ups #131 (Playwright CI, MERGED 2026-07-21 @ bc6a2a3; closed #134) + #135 (live SSE proxy, M3-deferred) + #136 (WCAG/keyboard audit) + #138 (web-layer client telemetry)
+    status: merged # PR #123 (2026-07-21); issue #59; follow-ups #131 (Playwright CI, MERGED 2026-07-21 @ bc6a2a3; declared no closing issue, so #134 stayed open until closed by hand 2026-08-29) + #135 (live SSE proxy, M3-deferred) + #136 (WCAG/keyboard audit) + #138 (web-layer client telemetry)
     allowed_paths: [apps/web/**, packages/ui/**]
 
   # M3 — extraction.

@@ -5,7 +5,8 @@ This directory is the restart point for all implementation agents. Fable must be
 ## Current state
 
 - Trunk is `a4bb356` (PR #174). This block was last reconciled 2026-08-30. The
-  revision it replaces on trunk was pinned to `ace7b83` (PR #168) and was wrong
+  revision it replaces on trunk was pinned to `ace7b83` by PR #168 @ `64eb571`
+  — `ace7b83` is PR #165's merge commit, not #168's — and was wrong
   within hours of the merges that followed it, so re-resolve against
   `origin/main` rather than trusting this line.
 - Specification (v1.2) and architecture (ADR-0002) are approved. Contracts are
