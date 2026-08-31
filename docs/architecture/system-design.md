@@ -574,15 +574,20 @@ high=-15` and is spuriously blocked as `range_low_gt_high` — no schema or
   `stage_output` is a defect (PR #145 review finding M4) was investigated and
   assessed a false positive, but a formal ruling is still pending — see
   [Cost and observability](#cost-and-observability).
-- A second, adjacent question about the same payload is tracked separately in
+- A second, adjacent question about the same payload was tracked separately in
   [ADR-0009](../decisions/ADR-0009-checkpoint-payload-in-event-stream.md),
-  **Status: Proposed** — whether `stage_output` carrying evidence text verbatim
-  breaches the metadata-only event guarantee in
+  **Status: Superseded by ADR-0011** — whether `stage_output` carrying evidence
+  text verbatim breaches the metadata-only event guarantee in
   `specs/003-agentic-extraction/data-model.md` (PR #145 review finding P1-8.2).
   Distinct from M4: M4 asks whether key substitution _inside_ `stage_output`
-  corrupts a resumed run, ADR-0009 asks whether that payload should carry the
-  text at all. Both are open, and their conclusions are consistent — the payload
-  is exempt from truncation, not from key substitution.
+  corrupts a resumed run, ADR-0009 asked whether that payload should carry the
+  text at all. **That question is now ruled:**
+  [ADR-0011](../decisions/ADR-0011-extraction-step-output-column.md) (Accepted)
+  adds `extraction_run_steps.output` so the checkpoint stops riding on the event
+  payload, restoring the metadata-only guarantee rather than amending it. The
+  work is #157, migration `0006`, and it is not yet implemented — until it lands
+  the payload remains exempt from truncation, though not from key substitution.
+  M4 is closed (PR #156).
 
 ### Reader and corpus acceptance
 

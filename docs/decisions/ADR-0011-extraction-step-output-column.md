@@ -490,8 +490,8 @@ Checked individually at `a4bb356` (rebase base after #174; #174 touched only
 function and carries the claim ADR-0009 makes, but `_bind_evidence_to_spans`
 runs to `:305` (`return bound`), so the citation truncates its last line. This
 ADR cites the full `:263-305` in "Alternatives rejected" rather than reproducing
-the short range. Recorded because "nearly exact" is a third category the two
-lists below would otherwise hide — a reviewer who checks it finds real content
+the short range. Recorded because "nearly exact" is a third category the
+lists either side of it would otherwise hide — a reviewer who checks it finds real content
 and stops, and never learns the range is wrong.
 
 *No longer resolving (relative to ADR-0009's original coords):*
@@ -505,7 +505,9 @@ lines. There is no `_SENSITIVE_KEYS` symbol in the tree.
 `persist.py:536-552` — now conflict-upsert code; the checkpoint rationale is at
 `:709` and `:822-838`.
 
-**Every one of ADR-0009's substantive claims holds; only the coordinates moved**,
+**Every one of ADR-0009's substantive claims holds; the coordinates moved,
+with the single exception recorded above — `handler.py:263-304` never moved and
+was one line short from the day it was written**,
 consistent with PR #156 (merged `2026-08-04T02:09:06Z`) landing the corrections
 its revision history records, and with subsequent merges to `main`. Issue #157's
 citations were taken against `61058e4` and have drifted for the same reason. This
