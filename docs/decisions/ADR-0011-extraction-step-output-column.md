@@ -491,8 +491,8 @@ function and carries the claim ADR-0009 makes, but `_bind_evidence_to_spans`
 runs to `:305` (`return bound`), so the citation truncates its last line. This
 ADR cites the full `:263-305` in "Alternatives rejected" rather than reproducing
 the short range. Recorded because "nearly exact" is a third category the
-lists either side of it would otherwise hide — a reviewer who checks it finds real content
-and stops, and never learns the range is wrong.
+lists either side of it would otherwise hide — a reviewer who checks it
+finds real content and stops, and never learns the range is wrong.
 
 *No longer resolving (relative to ADR-0009's original coords):*
 `validate/pipeline.py:157,178-180` — the hash chain is now at `:187`, `:196`,
