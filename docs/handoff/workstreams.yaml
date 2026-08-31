@@ -371,7 +371,7 @@ packages:
     tasks: [T0401, T0402, T0403, T0409, T0410]
     depends_on: [M3-EXTRACTION-CORE]
     team: modeling
-    branch: agent/m4-model-calc
+    branch: agent/m4-model-calc # not yet created
     status: ready # #174 is on main @ a4bb356; packages/calculation-engine/** overlap nothing in flight; credentials mock-only; dispatchable now. Adding a key, not flipping one — previously inherited defaults.status: blocked.
     allowed_paths: [packages/calculation-engine/**]
   - id: M4-FACT-SCENARIOS # gated on confidence controls so approved extractions cannot seed model nodes before monetary auto-approve rules exist
@@ -458,7 +458,7 @@ packages:
     # are blocked today, so there is no live contention; serialize against
     # whichever unblocks first.
     # Spec: docs/research/evals-report-renderer-proposal.md.
-    status: merged # PR #164 squash-merged to main @ a23514e (2026-08-11); issue #151 closed by merge. Shipped evals/reporting/corpus_qa_render.py + its README, evals/tests/test_corpus_qa_render.py, and BOTH committed goldens (.md + .svg) — the size lever was declined, see the STATUS.md decision record. Merged at +2531/-0 across 6 files, roughly fourfold the ~640 changed lines that decision record projected (1161 lines are the test module, 255 the two goldens); docs/handoff/README.md's "below roughly 600 changed lines" is a stated preference, not a gate. This entry still reads `ready` on trunk at a4bb356 — ever since the 2026-08-11 merge — and an agent reading the queue in that window would have re-taken finished work. This reconciliation is what flips it to `merged`: the fix ships here, and was not applied at 5b4b77c or at any commit since. evals/reporting/** and evals/tests/** are free to claim again, still as SUBTREES of the evals/** claimed by #108/#62/#67/#68.
+    status: merged # PR #164 squash-merged to main @ a23514e (2026-08-11); issue #151 closed by merge. Shipped evals/reporting/corpus_qa_render.py + its __init__.py + its README, evals/tests/test_corpus_qa_render.py, and BOTH committed goldens (.md + .svg) — six files — the size lever was declined, see the STATUS.md decision record. Merged at +2531/-0 across 6 files, roughly fourfold the ~640 changed lines that decision record projected (1161 lines are the test module, 255 the two goldens); docs/handoff/README.md's "below roughly 600 changed lines" is a stated preference, not a gate. This entry still reads `ready` on trunk at a4bb356 — ever since the 2026-08-11 merge — and an agent reading the queue in that window would have re-taken finished work. This reconciliation is what flips it to `merged`: the fix ships here, and was not applied at 5b4b77c or at any commit since. evals/reporting/** and evals/tests/** are free to claim again, still as SUBTREES of the evals/** claimed by #108/#62/#67/#68.
     allowed_paths:
       - evals/reporting/**
       - evals/tests/**

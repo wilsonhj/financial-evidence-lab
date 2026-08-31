@@ -4,9 +4,10 @@ This directory is the restart point for all implementation agents. Fable must be
 
 ## Current state
 
-- Trunk is `a4bb356` (PR #174). This block was last reconciled 2026-08-30; the
-  revision before it was pinned to `5b4b77c` and was wrong within hours of later
-  merges, so re-resolve against `origin/main` rather than trusting this line.
+- Trunk is `a4bb356` (PR #174). This block was last reconciled 2026-08-30. The
+  revision it replaces on trunk was pinned to `ace7b83` (PR #168) and was wrong
+  within hours of the merges that followed it, so re-resolve against
+  `origin/main` rather than trusting this line.
 - Specification (v1.2) and architecture (ADR-0002) are approved. Contracts are
   frozen at OpenAPI `v0.4.0` with migrations through `0005`.
 - `main` is the only implementation base; `integration/m0` is retired. Every
@@ -30,8 +31,9 @@ This directory is the restart point for all implementation agents. Fable must be
 - `M4-MODEL-CALC` (#63) is `ready`: its only dependency is merged,
   `packages/calculation-engine/**` overlaps nothing in flight, and credentials
   stay mock-only — this reconciliation **adds** the key. `M3-REVIEW` (#61)
-  stays `status: blocked` on migration 0006 (via #157) before SSE exposure and
-  on unimplemented #146 Option 1 (terminal runs final, ruled 2026-08-29) as a
+  stays `status: blocked` on three holds: ratification of ADR-0011 (PR #175,
+  Accepted on that PR), migration 0006 via #157 before SSE exposure, and
+  unimplemented #146 Option 1 (terminal runs final, ruled 2026-08-29) as a
   producer gate. `M3-CONFIDENCE-GATE` (#62) is genuinely not unblocked — it
   `depends_on: [M3-REVIEW]`.
 - Integration lead ruled ADR-0011 over ADR-0009; ratification is PR #175
