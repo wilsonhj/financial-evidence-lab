@@ -406,6 +406,29 @@ packages:
     depends_on: [M3-REVIEW] # M3-EXTRACTION-CORE inherited via M3-REVIEW
     team: trust
     branch: agent/m3-confidence-gate
+    # This package CANNOT complete mock-only, so it must not inherit
+    # defaults.credentials. M3-304 (specs/003-agentic-extraction/tasks.md:36)
+    # requires a "live OpenAI structured-output smoke with approved secret", and
+    # #62's own issue body closes "Request `FEL_OPENAI_API_KEY` only for
+    # credentialed smoke". Until this key was added the file asserted #62 was
+    # mock-only, which is false. Adding it changes no status and dispatches
+    # nothing; it records a precondition that already existed.
+    #
+    # TWO CONSEQUENCES FOR THE LEAD, not resolved here:
+    # (1) ORDERING. specs/004-mvp-completion §6.2 places #62 at wave 2 and
+    #     RELEASE-LIVE-CUTOVER — which owns provisioning — at wave 6, putting the
+    #     consumer four waves ahead of its provisioner. The cheap fix is to split
+    #     provisioning from live evaluation: make FEL_OPENAI_API_KEY a wave-0
+    #     integration-lead action and leave the cutover owning live evaluation.
+    #     That needs no graph edge and matches #62's own "only for credentialed
+    #     smoke". The alternative, depends_on: [M3-REVIEW, RELEASE-LIVE-CUTOVER],
+    #     is cycle-free but drags the whole cutover ahead of wave 2.
+    # (2) PROVIDER. M3-304 names OpenAI; #132 directs claude-opus-4-8; ADR-0002
+    #     (Accepted) pins OpenAI; constitution principle V requires an approved
+    #     ADR plus benchmark evidence, and neither exists (finding A-1, ADR-0012
+    #     Proposed). So A-1 gates #62 at wave 2, not RELEASE-LIVE-CUTOVER at
+    #     wave 6 as previously recorded.
+    credentials: hosted-required # override defaults.credentials mock-only; M3-304 only
     allowed_paths:
       - workers/src/fel_workers/extraction/**
       - workers/tests/**
