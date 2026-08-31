@@ -306,7 +306,7 @@ packages:
     depends_on: [M2-RETRIEVAL-BACKEND, READER-CROSS-STACK] # contract inherited; #96 is reader gate
     team: experience
     branch: agent/m2-observatory-ui
-    status: merged # PR #123 (2026-07-21); issue #59; follow-ups #131 (Playwright CI, MERGED 2026-07-21 @ bc6a2a3; declared no closing issue, so #134 never auto-closed and still reads as pending — re-scope or close it) + #134 (E2E in CI) + #135 (live SSE proxy, M3-deferred) + #136 (WCAG/keyboard audit) + #138 (web-layer client telemetry)
+    status: merged # PR #123 (2026-07-21); issue #59; follow-ups #131 (Playwright CI, MERGED 2026-07-21 @ bc6a2a3; declared no closing issue, so #134 stayed open until closed by hand 2026-08-29) + #135 (live SSE proxy, M3-deferred) + #136 (WCAG/keyboard audit) + #138 (web-layer client telemetry)
     allowed_paths: [apps/web/**, packages/ui/**]
 
   # M3 — extraction.
@@ -352,7 +352,7 @@ packages:
     depends_on: [M3-EXTRACTION-CORE]
     team: experience
     branch: agent/m3-review # not yet created
-    status: blocked # unblocks to `ready` when #60 merges via PR #145; without an explicit key this inherited defaults.status anyway, which contradicted STATUS.md
+    status: blocked # NOT a dependency block any more: depends_on [M3-EXTRACTION-CORE] is SATISFIED — #60 merged via PR #145 @ 61058e4 (2026-07-30). Held instead by: ADR-0011 is being ratified on PR #175 (Accepted on that PR); SSE still waits until migration 0006 lands via #157. #146 was ruled Option 1 (terminal runs final) on 2026-08-29 but is not yet implemented — still a producer gate. Deliberately left `blocked` by this reconciliation: flipping this key is a dispatch decision reserved to the integration lead, not a documentation fix. Note the key is explicit, so dispatching means flipping it rather than adding one.
     allowed_paths: [apps/web/**, apps/api/**]
   - id: M3-CONFIDENCE-GATE # confidence scoring + extraction quality gate
     issue: 62
@@ -371,7 +371,8 @@ packages:
     tasks: [T0401, T0402, T0403, T0409, T0410]
     depends_on: [M3-EXTRACTION-CORE]
     team: modeling
-    branch: agent/m4-model-calc
+    branch: agent/m4-model-calc # not yet created
+    status: ready # #174 is on main @ a4bb356; packages/calculation-engine/** overlap nothing in flight; credentials mock-only; dispatchable now. Adding a key, not flipping one — previously inherited defaults.status: blocked.
     allowed_paths: [packages/calculation-engine/**]
   - id: M4-FACT-SCENARIOS # gated on confidence controls so approved extractions cannot seed model nodes before monetary auto-approve rules exist
     issue: 64
@@ -457,7 +458,7 @@ packages:
     # are blocked today, so there is no live contention; serialize against
     # whichever unblocks first.
     # Spec: docs/research/evals-report-renderer-proposal.md.
-    status: ready # deps satisfied — M1-CORPUS-QA merged via #86; size lever declined (both goldens committed), see STATUS.md decision record
+    status: merged # PR #164 squash-merged to main @ a23514e (2026-08-11); issue #151 closed by merge. Shipped evals/reporting/corpus_qa_render.py + its __init__.py + its README, evals/tests/test_corpus_qa_render.py, and BOTH committed goldens (.md + .svg) — six files — the size lever was declined, see the STATUS.md decision record. Merged at +2531/-0 across 6 files, roughly fourfold the ~640 changed lines that decision record projected (1161 lines are the test module, 255 the two goldens); docs/handoff/README.md's "below roughly 600 changed lines" is a stated preference, not a gate. This entry still reads `ready` on trunk at a4bb356 — ever since the 2026-08-11 merge — and an agent reading the queue in that window would have re-taken finished work. This reconciliation is what flips it to `merged`: the fix ships here, and was not applied at 5b4b77c or at any commit since. evals/reporting/** and evals/tests/** are free to claim again, still as SUBTREES of the evals/** claimed by #108/#62/#67/#68.
     allowed_paths:
       - evals/reporting/**
       - evals/tests/**
