@@ -1,6 +1,6 @@
 # Implementation Plan: MVP Completion
 
-**Branch**: `spec/004-mvp-completion` | **Date**: 2026-08-25 | **Spec**: [`spec.md`](./spec.md)
+**Branch**: `spec/004-mvp-completion` | **Date**: 2026-08-25, refreshed 2026-08-30 | **Spec**: [`spec.md`](./spec.md)
 
 **Input**: Feature specification from `/specs/004-mvp-completion/spec.md`
 
@@ -10,7 +10,7 @@
 
 ## Summary
 
-Nine registered packages and one unregistered workstream stand between `main` @ `5b4b77c` and the immutable MVP release artifact (`T0513`). Twenty-nine of sixty-seven in-scope Spec Kit tasks are outstanding. The critical path is six deep and terminates at `M5-AUDIT-RELEASE` (#68).
+Nine registered packages and one unregistered workstream stand between `main` @ `a4bb356` and the immutable MVP release artifact (`T0513`). Twenty-nine of sixty-seven in-scope Spec Kit tasks are outstanding. The critical path is six deep and terminates at `M5-AUDIT-RELEASE` (#68).
 
 The technical approach is not new construction but **sequencing under two constraints the existing graph does not encode**: path-exclusivity between concurrently dispatched packages, and a credential precondition that no `depends_on` edge can express. The plan's substantive contribution is to make the second constraint explicit by registering `RELEASE-LIVE-CUTOVER` and giving #68 a dependency on it, so the terminal node stops being unreachable.
 
@@ -36,7 +36,7 @@ The technical approach is not new construction but **sequencing under two constr
 
 **Constraints**: `defaults.credentials: mock-only` — **the binding constraint of this plan** (spec §5). Path-exclusivity: no two concurrently dispatched packages may share an `allowed_paths` glob. **This PR is itself a `specs/**` shared-path change** and therefore carries `contract-change` plus an authorization record per #141; separately, it proposes no OpenAPI, JSON-schema or migration change
 
-**Scale/Scope**: 10 packages, 29 tasks, 16 release-blocking backlog issues, 8 dispatch waves. No new product surface
+**Scale/Scope**: 10 packages, 29 tasks, 14 release-blocking backlog issues, 8 dispatch waves. No new product surface
 
 ## Constitution Check
 
@@ -44,7 +44,7 @@ The technical approach is not new construction but **sequencing under two constr
 
 - [x] **Evidence and temporal-cutoff behavior is explicit and testable.** This plan adds no evidence path. It preserves the parent's 100% temporal-validity gate as a release blocker and routes `T0112` — the only outstanding ingestion work — through `RELEASE-LIVE-CUTOVER`, where cutoff behavior is already covered by the merged M1 suites (`T0111`).
 - [x] **Financial calculations are deterministic, decimal, typed, and source-linked.** Unchanged. `M4-MODEL-CALC` (#63) carries the decimal-engine and property-test obligations verbatim from `T0403`/`T0409`; this plan neither relaxes nor reinterprets them.
-- [x] **Tests and numeric evaluation gates precede implementation tasks.** Wave 0 places the #171 red-green regression test and the `tasks.md` reconciliation *before* any package dispatch.
+- [x] **Tests and numeric evaluation gates precede implementation tasks.** Wave 0 placed the #171 red-green regression test before any package dispatch; it merged as PR #174 @ `a4bb356` on 2026-08-29, so this is now satisfied in fact rather than in plan. The `tasks.md` reconciliation remains outstanding but gates nothing.
 - [ ] **Tenant isolation, secrets, auditability, prompt-injection defenses, and cost ceilings are covered.** — **FAILS.** Cannot be asserted: every credential group in `CREDENTIALS.md` reads "Not requested", so the approved secret-management flow required by principle IV has never been exercised. Re-check required before wave 6.
 - [ ] **The design stays within the approved modular-monolith stack or includes an approved complexity ADR.** — **FAILS.** The replace-OpenAI directive in #132 substitutes `claude-opus-4-8` for ADR-0002's accepted "OpenAI for generation", with no superseding ADR and no benchmark evidence. Principle V requires both.
 
@@ -101,7 +101,7 @@ ADR-0008's scaffold-registration exception reaches **only** `packages/export/`, 
 Wave contents are defined in **spec §6.2, which is authoritative**; this section states only the rules governing them, to avoid two divergent copies of the same list.
 
 - Wave 0 is a set of integration-lead actions, not a package dispatch. It spans **several pull requests** (this one; the #171 fix; the `tasks.md` reconciliation; the `RELEASE-LIVE-CUTOVER` registration), which may land in any order.
-- Of wave 0, only the **#171 fix gates wave 1** — it is the defect #62 is later built to measure. The remaining wave-0 items unblock #61 (the #146 and ADR-0009/#157 rulings) or improve ledger accuracy without blocking dispatch.
+- Of wave 0, only the **#171 fix gated wave 1** — the defect #62 is later built to measure. **It merged 2026-08-29, so wave 1 is open.** The #146 and ADR-0009/#157 rulings that unblock #61 have both been made; #61 now waits on those rulings being *implemented* (#146's Option 1, and #157's migration `0006`), not decided.
 - For package-bearing waves (1 onward), a wave opens only when every package in the prior wave reads `merged`.
 - **`M4-MODEL-CALC` (#63) is wave-0-concurrent.** It is listed in wave 1 for dependency ordering, but requires no ruling, contends with nothing, and can be dispatched today alongside wave-0 work.
 

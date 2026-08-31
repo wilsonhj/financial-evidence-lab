@@ -5,7 +5,7 @@
 **Date:** 2026-08-25
 **Parent specification:** `specs/001-financial-evidence-lab/spec.md` v1.2
 **Scope:** T0306–T0310, T0401–T0410, T0501–T0513 excluding the deferred T0506, T0214b, and the residual T0112. No new product surface.
-**Baseline measured:** `origin/main` @ `5b4b77c`, CI green
+**Baseline measured:** `origin/main` @ `a4bb356`, CI green (refreshed 2026-08-30; first drafted against `5b4b77c`)
 **Canonical task ledger:** `specs/001-financial-evidence-lab/tasks.md`. **This feature directory deliberately ships no `tasks.md`** — see §1.2.
 
 ---
@@ -36,7 +36,7 @@ It authorizes nothing. Flipping any package `status`, provisioning any credentia
 
 ## 2. Evidence basis
 
-Every **count, status and identifier** below was produced by a command run against `origin/main` on 2026-08-23 and re-confirmed 2026-08-25 — not read from a status document. Re-run these to re-verify.
+Every **count, status and identifier** below was produced by a command run against `origin/main` on 2026-08-23 and re-run against `a4bb356` on 2026-08-30 — not read from a status document. Re-run these to re-verify.
 
 Statements of *judgement* are not covered by that claim and are marked where they appear: the severity classes in §4.3, the reading that a defect is untested, and characterisations of review outcomes. Those rest on reading the artefacts, not on any command below.
 
@@ -54,11 +54,22 @@ Statements of *judgement* are not covered by that claim and are marked where the
 
 ---
 
-## 3. Verified state, 2026-08-25
+## 3. Verified state, 2026-08-30
 
-- Trunk: `main` @ `5b4b77c`; all five GitHub Actions checks pass.
-- Open PRs: **1** — #172, `MERGEABLE` / `CLEAN`, five of five checks pass, code review returned no issues. Docs-only, three files.
-- Open issues: **33**.
+- Trunk: `main` @ `a4bb356` (PR #174, closing #171); all five GitHub Actions checks pass.
+- Open PRs: **3** — #172 (handoff reconcile), #173 (this specification), #175 (ADR-0011). All three `MERGEABLE` / `CLEAN` with five of five checks passing.
+- Open issues: **31**.
+
+**Resolved since this document was first drafted** (2026-08-25 → 2026-08-30), each an item §8 listed as owed:
+
+| Item | Outcome |
+|---|---|
+| #171 over-suppression regression | **Fixed and merged** — PR #174 @ `a4bb356`, red-green verified; issue closed |
+| #146 terminal-run retry semantics | **Ruled** 2026-08-29 — Option 1, *terminal runs are final*; consumer drops or dead-letters a job whose run row is terminal. Issue stays open pending implementation |
+| ADR-0009 vs #157 fork | **Ruled** — ADR-0011 accepted on PR #175; ADR-0009 marked `Superseded by ADR-0011`. #157 remains the implementing work |
+| #134 Playwright E2E in CI | **Closed** — its work had already merged as PR #131 @ `bc6a2a3`, exactly as §8 item 7 recorded |
+
+Structural measurements are **unchanged**, because #174 touched only `workers/src/fel_workers/extraction/validate/accounting.py` and `workers/tests/extraction/test_accounting_identities.py`: 32 packages, 22 `merged`, 21 ledger checkboxes, 2 `credentials:` keys, 5 "Not requested". Re-run and confirmed against `a4bb356`.
 - Registered packages in `workstreams.yaml`: **32**
   - `status: merged` on trunk: **22**
   - Effectively merged but stale in the queue: **1** — `EVALS-REPORT-RENDER` (#151) merged as PR #164 @ `a23514e` while its entry still reads `ready`; PR #172 corrects this
@@ -111,25 +122,23 @@ Plus **one package this spec proposes registering** (§5.1): `RELEASE-LIVE-CUTOV
 
 **Caveat on the reconciliation.** Checking a box asserts the parent spec's completion standard: "code, tests, telemetry, documentation, and acceptance evidence are present." Merge is strong evidence but not identical to that standard. `T0215` in particular (reference-corpus retrieval performance suite) should be confirmed against `packages/retrieval/ACCEPTANCE.md` before its box is checked, not inferred from #58's merge alone.
 
-### 4.3 Release-blocking backlog (16 issues)
+### 4.3 Release-blocking backlog (14 issues)
 
 Per the scope decision recorded in `clarify-analyse.md` **Q-1**, **every open non-epic backlog issue is a release blocker.** This is the widest of the three scopes considered; §9 records the cost.
 
 | Issue | Class | Feeds |
 |---|---|---|
-| #171 | Correctness | §19.6 numeric accuracy ≥ 99.0%. Active regression on trunk; no test covers it |
 | #158 | Correctness | §19.6 temporal validity 100%; extraction identity integrity |
-| #157 | Contract | Mutually exclusive with ADR-0009; **gates #61** |
+| #157 | Contract | **Gates #61.** The fork is ruled — ADR-0011 accepted, ADR-0009 superseded — so #157 is now the sanctioned implementation, not one branch of a choice |
 | #154 | Correctness | §19.6 guidance F1 ≥ 90.0% |
 | #153 | Correctness | §19.6 numeric accuracy |
-| #146 | Design ruling | **Gates #61** |
+| #146 | Design ruling | **Gates #61.** Ruled 2026-08-29 (Option 1, terminal runs final); open pending implementation |
 | #143 | CI hygiene | Fail-closed `audit-bulk` gate reddens docs-only PRs |
 | #141 | Process | Shared-path authorization. **Gates this PR** |
 | #138 | Telemetry | Parent §18.1 |
 | #137 | Cutover hygiene | Folds into `RELEASE-LIVE-CUTOVER`, §5 |
 | #136 | Accessibility | Parent §16.3; consumed by `T0511` |
 | #135 | Feature residue | Live SSE proxy deferred from #59; overlaps #61's surface |
-| #134 | CI | Parent §20.2; consumed by `T0511`. **Its work merged as PR #131 @ `bc6a2a3`** — re-scope or close |
 | #133 | Test validity | Numeric identity tautology behind the accuracy gate |
 | #132 | Exit gate | **M2's exit criterion (M2-024) is not met**; see §5 |
 | #81 | Benchmark | §19.5 category coverage. The "≥ 8 distinct stress features" bar is #81's own wording, not §19.5's — §19.5 requires ten categories with ≥ 30 cases each |
@@ -223,7 +232,7 @@ Downstream contention is heavy: #62/#67/#68 all claim `evals/**`; #65/#66 both c
 
 | Wave | Dispatch | Precondition |
 |---|---|---|
-| **0** | Merge #172; fix #171; reconcile `tasks.md`; register `RELEASE-LIVE-CUTOVER`; land the ADR for **A-1**; rule #146 and ADR-0009/#157; resolve #141 and #143; re-scope #134 | None — all are integration-lead actions, spanning several PRs. **Only the #171 fix gates wave 1** |
+| **0** | ~~fix #171~~ ✅ merged @ `a4bb356`; ~~rule #146~~ ✅ Option 1; ~~rule ADR-0009/#157~~ ✅ ADR-0011 accepted; ~~re-scope #134~~ ✅ closed. **Remaining:** merge #172, #173, #175; reconcile `tasks.md`; register `RELEASE-LIVE-CUTOVER`; land the ADR for **A-1**; resolve #141 and #143; implement the #146 ruling | None — integration-lead actions across several PRs. **The wave-1 gate (#171) has cleared** |
 | **1** | #61 ∥ #63 | #61 needs the #146 and ADR-0009/#157 rulings; #63 needs nothing |
 | **2** | #62 | #61 merged |
 | **3** | #64 | #62 and #63 merged |
@@ -263,12 +272,12 @@ Every package inherits `defaults.required_evidence: [tests, telemetry-if-applica
 Four decisions were resolved in `clarify-analyse.md` (Q-1 through Q-4). These remain:
 
 1. **Merge PR #172** — code review returned no issues; rule whether it needs `contract-change` + an authorization record per #141, since it touches `docs/handoff/workstreams.yaml` and `STATUS.md`.
-2. **ADR-0009 vs #157** — mutually exclusive; gates #61's SSE surface.
-3. **#146** — terminal-run retry semantics; the other ruling gating #61.
+2. ~~**ADR-0009 vs #157**~~ — **ruled.** ADR-0011 accepted on PR #175; ADR-0009 `Superseded by ADR-0011`. #61's SSE surface now waits on #157 being *implemented* (migration `0006`), not on a decision.
+3. ~~**#146**~~ — **ruled** 2026-08-29: Option 1, terminal runs are final. Still a producer gate for #61 until implemented; the issue remains open for that reason.
 4. **Dispatch #63** — zero contention, independent of items 2 and 3; requires adding a `status:` key.
 5. **Register `RELEASE-LIVE-CUTOVER`** and file its issue (§5.1), then answer its four questions (§5.2).
 6. **Reconcile `tasks.md`** — 17 checkboxes, with the `T0215` caveat in §4.2. While there, **cite `FOR-004` on `T0510`**: it is the only parent-spec requirement no task references, and it carries constitution principle II's provenance guarantee into exports (finding **A-11**).
-7. **Re-scope or close #134** — its work merged as PR #131 @ `bc6a2a3`.
+7. ~~**Re-scope or close #134**~~ — **closed** 2026-08-29; its work had merged as PR #131 @ `bc6a2a3`.
 8. **Ratify this spec**, or return it with scope changes.
 
 ---
@@ -280,7 +289,7 @@ Four decisions were resolved in `clarify-analyse.md` (Q-1 through Q-4). These re
 | Release gates unevaluable in mock mode | §5; `CREDENTIALS.md` all-"Not requested"; `workstreams.yaml:73` | Register `RELEASE-LIVE-CUTOVER` now, not at wave 6 |
 | Canonical ledger under-reports by 17 tasks | §4.2, measured | Reconcile immediately after #172; confirm `T0215` against `packages/retrieval/ACCEPTANCE.md` |
 | Stale `status:` re-dispatches finished work | `EVALS-REPORT-RENDER` read `ready` for nine days after PR #164 merged | Confirm the issue is open on GitHub before trusting `ready` |
-| Green CI is not a correctness claim | #171 is live on `5b4b77c`; all five checks pass because no test covers it | Read gate-green as "nothing we check is broken" |
+| Green CI is not a correctness claim | #171 was live on `5b4b77c` with all five checks passing, because no test covered it. **Fixed by PR #174**, which added the missing coverage | The principle stands even though this instance is closed: read gate-green as "nothing we check is broken". A live example remains — the whole 1009-test Python suite passes with the `_check_segment_sums` suppression mechanism deleted outright, so its lower bound is still untested |
 | Six-deep critical path, one uncontended package | §6.1, measured | Dispatch #63 immediately; it blocks nothing and is blocked by nothing |
 | M2 exit criterion not actually met | #132 open; PR #122 merged mock plumbing only | Folded into `RELEASE-LIVE-CUTOVER`; do not treat M2 as closed |
 | Alpha Vantage paid tier is an accepted-ADR obligation, unbudgeted | ADR-0002 (Accepted) requires ≥ USD 49.99/mo; `CREDENTIALS.md` reads "Not requested" | Budget sign-off, or a new ADR reversing ADR-0002 |
@@ -300,6 +309,6 @@ Four decisions were resolved in `clarify-analyse.md` (Q-1 through Q-4). These re
 | Packages with every dependency merged | **3** — #61, #63, #108 |
 | Of those, dispatchable today with no ruling and no credential | **1** — #63, contends with nothing |
 | Safe parallel pairs among the 3 dispatchable | 2 of 3 (#61∥#63, #63∥#108; #61 vs #108 contends) |
-| Open issues | 33 — 16 release-blocking, 5 epics, 2 rollup trackers, 10 package issues |
+| Open issues | 31 — 14 release-blocking, 5 epics, 2 rollup trackers, 10 package issues (was 33; #171 and #134 closed 2026-08-29) |
 | Release gates to satisfy | 10 numeric + 11 definition-of-done items |
 | Ledger drift to correct | 17 checkboxes |
