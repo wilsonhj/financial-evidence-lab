@@ -5,6 +5,7 @@ import { defineConfig, devices } from "@playwright/test";
 // source is deterministic and never reaches the network, so runs are stable.
 const PORT = 3210;
 const BASE_URL = `http://127.0.0.1:${PORT}`;
+const chromiumExecutablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
 
 export default defineConfig({
   testDir: "./e2e",
@@ -16,7 +17,17 @@ export default defineConfig({
     baseURL: BASE_URL,
     trace: "on-first-retry",
   },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  projects: [
+    {
+      name: "chromium",
+      use: {
+        ...devices["Desktop Chrome"],
+        ...(chromiumExecutablePath
+          ? { launchOptions: { executablePath: chromiumExecutablePath } }
+          : {}),
+      },
+    },
+  ],
   webServer: {
     // Production build + start is more deterministic than `next dev`, whose
     // first-hit route compilation can slow or flake under CI load.
