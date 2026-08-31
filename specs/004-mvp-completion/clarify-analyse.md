@@ -56,7 +56,7 @@ Mirrors `plan.md`, which is authoritative for the gate result.
 
 - **Evidence and temporal integrity:** preserved unchanged. This feature adds no evidence path and no retrieval surface; the 100% temporal-validity gate remains a release blocker, and the sole outstanding ingestion work (`T0112`) routes through `RELEASE-LIVE-CUTOVER` under the already-merged M1 cutoff suites.
 - **Deterministic financial computation:** untouched. `M4-MODEL-CALC` (#63) carries the decimal-engine and property-test obligations verbatim from `T0403`/`T0409`; nothing here relaxes or reinterprets them.
-- **Test-first quality gates:** honoured in sequencing. Wave 0 places the #171 red-green regression test and the ledger reconciliation *before* any dispatch, so no package is built against a ledger that misreports its dependencies.
+- **Test-first quality gates:** honoured in sequencing, and now in fact. Wave 0 placed the #171 red-green regression test *before* any dispatch; it merged as PR #174 @ `a4bb356` on 2026-08-29, so the wave-1 gate has cleared. The ledger reconciliation remains outstanding but gates no dispatch.
 - **Security and cost boundaries:** **cannot be asserted (A-4).** The approved secret-management flow has never been exercised — all five credential groups read "Not requested". Re-check required before wave 6.
 - **Simplicity and provider isolation:** **cannot be asserted (A-1).** The replace-OpenAI directive substitutes an AI provider against ADR-0002 (Accepted) with neither a superseding ADR nor benchmark evidence, both of which principle V requires.
 
