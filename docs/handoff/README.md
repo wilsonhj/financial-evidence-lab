@@ -20,8 +20,9 @@ This directory is the restart point for all implementation agents. Fable must be
   #162 (#155, the orphaned normalize modules — now wired in), and #174 (#171,
   segment-sum over-suppression).
 - `EVALS-REPORT-RENDER` (#151) merged as PR #164 @ `a23514e`; its entry read
-  `ready` for nine days afterwards, so an agent reading the queue in that
-  window would have re-taken finished work. `M4-MODEL-CALC` (#63) now reads
+  `ready` ever since that 2026-08-11 merge — this reconciliation is what
+  flips it — so an agent reading the queue in that window would have
+  re-taken finished work. `M4-MODEL-CALC` (#63) now reads
   `status: ready`. Open PRs are #172 (this ledger), #173 (004-mvp-completion),
   and #175 (ADR-0011 ratification). Re-run `gh pr list --state open`. Do not
   infer dispatchability from a stale `ready` — confirm the issue is open on
