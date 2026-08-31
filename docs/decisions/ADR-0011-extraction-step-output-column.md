@@ -222,8 +222,8 @@ rewrite). This ratifying PR does not add `0006` or edit `persist.py`.
 - *Regression risk sits on the crash-resume path*, which is exactly where PR
   #145's silent-data-loss bug lived (`persist.py:822-838` records it). The
   mitigation is that this change is mostly a deletion, and that the load-bearing
-  new test (resume with the `step_completed` event deleted) is stronger than
-  anything the current design can express.
+  new test (resume with the `step_completed` event never written) is stronger
+  than anything the current design can express.
 - *Two rationales become stale and must be rewritten, not deleted.*
   `commit_succeeded_atomic` (`persist.py:812-855`) loses its justification once
   the step row is self-sufficient — a crash between row and event then costs
@@ -365,7 +365,7 @@ objection is real and is answered by sequencing, not by argument: this must land
 before #61, and if it cannot, the fallback is to reopen ADR-0009 rather than to
 ship #61 over the gap. The execution-risk objection is the strongest one against
 this ADR and is not dismissed: it is why the "Verification" section below demands
-a crash-resume test with the `step_completed` row deleted, and why the
+a crash-resume test with the `step_completed` event never written, and why the
 implementing PR must be reviewed as a correctness change on the resume path
 rather than as a schema addition. If the integration lead judges that risk
 unacceptable while #61 is the immediate priority, ratifying ADR-0009 and
@@ -423,8 +423,27 @@ The implementing PR must show:
    rejected; an identity-pin UPDATE is still rejected; a cross-org read returns
    nothing.
 3. **A crash-resume test proving resume succeeds with the `step_completed` event
-   row DELETED** — output survives on the step row alone. This is the
-   load-bearing new test and the one the current design cannot express.
+   never written** — output survives on the step row alone. The absence must be
+   produced by drop-on-append, *not* by SQL `DELETE`: `0004:661` grants `fel_app`
+   only `SELECT, INSERT` on `extraction_run_events`, and the guard raises
+   `'% is append-only'` on DELETE (`0004:488-489`, attached at `0004:523-524`) —
+   the same append-only model recorded above. The mechanism already exists:
+   `_LosingEventStore`
+   (`workers/tests/extraction/test_postgres_crash_resume.py:463-482`, used at
+   `:523` via `lose_on_step`) returns an unpersisted event, leaving exactly the
+   state a death between the step commit and its append leaves. On a fresh
+   connection and fresh stores the resumed pass must assert all three:
+   (a) **zero `step_completed` rows** for that step — the precondition query at
+   `:547-555`; (b) **output hydrated from `extraction_run_steps.output`** —
+   `load_succeeded` returns a non-null `output` with `_load_stage_output`'s event
+   scan (`persist.py:701-729`) deleted, so `workflow.py:490-496` skips the stage
+   instead of re-executing it; (c) **zero model calls** — `_CountingLLM.calls == 0`
+   (`:259-277`), the exact inverse of today's `second.calls >= 1` (`:574`).
+   (c) is what stops a resume that silently re-ran the stage from scoring as a
+   pass; the counter is whole-run, which is the stronger assertion here because
+   every stage resumes from its own row. `stage_resumed` (`workflow.py:497-502`)
+   is the per-step seam if one is needed. This is the load-bearing new test and
+   the one the current design cannot express.
 4. A test asserting that every persisted `extraction_run_events.payload` for a
    full run contains no evidence text, so `data-model.md:23` is machine-checked
    rather than prose.
