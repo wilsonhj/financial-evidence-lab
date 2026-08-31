@@ -505,11 +505,11 @@ lines. There is no `_SENSITIVE_KEYS` symbol in the tree.
 `persist.py:536-552` — now conflict-upsert code; the checkpoint rationale is at
 `:709` and `:822-838`.
 
-**Every one of ADR-0009's substantive claims holds; the coordinates moved,
-with the single exception recorded above — `handler.py:263-304` never moved and
-was one line short from the day it was written**,
+**Every one of ADR-0009's substantive claims holds; the coordinates moved**,
 consistent with PR #156 (merged `2026-08-04T02:09:06Z`) landing the corrections
-its revision history records, and with subsequent merges to `main`. Issue #157's
+its revision history records, and with subsequent merges to `main`. The single
+exception is `handler.py:263-304`, which never moved and was one line short from
+the day it was written — nothing about #156 explains it. Issue #157's
 citations were taken against `61058e4` and have drifted for the same reason. This
 ADR's citations are against `a4bb356` and will drift too — which is an argument
 for the machine-checked assertions in "Verification" items 4 and 5 over prose
