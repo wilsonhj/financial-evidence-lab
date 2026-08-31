@@ -91,7 +91,7 @@ M0, M1 and M2 are code-complete. M3 core is merged. M3 review, M4 and M5 are ent
 
 | Package | Issue | Tasks | Depth | Dispatch state |
 |---|---|---|---:|---|
-| `M3-REVIEW` | #61 | T0308, T0309 | 1 | **All deps merged.** Held by two open rulings, not by dependencies |
+| `M3-REVIEW` | #61 | T0308, T0309 | 1 | **All deps merged.** Held by unimplemented #146 Option 1 (whole package) and unimplemented #157/`0006` (SSE only) — both rulings are made (§8 items 2–3), not open |
 | `M4-MODEL-CALC` | #63 | T0401–T0403, T0409, T0410 | 1 | **All deps merged; contends with nothing dispatchable.** Dispatched — carries `status: ready` on trunk since PR #172 |
 | `READER-PROD-SMOKE` | #108 | — | 1 | All deps merged; **credential-gated** (`credentials: hosted-required`) |
 | `M3-CONFIDENCE-GATE` | #62 | T0306, T0307, T0310 | 2 | `depends_on: [M3-REVIEW]` — edge confirmed real, §6.3 |

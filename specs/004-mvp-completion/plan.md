@@ -24,7 +24,7 @@ The technical approach is not new construction but **sequencing under two constr
 
 **Primary Dependencies**: per ADR-0002
 
-**Storage**: per ADR-0002. Sequencing-relevant fact only: migrations are frozen through `0005` and OpenAPI at `v0.4.0`, so no package in any wave proposes a contract change
+**Storage**: per ADR-0002. Sequencing-relevant fact only: trunk is frozen through `0005` and OpenAPI at `v0.4.0` until wave 0 lands ADR-0011's migration `0006` (spec §4.4) — that entry is the contract change this plan sequences, not a claim that no wave proposes one
 
 **Testing**: pytest, with `pythonpath` spanning `apps/api`, `workers/src`, `evals`, and four `packages/*` (`providers`, `retrieval`, `retrieval-evals`, `ontology`); vitest for JS/TS; Playwright for web E2E
 
