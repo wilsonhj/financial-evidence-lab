@@ -460,7 +460,7 @@ now has a concrete implementation to point to.
 | Enforce wall-clock, attempt, token, and cost budgets durably                         | `RunBudget.precheck`/`record` (`budget.py`), usage merged with `GREATEST` across queue attempts                                                              |
 | Treat missing/invalid citations and financial normalization as blockers              | `citations.py` (uncited/unverified proposals blocked); `normalize/payload.py` fails closed on unparseable/out-of-range values                                |
 | Preserve scale, unit, period, currency, and magnitude in duplicate/conflict identity | `duplicates.py::comparability_key_for` + `value_fingerprint`; `accounting.py::_magnitude`                                                                    |
-| Minimize sensitive/raw provider data in audit records                                | `redact.py` (queue-owned error sinks) and `events.py::redact_payload` (extraction event payloads); see the M4 open question under Known gaps                 |
+| Minimize sensitive/raw provider data in audit records                                | `redact.py` (queue-owned error sinks) and `events.py::redact_event_payload` (extraction event payloads); M4 settled by PR #156, see Known gaps                 |
 
 ## Failure, concurrency, and idempotency semantics
 
@@ -497,18 +497,17 @@ runtime enforces this with a hard budget (`extraction/budget.py`, see
 `extraction_run_steps.error` sinks — credential shapes and quoted runs, since
 those columns can carry document-derived text such as
 `f"cannot normalize raw_value {value!r}"`) and
-`extraction/events.py::redact_payload` (key-based masking for extraction
+`extraction/events.py::redact_event_payload` (key-based masking for extraction
 event payloads, with one deliberate exception: a `step_completed` event's
 `stage_output` is the durable checkpoint payload — migration `0004` has no
-`steps.output` column — so it is exempted from _truncation_, though its
-sensitive-key substitution still runs). Whether that sensitive-key
-substitution running inside `stage_output` is itself a defect (it can corrupt
-`raw_payload_hash` on rehydration if an issuer-supplied qualifier or dimension
-key happens to collide with a redacted key name, e.g. `token`) was
-investigated during PR #145 review and assessed a false positive — closed
-variants of the frozen payload schema were enumerated and only `text`
-collides, which is already exempted — but a formal ruling closing or
-re-opening that question is still pending.
+`steps.output` column — so the whole subtree is split out, redacted around,
+and reattached verbatim: neither truncated nor key-substituted). PR #145
+review finding M4 — substitution inside `stage_output` corrupting
+`raw_payload_hash` — was real; PR #156 @ `263bff8` made the exemption
+positional and total (`events.py:117-126`). No ruling is pending. See
+[Known gaps](#known-gaps-and-open-decisions). ADR-0011 moves the checkpoint
+onto `extraction_run_steps.output` via #157 / migration `0006`; until that
+lands the payload stays exempt from redaction entirely.
 
 ## Deployment modes
 
