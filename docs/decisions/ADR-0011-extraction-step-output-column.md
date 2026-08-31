@@ -4,8 +4,8 @@ Status: Accepted
 Date: 2026-08-29
 Accepted: 2026-08-30 by integration lead on PR #175
 Supersedes: ADR-0009 (`docs/decisions/ADR-0009-checkpoint-payload-in-event-stream.md`,
-Status: Proposed, never ratified) — ADR-0009's proposed amendment is withdrawn
-unexecuted.
+Status: Proposed, never ratified; historical — this PR sets it to `Superseded by
+ADR-0011`) — ADR-0009's proposed amendment is withdrawn unexecuted.
 Occasioned by: issue #157 (`contract-change`, `agent-task`, open), filed as the
 follow-up ADR-0009 names in its own "Alternatives rejected".
 Blocks: #61 SSE until the *implementing* PR for migration 0006 lands. Non-SSE
@@ -13,12 +13,18 @@ Blocks: #61 SSE until the *implementing* PR for migration 0006 lands. Non-SSE
 is a separate ruling.
 
 All file:line references verified against this branch's base, `origin/main` @
-`a4bb356`. Where a reference could not be verified, the text says so.
+`a4bb356`. Where a reference could not be verified, the text says so. The one
+deliberate exception is every `ADR-0009:N` citation below, which is a
+**post-merge** line number: this PR inserts a `Superseded:` line at
+`ADR-0009:7`, shifting every line at or below it by one, so citing the base
+would leave all nine ranges off by one the moment this lands. See "Notes" on
+citation drift — an ADR that moves its own citation target has to say which side
+of the move it is citing.
 
 ## Context
 
 **ADR-0009 already concedes this decision on the merits.** Its "Alternatives
-rejected" section, verbatim (`ADR-0009:134-136`):
+rejected" section, verbatim (`ADR-0009:135-137`):
 
 > **Add a `steps.output` column.** The correct fix, and the one that would restore
 > the original guarantee outright. It is a change to frozen migration `0004`, so it
@@ -34,7 +40,7 @@ later (`gh pr view 145 -R wilsonhj/financial-evidence-lab`; `gh issue view 60`).
 **Nothing has been amended yet.** At the time of this decision ADR-0009 was
 `Status: Proposed` (historical; now `Superseded by ADR-0011`) and stated plainly
 that it "proposes the change and does not make it"
-(`ADR-0009:199-200`). All six guarantee statements are byte-unchanged at
+(`ADR-0009:200-201`). All six guarantee statements are byte-unchanged at
 `a4bb356` — each verified individually:
 
 - `specs/003-agentic-extraction/data-model.md:23`
@@ -167,6 +173,7 @@ rewrite). This ratifying PR does not add `0006` or edit `persist.py`.
 | `persist.py:646-699` (`load_succeeded`) | add `output` to the SELECT list at `:670-671` |
 | `persist.py:701-729` (`_load_stage_output`) | delete |
 | `workflow.py:528-534` | drop the `stage_output` key |
+| `workflow.py:389-399` (`_commit_stage`) | docstring asserts the event payload is a stage result's ONLY carrier — rewrite, do not delete |
 | `events.py:70-126` | delete the exemption; collapse `_redact` to one mode |
 | `specs/003-agentic-extraction/data-model.md:19` | add `output` to the column list |
 | version pins | `package.json:3`, `openapi.yaml:4` (+ changelog `:5-13`), `src/index.ts:21`, `contracts.test.ts:86,90` |
@@ -224,7 +231,7 @@ rewrite). This ratifying PR does not add `0006` or edit `persist.py`.
   mitigation is that this change is mostly a deletion, and that the load-bearing
   new test (resume with the `step_completed` event never written) is stronger
   than anything the current design can express.
-- *Two rationales become stale and must be rewritten, not deleted.*
+- *Three rationales become stale and must be rewritten, not deleted.*
   `commit_succeeded_atomic` (`persist.py:812-855`) loses its justification once
   the step row is self-sufficient — a crash between row and event then costs
   telemetry, not data; whether to keep the transaction as hygiene is a judgement
@@ -232,14 +239,19 @@ rewrite). This ratifying PR does not add `0006` or edit `persist.py`.
   correct, but its rationale paragraph cites `_load_stage_output`'s
   `ORDER BY id DESC LIMIT 1` hazard (`workflow.py:349-352`); with the column plus
   `ON CONFLICT DO NOTHING` against the partial replay index (`0004:173-175`), a
-  zombie worker's write loses the race instead of winning it.
+  zombie worker's write loses the race instead of winning it. `_commit_stage`'s
+  docstring (`workflow.py:392-399`) is the third and the most directly falsified:
+  it states that the `step_completed` event's `stage_output` "is the ONLY carrier
+  of a stage's result (0004 has no `steps.output` column)". This decision adds
+  exactly the column it says does not exist, so the sentence is false by
+  construction the moment `0006` lands.
 
 ## Contract-version question (open; must be answered by the implementing PR)
 
 `packages/contracts` is at **0.4.0** (`package.json:3`, `openapi.yaml:4`).
 `VERSIONING.md:19-23` classifies "changing the meaning of an existing field" as
 breaking; `:25-29` classifies additive change as minor. This ADR does not resolve
-it — the same posture ADR-0009 took (`ADR-0009:54-55`) — but it does narrow it,
+it — the same posture ADR-0009 took (`ADR-0009:55-56`) — but it does narrow it,
 because the question is a **different** one under this decision.
 
 - **Reading A — additive/minor (0.5.0).** The `payload` description is untouched
@@ -287,7 +299,7 @@ re-verified for this ADR.**
   it carries none, and `apps/web` may build against `payload.stage_output` —
   after which removing the key becomes a real breaking change for a real
   consumer instead of a no-op diff. Add this work to #61's `depends_on`.
-  ADR-0009 flags the same trigger from the other side (`ADR-0009:165-167`).
+  ADR-0009 flags the same trigger from the other side (`ADR-0009:166-168`).
 - **A new `workstreams.yaml` entry is required.** `M3-CONTRACT` (#101) is the
   only entry spanning both `db/migrations/**` and `packages/contracts/**` and it
   is `status: merged`; the precedent for a new retroactive entry is
@@ -306,9 +318,9 @@ re-verified for this ADR.**
   `VERSIONING.md:44-51`; `db/migrations/README.md:10-11`). #157 already carries
   both labels.
 - **ADR-0009's revisit triggers mostly retire with it.** Its non-public-source
-  trigger (`ADR-0009:161-164`) becomes moot — the stream stops carrying source
+  trigger (`ADR-0009:162-165`) becomes moot — the stream stops carrying source
   text regardless of the corpus. Its redaction-helper trigger
-  (`ADR-0009:171-173`) also retires, since there is no exemption left to
+  (`ADR-0009:172-174`) also retires, since there is no exemption left to
   re-merge. Its #61 trigger is what this ADR converts into a sequencing
   requirement.
 - **Nothing about the run's durability or fencing weakens.** Checkpoint identity
@@ -335,7 +347,7 @@ serious alternative, and the case for it is genuine:
 - *The code being deleted was expensive to get right.* The positional exemption
   (`events.py:117-126`) and the atomic commit (`persist.py:812-855`) took two
   review rounds and a review finding (M4) to converge; two earlier key-based
-  scopings both corrupted the checkpoint (`ADR-0009:75-86`). Replacing working,
+  scopings both corrupted the checkpoint (`ADR-0009:76-87`). Replacing working,
   hard-won code on the crash-resume path carries regression risk that a prose
   amendment does not.
 - *Neither route is contract-free.* This ADR still moves the version pins and
@@ -344,7 +356,7 @@ serious alternative, and the case for it is genuine:
 - *The risk is asymmetric in the other direction too.* This route rewrites the
   crash-resume path — the exact code where PR #145's silent checkpoint-corruption
   bug lived, and where two earlier key-based scopings already failed
-  (`ADR-0009:75-86`). A botched implementation here produces a **correctness
+  (`ADR-0009:76-87`). A botched implementation here produces a **correctness
   incident**: a resume that silently loses or mis-attributes an extraction.
   ADR-0009's route produces, at worst, a documentation defect. Measured by
   worst-case severity rather than by which document is true, ADR-0009 is the
@@ -373,7 +385,7 @@ deferring this is a defensible call — it should just be made knowingly, rather
 than by leaving the fork open.
 
 **Store stage output in object storage and reference it by key.** Rejected now;
-ADR-0009's objection (`ADR-0009:138-140`) is unchanged and this ADR endorses it —
+ADR-0009's objection (`ADR-0009:139-141`) is unchanged and this ADR endorses it —
 a second durability system on the resume path with a failure mode (event
 committed, blob missing) the current transaction boundary cannot cover. Its
 stated merit, scaling better than JSONB, survives as a future option if stage
@@ -383,7 +395,7 @@ column puts the hash and the hashed value in one row and one write — but "weak
 objection to the thing we are not doing" is not a reason to do it.
 
 **Truncate and re-fetch on resume.** Rejected, and ADR-0009's corrected reasoning
-(`ADR-0009:150-157`) survives intact and re-verified: only pinned span text is
+(`ADR-0009:151-158`) survives intact and re-verified: only pinned span text is
 re-fetchable — `handler.py:263-305` verifies evidence against canonical
 `source_spans` rows, `persist.py:82` and `:337-358` load them, and a re-fetch
 path exists in `apps/api/app/reader.py:82,90`. But `stage_output` also carries
@@ -470,7 +482,7 @@ Checked individually at `a4bb356` (rebase base after #174; #174 touched only
 `accounting.py` and its test — load-bearing citations below are unchanged):
 
 *Still exact:* all six guarantee locations; `0004:143-171`, `0004:661`,
-`0004:692-695`; `spec.md:61`; `handler.py:263-304`; `persist.py:82`;
+`0004:692-695`; `spec.md:61`; `handler.py:263-305`; `persist.py:82`;
 `events.py:1-8`; `OPERATOR.md:16`; `workflow.py:528-534` (`stage_output` write);
 `persist.py:701-729` (`_load_stage_output`).
 
@@ -479,7 +491,9 @@ Checked individually at `a4bb356` (rebase base after #174; #174 touched only
 `:208-209`. `workflow.py:370-375` for `stage_input_hash` — now `:477-482`;
 `:370-375` is a docstring in `_is_recoverable`. `workflow.py:484` for the
 `sha256_hex` re-check — now `:612-618`. `events.py:53-81` for the redaction
-docstring — now `:71-116`; `:53-81` is the `_SENSITIVE_KEYS` literal.
+docstring — now `:71-116`; `:53-81` no longer names one construct at all, running
+from inside the `_REDACT_KEYS` literal (`:52-67`) into that docstring's opening
+lines. There is no `_SENSITIVE_KEYS` symbol in the tree.
 `persist.py:536-552` — now conflict-upsert code; the checkpoint rationale is at
 `:709` and `:822-838`.
 
