@@ -385,7 +385,7 @@ deferring this is a defensible call — it should just be made knowingly, rather
 than by leaving the fork open.
 
 **Store stage output in object storage and reference it by key.** Rejected now;
-ADR-0009's objection (`ADR-0009:139-141`) is unchanged and this ADR endorses it —
+ADR-0009's objection (`ADR-0009:138-141`) is unchanged and this ADR endorses it —
 a second durability system on the resume path with a failure mode (event
 committed, blob missing) the current transaction boundary cannot cover. Its
 stated merit, scaling better than JSONB, survives as a future option if stage
@@ -395,7 +395,7 @@ column puts the hash and the hashed value in one row and one write — but "weak
 objection to the thing we are not doing" is not a reason to do it.
 
 **Truncate and re-fetch on resume.** Rejected, and ADR-0009's corrected reasoning
-(`ADR-0009:151-158`) survives intact and re-verified: only pinned span text is
+(`ADR-0009:150-158`) survives intact and re-verified: only pinned span text is
 re-fetchable — `handler.py:263-305` verifies evidence against canonical
 `source_spans` rows, `persist.py:82` and `:337-358` load them, and a re-fetch
 path exists in `apps/api/app/reader.py:82,90`. But `stage_output` also carries
@@ -482,9 +482,17 @@ Checked individually at `a4bb356` (rebase base after #174; #174 touched only
 `accounting.py` and its test — load-bearing citations below are unchanged):
 
 *Still exact:* all six guarantee locations; `0004:143-171`, `0004:661`,
-`0004:692-695`; `spec.md:61`; `handler.py:263-305`; `persist.py:82`;
+`0004:692-695`; `spec.md:61`; `persist.py:82`;
 `events.py:1-8`; `OPERATOR.md:16`; `workflow.py:528-534` (`stage_output` write);
 `persist.py:701-729` (`_load_stage_output`).
+
+*Exact but one line short:* `handler.py:263-304`. It resolves to the right
+function and carries the claim ADR-0009 makes, but `_bind_evidence_to_spans`
+runs to `:305` (`return bound`), so the citation truncates its last line. This
+ADR cites the full `:263-305` in "Alternatives rejected" rather than reproducing
+the short range. Recorded because "nearly exact" is a third category the two
+lists below would otherwise hide — a reviewer who checks it finds real content
+and stops, and never learns the range is wrong.
 
 *No longer resolving (relative to ADR-0009's original coords):*
 `validate/pipeline.py:157,178-180` — the hash chain is now at `:187`, `:196`,
