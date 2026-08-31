@@ -1,6 +1,6 @@
 # Implementation Plan: MVP Completion
 
-**Branch**: `spec/004-mvp-completion` | **Date**: 2026-08-25, refreshed 2026-08-30 | **Spec**: [`spec.md`](./spec.md)
+**Branch**: `spec/004-mvp-completion` | **Date**: 2026-08-25, refreshed 2026-08-31 | **Spec**: [`spec.md`](./spec.md)
 
 **Input**: Feature specification from `/specs/004-mvp-completion/spec.md`
 
@@ -10,7 +10,7 @@
 
 ## Summary
 
-Nine registered packages and one unregistered workstream stand between `main` @ `a4bb356` and the immutable MVP release artifact (`T0513`). Twenty-nine of sixty-seven in-scope Spec Kit tasks are outstanding. The critical path is six deep and terminates at `M5-AUDIT-RELEASE` (#68).
+Nine registered packages and **two** unregistered workstreams stand between trunk and the immutable MVP release artifact (`T0513`): the mock→live cutover (spec §5.1) and the migration-`0006` entry ADR-0011 requires for #157 (spec §4.4). Measured at `main` @ `a4bb356`; trunk is now `ebe77af` after PR #172. Twenty-nine of sixty-seven in-scope Spec Kit tasks are outstanding. The critical path is six deep and terminates at `M5-AUDIT-RELEASE` (#68).
 
 The technical approach is not new construction but **sequencing under two constraints the existing graph does not encode**: path-exclusivity between concurrently dispatched packages, and a credential precondition that no `depends_on` edge can express. The plan's substantive contribution is to make the second constraint explicit by registering `RELEASE-LIVE-CUTOVER` and giving #68 a dependency on it, so the terminal node stops being unreachable.
 
@@ -36,7 +36,7 @@ The technical approach is not new construction but **sequencing under two constr
 
 **Constraints**: `defaults.credentials: mock-only` — **the binding constraint of this plan** (spec §5). Path-exclusivity: no two concurrently dispatched packages may share an `allowed_paths` glob. **This PR is itself a `specs/**` shared-path change** and therefore carries `contract-change` plus an authorization record per #141; separately, it proposes no OpenAPI, JSON-schema or migration change
 
-**Scale/Scope**: 10 packages, 29 tasks, 14 release-blocking backlog issues, 8 dispatch waves. No new product surface
+**Scale/Scope**: 11 packages (9 registered + 2 to register), 29 tasks, 14 release-blocking backlog issues, 8 dispatch waves. No new product surface
 
 ## Constitution Check
 
@@ -69,7 +69,7 @@ specs/004-mvp-completion/
 └── clarify-analyse.md   # Clarification resolutions + cross-artifact analysis
 ```
 
-No `research.md`, `data-model.md`, `quickstart.md` or `contracts/`: this feature adds no data model, no contract and no developer-facing entry point. No `tasks.md` **by deliberate choice** — the outstanding work already carries canonical IDs (`T0112`, `T0306`–`T0513`) in `specs/001-financial-evidence-lab/tasks.md`, and a second copy would reproduce the drift documented in spec §4.2.
+No `research.md`, `data-model.md`, `quickstart.md` or `contracts/`: this feature adds no data model, no contract and no developer-facing entry point. No `tasks.md` **by deliberate choice** — the outstanding work already carries canonical IDs (`T0112`, `T0214b`, `T0306`–`T0513`) in `specs/001-financial-evidence-lab/tasks.md`, and a second copy would reproduce the drift documented in spec §4.2.
 
 ### Source Code (repository root)
 
@@ -100,10 +100,10 @@ ADR-0008's scaffold-registration exception reaches **only** `packages/export/`, 
 
 Wave contents are defined in **spec §6.2, which is authoritative**; this section states only the rules governing them, to avoid two divergent copies of the same list.
 
-- Wave 0 is a set of integration-lead actions, not a package dispatch. It spans **several pull requests** (this one; the #171 fix; the `tasks.md` reconciliation; the `RELEASE-LIVE-CUTOVER` registration), which may land in any order.
-- Of wave 0, only the **#171 fix gated wave 1** — the defect #62 is later built to measure. **It merged 2026-08-29, so wave 1 is open.** The #146 and ADR-0009/#157 rulings that unblock #61 have both been made; #61 now waits on those rulings being *implemented* (#146's Option 1, and #157's migration `0006`), not decided.
+- Wave 0 is a set of integration-lead actions, not a package dispatch. It spans **several pull requests** (this one; the #171 fix, merged; the handoff reconciliation #172, merged; the `tasks.md` reconciliation; the `RELEASE-LIVE-CUTOVER` registration; the registration of ADR-0011's migration-`0006` entry for #157), which may land in any order — **except** that the last of these must precede #61's SSE surface, per ADR-0011's mandatory revisit trigger.
+- Of wave 0, only the **#171 fix gated wave 1** — the defect #62 is later built to measure. **It merged 2026-08-29, so wave 1 is open.** The #146 and ADR-0009/#157 rulings that unblock #61 have both been made; what remains is implementation, not decision. #146's Option 1 gates #61 as a whole; #157's migration `0006` gates **only #61's SSE surface**, so a wave-1 #61 dispatch is non-SSE (spec §4.4, §6.2, §7).
 - For package-bearing waves (1 onward), a wave opens only when every package in the prior wave reads `merged`.
-- **`M4-MODEL-CALC` (#63) is wave-0-concurrent.** It is listed in wave 1 for dependency ordering, but requires no ruling, contends with nothing, and can be dispatched today alongside wave-0 work.
+- **`M4-MODEL-CALC` (#63) is wave-0-concurrent, and is now dispatched.** It is listed in wave 1 for dependency ordering, but requires no ruling and contends with nothing; PR #172 added its `status: ready` key on 2026-08-31.
 
 ## Complexity Tracking
 
