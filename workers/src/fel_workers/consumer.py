@@ -198,9 +198,18 @@ def run_worker(
     own connection so long-running jobs are never mistaken for dead ones, and
     every ``reap_interval_iterations`` claim attempts the loop calls
     :func:`queue.reap_stale` (threshold ``stale_after_seconds``) so jobs whose
-    worker crashed are requeued instead of staying 'running' forever. If the
-    heartbeat reports the lease lost, the job is treated as lost: the handler
-    result is discarded and no terminal state is written — the new owner wins.
+    worker crashed are recovered instead of staying 'running' forever —
+    requeued while attempts remain, dead-lettered once they are exhausted, so
+    a job that kills its worker cannot be reaped in a loop. If the heartbeat
+    reports the lease lost, the job is treated as lost: the handler result is
+    discarded and no terminal state is written — the new owner wins.
+
+    Two terminal outcomes bypass the retry budget entirely. A handler raising
+    :class:`queue.PermanentFailure` is dead-lettered on the spot (the job can
+    never succeed, so the remaining attempts would only repeat the failure),
+    and a handler that accepts ``cancel_check`` is given one bound to
+    :func:`queue.is_cancel_requested` so an operator can wind a long run down
+    cooperatively.
 
     ``extraction_memory_stores`` is the ONLY way to send ``extraction_run``
     output to in-memory stores while a connection is live, and it is off by
@@ -221,7 +230,12 @@ def run_worker(
         if reap_interval_iterations > 0 and (iterations - 1) % reap_interval_iterations == 0:
             reaped = queue.reap_stale(conn, stale_seconds=stale_after_seconds)
             if reaped:
-                log.warning("reaped %d stale job(s) back to queued", reaped)
+                log.warning(
+                    "reaped %d stale job(s): %d requeued, %d dead-lettered (attempts exhausted)",
+                    reaped,
+                    reaped.requeued,
+                    reaped.dead_lettered,
+                )
         job = queue.claim_one(conn, queue=queue_name)
         if job is None:
             if max_iterations is not None:
@@ -278,6 +292,19 @@ def run_worker(
             # the Callable[[], bool] parameter.
             return not hb.lease_lost
 
+        claimed_job_id = job.id
+
+        def _cancel_check(job_id: str = claimed_job_id) -> bool:
+            # Cooperative cancellation (issue #189): handlers poll this at
+            # stage boundaries so a cancelled run winds itself down to a
+            # consistent terminal state. Bound as a default for the same
+            # reason as _lease_check (ruff B023). The worker connection is
+            # safe here -- unlike the heartbeat, which needs its own
+            # connection because it runs on a separate thread, the handler
+            # calls this synchronously on the worker's own thread, between
+            # its own statements.
+            return queue.is_cancel_requested(conn, job_id=job_id)
+
         try:
             if job.kind == JOB_KIND_SEC_DISCOVERY:
                 run_discovery_job(conn, sec, job.payload, job_queue=queue_name)
@@ -307,6 +334,7 @@ def run_worker(
                     extraction_provider,
                     job.payload,
                     lease_check=_lease_check,
+                    cancel_check=_cancel_check,
                     use_memory_stores=extraction_memory_stores,
                     job_org_id=job.org_id,
                 )
@@ -329,6 +357,20 @@ def run_worker(
                     outcome.status,
                     outcome.reason_code or "ok",
                 )
+        except queue.PermanentFailure as exc:
+            # A handler that raises PermanentFailure is saying this job can
+            # never succeed, so retrying it is pure waste: dead-letter it now
+            # regardless of the attempts remaining (issue #146, Option 1 — a
+            # job whose run row is already terminal would fail identically on
+            # every remaining attempt). Ordered before the generic handler
+            # below because PermanentFailure IS an Exception.
+            heartbeat.stop()
+            if heartbeat.lease_lost:
+                log.warning("lease lost during job %s; failure not recorded", job.id)
+                continue
+            log.warning("job %s permanently failed; dead-lettering", job.id)
+            queue.dead_letter(conn, job, str(exc))
+            continue
         except Exception as exc:  # noqa: BLE001 — job isolation boundary
             heartbeat.stop()
             if heartbeat.lease_lost:
