@@ -3,8 +3,10 @@ events (spec section 17.1/18.1 baseline)."""
 
 from __future__ import annotations
 
+import importlib
 import json
 import logging
+import os
 import time
 import uuid
 from typing import Any
@@ -40,6 +42,36 @@ def configure_logging() -> None:
     root = logging.getLogger()
     root.handlers = [handler]
     root.setLevel(logging.INFO)
+
+
+def configure_error_reporting() -> None:
+    """Initialise Sentry when ``FEL_SENTRY_DSN`` is set; otherwise do nothing.
+
+    Three deliberate properties (#203):
+
+    * **No DSN, no SDK call.** The default deployment reports nothing off-box,
+      so an unconfigured environment cannot leak anything.
+    * **The SDK is an optional dependency**, imported lazily inside the DSN
+      branch. ``sentry-sdk`` is intentionally *not* added to the API's
+      dependencies here — wiring the dependency is a separate, reviewable
+      change. A DSN set without the SDK installed warns loudly rather than
+      failing the boot or silently swallowing the intent.
+    * ``send_default_pii=False`` — request bodies, headers and user identifiers
+      are never attached automatically. Financial documents and tenant claims
+      are not error-report payloads.
+    """
+    dsn = os.environ.get("FEL_SENTRY_DSN")
+    if not dsn:
+        return
+    try:
+        sentry_sdk = importlib.import_module("sentry_sdk")
+    except ImportError:
+        log.warning(
+            "FEL_SENTRY_DSN is set but the sentry-sdk package is not installed;"
+            " error reporting is disabled"
+        )
+        return
+    sentry_sdk.init(dsn=dsn, send_default_pii=False)
 
 
 class RequestContextMiddleware(BaseHTTPMiddleware):
