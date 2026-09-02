@@ -55,7 +55,7 @@ export default async function ObservatoryRunPage({
   const compareWith = snapshot?.runs.find((run) => run.run_id !== runId)?.run_id;
 
   return (
-    <main className="page-main">
+    <main id="main-content" tabIndex={-1} className="page-main">
       <p>
         <Link href="/observatory">← Search Observatory</Link>
       </p>

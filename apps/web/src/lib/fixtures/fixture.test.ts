@@ -1,11 +1,10 @@
 import { createHash } from "node:crypto";
 import { createRequire } from "node:module";
 
-import Ajv2020 from "ajv/dist/2020";
-import addFormats from "ajv-formats";
 import { describe, expect, it } from "vitest";
 
 import { extractSpanText } from "../spans";
+import { createAjv } from "../data/ajv-setup";
 import { fixtureEvidenceSource } from "../data/fixture-source";
 import {
   DOC_10Q_ID,
@@ -25,12 +24,12 @@ const require = createRequire(import.meta.url);
 const sourceSpanSchema = require("@fel/contracts/schemas/source-span.schema.json") as object;
 const financialFactSchema = require("@fel/contracts/schemas/financial-fact.schema.json") as object;
 
-// TODO(contract-change): this ajv setup is duplicated with
-// packages/contracts/contracts.test.ts; deduplicating it means exporting a
-// validator from the frozen contracts package, so it is deliberately left
-// as-is until a contract-change issue/ADR lands.
-const ajv = new Ajv2020({ strict: false, allErrors: true });
-addFormats(ajv);
+// The Ajv2020 + ajv-formats setup is shared with reader-contract-validator.ts
+// via createAjv() (see its module doc). packages/contracts/contracts.test.ts
+// keeps its own copy deliberately: that package is a frozen contract
+// boundary web must not import from for tooling, and sharing a validator
+// across that boundary would need a contract-change issue/ADR.
+const ajv = createAjv();
 const validateSpan = ajv.compile(sourceSpanSchema);
 const validateFact = ajv.compile(financialFactSchema);
 

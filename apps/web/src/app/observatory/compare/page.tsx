@@ -15,7 +15,7 @@ export default async function ObservatoryComparePage({
   const { a, b } = (await searchParams) ?? {};
   if (!a || !b) {
     return (
-      <main className="page-main">
+      <main id="main-content" tabIndex={-1} className="page-main">
         <p>
           <Link href="/observatory">← Search Observatory</Link>
         </p>
@@ -29,7 +29,7 @@ export default async function ObservatoryComparePage({
   try {
     const [runA, runB] = await Promise.all([source.getRun(a), source.getRun(b)]);
     return (
-      <main className="page-main">
+      <main id="main-content" tabIndex={-1} className="page-main">
         <p>
           <Link href={`/observatory/runs/${a}`}>← Back to run</Link>
         </p>

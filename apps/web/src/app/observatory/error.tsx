@@ -13,7 +13,13 @@ export default function ObservatoryError({
   reset: () => void;
 }) {
   return (
-    <main className="page-main" role="alert" aria-labelledby="observatory-error-heading">
+    <main
+      id="main-content"
+      tabIndex={-1}
+      className="page-main"
+      role="alert"
+      aria-labelledby="observatory-error-heading"
+    >
       <h2 id="observatory-error-heading">Could not load this retrieval run</h2>
       <p>The Observatory failed while loading this run. This is a data-source error.</p>
       {error.digest && (
