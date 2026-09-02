@@ -15,7 +15,15 @@ from fel_workers.extraction.types import EvidenceBlock, ProposalDraft
 from fel_workers.extraction.validate.pipeline import _evidence_rows
 
 
-def test_stage_output_keeps_span_text_under_redaction() -> None:
+def test_span_text_never_reaches_an_event_payload() -> None:
+    """Blocker 7 inverted by ADR-0011: the checkpoint moved off the event.
+
+    This test used to assert the opposite — that span text survived redaction
+    inside `stage_output`, because the event payload WAS the checkpoint. Since
+    migration 0006 the output lives on `extraction_run_steps.output`, so the
+    exemption is deleted and any source text that somehow reached an event
+    payload is redacted like anything else.
+    """
     payload = {
         "step_name": "assemble_evidence",
         "input_hash": "sha256:" + "a" * 64,
@@ -31,7 +39,7 @@ def test_stage_output_keeps_span_text_under_redaction() -> None:
     }
     cleaned = redact_event_payload(payload, event_type="step_completed")
     assert cleaned["api_key"] == "[redacted]"
-    assert cleaned["stage_output"][0]["text"] == "ARR was $100 million"
+    assert cleaned["stage_output"][0]["text"] == "[redacted]"
 
 
 def test_serialize_evidence_block_round_trip_shape() -> None:

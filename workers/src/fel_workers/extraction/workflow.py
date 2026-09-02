@@ -22,8 +22,13 @@ from fel_workers.extraction.errors import (
     ProviderRefused,
     StepFailed,
 )
-from fel_workers.extraction.events import MemoryEventStore, redact_event_payload
-from fel_workers.extraction.hashing import hash_json, sha256_hex, stage_input_hash
+from fel_workers.extraction.events import MemoryEventStore
+from fel_workers.extraction.hashing import (
+    canonical_json,
+    hash_json,
+    sha256_hex,
+    stage_input_hash,
+)
 from fel_workers.extraction.normalize.pipeline import normalize_payload
 from fel_workers.extraction.persist import MemoryPersistStore, UsageSnapshot
 from fel_workers.extraction.roles.base import ROLE_SPECS
@@ -345,13 +350,18 @@ def _commit_fence(ctx: _ExecCtx, step_name: str) -> None:
 
     ``_boundary`` runs before the stage, so everything after it — the model call
     above all — was unfenced: a worker whose lease expired mid-``classify`` still
-    committed the step row and its ``step_completed`` event. That is not a
-    harmless duplicate. ``extraction_run_events`` has no uniqueness constraint and
-    ``_load_stage_output`` takes ``ORDER BY id DESC LIMIT 1``, so the zombie's
-    output is what the run's real owner reads back on resume. (Since #158 the
-    read side also binds the event to the committed step row's ``output_hash``
-    and re-hashes the restored payload, so a disagreeing zombie row is rejected
-    on read — but this fence is what stops the write from landing at all.)
+    committed the step row and its ``step_completed`` event.
+
+    That used to be worse than a duplicate. While the checkpoint lived in the
+    event payload, ``extraction_run_events`` had no uniqueness constraint and the
+    hydration read ``ORDER BY id DESC LIMIT 1``, so the zombie's output was what
+    the run's real owner read back on resume. Since ADR-0011 the output lives on
+    the step row, whose success key is the partial unique index
+    ``(run_id, step_name, input_hash, workflow_version) WHERE status='succeeded'``
+    and whose INSERT is ``ON CONFLICT DO NOTHING`` — a zombie's write now loses
+    the race instead of winning it. The fence is still worth keeping: it stops
+    the zombie writing at all, and it is the only thing that stops a lease-less
+    worker appending events to a run it no longer owns.
 
     Raising here writes nothing and the owner re-runs the stage, which is
     idempotent by construction (keyed on ``input_hash``). The wall-clock cap is
@@ -364,84 +374,117 @@ def _commit_fence(ctx: _ExecCtx, step_name: str) -> None:
         raise Cancelled(f"run cancelled before committing stage {step_name}")
 
 
-def _is_recoverable(record: StageRecord, *, run_id: str) -> bool:
-    """Reject a checkpoint that claims an output it cannot hand back.
+def _is_recoverable(ctx: _ExecCtx, record: StageRecord) -> bool:
+    """Reject a checkpoint that cannot hand back the output it claims.
 
-    ``output_hash`` non-null with ``output is None`` is the torn state a crash
-    between the step commit and its ``step_completed`` event leaves behind (see
-    ``PostgresCheckpointStore.commit_succeeded_atomic``, which now makes the pair
-    atomic so this cannot be produced any more — rows written by earlier code, or
-    an event pruned later, still can be). Treating it as a completed stage skips
-    the stage with zero model calls and lands the run ``succeeded`` +
-    ``abstained=True`` with no proposals: silent data loss dressed up as a
-    legitimate abstention. Re-running the stage is the fail-closed answer; the
-    stage is idempotent by construction, keyed on ``input_hash``.
+    Two rejections, both fail-closed, both answered the same way: re-run the
+    stage. That is always safe — a stage is idempotent by construction, keyed on
+    ``input_hash`` — whereas trusting a checkpoint that is wrong about its own
+    output is not.
 
-    ``durable_output_hash`` is the second gate (#158). ``_load_stage_output``
-    hands back ``stage_output`` verbatim from the durable event, and the workflow
-    recomputes ``raw_payload_hash`` / ``proposal_id_for`` from it — so a payload
-    that diverged after commit (bit rot, an errant repair script, replication or
-    restore skew, the zombie double-commit ``_commit_fence`` documents) silently
-    forked the run's proposal identity, and 0004 made the fork permanent.
-    Re-hashing the restored subtree against the hash stamped beside it at write
-    time (``_durable_stage_output_hash``) catches that. A mismatch is handled
-    exactly like the torn state — the stage re-runs — and deliberately NOT as an
-    ``IntegrityError``: that would take the ``StepFailed`` branch and land the
-    run terminal ``failed``, unretryable under #146, so a corrupted checkpoint
-    would kill the run outright. The telemetry names both hashes and never the
-    payload. ``None`` means the row predates the field; the check is skipped and
-    those rows resume exactly as before.
+    **Missing output.** ``output_hash`` non-null with ``output is None`` was the
+    torn state a crash between the step commit and its ``step_completed`` event
+    left behind, back when the event payload was the only carrier. Migration 0006
+    puts the output on the step row in the same INSERT as its hash, under
+    ``CHECK ((output IS NULL) = (output_hash IS NULL))``, so new rows cannot be
+    torn. Rows written before 0006 on runs that have since gone terminal are
+    unrepairable — 0004 forbids UPDATE on a terminal run and DELETE outright — so
+    this branch is retained permanently as a legacy-row defence. Treating such a
+    row as a completed stage skips it with zero model calls and lands the run
+    ``succeeded`` + ``abstained=True`` with no proposals: silent data loss
+    dressed up as a legitimate abstention.
+
+    **Output that does not match its hash** (issue #158). ``output_hash`` is
+    ``hash_json`` over the serialized output, so recomputing it is a complete
+    check of the restored payload: any edit, truncation or substitution anywhere
+    in the subtree changes it. Nothing else would catch a tampered or corrupted
+    ``steps.output`` — ``_restore_output``'s ``text_hash`` check covers only
+    ``assemble_evidence``'s span text, and the model-derived subtrees
+    (``classification``, ``candidates``, ``raw_proposals``, ``normalized``) have
+    no other content address at all. A mismatch would otherwise be laundered into
+    proposal identity: ``raw_payload_hash`` and ``proposal_id_for`` are computed
+    from the restored payload, so the run would emit self-consistent proposals
+    that no longer describe what the stage actually produced.
+
+    The rejection is reported as a ``step_failed`` event carrying
+    ``error.code = 'checkpoint_rejected'``. The event vocabulary is frozen —
+    ``ALLOWED_EVENT_TYPES`` mirrors 0004's ``event_type`` CHECK, which has no
+    ``checkpoint_rejected`` member and would reject the insert — so the reason
+    travels in the payload instead. See the operator runbook.
     """
     if record.output_hash is not None and record.output is None:
-        emit(
-            "stage_checkpoint_unrecoverable",
-            run_id=run_id,
-            step_name=record.step_name,
-            input_hash=record.input_hash,
-            output_hash=record.output_hash,
+        _reject_checkpoint(
+            ctx,
+            record=record,
+            reason="checkpoint_output_missing",
+            message=(
+                f"step {record.step_name} claims output_hash {record.output_hash} "
+                "but stored no output"
+            ),
         )
         return False
-    if record.durable_output_hash is not None:
-        restored_hash = hash_json(record.output)
-        if restored_hash != record.durable_output_hash:
-            emit(
-                "stage_checkpoint_payload_mismatch",
-                run_id=run_id,
-                step_name=record.step_name,
-                input_hash=record.input_hash,
-                output_hash=record.output_hash,
-                stage_output_hash=record.durable_output_hash,
-                restored_hash=restored_hash,
+    if record.output is not None:
+        actual = hash_json(serialize_stage_output(record.output))
+        if actual != record.output_hash:
+            _reject_checkpoint(
+                ctx,
+                record=record,
+                reason="checkpoint_hash_mismatch",
+                message=(
+                    f"step {record.step_name} stored output hashing to {actual} "
+                    f"under output_hash {record.output_hash}"
+                ),
             )
             return False
     return True
 
 
-def _durable_stage_output_hash(event_payload: dict[str, Any]) -> str:
-    """Hash the ``stage_output`` bytes the event row will actually hold.
+def _reject_checkpoint(ctx: _ExecCtx, *, record: StageRecord, reason: str, message: str) -> None:
+    """Record a refused checkpoint, then let the caller re-run the stage.
 
-    ``output_hash`` is ``hash_json`` over the stage's LIVE return value, taken one
-    line before ``serialize_stage_output`` produces what is stored — two different
-    functions of the same value. They agree today because every stage returns
-    JSON-native values, but a dataclass hashes as its ``repr`` while it serializes
-    through ``asdict``, and a tuple hashes as an array while it stringifies. A
-    resume can only re-hash what it reads back, so the hash it is checked
-    against must be taken over the post-serialize, post-redact subtree — through
-    the same ``redact_event_payload`` the event sinks apply, so the stamp and the
-    stored bytes cannot drift apart. ``_is_recoverable`` compares against this.
+    Best-effort, like ``_record_stage_failure``: a store that is itself failing
+    must not turn a recoverable re-run into a crash. The event type is
+    ``step_failed`` because the vocabulary is frozen — see ``_is_recoverable``.
     """
-    durable = redact_event_payload(event_payload, event_type="step_completed")
-    return hash_json(durable.get("stage_output"))
+    req = ctx.state.request
+    emit(
+        "stage_checkpoint_rejected",
+        run_id=req.run_id,
+        step_name=record.step_name,
+        input_hash=record.input_hash,
+        output_hash=record.output_hash,
+        reason=reason,
+    )
+    try:
+        ctx.deps.events.append(
+            org_id=req.org_id,
+            run_id=req.run_id,
+            event_type="step_failed",
+            payload={
+                "step_name": record.step_name,
+                "input_hash": record.input_hash,
+                "output_hash": record.output_hash,
+                "error": {"code": "checkpoint_rejected", "message": message},
+                "reason": reason,
+                "action": "stage_re_executed",
+            },
+        )
+    except Exception:  # pragma: no cover — never block the re-run on telemetry
+        return
 
 
 def _commit_stage(
     ctx: _ExecCtx, *, record: StageRecord, event_payload: dict[str, Any]
 ) -> StageRecord:
-    """Commit a succeeded stage and its output-carrying event as one unit.
+    """Commit a succeeded stage row and its ``step_completed`` event as one unit.
 
-    The ``step_completed`` event's ``stage_output`` is the ONLY carrier of a
-    stage's result (0004 has no ``steps.output`` column), so the two writes must
-    not be separately durable. Stores that can do it atomically expose
+    Since ADR-0011 the stage's result is durable on the step row itself
+    (``extraction_run_steps.output``, written in the same INSERT as
+    ``output_hash``), so the event is no longer the carrier of anything a resume
+    needs — it is telemetry. The transaction is kept anyway, for a narrower
+    reason than the one it was written for: a crash between the two writes now
+    costs an audit event rather than an extraction, and an audit trail with holes
+    in it is still a defect. Stores that can do it atomically expose
     ``commit_succeeded_atomic``; the in-memory doubles have no durability
     boundary to straddle and fall back to the two-call form.
     """
@@ -535,11 +578,7 @@ def _run_stage(ctx: _ExecCtx, step_name: str) -> None:
         input_hash=input_hash,
         workflow_version=req.workflow_version,
     )
-    if (
-        existing is not None
-        and existing.status == "succeeded"
-        and _is_recoverable(existing, run_id=req.run_id)
-    ):
+    if existing is not None and existing.status == "succeeded" and _is_recoverable(ctx, existing):
         ctx.state.stages[step_name] = existing
         _restore_output(ctx.state, step_name, existing.output)
         emit(
@@ -564,25 +603,29 @@ def _run_stage(ctx: _ExecCtx, step_name: str) -> None:
     except BaseException as exc:  # noqa: BLE001 — recorded, then re-raised unchanged
         _record_stage_failure(ctx, step_name=step_name, input_hash=input_hash, exc=exc)
         raise
-    output_hash = hash_json(output) if output is not None else None
+    # The stored form IS the hashed form: `output_hash` is computed over exactly
+    # the value that lands in `extraction_run_steps.output`, so a resume can
+    # re-verify the row it read back (`_is_recoverable`, issue #158). Hashing the
+    # pre-serialization object instead would produce a digest nothing durable
+    # could ever be checked against.
+    serialized = serialize_stage_output(output)
+    output_hash = hash_json(serialized) if output is not None else None
     record = StageRecord(
         step_name=step_name,
         attempt=1,
         status="succeeded",
         input_hash=input_hash,
         output_hash=output_hash,
-        output=output,
+        output=serialized,
     )
-    event_payload = {
+    # Metadata only — no stage output, no source text (ADR-0011). The output is
+    # on the step row; this event says a step finished and names its hashes.
+    event_payload: dict[str, Any] = {
         "step_name": step_name,
         "input_hash": input_hash,
         "output_hash": output_hash,
-        # Frozen 0004 has no steps.output column; persist resume payload here.
-        "stage_output": serialize_stage_output(output),
+        "output_size_bytes": len(canonical_json(serialized)) if output is not None else 0,
     }
-    # Additive sibling of `stage_output`; the payload is an open object in the
-    # frozen event schema. Verified by `_is_recoverable` on resume (#158).
-    event_payload["stage_output_hash"] = _durable_stage_output_hash(event_payload)
     audit = ctx.model_audit
     if audit is not None:
         record.attempt = audit.attempts

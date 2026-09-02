@@ -497,9 +497,15 @@ INSERT INTO extraction_run_steps (
     'sha256:5555555555555555555555555555555555555555555555555555555555555555',
     'workflow-v1', 'extraction-payload/v1', 'prompt-v1', now()
 );
+-- `output` is set alongside `output_hash` because migration 0006 added
+-- `CHECK ((output IS NULL) = (output_hash IS NULL))` (ADR-0011): a hash with
+-- nothing hashed is the torn checkpoint 0006 exists to make unrepresentable.
+-- 0004 itself is unchanged; only this harness, which runs against a database
+-- with every migration applied, had to name the column.
 UPDATE extraction_run_steps
 SET status = 'succeeded',
     output_hash = 'sha256:6666666666666666666666666666666666666666666666666666666666666666',
+    output = '{"ok": true}'::jsonb,
     finished_at = now()
 WHERE id = '70000000-0000-0000-0000-0000000000a1';
 INSERT INTO extraction_run_events (org_id, run_id, event_type, payload)
