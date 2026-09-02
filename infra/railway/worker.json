@@ -5,7 +5,7 @@
     "buildCommand": "pip install -r requirements.txt && pip install ./packages/providers ./packages/ontology ./workers"
   },
   "deploy": {
-    "startCommand": "python scripts/db/migrate.py --check && FEL_WORKER_HEALTH_PORT=$PORT python -m fel_workers run",
+    "startCommand": "python scripts/db/migrate.py --check --database-url \"$FEL_DATABASE_URL\" && FEL_WORKER_HEALTH_PORT=$PORT python -m fel_workers run",
     "healthcheckPath": "/health",
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 3
