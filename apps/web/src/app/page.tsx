@@ -20,7 +20,7 @@ export default async function DocumentListPage() {
   const links = linkAmendments(documents);
 
   return (
-    <main className="page-main" aria-labelledby="documents-heading">
+    <main id="main-content" tabIndex={-1} className="page-main" aria-labelledby="documents-heading">
       <h2 id="documents-heading">Filings</h2>
       <p>Select a filing to open its version-pinned evidence snapshot.</p>
       <table className="doc-table">

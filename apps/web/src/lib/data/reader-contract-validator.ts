@@ -1,9 +1,8 @@
-import Ajv2020 from "ajv/dist/2020";
-import addFormats from "ajv-formats";
-
 import financialFactSchema from "@fel/contracts/schemas/financial-fact.schema.json";
 import readerResponseSchema from "@fel/contracts/schemas/reader-response.schema.json";
 import sourceSpanSchema from "@fel/contracts/schemas/source-span.schema.json";
+
+import { createAjv } from "./ajv-setup";
 
 type JsonSchema = Record<string, unknown>;
 
@@ -25,8 +24,7 @@ function relaxOpenEnums(value: unknown): void {
 const readerSchema = structuredClone(readerResponseSchema) as JsonSchema;
 relaxOpenEnums(readerSchema);
 
-const ajv = new Ajv2020({ strict: false, allErrors: true });
-addFormats(ajv);
+const ajv = createAjv();
 ajv.addSchema(sourceSpanSchema);
 ajv.addSchema(financialFactSchema);
 const validate = ajv.compile(readerSchema);

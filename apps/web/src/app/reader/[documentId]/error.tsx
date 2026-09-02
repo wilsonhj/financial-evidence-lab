@@ -14,7 +14,13 @@ export default function ReaderError({
   reset: () => void;
 }) {
   return (
-    <main className="page-main" role="alert" aria-labelledby="reader-error-heading">
+    <main
+      id="main-content"
+      tabIndex={-1}
+      className="page-main"
+      role="alert"
+      aria-labelledby="reader-error-heading"
+    >
       <h2 id="reader-error-heading">Could not load this filing</h2>
       <p>
         The evidence source failed while loading this document. The document may still exist — this

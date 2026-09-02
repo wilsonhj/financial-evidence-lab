@@ -43,3 +43,35 @@ test("the trace view is keyboard navigable: focus reaches a candidate and Enter 
   await expect(page).toHaveURL(/\/reader\/.*\?span=/);
   await expect(page.locator('button.span-mark[aria-pressed="true"]')).toBeVisible();
 });
+
+test("the skip link is the first focusable element and Tab reaches the first cited span", async ({
+  page,
+}) => {
+  await page.goto(`/reader/${REVENUE_DOC_ID}`);
+
+  // The very first Tab from a fresh page must land on the skip link, before
+  // any repeated header/nav chrome.
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("link", { name: "Skip to main content" })).toBeFocused();
+
+  // Activating it jumps focus to the main reader landmark, past the header.
+  await page.keyboard.press("Enter");
+  await expect(page.locator("#main-content")).toBeFocused();
+
+  // Continuing to Tab from the top reaches a real, focusable citation span
+  // button — proving the DocumentPane spans are keyboard-operable, not just
+  // clickable. Bounded so the check stays fast even if the outline grows.
+  await page.goto(`/reader/${REVENUE_DOC_ID}`);
+  let reachedSpan = false;
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    await page.keyboard.press("Tab");
+    const isSpan = await page.evaluate(
+      () => document.activeElement?.classList.contains("span-mark") ?? false,
+    );
+    if (isSpan) {
+      reachedSpan = true;
+      break;
+    }
+  }
+  expect(reachedSpan).toBe(true);
+});

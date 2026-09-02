@@ -98,6 +98,42 @@ a {
   border: 0;
 }
 
+/*
+ * Skip link: visually hidden like any other .visually-hidden content, but
+ * restored to a normal, visible position the moment it receives keyboard
+ * focus, so a keyboard/screen-reader user tabbing from the top of the page
+ * sees where they landed and can jump past repeated header/nav content.
+ */
+.skip-link {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.skip-link:focus {
+  position: fixed;
+  top: 0.5rem;
+  left: 0.5rem;
+  width: auto;
+  height: auto;
+  padding: 0.6rem 1rem;
+  margin: 0;
+  overflow: visible;
+  clip: auto;
+  white-space: normal;
+  background: var(--color-bg);
+  color: var(--color-accent);
+  border: 2px solid var(--color-accent);
+  border-radius: 4px;
+  z-index: 100;
+}
+
 .site-header {
   display: flex;
   align-items: baseline;
