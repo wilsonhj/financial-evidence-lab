@@ -74,3 +74,51 @@ Worker-role note: no service role exists yet. The index build path
 status transitions) assumes one; when it is introduced it will need
 `UPDATE ON retrieval_index_versions` (for the status transitions and the
 guards' `FOR SHARE` locks) in addition to `INSERT` on the artifact tables.
+
+## 0007 jobs hardening (#189)
+
+Additive changes to 0001's `jobs` table, for the three queue gaps in #189:
+
+- `available_at timestamptz NOT NULL DEFAULT now()` — retry scheduling.
+  `queue.claim_one` filters on `available_at <= now()`, and `queue.fail`
+  pushes it forward by an exponential, jittered backoff (base 5s, factor 2,
+  cap 15 min) instead of requeueing a failed attempt for an immediate
+  re-claim. `started_at` records the most recent claim;
+  `cancel_requested_at` carries a cooperative cancellation request.
+- `jobs_heartbeat_running_idx` on `(heartbeat_at) WHERE status = 'running'`
+  — the reaper predicate had no supporting index.
+- `jobs_claim_available_idx` — 0001's claim key on
+  `(queue, priority, created_at)` partial to `status = 'queued'`, plus
+  `INCLUDE (available_at)`, so the new claim filter is evaluated from the
+  index rather than a heap fetch per scheduled retry.
+  0001's `jobs_claim_idx` is left in place (migrations are append-only) and
+  the key order is deliberately unchanged: `claim_one` still needs
+  `(priority, created_at)` order, so moving `available_at` into the key
+  would buy a range scan at the price of a sort in the common case where
+  nothing is backed off.
+
+Cancellation is the only `fel_app` write added, and it takes **both** a
+column-level grant and a policy — neither is sufficient alone:
+
+- `GRANT UPDATE (cancel_requested_at) ON jobs TO fel_app` keeps every other
+  column read-only to the request role (`status`, `attempts`, `lease`,
+  `payload`, `error`), so a tenant can ask for a stop but cannot forge a
+  terminal state. The harness pins this: writing `status` or `attempts` as
+  `fel_app` must raise `42501`.
+- `jobs_cancel_own_org`, a `RESTRICTIVE ... FOR UPDATE TO fel_app` policy
+  requiring `org_id = fel_claim_org_id()`. 0001's permissive `jobs_tenant`
+  policy also admits `org_id IS NULL` (tenantless platform jobs); that is
+  right for reading but would let any tenant cancel a platform job, so this
+  ANDs an own-org-only rule onto `UPDATE` alone and leaves `SELECT`/`INSERT`
+  as they were. It is scoped `TO fel_app` so the future worker service role
+  does not inherit a rule written for request paths.
+
+Cancellation never changes `status` by itself: the worker polls
+`queue.is_cancel_requested` at a stage boundary and winds the run down, so a
+partially written run reaches a consistent terminal state rather than being
+torn out from under a live worker.
+
+Reaping is no longer unconditional. `queue.reap_stale` requeues a stale
+claim only while `attempts < max_attempts` and otherwise parks it as
+`failed` with a `REAPED_EXHAUSTED` error envelope — before this, a job that
+reliably killed its worker was reaped, re-claimed and killed again forever.
