@@ -12,6 +12,14 @@ Rules (see ADR-0002 and the constitution):
 - Every migration must apply cleanly to an empty database. CI's `database`
   job applies all migrations to a disposable Postgres 17 container and runs
   the backup-restore smoke test (`infra/scripts/backup_restore_smoke.sh`).
+- Apply them with `python scripts/db/migrate.py` (`make db-migrate`), never a
+  `for f in *.sql; do psql -f "$f"; done` loop. The applier records every file
+  and its sha256 in a `schema_migrations` ledger, so re-running is a no-op and
+  editing an applied file is caught as checksum drift rather than silently
+  diverging from the deployed schema. `--check` (`make db-check`) is the
+  read-only gate; `--baseline` adopts a database an older shell loop migrated.
+  Files in `tests/` are harnesses, not migrations: the applier only reads
+  `NNNN_*.sql` directly in this directory and never descends into `tests/`.
 - Tenant-scoped tables must ship with their row-level-security policies in
   the same migration that creates them.
 

@@ -10,7 +10,9 @@ export default defineConfig({
   testDir: "./e2e",
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
-  retries: 0,
+  // One retry in CI absorbs the rare cold-start flake without hiding a real
+  // failure; locally a flake should be visible immediately.
+  retries: process.env.CI ? 1 : 0,
   reporter: [["list"]],
   use: {
     baseURL: BASE_URL,

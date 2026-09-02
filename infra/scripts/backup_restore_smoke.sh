@@ -1,32 +1,35 @@
 #!/usr/bin/env bash
-# Migration + backup-restore smoke test (SPEC section 16.2 / M0 exit gate).
+# Backup-restore smoke test (SPEC section 16.2 / M0 exit gate).
 #
 # Runs against the connection described by the standard PG* environment
-# variables. Applies every db/migrations/*.sql in lexical order, writes a
-# marker row, takes a pg_dump, wipes the schema, restores the dump, and
-# verifies the marker survived. Requires only a disposable database — no
-# hosted credentials.
+# variables. Expects the schema to be migrated already — apply it with
 #
-# MIGRATIONS_DIR overrides the migrations location; CI copies this script
-# into the postgres service container (so pg_dump matches the server
-# version) and points MIGRATIONS_DIR at the copied directory.
+#     python scripts/db/migrate.py --database-url "$URL"
+#
+# which records every file in the `schema_migrations` ledger. This script then
+# writes a marker row, dumps cluster roles and the database, wipes the
+# database, restores roles first and the database second, and verifies that
+# the marker, the migration ledger, and the `fel_app` grants all survived.
+#
+# Roles are cluster-level, so a same-cluster restore finds them already
+# present and the role restore is a no-op; the step exists so that a restore
+# into a *fresh* cluster recreates `fel_app` before the dump's GRANT
+# statements reference it. Role errors are therefore reported, not fatal.
 set -euo pipefail
 
-MIGRATIONS_DIR="${MIGRATIONS_DIR:-$(dirname "$0")/../../db/migrations}"
 DUMP_FILE="$(mktemp -t fel-smoke-XXXXXX.dump)"
-trap 'rm -f "$DUMP_FILE"' EXIT
+ROLES_FILE="$(mktemp -t fel-smoke-roles-XXXXXX.sql)"
+trap 'rm -f "$DUMP_FILE" "$ROLES_FILE"' EXIT
 
-echo "==> Applying migrations from ${MIGRATIONS_DIR}"
-shopt -s nullglob
-migrations=("${MIGRATIONS_DIR}"/*.sql)
-if [ "${#migrations[@]}" -eq 0 ]; then
-  echo "    (no migrations yet — smoke test will still verify dump/restore)"
-else
-  for f in "${migrations[@]}"; do
-    echo "    applying $(basename "$f")"
-    psql --set ON_ERROR_STOP=1 --quiet --file "$f"
-  done
+echo "==> Verifying the database is migrated"
+ledger="$(psql --tuples-only --no-align \
+  --command "SELECT count(*) FROM schema_migrations;" 2>/dev/null || true)"
+if [ -z "$ledger" ] || [ "$ledger" = "0" ]; then
+  echo "FAIL: no schema_migrations ledger rows in ${PGDATABASE}." >&2
+  echo "      Apply migrations first: python scripts/db/migrate.py" >&2
+  exit 1
 fi
+echo "    ${ledger} migration(s) recorded in schema_migrations"
 
 echo "==> Writing smoke marker"
 psql --set ON_ERROR_STOP=1 --quiet <<'SQL'
@@ -37,6 +40,9 @@ CREATE TABLE IF NOT EXISTS _ci_smoke (
 INSERT INTO _ci_smoke (id, marker) VALUES (1, 'backup-restore-smoke')
 ON CONFLICT (id) DO UPDATE SET marker = EXCLUDED.marker;
 SQL
+
+echo "==> Dumping cluster roles"
+pg_dumpall --roles-only --file "$ROLES_FILE"
 
 echo "==> Dumping database"
 pg_dump --format=custom --file "$DUMP_FILE"
@@ -50,6 +56,14 @@ psql --dbname postgres --set ON_ERROR_STOP=1 --quiet \
 psql --dbname postgres --set ON_ERROR_STOP=1 --quiet \
   --command "CREATE DATABASE \"${PGDATABASE}\";"
 
+echo "==> Restoring roles (before the database, so GRANTs resolve)"
+# Roles survive a same-cluster DROP DATABASE, so "role already exists" is the
+# expected outcome here and must not fail the run; on a fresh cluster the
+# same file is what recreates fel_app.
+psql --dbname postgres --quiet --file "$ROLES_FILE" >/dev/null 2>&1 ||
+  echo "    (some role statements were skipped)"
+echo "    roles applied; existing roles left as they are"
+
 echo "==> Restoring dump into the fresh database"
 pg_restore --exit-on-error --dbname "$PGDATABASE" "$DUMP_FILE"
 
@@ -61,4 +75,20 @@ if [ "$marker" != "backup-restore-smoke" ]; then
   exit 1
 fi
 
-echo "OK: migrations applied; backup and restore verified"
+echo "==> Verifying the migration ledger survived restore"
+restored_ledger="$(psql --tuples-only --no-align \
+  --command "SELECT count(*) FROM schema_migrations;")"
+if [ "$restored_ledger" != "$ledger" ]; then
+  echo "FAIL: schema_migrations has ${restored_ledger} row(s), expected ${ledger}" >&2
+  exit 1
+fi
+
+echo "==> Verifying fel_app grants survived restore"
+granted="$(psql --tuples-only --no-align \
+  --command "SELECT has_table_privilege('fel_app', 'organizations', 'SELECT');")"
+if [ "$granted" != "t" ]; then
+  echo "FAIL: fel_app lost SELECT on organizations after restore (got: '$granted')" >&2
+  exit 1
+fi
+
+echo "OK: roles, schema, ledger, grants, and data survived backup and restore"

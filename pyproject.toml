@@ -3,6 +3,7 @@ line-length = 100
 target-version = "py311"
 src = [
     "apps/api",
+    "scripts/db",
     "workers/src",
     "evals",
     "packages/providers",
@@ -27,6 +28,7 @@ mypy_path = "apps/api:workers/src:evals:packages/providers:packages/retrieval:pa
 [tool.pytest.ini_options]
 pythonpath = [
     "apps/api",
+    "scripts/db",
     "workers/src",
     "evals",
     "packages/providers",
@@ -36,6 +38,7 @@ pythonpath = [
 ]
 testpaths = [
     "apps/api/tests",
+    "scripts/db/tests",
     "workers/tests",
     "evals/tests",
     "packages/providers/tests",
@@ -44,6 +47,29 @@ testpaths = [
     "packages/ontology/tests",
 ]
 addopts = "-q --import-mode=importlib"
+
+[tool.coverage.run]
+branch = false
+# Source packages, matching the mypy target list in ci.yml. Coverage is opt-in
+# (`pytest --cov`) rather than an addopts default so local runs stay fast; CI's
+# python job passes the flags.
+source = [
+    "apps/api/app",
+    "workers/src/fel_workers",
+    "evals",
+    "packages/providers/fel_providers",
+    "packages/retrieval/fel_retrieval",
+    "packages/retrieval-evals/fel_retrieval_evals",
+    "packages/ontology/fel_ontology",
+]
+omit = ["*/tests/*"]
+
+[tool.coverage.report]
+# Floor = the measured baseline minus one point. Raise it when coverage rises;
+# never lower it without saying why in the PR.
+fail_under = 91
+show_missing = false
+skip_covered = true
 
 [tool.bandit]
 exclude_dirs = ["tests", ".venv"]
