@@ -16,19 +16,23 @@ describe("ReaderPage", () => {
     vi.stubEnv("FEL_EVIDENCE_SOURCE", "fixture");
   });
 
-  // Regression (finding 5): the reader was not keyed by document, so client
-  // state (selection, outline focus, notes) leaked across filings when
-  // navigating. The page must render <EvidenceReader key={documentId}> so a
-  // different document remounts the reader with fresh state.
-  it("keys the EvidenceReader by documentId so navigation remounts it", async () => {
+  // Regression (finding 5), updated for issue #198: the reader used to leak
+  // client state (selection, outline focus, notes) across filings when
+  // navigating, which the page originally fixed with <EvidenceReader
+  // key={documentId}> (forcing a remount). EvidenceReader now keys its
+  // internal useReducer state by documentId and resets on a prop change
+  // instead (see lib/reader-state.test.ts), so the page passes documentId
+  // straight through without a key.
+  it("passes documentId through without a remount key (reducer now owns the reset)", async () => {
     const element10q = await renderPageElement(DOC_10Q_ID);
     const element10qa = await renderPageElement(DOC_10QA_ID);
 
     expect(element10q.type).toBe(EvidenceReader);
     expect(element10qa.type).toBe(EvidenceReader);
-    expect(element10q.key).toBe(DOC_10Q_ID);
-    expect(element10qa.key).toBe(DOC_10QA_ID);
-    expect(element10q.key).not.toBe(element10qa.key);
+    expect((element10q.props as { documentId: string }).documentId).toBe(DOC_10Q_ID);
+    expect((element10qa.props as { documentId: string }).documentId).toBe(DOC_10QA_ID);
+    expect(element10q.key).toBeNull();
+    expect(element10qa.key).toBeNull();
   });
 
   it("raises Next.js notFound for an unknown document id", async () => {

@@ -30,10 +30,11 @@ export default async function ReaderPage({
 
   const { data } = result;
   return (
-    // key={documentId}: navigating between filings must remount the reader so
-    // selection, outline focus, and notes never leak across documents.
+    // No key={documentId}: EvidenceReader now keys its internal useReducer
+    // state by documentId (see lib/reader-state.ts) and resets on a prop
+    // change, so a remount is no longer needed to keep selection, outline
+    // focus, and notes from leaking across documents (issue #198).
     <EvidenceReader
-      key={documentId}
       documentId={documentId}
       documents={data.documents}
       sections={data.sections}
