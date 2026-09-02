@@ -269,3 +269,29 @@ def test_timestamps_are_timezone_aware(
     published = datetime.fromisoformat(doc["published_at"])
     assert published.tzinfo is not None
     assert published.astimezone(UTC) == datetime(2026, 5, 5, 16, 30, tzinfo=UTC)
+
+
+def test_document_listing_is_bounded(
+    client: TestClient, org_fixture: tuple[str, str], db_url: str
+) -> None:
+    """#191: `limit` bounds the listing; out-of-range values are rejected."""
+    ids = _seed_corpus(db_url)
+    url = f"/v1/entities/{ids['entity_id']}/documents"
+    headers = _headers(org_fixture)
+
+    assert len(client.get(url, headers=headers).json()) == 2
+
+    bounded = client.get(url, params={"limit": 1}, headers=headers)
+    assert bounded.status_code == 200
+    assert [d["id"] for d in bounded.json()] == [ids["early_doc"]]
+
+    # The bound composes with the cutoff rather than replacing it.
+    with_cutoff = client.get(
+        url, params={"limit": 5, "as_of": "2026-06-01T00:00:00Z"}, headers=headers
+    )
+    assert [d["id"] for d in with_cutoff.json()] == [ids["early_doc"]]
+
+    for out_of_range in (0, 201):
+        rejected = client.get(url, params={"limit": out_of_range}, headers=headers)
+        assert rejected.status_code == 422, out_of_range
+        assert rejected.json()["error"]["code"] == "VALIDATION_ERROR"

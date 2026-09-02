@@ -4,6 +4,23 @@ The endpoint assembles one cutoff-safe database snapshot, selects exactly one
 parsed version per visible filing, and verifies canonical section/span
 provenance before returning it. A corrupt or unavailable canonical object is
 an integrity failure; the API never serves unverifiable evidence.
+
+Bounded assembly (#191). One reader response fans out over every span and fact
+of the selected version, so the span and fact reads are capped by
+``FEL_READER_MAX_SPANS`` / ``FEL_READER_MAX_FACTS`` (default 5000 each). When a
+version exceeds a cap the request fails with 413 ``READER_TOO_LARGE`` rather
+than returning a silently short answer.
+
+Why 413 and not a ``truncated: true`` flag: the frozen contract forbids it.
+``packages/contracts/schemas/reader-response/v1`` — and the OpenAPI
+``ReaderResponse`` that $refs it — declare ``additionalProperties: false`` on
+the response object and on every nested reader block, so an extra field would
+make a valid API response fail contract validation. Adding one is a
+contract-change requiring an ADR, which this issue is not. A truncated evidence
+snapshot is also the wrong default for this endpoint specifically: reader
+output feeds citation verification, and a response missing some of the version's
+spans would let a citation resolve to "not present" that is merely "not
+returned". Failing loudly keeps evidence integrity a code-enforced property.
 """
 
 from __future__ import annotations
@@ -20,10 +37,10 @@ from pydantic import AwareDatetime
 
 from app.auth import TenantContext
 from app.config import settings
-from app.corpus import _document_body
 from app.db import tenant_connection
 from app.dependencies import get_tenant_context
 from app.errors import api_error
+from app.serializers import document_body
 
 router = APIRouter(prefix="/v1", tags=["corpus"])
 
@@ -82,6 +99,7 @@ _ALL_SPANS_SQL = """
     FROM source_spans
     WHERE document_version_id = %s
     ORDER BY start_char, end_char, id::text COLLATE "C"
+    LIMIT %s
 """
 
 _REFERENCED_SPANS_SQL = """
@@ -96,6 +114,7 @@ _REFERENCED_SPANS_SQL = """
             AND ff.source_span_id = ss.id
       )
     ORDER BY ss.start_char, ss.end_char, ss.id::text COLLATE "C"
+    LIMIT %s
 """
 
 _FACTS_SQL = """
@@ -106,11 +125,22 @@ _FACTS_SQL = """
     FROM financial_facts
     WHERE document_version_id = %s
     ORDER BY id::text COLLATE "C"
+    LIMIT %s
 """
 
 
 def _not_found() -> Exception:
     return api_error(404, "NOT_FOUND", "Document not found.")
+
+
+def _too_large(resource: str, limit: int) -> Exception:
+    """413 for a version whose evidence exceeds the configured assembly cap."""
+    return api_error(
+        413,
+        "READER_TOO_LARGE",
+        "Document version exceeds the reader's bounded assembly limits.",
+        {"resource": resource, "limit": limit},
+    )
 
 
 def _integrity_error(reason: str) -> Exception:
@@ -260,12 +290,18 @@ def _build_document_block(
     section_bodies = [_section_body(row, canonical_text) for row in section_rows]
     sections_by_id = {section["id"]: section for section in section_bodies}
 
+    # Read one row past the cap: a full page means the version is larger than
+    # this endpoint will assemble, which is a 413 rather than a short answer.
+    cfg = settings()
+    max_spans, max_facts = cfg.reader_max_spans, cfg.reader_max_facts
     if include_sections:
-        span_rows = conn.execute(_ALL_SPANS_SQL, (version_row["id"],)).fetchall()
+        span_rows = conn.execute(_ALL_SPANS_SQL, (version_row["id"], max_spans + 1)).fetchall()
     else:
         span_rows = conn.execute(
-            _REFERENCED_SPANS_SQL, (version_row["id"], version_row["id"])
+            _REFERENCED_SPANS_SQL, (version_row["id"], version_row["id"], max_spans + 1)
         ).fetchall()
+    if len(span_rows) > max_spans:
+        raise _too_large("spans", max_spans)
     spans = [
         _span_body(
             row,
@@ -276,13 +312,15 @@ def _build_document_block(
         for row in span_rows
     ]
     span_ids = {span["id"] for span in spans}
-    fact_rows = conn.execute(_FACTS_SQL, (version_row["id"],)).fetchall()
+    fact_rows = conn.execute(_FACTS_SQL, (version_row["id"], max_facts + 1)).fetchall()
+    if len(fact_rows) > max_facts:
+        raise _too_large("facts", max_facts)
     facts = [
         _fact_body(row, version_id=version_id, entity_id=entity_id, span_ids=span_ids)
         for row in fact_rows
     ]
     block: dict[str, Any] = {
-        "meta": _document_body(document_row),
+        "meta": document_body(document_row),
         "document_version_id": version_id,
         "spans": spans,
         "facts": facts,
