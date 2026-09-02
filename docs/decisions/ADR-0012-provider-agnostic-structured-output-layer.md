@@ -1,7 +1,8 @@
 # ADR-0012: Provider-agnostic structured-output layer
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-09-02
+**Accepted:** 2026-09-02 by the integration lead on branch `claude/repo-analysis-improvements-m25v4u` (review #188). The provider pin itself remains open until the #177 / #132 benchmark records Amendment 1; what is accepted is the layer, the selection knobs, and the fail-closed rules.
 **Issues:** #195 (this ADR), #193 (claims-output consumer), #194 (extraction tool loop), #177 / #132 (benchmark)
 **Amends:** ADR-0002 (AI and retrieval section)
 

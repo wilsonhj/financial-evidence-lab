@@ -1,7 +1,8 @@
 # ADR-0014: Checksummed migration ledger and single applier
 
-Status: Proposed
+Status: Accepted
 Date: 2026-09-02
+Accepted: 2026-09-02 by the integration lead on branch `claude/repo-analysis-improvements-m25v4u` (review #188); `scripts/db/migrate.py`, the CI wiring and the smoke script implement it.
 Occasioned by: issue #199 (`contract-change`), part of the 2026-09-01
 architecture review (#188).
 Touches shared paths: `.github/workflows/ci.yml`, `infra/**`, `Makefile`,

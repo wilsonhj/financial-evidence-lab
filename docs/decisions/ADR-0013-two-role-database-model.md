@@ -1,7 +1,8 @@
 # ADR-0013: Two-role database model (fel_app + fel_worker)
 
-Status: Proposed
+Status: Accepted
 Date: 2026-09-01
+Accepted: 2026-09-02 by the integration lead on branch `claude/repo-analysis-improvements-m25v4u` (review #188); migration 0008 and its harness implement it, rollout gated by `FEL_WORKER_DB_ROLE`.
 
 Issues: #190 (worker service role), #197 (platform FK hygiene)
 Migrations: `db/migrations/0008_worker_role.sql`,

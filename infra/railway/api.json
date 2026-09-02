@@ -5,8 +5,7 @@
     "buildCommand": "pip install -r requirements.txt"
   },
   "deploy": {
-    "preDeployCommand": "python scripts/db/migrate.py",
-    "startCommand": "uvicorn app.main:app --host 0.0.0.0 --port $PORT --app-dir apps/api",
+    "startCommand": "python scripts/db/migrate.py && uvicorn app.main:app --host 0.0.0.0 --port $PORT --app-dir apps/api",
     "healthcheckPath": "/health",
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 3
