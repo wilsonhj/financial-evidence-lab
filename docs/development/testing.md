@@ -404,3 +404,20 @@ Advisory gates are independent of functional tests. Inspect the exact
 transitive dependency and the comments in `pnpm-workspace.yaml`. Shared-path
 security overrides must follow the repository governance decision tracked in
 issue #141.
+
+### Scheduled dependency-advisory refresh
+
+`.github/workflows/advisories.yml` (#143) runs the same two advisory gates as
+`make ci`'s security section on a weekly cron (Monday 06:00 UTC), plus
+`workflow_dispatch` for an on-demand run:
+
+- `pnpm install --frozen-lockfile && node scripts/audit-bulk.mjs`
+- `pip install -r requirements-dev.txt && pip-audit -r requirements.txt -r requirements-dev.txt`
+
+This exists because PR-triggered CI only re-checks advisories when a PR
+touches a dependency file — it does not catch a new advisory published
+against an unchanged lockfile. On failure the workflow opens or updates a
+single tracking issue titled `Dependency advisories: <date>` (label
+`advisory`): it searches for an existing open issue with that label first and
+comments on it if found, or creates one otherwise, so a run of consecutive
+failures does not spawn a new issue every week.
