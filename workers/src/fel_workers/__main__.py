@@ -198,6 +198,17 @@ def build_run_providers() -> tuple[SecClient, StorageProvider]:
 EXTRACTION_QUEUE = "extraction"
 
 
+def _live_llm_selected() -> bool:
+    """True when ``FEL_LLM_PROVIDER`` names a live provider (anything but mock).
+
+    ``FEL_LLM_PROVIDER=mock`` is not a live selection: it still requires the
+    explicit ``FEL_ALLOW_MOCK_LLM`` opt-in below, exactly as an unset knob does,
+    so naming the mock never becomes a quieter way of enabling it.
+    """
+    selection = os.environ.get("FEL_LLM_PROVIDER", "").strip().lower()
+    return bool(selection) and selection != "mock"
+
+
 def build_structured_llm(queue_name: str) -> StructuredLLMProvider | None:
     """Bind the structured-model provider for run mode from the environment.
 
@@ -222,7 +233,22 @@ def build_structured_llm(queue_name: str) -> StructuredLLMProvider | None:
     dispatch by :func:`fel_workers.consumer.run_worker` (missing-capability
     path) rather than answered with fabricated output.
     """
-    if not _read_mode_flag("FEL_ALLOW_MOCK_LLM") or queue_name != EXTRACTION_QUEUE:
+    if queue_name != EXTRACTION_QUEUE:
+        return None
+    if _live_llm_selected():
+        # ADR-0012: a live selection binds through the provider factory, whose
+        # own fail-closed rules apply (credential present, known provider). The
+        # mock opt-in is irrelevant on this path and is not consulted.
+        from fel_providers.factory import build_structured_llm_provider
+        from fel_providers.live_http import ProviderConfigurationError
+
+        try:
+            provider = build_structured_llm_provider(os.environ)
+        except ProviderConfigurationError as exc:
+            raise RuntimeError(f"FEL_LLM_PROVIDER is set but cannot be bound: {exc}") from exc
+        log.info("structured model bound via FEL_LLM_PROVIDER=%s", os.environ["FEL_LLM_PROVIDER"])
+        return provider
+    if not _read_mode_flag("FEL_ALLOW_MOCK_LLM"):
         return None
     from fel_providers.mocks import MockStructuredLLMProvider
 
@@ -283,13 +309,14 @@ def validate_extraction_model_binding(queue_name: str) -> None:
     no model and must still start; an ``extraction_run`` that reaches it
     anyway is failed closed at dispatch.
     """
-    opted_in = _read_mode_flag("FEL_ALLOW_MOCK_LLM")
+    opted_in = _read_mode_flag("FEL_ALLOW_MOCK_LLM") or _live_llm_selected()
     if queue_name == EXTRACTION_QUEUE:
         if opted_in:
             return
         raise RuntimeError(
             f"queue {queue_name!r} carries extraction_run jobs but no model is"
-            " configured — refusing to start. Set FEL_ALLOW_MOCK_LLM=1 to opt in"
+            " configured — refusing to start. Set FEL_LLM_PROVIDER=openai|anthropic"
+            " with its credential (ADR-0012), or FEL_ALLOW_MOCK_LLM=1 to opt in"
             " explicitly to the deterministic mock model. WARNING: the mock model"
             " answers every extraction with FABRICATED financial proposals that"
             " land in the review queue looking like genuine output; it must never"

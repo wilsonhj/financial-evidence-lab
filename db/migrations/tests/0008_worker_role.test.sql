@@ -230,6 +230,8 @@ INSERT INTO extraction_run_steps (
 );
 UPDATE extraction_run_steps
    SET status = 'succeeded',
+       -- `output` accompanies `output_hash`: 0006's pair CHECK forbids the hash alone.
+       output = '{}'::jsonb,
        output_hash = 'sha256:0000000000000000000000000000000000000000000000000000000000000016',
        finished_at = now()
  WHERE id = '00000000-0000-0000-0000-000000000b01';
