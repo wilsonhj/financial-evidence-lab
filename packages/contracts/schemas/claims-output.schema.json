@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.fel.dev/schemas/claims-output/v1",
+  "x-fel-version": "1.0.0",
+  "title": "Claims output",
+  "description": "Structured reader output: the atomic claims a model asserts from the selected context, each grounded in one or more context items by id and quote. Optional members are modelled as required-and-nullable so this exact schema can be sent to a strict structured-output provider (OpenAI json_schema strict, Anthropic tool input_schema) without transformation. additionalProperties is false everywhere: an unknown member is a contract violation, never a tolerated extra.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["claims", "abstain"],
+  "properties": {
+    "claims": {
+      "type": "array",
+      "description": "Atomic claims in assertion order. Empty when the model abstains.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["text", "citations", "numeric"],
+        "properties": {
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "description": "One independently verifiable assertion."
+          },
+          "citations": {
+            "type": "array",
+            "minItems": 1,
+            "description": "Context items this claim is grounded in. A claim with no citation is not admissible.",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["item_id", "quote"],
+              "properties": {
+                "item_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Id of a selected context item. An id outside the selected set is a contract violation."
+                },
+                "quote": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Verbatim span of the cited item's text that grounds the claim."
+                }
+              }
+            }
+          },
+          "numeric": {
+            "type": ["object", "null"],
+            "description": "The single checkable quantity the claim asserts, or null for a claim that asserts none. Decimal string, never a float.",
+            "additionalProperties": false,
+            "required": ["value", "unit", "period"],
+            "properties": {
+              "value": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Exact decimal string."
+              },
+              "unit": { "type": ["string", "null"] },
+              "period": { "type": ["string", "null"] }
+            }
+          }
+        }
+      }
+    },
+    "abstain": {
+      "type": ["object", "null"],
+      "description": "Present (non-null) when the model declines to answer from the selected context; claims must then be empty.",
+      "additionalProperties": false,
+      "required": ["reason"],
+      "properties": {
+        "reason": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

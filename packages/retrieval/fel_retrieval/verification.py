@@ -29,6 +29,7 @@ from __future__ import annotations
 import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import Protocol
 
 from fel_retrieval.generation import (
@@ -58,13 +59,25 @@ class CitationIntegrityError(RuntimeError):
         self.code = code
 
 
+# Confidence is reported to four decimal places; an exact Decimal so no float
+# rounding can turn "almost fully covered" into a rendered 1.
+_CONFIDENCE_QUANTUM = Decimal("0.0001")
+
+
 @dataclass(frozen=True)
 class CitationEdge:
-    """A verified claim -> evidence edge."""
+    """A verified claim -> evidence edge.
+
+    ``confidence`` is the verifier's own support score for this edge in
+    ``[0, 1]``. It is the ONLY source of a claim's confidence (#193): generation
+    proposes claims with confidence unset, so nothing downstream can render a
+    constant 1 that no evidence check produced.
+    """
 
     status: str
     numeric_checks: dict[str, bool]
     rationale: str
+    confidence: Decimal = Decimal("0")
 
 
 def _tokens(text: str) -> set[str]:
@@ -135,6 +148,7 @@ class MockCitationVerifier:
                     status="irrelevant",
                     numeric_checks={},
                     rationale="claim asserts numeric but evidence has no numeric tuple",
+                    confidence=Decimal("0"),
                 )
             numeric_checks = validate_numeric(claim_numeric, evidence.numeric)
             if not all(numeric_checks.values()):
@@ -143,6 +157,7 @@ class MockCitationVerifier:
                     status="contradictory",
                     numeric_checks=numeric_checks,
                     rationale=f"numeric mismatch: {', '.join(failed)}",
+                    confidence=Decimal("0"),
                 )
 
         coverage = _coverage(claim_text, evidence.text)
@@ -156,6 +171,10 @@ class MockCitationVerifier:
             status=status,
             numeric_checks=numeric_checks,
             rationale=f"lexical coverage {coverage:.2f}",
+            # Full support (1) requires full lexical coverage AND, when the claim
+            # asserts a number, every numeric dimension checking out — both are
+            # already true on this branch.
+            confidence=Decimal(str(coverage)).quantize(_CONFIDENCE_QUANTUM),
         )
 
 
@@ -216,6 +235,19 @@ def should_abstain(claims: Sequence[GeneratedClaim]) -> bool:
     return all(claim.status == "unsupported" for claim in claims)
 
 
+def claim_confidence(edges: Sequence[CitationEdge]) -> Decimal | None:
+    """Fold verified edges into the claim's confidence (``None`` if uncited).
+
+    The weakest edge decides (``min``), so a claim is only as confident as its
+    least-supported citation: adding a loosely-related citation can lower a
+    claim's confidence but can never raise it. Generation never sets confidence,
+    so this is the only place one is produced (#193).
+    """
+    if not edges:
+        return None
+    return min(edge.confidence for edge in edges)
+
+
 def verify_claims(
     claims: Sequence[GeneratedClaim],
     context: Sequence[ContextItem],
@@ -231,12 +263,14 @@ def verify_claims(
     verified: list[GeneratedClaim] = []
     for claim in claims:
         new_citations: list[ClaimCitation] = []
+        edges: list[CitationEdge] = []
         for citation in claim.citations:
             item = assert_citation_integrity(citation, accepted)
             # The claim asserts its own numeric; every edge checks that assertion
             # against its OWN cited evidence, so a second correctly-cited fact is
             # never mis-flagged by the value of an earlier one.
             edge = verifier.verify(claim.text, item, claim_numeric=claim.numeric)
+            edges.append(edge)
             new_citations.append(
                 ClaimCitation(
                     item_id=citation.item_id,
@@ -247,18 +281,20 @@ def verify_claims(
                     verifier=verifier.name,
                     model=verifier.model,
                     version=verifier.version,
+                    quote=citation.quote,
                 )
             )
         status = classify_claim([c.status for c in new_citations])
         if status == "supported" and claim.calculation_lineage:
             status = "derived"
+        confidence = claim_confidence(edges)
         verified.append(
             GeneratedClaim(
                 ord=claim.ord,
                 text=claim.text,
                 status=status,
                 citations=tuple(new_citations),
-                confidence=claim.confidence,
+                confidence=confidence,
                 calculation_lineage=claim.calculation_lineage,
                 numeric=claim.numeric,
             )
@@ -269,6 +305,7 @@ def verify_claims(
 __all__ = [
     "NUMERIC_CHECK_KEYS",
     "CitationEdge",
+    "claim_confidence",
     "CitationIntegrityError",
     "CitationVerifier",
     "MockCitationVerifier",

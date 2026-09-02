@@ -1,11 +1,18 @@
-"""Provider interfaces and deterministic mocks (T0010).
+"""Provider interfaces, deterministic mocks, and live adapters (T0010, ADR-0012).
 
 Every external service sits behind one of these narrow protocols
-(constitution Principle V). Live implementations are integration-
-credentialed work; the environment variable NAMES they will consume are
-documented in docs/handoff/CREDENTIALS.md — never values.
+(constitution Principle V). The live adapters (``openai_live``,
+``anthropic_live``) sit behind the same protocols and are selected by
+environment via :mod:`fel_providers.factory`; the environment variable NAMES
+they consume are documented in docs/handoff/CREDENTIALS.md and ADR-0012 —
+never values.
 """
 
+from fel_providers.anthropic_live import AnthropicStructuredProvider
+from fel_providers.factory import (
+    build_embedding_provider,
+    build_structured_llm_provider,
+)
 from fel_providers.interfaces import (
     EmbeddingProvider,
     FredClient,
@@ -18,6 +25,13 @@ from fel_providers.interfaces import (
     StructuredLLMProvider,
     StructuredModelResult,
 )
+from fel_providers.live_http import (
+    LiveHttpConfig,
+    ProviderConfigurationError,
+    ProviderError,
+    ProviderHttpError,
+    ProviderProtocolError,
+)
 from fel_providers.mocks import (
     MockEmbeddingProvider,
     MockFredClient,
@@ -27,11 +41,17 @@ from fel_providers.mocks import (
     MockStorageProvider,
     MockStructuredLLMProvider,
 )
+from fel_providers.openai_live import (
+    OpenAIEmbeddingProvider,
+    OpenAIStructuredProvider,
+)
 
 __all__ = [
+    "AnthropicStructuredProvider",
     "EmbeddingProvider",
     "FredClient",
     "LLMProvider",
+    "LiveHttpConfig",
     "MarketBar",
     "MarketDataProvider",
     "MockEmbeddingProvider",
@@ -41,9 +61,17 @@ __all__ = [
     "MockSecClient",
     "MockStorageProvider",
     "MockStructuredLLMProvider",
+    "OpenAIEmbeddingProvider",
+    "OpenAIStructuredProvider",
+    "ProviderConfigurationError",
+    "ProviderError",
+    "ProviderHttpError",
+    "ProviderProtocolError",
     "SecClient",
     "StorageProvider",
     "StructuredGenerationRequest",
     "StructuredLLMProvider",
     "StructuredModelResult",
+    "build_embedding_provider",
+    "build_structured_llm_provider",
 ]
