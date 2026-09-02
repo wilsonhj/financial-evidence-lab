@@ -10,7 +10,9 @@ This directory is the restart point for all implementation agents. Fable must be
   within hours of the merges that followed it, so re-resolve against
   `origin/main` rather than trusting this line.
 - Specification (v1.2) and architecture (ADR-0002) are approved. Contracts are
-  frozen at OpenAPI `v0.4.0` with migrations through `0005`.
+  frozen at OpenAPI `v0.5.0` with migrations through `0009` (review branch
+  `claude/repo-analysis-improvements-m25v4u`, #188; `main` still carries
+  `v0.4.0` / `0005` until that branch merges).
 - `main` is the only implementation base; `integration/m0` is retired. Every
   push and PR is CI-gated.
 - **The project is Apache-2.0, not MIT.** PR #166 @ `5394c64` relicensed it and
