@@ -1,6 +1,15 @@
 # ADR-0011: Add `extraction_run_steps.output` so the checkpoint stops riding on the event payload
 
 Status: Accepted
+Implemented: 2026-09-02. Migration `db/migrations/0006_extraction_step_output.sql`
+landed on branch `claude/repo-analysis-improvements-m25v4u`, and contract release
+**0.5.0** answers the open "Contract-version question" below as a **minor** bump,
+not a major one. The reasoning is recorded in `docs/handoff/CONTRACTS.md` under
+the v0.5.0 entry: `ExtractionEvent.payload` keeps `additionalProperties: true`,
+every schema `$id` is unchanged, and `stage_output` was never a declared
+property — so Reading A holds and `1.0.0` is not warranted. `VERSIONING.md` now
+states the companion rule that a nullable widening keeping the property
+`required` is additive. Decision items 2-7 are therefore no longer open work.
 Date: 2026-08-29
 Accepted: 2026-08-30 by integration lead on PR #175
 Supersedes: ADR-0009 (`docs/decisions/ADR-0009-checkpoint-payload-in-event-stream.md`,

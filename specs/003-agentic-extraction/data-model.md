@@ -16,7 +16,7 @@ Closed status: `queued`, `running`, `waiting_review`, `succeeded`, `failed`, `ca
 
 ### `extraction_run_steps`
 
-`id`, `org_id`, `run_id`, `step_name`, `attempt`, `status`, `input_hash`, `output_hash`, `workflow_version`, `schema_version`, `prompt_version`, `provider_response_id`, token/cost fields, redacted `error`, `started_at`, `finished_at`. Closed status: `pending`, `running`, `succeeded`, `failed`, `skipped`, `cancelled`. Unique `(run_id, step_name, attempt)` and unique successful `(run_id, step_name, input_hash, workflow_version)`.
+`id`, `org_id`, `run_id`, `step_name`, `attempt`, `status`, `input_hash`, `output jsonb`, `output_hash`, `workflow_version`, `schema_version`, `prompt_version`, `provider_response_id`, token/cost fields, redacted `error`, `started_at`, `finished_at`. Closed status: `pending`, `running`, `succeeded`, `failed`, `skipped`, `cancelled`. Unique `(run_id, step_name, attempt)` and unique successful `(run_id, step_name, input_hash, workflow_version)`. `output` (nullable, added by `0006` per ADR-0011) carries the stage result the checkpoint resumes from, written in the same INSERT as `output_hash`, which is what makes the "event payloads carry IDs, counts and status, never evidence or prompt text" guarantee literally true rather than nearly true — the result no longer has to ride on the `step_completed` event payload to be durable.
 
 ### `extraction_run_events`
 
@@ -24,7 +24,7 @@ Closed status: `queued`, `running`, `waiting_review`, `succeeded`, `failed`, `ca
 
 ### `extraction_proposals`
 
-`id`, `org_id`, `workspace_id`, `run_id`, `kind`, `metric_id`, `payload jsonb`, `raw_payload_hash`, `definition_hash`, `comparability_key jsonb`, `record_confidence numeric(4,3)`, `field_confidences jsonb`, `validation_summary jsonb`, `state`, `review_priority`, `version`, `created_at`. Kind: `kpi`, `guidance`, `revenue_driver`. State: `proposed`, `needs_review`, `accepted`, `rejected`, `superseded`. A trigger forbids changing `payload`, hashes, or run after insert; state/version advances only in review transactions.
+`id`, `org_id`, `workspace_id`, `run_id`, `kind`, `metric_id`, `payload jsonb`, `raw_payload_hash`, `definition_hash`, `comparability_key jsonb`, `record_confidence numeric(4,3)`, `field_confidences jsonb`, `validation_summary jsonb`, `state`, `review_priority`, `version`, `created_at`. Kind: `kpi`, `guidance`, `revenue_driver`. State: `proposed`, `needs_review`, `accepted`, `rejected`, `superseded`. A trigger forbids changing `payload`, hashes, or run after insert; state/version advances only in review transactions. `record_confidence` is nullable (`0006`, issue #194): NULL means "not yet scored" and is not comparable with `0`; the range CHECK still binds every non-NULL value.
 
 ### `extraction_proposal_evidence`
 

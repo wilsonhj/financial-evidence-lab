@@ -27,6 +27,11 @@ These rules are frozen by ADR-0001 and govern every artifact in this package:
 - New paths, optional fields, new enum values where the consumer contract
   says unknown values must be tolerated (explicitly marked
   `x-fel-open-enum: true`), new schemas.
+- Widening a type to admit `null` while the property stays in `required`
+  (OpenAPI 3.1 `type: ["string", "null"]`). The key is still always on the
+  wire; only the value set grows, so every previously valid document stays
+  valid. This is the mirror image of tightening and never bumps a schema
+  `$id` major.
 
 ## Non-negotiable invariants (never change without a new spec version)
 
@@ -52,3 +57,17 @@ These rules are frozen by ADR-0001 and govern every artifact in this package:
 
 Compatibility is decided by the deterministic contract tests
 (`contracts.test.ts`), never by field-name similarity.
+
+## Changelog
+
+The authoritative per-release record — what changed, which issue and ADR
+authorized it, and which migrations shipped with it — lives in
+`docs/handoff/CONTRACTS.md`. This list is the version index.
+
+| Version | Date | Authority | Summary |
+|---|---|---|---|
+| 0.1.0 | 2026-07 | ADR-0001 | Initial freeze: conventions, workspaces, entities, documents, source spans, ingestion jobs, error envelope. |
+| 0.2.0 | 2026-07-15 | PR #92, ADR-0005 | Reader composite endpoint; `reader-response/v1`; `FinancialFact` promoted into the generated types. |
+| 0.3.0 | 2026-07-16 | issue #100, ADR-0006 | Observable hybrid retrieval: queries, reruns, typed resumable SSE, traces, evidence feedback. |
+| 0.4.0 | 2026-07-19 | issue #101, ADR-0007 | Bounded agentic extraction: runs, typed SSE, proposals/review, approved versions; open-enum loosening on volatile M2 labels. |
+| 0.5.0 | 2026-09-02 | issues #194, #193, #157; ADR-0011, ADR-0012 | Additive: `claims-output/v1` schema + fixture; `ExtractionProposal.record_confidence` widened to nullable (required, NULL = "not yet scored"); `x-fel-status: planned` convention documented; `limit` on list endpoints; 413 `READER_TOO_LARGE`; `extraction_run_steps.output` per ADR-0011. |
