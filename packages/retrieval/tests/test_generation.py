@@ -40,6 +40,10 @@ def _ctx(
     )
 
 
+def _n(value: str) -> NumericTuple:
+    return NumericTuple(Decimal(value), "USD", "FY2026-Q2", 6)
+
+
 class StubProvider:
     """Returns a fixed parsed object, recording the request it was handed."""
 
@@ -149,6 +153,70 @@ def test_numeric_scale_and_defaults_come_from_the_cited_evidence() -> None:
     )
     claim = StructuredClaimGenerator(provider).generate("q", context, as_of=AS_OF).claims[0]
     assert claim.numeric == evidence
+
+
+# --- the claim's number is the model's, not a copy of the evidence (#133) ---
+# The generator this replaced set ``claim.numeric = item.numeric``, so a
+# per-citation numeric check compared a value with itself: it could not fail,
+# and every test that asserted on it asserted nothing. The scripted provider
+# (``conftest.ScriptedClaimProvider``) never sees a ``ContextItem``, so the
+# numbers below are its own.
+
+
+def test_claim_numeric_is_the_providers_assertion_not_the_evidences(
+    scripted_claim_provider: Any, scripted_claim: Any
+) -> None:
+    evidence = NumericTuple(Decimal("100"), "USD", "FY2026-Q2", 6)
+    context = [_ctx("item-1", "Revenue was $100 million.", numeric=evidence)]
+    provider = scripted_claim_provider(
+        [
+            scripted_claim(
+                "Revenue was $250 million.",
+                [("item-1", "Revenue")],
+                value="250",
+                unit="USD",
+                period="FY2026-Q2",
+            )
+        ]
+    )
+
+    claim = StructuredClaimGenerator(provider).generate("q", context, as_of=AS_OF).claims[0]
+
+    assert provider.asserted_values == ("250",)
+    assert claim.numeric is not None
+    assert claim.numeric.value == Decimal("250")
+    # Independent of the evidence: an identity generator could not produce this.
+    assert claim.numeric.value != evidence.value
+    assert claim.numeric != evidence
+    # ...while the fields the contract does not ask a model to assert still come
+    # from the cited evidence, so no mismatch is manufactured out of thin air.
+    assert claim.numeric.scale == evidence.scale
+
+
+def test_scripted_claims_carry_their_own_numbers_per_claim(
+    scripted_claim_provider: Any, scripted_claim: Any
+) -> None:
+    """Two claims, two independent assertions -- one agreeing with its evidence
+    and one not. Both are proposed identically; only verification separates them."""
+    context = [
+        _ctx("item-1", "Revenue was $100 million.", numeric=_n("100")),
+        _ctx("item-2", "Net income was $28 million.", span="span-2", numeric=_n("28")),
+    ]
+    provider = scripted_claim_provider(
+        [
+            scripted_claim("Revenue was $100 million.", [("item-1", "Revenue")], value="100"),
+            scripted_claim("Net income was $28 million.", [("item-2", "Net income")], value="31"),
+        ]
+    )
+
+    claims = StructuredClaimGenerator(provider).generate("q", context, as_of=AS_OF).claims
+
+    assert provider.asserted_values == ("100", "31")
+    assert [c.numeric.value for c in claims if c.numeric] == [Decimal("100"), Decimal("31")]
+    # The second claim disagrees with the evidence it cites; the generator still
+    # proposes it unsupported and leaves the judgement to verification.
+    assert [c.status for c in claims] == ["unsupported", "unsupported"]
+    assert all(c.confidence is None for c in claims)
 
 
 def test_unknown_item_id_is_a_contract_violation() -> None:

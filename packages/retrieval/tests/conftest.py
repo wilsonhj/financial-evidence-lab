@@ -17,14 +17,17 @@ from __future__ import annotations
 import json
 import os
 import uuid
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
 import pytest
+
+from fel_providers.interfaces import StructuredGenerationRequest, StructuredModelResult
 
 try:  # driver is a dev dependency; integration tests require it
     import psycopg
@@ -273,5 +276,104 @@ def seed_document(pg_conn: Any) -> Callable[..., SeededDocument]:
         return _seed_document(
             pg_conn, corpus_version_id=corpus_version_id, published_at=published_at
         )
+
+    return factory
+
+
+# --- non-identity claim generation (#133) ----------------------------------
+# The old identity generator copied ``claim.numeric = item.numeric``, so the
+# per-citation numeric check compared a value with itself and could only ever
+# pass: every numeric assertion in a test built on it was a tautology. The
+# scripted provider below is the antidote. It is a ``StructuredLLMProvider``
+# like any other: it sees only the rendered prompt, never the ``ContextItem``
+# objects, and its claim numerics come from the script the test hands it. A
+# number that agrees with the cited evidence therefore agrees because the test
+# said so, and a number that disagrees is a real disagreement the verifier has
+# to catch.
+
+
+class ScriptedClaimProvider:
+    """Deterministic ``StructuredLLMProvider`` emitting scripted claims JSON.
+
+    It is handed the claims-output/v1 objects it must return, so the numbers a
+    claim asserts are the test's, never a copy of a cited item's tuple: nothing
+    here can see a ``ContextItem`` at all, only the rendered prompt. The prompt
+    is recorded so a test can pin what the generator actually sent, and
+    ``asserted_values`` exposes the scripted assertions so a test can show they
+    differ from the evidence they are checked against.
+    """
+
+    provider = "scripted"
+    model = "scripted-claims-v1"
+
+    def __init__(self, claims: Sequence[Mapping[str, Any]], *, abstain: str | None = None) -> None:
+        self._claims = [dict(claim) for claim in claims]
+        self._abstain = abstain
+        self.prompt: str | None = None
+
+    @property
+    def asserted_values(self) -> tuple[str | None, ...]:
+        """The ``value`` each scripted claim asserts (``None`` where unset)."""
+        values: list[str | None] = []
+        for claim in self._claims:
+            numeric = claim.get("numeric")
+            values.append(str(numeric["value"]) if isinstance(numeric, dict) else None)
+        return tuple(values)
+
+    def generate_structured(self, request: StructuredGenerationRequest) -> StructuredModelResult:
+        self.prompt = "\n".join(str(message.get("content", "")) for message in request.messages)
+        return StructuredModelResult(
+            provider=self.provider,
+            model=self.model,
+            response_id="scripted-1",
+            parsed={
+                "claims": [dict(claim) for claim in self._claims],
+                "abstain": {"reason": self._abstain} if self._abstain is not None else None,
+            },
+            refused=False,
+            refusal=None,
+            input_tokens=11,
+            output_tokens=5,
+            estimated_cost_usd=Decimal("0"),
+            raw={},
+        )
+
+
+@pytest.fixture()
+def scripted_claim() -> Callable[..., dict[str, Any]]:
+    """Factory: one claims-output/v1 claim object with an independent numeric.
+
+    ``citations`` is a sequence of ``(item_id, quote)`` pairs; ``numeric`` is
+    the value the claim asserts, with optional unit/period, or ``None`` for a
+    claim asserting no single scalar.
+    """
+
+    def factory(
+        text: str,
+        citations: Sequence[tuple[str, str]],
+        *,
+        value: str | None = None,
+        unit: str | None = None,
+        period: str | None = None,
+    ) -> dict[str, Any]:
+        return {
+            "text": text,
+            "citations": [{"item_id": item_id, "quote": quote} for item_id, quote in citations],
+            "numeric": (
+                None if value is None else {"value": value, "unit": unit, "period": period}
+            ),
+        }
+
+    return factory
+
+
+@pytest.fixture()
+def scripted_claim_provider() -> Callable[..., ScriptedClaimProvider]:
+    """Factory for :class:`ScriptedClaimProvider` (see #133)."""
+
+    def factory(
+        claims: Sequence[Mapping[str, Any]], *, abstain: str | None = None
+    ) -> ScriptedClaimProvider:
+        return ScriptedClaimProvider(claims, abstain=abstain)
 
     return factory

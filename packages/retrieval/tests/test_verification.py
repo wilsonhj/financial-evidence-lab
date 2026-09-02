@@ -3,10 +3,17 @@
 from __future__ import annotations
 
 from decimal import Decimal
+from typing import Any
 
 import pytest
 
-from fel_retrieval.generation import ClaimCitation, ContextItem, GeneratedClaim, NumericTuple
+from fel_retrieval.generation import (
+    ClaimCitation,
+    ContextItem,
+    GeneratedClaim,
+    NumericTuple,
+    StructuredClaimGenerator,
+)
 from fel_retrieval.verification import (
     CitationIntegrityError,
     MockCitationVerifier,
@@ -16,6 +23,8 @@ from fel_retrieval.verification import (
     validate_numeric,
     verify_claims,
 )
+
+AS_OF = "2026-01-01T00:00:00+00:00"
 
 
 def _num(value: str, unit: str = "USD", period: str = "FY2025", scale: int = 6) -> NumericTuple:
@@ -234,6 +243,68 @@ def test_multi_citation_each_edge_checked_against_own_evidence() -> None:
     assert verified[0].status != "contradicted"
     assert verified[0].status in {"supported", "derived"}
     assert all(c.status in {"entailed", "partial"} for c in verified[0].citations)
+
+
+# --- per-edge numeric check, on a non-identity claim (#133) ----------------
+# The generator this suite used to build on copied ``claim.numeric =
+# item.numeric``, so every per-citation numeric check compared a value with
+# itself: it passed by construction and proved nothing about the verifier. The
+# claim below comes from the scripted provider (``conftest``), which never sees
+# a ``ContextItem`` — its number is its own — and it is cited to two items that
+# each carry their own numeric tuple. Each edge must be checked against ITS OWN
+# evidence: folding the citations into one aggregate numeric verdict turns the
+# disagreeing edge green and loses the contradiction.
+
+
+def test_two_citations_are_each_numeric_checked_against_their_own_evidence(
+    scripted_claim_provider: Any, scripted_claim: Any
+) -> None:
+    agreeing = _item("a", "revenue was 100 for the quarter", numeric=_num("100"))
+    disagreeing = _item(
+        "b",
+        "revenue was 100 for the quarter",
+        span="span-2",
+        numeric=_num("100", unit="EUR"),
+    )
+    provider = scripted_claim_provider(
+        [
+            scripted_claim(
+                "revenue was 100 for the quarter",
+                [("a", "revenue was 100"), ("b", "revenue was 100")],
+                value="100",
+                unit="USD",
+                period="FY2025",
+            )
+        ]
+    )
+    context = [agreeing, disagreeing]
+    [claim] = StructuredClaimGenerator(provider).generate("q", context, as_of=AS_OF).claims
+    # The claim's own assertion, not a copy of either cited tuple.
+    assert claim.numeric == _num("100")
+    assert claim.numeric != disagreeing.numeric
+
+    [verified] = verify_claims([claim], context, MockCitationVerifier())
+
+    by_item = {citation.item_id: citation for citation in verified.citations}
+    assert set(by_item) == {"a", "b"}
+    # Edge "a" is checked against a's USD tuple: every dimension holds.
+    assert by_item["a"].status == "entailed"
+    assert by_item["a"].numeric_checks == {
+        "value": True,
+        "unit": True,
+        "period": True,
+        "sign": True,
+        "scale": True,
+    }
+    # Edge "b" is checked against b's EUR tuple, and only that: the same claim
+    # value that held for "a" does not make b's unit agree.
+    assert by_item["b"].status == "contradictory"
+    assert by_item["b"].numeric_checks["unit"] is False
+    assert by_item["b"].numeric_checks["value"] is True
+    assert by_item["a"].numeric_checks != by_item["b"].numeric_checks
+    # The contradiction survives to the claim and zeroes its confidence.
+    assert verified.status == "contradicted"
+    assert verified.confidence == Decimal("0")
 
 
 def test_verify_claims_dangling_raises() -> None:
