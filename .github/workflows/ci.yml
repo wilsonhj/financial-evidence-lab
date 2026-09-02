@@ -53,11 +53,31 @@ jobs:
           node-version-file: .node-version
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # Browser binaries are keyed on the resolved @playwright/test version, so
+      # the cache is invalidated exactly when the browser build would change.
+      - name: Resolve the Playwright version
+        id: playwright
+        run: |
+          version="$(node -p "require('./apps/web/package.json').devDependencies['@playwright/test']")"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ms-playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
       # Only chromium is configured in apps/web/playwright.config.ts. The
       # config's webServer block runs `next build && next start` and drives the
       # Observatory against fixture data (FEL_EVIDENCE_SOURCE=fixture) — no
       # live backend, no network.
-      - run: pnpm --filter @fel/web exec playwright install --with-deps chromium
+      - name: Install Chromium (cache miss)
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: pnpm --filter @fel/web exec playwright install --with-deps chromium
+      # System libraries live outside the cached browser directory, so they are
+      # installed on a cache hit too — this is a no-op download-wise.
+      - name: Install Chromium system dependencies (cache hit)
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: pnpm --filter @fel/web exec playwright install-deps chromium
       - run: pnpm --filter @fel/web run test:e2e
 
   python:
@@ -82,25 +102,31 @@ jobs:
           --health-retries 10
     env:
       TEST_DATABASE_URL: postgresql://fel:fel-ci-only@localhost:5432/fel_test
+      # Turn a silently-skipped DB suite into a failure: the Postgres service
+      # above exists precisely so nothing here skips for want of a database.
+      FEL_REQUIRE_DB_TESTS: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version-file: .python-version
           cache: pip
-          cache-dependency-path: requirements-dev.txt
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
       - run: pip install -r requirements-dev.txt
       - name: Apply migrations
-        run: |
-          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
-          for f in db/migrations/*.sql; do
-            PGPASSWORD=fel-ci-only psql --set ON_ERROR_STOP=1 -h localhost -U fel -d fel_test -f "$f"
-          done
-      - run: black --check apps workers evals packages/providers packages/retrieval packages/retrieval-evals packages/ontology
-      - run: ruff check apps workers evals packages/providers packages/retrieval packages/retrieval-evals packages/ontology
+        run: python scripts/db/migrate.py --database-url "$TEST_DATABASE_URL"
+      - name: Verify the migration ledger is current
+        run: python scripts/db/migrate.py --database-url "$TEST_DATABASE_URL" --check
+      - run: black --check apps workers evals packages/providers packages/retrieval packages/retrieval-evals packages/ontology scripts conftest.py
+      - run: ruff check apps workers evals packages/providers packages/retrieval packages/retrieval-evals packages/ontology scripts conftest.py
       - run: mypy apps/api/app workers/src evals/graders packages/providers/fel_providers packages/retrieval/fel_retrieval packages/retrieval-evals/fel_retrieval_evals packages/ontology/fel_ontology
-      - run: pytest
-      - run: bandit -q -r apps workers evals packages/providers packages/retrieval packages/retrieval-evals packages/ontology -c pyproject.toml
+      # --cov here (not in addopts) keeps local runs fast; the floor lives in
+      # pyproject.toml's [tool.coverage.report].
+      - run: pytest --cov --cov-report=term
+      - run: bandit -q -r apps workers evals packages/providers packages/retrieval packages/retrieval-evals packages/ontology scripts -c pyproject.toml
+      - run: pip-audit -r requirements.txt
       - run: pip-audit -r requirements-dev.txt
 
   database:
@@ -123,27 +149,34 @@ jobs:
           --health-retries 10
     steps:
       - uses: actions/checkout@v4
-      # Run the smoke test inside the service container so the client tools
-      # (psql/pg_dump/pg_restore) always match the server version exactly —
-      # the runner's postgresql-client lags the pgvector/pgvector:0.8.5-pg17
-      # image, and pg_dump refuses to dump a newer server.
-      - name: Apply migrations and run backup-restore smoke test
+      - uses: actions/setup-python@v5
+        with:
+          python-version-file: .python-version
+      # The applier runs from the runner (it needs psycopg, which the Postgres
+      # image does not have); the smoke test still runs inside the service
+      # container so pg_dump/pg_restore match the server version exactly — the
+      # runner's postgresql-client lags pgvector/pgvector:0.8.5-pg17.
+      - name: Apply migrations
+        run: |
+          pip install "psycopg[binary]>=3.2"
+          python scripts/db/migrate.py \
+            --database-url postgresql://fel:fel-ci-only@localhost:5432/fel_ci
+      - name: Run backup-restore smoke test
         run: |
           docker cp infra/scripts/backup_restore_smoke.sh ${{ job.services.postgres.id }}:/tmp/smoke.sh
           docker cp db/migrations ${{ job.services.postgres.id }}:/tmp/migrations
           docker exec \
             -e PGHOST=localhost -e PGPORT=5432 -e PGUSER=fel \
             -e PGPASSWORD=fel-ci-only -e PGDATABASE=fel_ci \
-            -e MIGRATIONS_DIR=/tmp/migrations \
             ${{ job.services.postgres.id }} bash /tmp/smoke.sh
       # Behavioral regression harnesses for migration guards (RLS, grant,
       # immutability, and idempotency rules): run every
       # db/migrations/tests/*.test.sql against the restored database — which
       # also proves the guards survive backup-restore. Each harness runs in
       # its own transaction and rolls back; a violated guard raises, failing
-      # psql via ON_ERROR_STOP. No-op while tests/ is absent or empty
-      # (harnesses land alongside their migrations; smoke.sh's top-level
-      # *.sql glob never applies them as migrations).
+      # psql via ON_ERROR_STOP. The step fails when it finds no harness at all,
+      # so a lost or mis-copied tests/ directory cannot pass as a silent no-op.
+      # (The applier ignores tests/ — it never descends into subdirectories.)
       - name: Run migration regression harnesses
         run: |
           docker exec \
@@ -157,5 +190,9 @@ jobs:
                 psql --set ON_ERROR_STOP=1 --file "$f"
                 ran=$((ran+1))
               done
+              if [ "$ran" -eq 0 ]; then
+                echo "FAIL: no migration harnesses found in /tmp/migrations/tests" >&2
+                exit 1
+              fi
               echo "OK: ${ran} migration harness(es) run"
             '

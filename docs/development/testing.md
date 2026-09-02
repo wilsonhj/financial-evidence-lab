@@ -9,16 +9,16 @@ relevant loop while developing, then the full gate before review.
 
 ## Test matrix
 
-| Layer                     | Main tools                                            | Covers                                                           |
-| ------------------------- | ----------------------------------------------------- | ---------------------------------------------------------------- |
-| TypeScript unit/component | Vitest, Testing Library                               | contracts, web state, reader rendering, observatory behavior     |
-| Python unit               | pytest                                                | API services, worker logic, provider mocks, retrieval, graders   |
-| Database integration      | pytest + PostgreSQL/pgvector                          | migrations, RLS, queues, reader snapshots, retrieval persistence |
-| Contract drift            | repository generation scripts                         | JSON Schema/OpenAPI ↔ generated TypeScript consistency           |
-| Browser                   | Playwright                                            | fixture-mode Next.js routes and core interactions                |
-| Migration/operations      | shell harness + PostgreSQL                            | clean apply, role/RLS behavior, backup/restore expectations      |
-| Static quality            | ESLint, TypeScript, Ruff, mypy, Prettier, Black       | syntax, types, style, import and API mistakes                    |
-| Security                  | Gitleaks, Bandit, pip-audit, bulk npm advisory script | secrets, static Python findings, dependency advisories           |
+| Layer                     | Main tools                                            | Covers                                                                |
+| ------------------------- | ----------------------------------------------------- | --------------------------------------------------------------------- |
+| TypeScript unit/component | Vitest, Testing Library                               | contracts, web state, reader rendering, observatory behavior          |
+| Python unit               | pytest                                                | API services, worker logic, provider mocks, retrieval, graders        |
+| Database integration      | pytest + PostgreSQL/pgvector                          | migrations, RLS, queues, reader snapshots, retrieval persistence      |
+| Contract drift            | repository generation scripts                         | JSON Schema/OpenAPI ↔ generated TypeScript consistency                |
+| Browser                   | Playwright                                            | fixture-mode Next.js routes and core interactions                     |
+| Migration/operations      | migration applier + SQL harnesses + PostgreSQL        | clean apply, ledger/checksum drift, role/RLS behavior, backup/restore |
+| Static quality            | ESLint, TypeScript, Ruff, mypy, Prettier, Black       | syntax, types, style, import and API mistakes                         |
+| Security                  | Gitleaks, Bandit, pip-audit, bulk npm advisory script | secrets, static Python findings, dependency advisories                |
 
 ## Install the exact toolchain
 
@@ -68,7 +68,7 @@ name while iterating, but run the workspace command before handoff.
 # All tests; DB-gated suites skip without TEST_DATABASE_URL
 .venv/bin/pytest
 
-# Focused packages — all seven of pyproject.toml's testpaths
+# Focused packages — all eight of pyproject.toml's testpaths
 .venv/bin/pytest apps/api/tests
 .venv/bin/pytest workers/tests
 .venv/bin/pytest packages/retrieval/tests
@@ -76,11 +76,13 @@ name while iterating, but run the workspace command before handoff.
 .venv/bin/pytest packages/ontology/tests
 .venv/bin/pytest packages/providers/tests
 .venv/bin/pytest evals/tests
+.venv/bin/pytest scripts/db/tests
 
 # Static checks (matches the Makefile's format-check/lint/typecheck targets
 # and ci.yml's python job exactly — packages/ontology joined the tree in #145)
 .venv/bin/ruff check \
-  apps workers evals packages/providers packages/retrieval packages/retrieval-evals packages/ontology
+  apps workers evals packages/providers packages/retrieval packages/retrieval-evals packages/ontology \
+  scripts conftest.py
 .venv/bin/mypy \
   apps/api/app workers/src evals/graders \
   packages/providers/fel_providers \
@@ -88,14 +90,16 @@ name while iterating, but run the workspace command before handoff.
   packages/retrieval-evals/fel_retrieval_evals \
   packages/ontology/fel_ontology
 .venv/bin/black --check \
-  apps workers evals packages/providers packages/retrieval packages/retrieval-evals packages/ontology
+  apps workers evals packages/providers packages/retrieval packages/retrieval-evals packages/ontology \
+  scripts conftest.py
 
 # Security gates. CI runs these too — bandit and pip-audit in ci.yml's python
 # job, audit-bulk in its javascript job. They are the three gate commands most
 # often missed locally, because the sections above stop at the static checks.
 .venv/bin/bandit -q -r \
   apps workers evals packages/providers packages/retrieval packages/retrieval-evals packages/ontology \
-  -c pyproject.toml
+  scripts -c pyproject.toml
+.venv/bin/pip-audit -r requirements.txt
 .venv/bin/pip-audit -r requirements-dev.txt
 node scripts/audit-bulk.mjs
 ```
@@ -109,10 +113,8 @@ the bare form works:
 
 ```sh
 createdb fel_test
-for migration in db/migrations/*.sql; do
-  psql postgresql:///fel_test -v ON_ERROR_STOP=1 -f "$migration"
-done
 export TEST_DATABASE_URL=postgresql:///fel_test
+.venv/bin/python scripts/db/migrate.py
 .venv/bin/pytest
 ```
 
@@ -125,10 +127,8 @@ file or directory`. Use the same host/port/credentials as
 
 ```sh
 PGPASSWORD=fel createdb -h localhost -p 5432 -U fel fel_test
-for migration in db/migrations/*.sql; do
-  psql "postgresql://fel:fel@localhost:5432/fel_test" -v ON_ERROR_STOP=1 -f "$migration"
-done
 export TEST_DATABASE_URL=postgresql://fel:fel@localhost:5432/fel_test
+.venv/bin/python scripts/db/migrate.py
 .venv/bin/pytest
 ```
 
@@ -140,13 +140,66 @@ Requirements:
 - retrieval isolation tests may create disposable sibling databases, so the
   role used for the full suite needs `CREATEDB`.
 
+`scripts/db/migrate.py` applies pending migrations and records each one, with
+its sha256, in a `schema_migrations` ledger; re-running is a no-op, `--check`
+fails when anything is pending or when an applied file was edited, and
+`--baseline` adopts a database that an earlier shell loop already migrated.
+[`local.md`](./local.md#option-b-local-postgresql-and-api) documents the flags
+and exit codes. `make db-migrate` and `make db-check` are the shorthands.
+
+### Failing when DB-gated suites skip
+
 When `TEST_DATABASE_URL` is absent, DB-gated suites intentionally skip. A green
 local run with skips is not equivalent to the GitHub Actions PostgreSQL jobs.
+
+Every run therefore ends with a one-line census, e.g.
+
+```
+database-gated tests skipped: 187 across 24 module(s) (no TEST_DATABASE_URL)
+```
+
+and setting `FEL_REQUIRE_DB_TESTS=1` turns any such skip into a failed session,
+listing the modules that skipped:
+
+```sh
+FEL_REQUIRE_DB_TESTS=1 TEST_DATABASE_URL=postgresql:///fel_test .venv/bin/pytest
+```
+
+CI's `python` job sets `FEL_REQUIRE_DB_TESTS: "1"`, because that job provisions
+a Postgres service precisely so nothing skips for want of a database — a
+misconfigured service now fails the job instead of quietly halving the suite.
+Leave the variable unset on a database-free laptop. The root `conftest.py`
+implements this and counts a skip when its reason names `TEST_DATABASE_URL`, so
+keep that string in any new gate's skip reason.
 
 The database suites are where tenant isolation, application-role grants,
 cutoff boundaries, queue leasing, index immutability, reader snapshot
 consistency, and migration behavior are verified. Do not replace them with
 repository mocks for schema or RLS changes.
+
+## Coverage floors
+
+Both suites enforce a floor set at the measured baseline minus one point.
+A change that drops coverage below the floor fails the run; when coverage
+rises, raise the floor rather than leaving slack.
+
+| Suite      | Where                                            | Floor                                                          |
+| ---------- | ------------------------------------------------ | -------------------------------------------------------------- |
+| Python     | `[tool.coverage.*]` in `pyproject.toml`          | 91% of lines                                                   |
+| TypeScript | `test.coverage.thresholds` in `vitest.config.ts` | 87.7% statements, 78.6% branches, 91.2% functions, 89.3% lines |
+
+Python coverage is opt-in so that local iteration stays fast — `pytest` alone
+measures nothing, and CI's `python` job runs `pytest --cov --cov-report=term`.
+Measure it the way CI does, with a database attached (an un-migrated or absent
+database skips a fifth of the suite and understates coverage):
+
+```sh
+TEST_DATABASE_URL=postgresql:///fel_test .venv/bin/pytest --cov --cov-report=term
+```
+
+JavaScript coverage is on by default (`@vitest/coverage-v8`), so plain
+`corepack pnpm run test` — the command CI runs — enforces the thresholds. Only
+files the suites actually load are measured.
 
 ## Contract generation and drift
 

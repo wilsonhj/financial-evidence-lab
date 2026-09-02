@@ -31,6 +31,12 @@ python3.11 -m venv .venv
 .venv/bin/pip install -r requirements-dev.txt
 ```
 
+`requirements.txt` holds the runtime dependencies alone (what the API and
+worker images install, and what `infra/railway/*.json` builds with);
+`requirements-dev.txt` starts with `-r requirements.txt` and adds the
+toolchain. Install the dev file locally — it covers both. There is no hashed
+lock file yet; the floors in these files are minimum versions, not pins.
+
 `make install` is a convenience wrapper (it runs `python3 -m venv .venv`, so
 it inherits whatever `python3` resolves to); prefer the explicit
 `python3.11 -m venv .venv` above and confirm first with `python3 --version`
@@ -65,14 +71,46 @@ docker run --name fel-postgres \
   -d pgvector/pgvector:0.8.5-pg17
 ```
 
-Set the connection URL and apply migrations in filename order:
+Set the connection URL and apply migrations with the ledger applier:
 
 ```sh
 export FEL_DATABASE_URL=postgresql://fel:fel@localhost:5432/fel_dev
-for migration in db/migrations/*.sql; do
-  psql "$FEL_DATABASE_URL" -v ON_ERROR_STOP=1 -f "$migration"
-done
+python scripts/db/migrate.py --database-url "$FEL_DATABASE_URL"
 ```
+
+`make db-migrate` is the same command against `$DATABASE_URL` (falling back to
+`$TEST_DATABASE_URL`).
+
+The applier keeps a `schema_migrations` ledger — one row per applied file,
+with the file's sha256 — so it replaces the old
+`for migration in db/migrations/*.sql; do psql -f ...; done` loop:
+
+| Command                                | Behavior                                                           |
+| -------------------------------------- | ------------------------------------------------------------------ |
+| `python scripts/db/migrate.py`         | applies pending files in order, each in its own transaction        |
+| `python scripts/db/migrate.py --check` | exits non-zero if anything is pending or drifted (`make db-check`) |
+| `... --dry-run`                        | prints the plan and changes nothing                                |
+| `... --baseline`                       | records every pending file as applied **without running it**       |
+
+It reads `--database-url`, then `$DATABASE_URL`, then `$TEST_DATABASE_URL`,
+takes a Postgres advisory lock so two appliers cannot race, and refuses to
+proceed when an already-applied file's checksum no longer matches the ledger
+(migrations are append-only — correct forward with a new file). Exit codes: 0
+success, 1 usage, 2 pending, 3 checksum drift, 4 a migration failed and was
+rolled back, 5 could not connect.
+
+**Databases migrated before the ledger existed** — anything set up with the old
+shell loop — have the schema but no `schema_migrations` table, so a plain run
+would try to re-apply every file. Baseline them once:
+
+```sh
+python scripts/db/migrate.py --database-url "$FEL_DATABASE_URL" --baseline
+python scripts/db/migrate.py --database-url "$FEL_DATABASE_URL" --check
+```
+
+`--baseline` records only files that are not already in the ledger, so it is
+safe to run on a database that is partially recorded — but it asserts that the
+files really are applied. Never baseline a database that is missing schema.
 
 Migrations create the application roles and enable RLS. The migration user
 must be able to create extensions and roles. Application requests later switch
@@ -347,7 +385,9 @@ The expected version is the `packageManager` value in `package.json`.
 ### Database tests skip
 
 Set `TEST_DATABASE_URL` to a migrated PostgreSQL database. Some retrieval tests
-create disposable sibling databases, so the test role needs `CREATEDB`.
+create disposable sibling databases, so the test role needs `CREATEDB`. Setting
+`FEL_REQUIRE_DB_TESTS=1` turns those skips into a failed run — see
+[`testing.md`](./testing.md#database-backed-tests).
 
 ### API returns no workspaces with a valid-looking token
 
