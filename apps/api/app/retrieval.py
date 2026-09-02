@@ -38,6 +38,7 @@ otherwise it succeeds (a contradicted claim is preserved and displayed, M2-022).
 from __future__ import annotations
 
 import json
+import os
 import time
 import uuid
 from collections.abc import Callable, Iterator, Mapping
@@ -58,8 +59,19 @@ from app.dependencies import get_tenant_context
 from app.errors import api_error
 from app.ratelimit import rate_limit
 from fel_providers import EmbeddingProvider, MockEmbeddingProvider
+from fel_providers.anthropic_live import DEFAULT_MODEL as DEFAULT_ANTHROPIC_MODEL
+from fel_providers.factory import (
+    EMBEDDING_PROVIDER_ENV,
+    EMBEDDING_PROVIDERS,
+    LLM_PROVIDER_ENV,
+    LLM_PROVIDERS,
+    build_embedding_provider,
+    build_structured_llm_provider,
+)
 from fel_providers.interfaces import StructuredLLMProvider
+from fel_providers.live_http import ProviderConfigurationError
 from fel_providers.mocks import MockStructuredLLMProvider
+from fel_providers.openai_live import DEFAULT_MODEL as DEFAULT_OPENAI_MODEL
 from fel_retrieval import (
     LANE_ORDER,
     LaneCall,
@@ -95,11 +107,26 @@ router = APIRouter(prefix="/v1", tags=["retrieval"])
 # guard's run<->query planner-pin agreement always holds.
 PLANNER_VERSION = "synonym-planner/v1"
 
-# Generation identity persisted on every run (immutable lineage). Only the
-# deterministic mock structured provider is wired; any other pin fails closed at
-# generation time, so the persisted pin is always load-bearing.
-GENERATION_PROVIDER = "mock"
-GENERATION_MODEL = "mock-structured-v1"
+# Generation identity persisted on every run (immutable lineage). The pin is
+# read from the environment at request time (ADR-0012 factory knobs) so the
+# stored provider/model is exactly what generated the claims. When
+# ``FEL_LLM_PROVIDER`` is unset the API keeps the deterministic mock, which is
+# the only provider the mock-first stack has ever run; the live cutover (#177)
+# sets the knob and the factory's fail-closed rules then govern.
+MOCK_GENERATION_PIN = ("mock", "mock-structured-v1")
+
+
+def generation_pin() -> tuple[str, str]:
+    """Return ``(provider, model)`` for the run about to be created."""
+    selection = os.environ.get(LLM_PROVIDER_ENV, "").strip().lower()
+    if not selection or selection == "mock":
+        return MOCK_GENERATION_PIN
+    if selection == "anthropic":
+        model = os.environ.get("FEL_ANTHROPIC_MODEL", "").strip() or DEFAULT_ANTHROPIC_MODEL
+    else:
+        model = os.environ.get("FEL_OPENAI_MODEL", "").strip() or DEFAULT_OPENAI_MODEL
+    return selection, model
+
 
 EVENT_SCHEMA_VERSION = "retrieval-event/v1"
 
@@ -143,6 +170,19 @@ def _resolve_embedding_provider(provider: str, model: str) -> EmbeddingProvider:
     """
     if provider == "mock":
         return MockEmbeddingProvider(512)
+    if provider in EMBEDDING_PROVIDERS:
+        # The index's persisted pin is authoritative: overlay it on the process
+        # environment so the factory binds exactly that provider and model, and
+        # its own fail-closed rules (credential present, dimensions) apply.
+        overlay = {
+            **os.environ,
+            EMBEDDING_PROVIDER_ENV: provider,
+            "FEL_OPENAI_EMBEDDING_MODEL": model,
+        }
+        try:
+            return build_embedding_provider(overlay)
+        except ProviderConfigurationError as exc:
+            raise UnsupportedEmbeddingProvider(provider, model) from exc
     raise UnsupportedEmbeddingProvider(provider, model)
 
 
@@ -160,9 +200,16 @@ class UnsupportedGenerationProvider(RuntimeError):
 
 
 def _resolve_generation_provider(provider: str, model: str) -> StructuredLLMProvider:
-    """Resolve the run's pinned structured-generation provider (mock only today)."""
+    """Resolve the run's pinned structured-generation provider via the ADR-0012 factory."""
     if provider == "mock":
         return MockStructuredLLMProvider()
+    if provider in LLM_PROVIDERS:
+        model_env = "FEL_ANTHROPIC_MODEL" if provider == "anthropic" else "FEL_OPENAI_MODEL"
+        overlay = {**os.environ, LLM_PROVIDER_ENV: provider, model_env: model}
+        try:
+            return build_structured_llm_provider(overlay)
+        except ProviderConfigurationError as exc:
+            raise UnsupportedGenerationProvider(provider, model) from exc
     raise UnsupportedGenerationProvider(provider, model)
 
 
@@ -449,9 +496,7 @@ def _execute_pipeline(
     writer.set_status("generating")
     t0 = time.monotonic()
     context = _load_context_items(conn, accepted)
-    generator = StructuredClaimGenerator(
-        _resolve_generation_provider(GENERATION_PROVIDER, GENERATION_MODEL)
-    )
+    generator = StructuredClaimGenerator(_resolve_generation_provider(*generation_pin()))
     generation = generator.generate(plan["variants"][0], context, as_of=plan["effective_as_of"])
     for claim in generation.claims:
         writer.emit(
@@ -804,8 +849,7 @@ def _insert_run(
             index["config_hash"],
             index["embedding_provider"],
             index["embedding_model"],
-            GENERATION_PROVIDER,
-            GENERATION_MODEL,
+            *generation_pin(),
             PLANNER_VERSION,
         ),
     )
@@ -824,6 +868,8 @@ def _failure_envelope(exc: Exception) -> dict[str, str]:
     """Map a pipeline exception to the run's stored error envelope."""
     if isinstance(exc, UnsupportedEmbeddingProvider):
         return {"code": "EMBEDDING_PROVIDER_UNAVAILABLE", "message": str(exc)}
+    if isinstance(exc, UnsupportedGenerationProvider):
+        return {"code": "GENERATION_PROVIDER_UNAVAILABLE", "message": str(exc)}
     if isinstance(exc, LaneExecutionError):
         return {"code": "LANE_EXECUTION_FAILED", "message": str(exc)}
     if isinstance(exc, CitationIntegrityError):

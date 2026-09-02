@@ -9,5 +9,6 @@ black>=26.3.1
 mypy>=1.13.0
 pytest>=9.0.3
 pytest-cov>=6.0.0
+pyyaml>=6.0 # apps/api/tests/test_openapi_parity.py reads packages/contracts/openapi/openapi.yaml
 bandit>=1.7.10
 pip-audit>=2.7.3
