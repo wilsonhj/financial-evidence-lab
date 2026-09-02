@@ -197,7 +197,7 @@ def _claimed_span_hashes(clean: dict[str, Any]) -> dict[str, str]:
     the only caller passed no ``expected_hashes``.
 
     The pinned text is verified against its own hash separately and earlier, in
-    ``workflow._stage_assemble_evidence`` (and again in ``_restore_output`` on
+    ``stages.evidence.stage_assemble_evidence`` (and again in ``stages.io.restore_output`` on
     resume) — that is where the "evidence text matches its content address"
     guarantee lives. This check is the different one: the *citation* must agree
     with the pinned span it points at.
@@ -284,7 +284,7 @@ def citation_status_for(
     """Grade one citation row from the pinned evidence alone.
 
     The single rule behind every `citation_status` the pipeline writes, so a
-    draft rebuilt on crash-resume and one graded by `workflow._stage_verify_citations`
+    draft rebuilt on crash-resume and one graded by `stages.citations.stage_verify_citations`
     can never disagree. It reads only the pinned span map — never a value the
     model supplied — because `extraction_proposal_evidence` is append-only
     (`db/migrations/0004_extraction_core.sql`) and a wrong grade is permanent.
@@ -326,7 +326,7 @@ def _evidence_rows(
 
     Every row is graded here by `citation_status_for`, and any model-supplied
     grade is dropped first. Grading at build time rather than only in
-    `workflow._stage_verify_citations` is what keeps a draft rebuilt on
+    `stages.citations.stage_verify_citations` is what keeps a draft rebuilt on
     crash-resume — where that stage is replayed from its checkpoint and never
     re-runs — from reaching persist ungraded.
     """

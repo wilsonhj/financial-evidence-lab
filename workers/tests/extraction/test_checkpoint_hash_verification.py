@@ -6,7 +6,7 @@ thing that makes trusting it safe is ``output_hash``: ``hash_json`` over exactly
 the value stored in the column, recomputed on the way back in.
 
 Without that recomputation a corrupted or tampered ``output`` is laundered into
-proposal identity. ``_restore_output`` re-checks ``text_hash`` for
+proposal identity. ``stages.io.restore_output`` re-checks ``text_hash`` for
 ``assemble_evidence``'s span text and nothing else, and the model-derived
 subtrees — ``classification``, ``candidates``, ``raw_proposals``,
 ``normalized`` — have no content address at all. A resumed run would recompute
@@ -229,7 +229,7 @@ def test_legacy_row_with_no_output_is_rejected_not_skipped() -> None:
 
 @pytest.mark.parametrize("step_name", ["assemble_evidence", "normalize"])
 def test_hash_verification_covers_every_stage_not_just_evidence(step_name: str) -> None:
-    """`_restore_output`'s text_hash check covers span text only.
+    """`stages.io.restore_output`'s text_hash check covers span text only.
 
     `normalize`'s output is model-derived and has no other content address, so
     without `output_hash` verification nothing at all would notice a substituted

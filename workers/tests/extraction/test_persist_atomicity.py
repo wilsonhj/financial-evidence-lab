@@ -1,6 +1,6 @@
 """Proposals, their evidence and their conflicts must land as ONE transaction.
 
-``_stage_persist`` called ``persist_proposals`` and then ``persist_conflicts``
+``stages.persist.stage_persist`` called ``persist_proposals`` and then ``persist_conflicts``
 with nothing between them, on the worker's ``autocommit=True`` connection
 (``__main__.py`` opens it that way). Each statement was therefore its own
 transaction, so a failure in the second call left the first one durable:

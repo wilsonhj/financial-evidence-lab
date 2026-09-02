@@ -1,6 +1,6 @@
 """First-ingest evidence integrity (#60 review residual).
 
-`_restore_output` re-hashes span text on the crash-resume path, but the
+`stages.io.restore_output` re-hashes span text on the crash-resume path, but the
 ingest path only ever checked that ``text_hash`` carried a ``sha256:``
 prefix — never that the digest described the text. A caller-supplied wrong
 hash was therefore accepted at stage one and only surfaced after a crash,

@@ -13,7 +13,7 @@ def normalize_payload(payload: dict[str, Any]) -> tuple[dict[str, Any], list[str
     """Return (normalized_payload, blockers). Always preserves raw_value.
 
     The blocker list carries only a *rejection* — a payload the normalizer could
-    not normalize at all, returned unchanged so ``workflow._stage_normalize``
+    not normalize at all, returned unchanged so ``stages.normalize.stage_normalize``
     can count it and carry it to review. Blockers the normalizer detects without
     aborting (a contradicted sign, an out-of-range scale, a monetary figure with
     no currency, a non-string dimension) ride inside the payload on

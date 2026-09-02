@@ -316,7 +316,7 @@ def _bind_evidence_to_spans(
 
     ``_evidence_from_payload`` derives ``text_hash`` from the payload's OWN text
     when the payload does not supply one, so the integrity check in
-    ``_stage_assemble_evidence`` compared a payload against itself and could only
+    ``stages.evidence.stage_assemble_evidence`` compared a payload against itself and could only
     ever pass. ``source_spans`` was never SELECTed anywhere in ``workers/src`` —
     ingestion INSERTs the rows and nothing read them back — so the stored
     ``text_hash``, which IS the citation's content address, never entered the

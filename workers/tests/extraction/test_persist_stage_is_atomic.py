@@ -3,7 +3,7 @@
 `persist_outputs_atomic` exists on both stores and wraps proposals, their
 evidence and their conflicts in one transaction — but a method that nothing
 calls protects nothing. This suite pins the *wiring*, which is the half that
-was missing: `_stage_persist` called `persist_proposals` and then
+was missing: `stages.persist` called `persist_proposals` and then
 `persist_conflicts` with nothing between them, on an autocommit connection, so
 a conflict failure left durable orphan proposals behind.
 
@@ -79,9 +79,10 @@ class _RecordingStore:
 
 
 def _run_stage(store: _RecordingStore) -> Any:
+    from fel_workers.extraction.context import ExecCtx, WorkflowDeps
     from fel_workers.extraction.events import MemoryEventStore
+    from fel_workers.extraction.stages.persist import stage_persist
     from fel_workers.extraction.types import WorkflowState
-    from fel_workers.extraction.workflow import WorkflowDeps, _ExecCtx, _stage_persist
 
     from .test_workflow import _evidence, _request
 
@@ -102,8 +103,8 @@ def _run_stage(store: _RecordingStore) -> Any:
     from fel_workers.extraction.budget import RunBudget
     from fel_workers.extraction.validate.pipeline import default_ontology
 
-    ctx = _ExecCtx(state=state, deps=deps, budget=RunBudget(), ontology=default_ontology())
-    return _stage_persist(ctx)
+    ctx = ExecCtx(state=state, deps=deps, budget=RunBudget(), ontology=default_ontology())
+    return stage_persist(ctx)
 
 
 def test_persist_stage_uses_the_atomic_write() -> None:
