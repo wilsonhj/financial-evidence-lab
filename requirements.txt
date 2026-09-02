@@ -10,3 +10,6 @@ uvicorn>=0.32.0
 pydantic>=2.9.2
 httpx>=0.27.2
 psycopg[binary,pool]>=3.2
+# Error reporting (ADR-0002). Initialised only when FEL_SENTRY_DSN is set; the
+# API and worker log a warning and continue if the SDK is absent.
+sentry-sdk>=2.0.0

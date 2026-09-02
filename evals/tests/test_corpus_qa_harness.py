@@ -549,6 +549,12 @@ def test_failed_fetch_jobs_are_a_run_failure_with_recorded_errors(
 ) -> None:
     """Finding 2a/2c: parked-failed jobs surface as a run failure with
     their terminal status and error captured in the report."""
+    # This test pins the attempts budget, not the retry schedule: with the
+    # real exponential backoff (#189) a refused fetch waits seconds between
+    # attempts and the bounded harness loop would see it still `queued`.
+    from fel_workers import queue as fel_queue
+
+    monkeypatch.setattr(fel_queue, "RETRY_BACKOFF_BASE_SECONDS", 0.0)
     cohort_path = tmp_path / "one-issuer-cohort.json"
     cohort_path.write_text(
         json.dumps(
@@ -752,6 +758,10 @@ def test_surplus_fetch_job_failure_is_a_run_failure(
     the discovery job's own listing yields a fetch job OUTSIDE the expected
     set. It must not be invisible: it is reconciled as surplus, and its
     failure fails the run."""
+    # Attempts budget, not schedule: run the refused fetch with zero backoff (#189).
+    from fel_workers import queue as fel_queue
+
+    monkeypatch.setattr(fel_queue, "RETRY_BACKOFF_BASE_SECONDS", 0.0)
     clients: list[_LateFilingClient] = []
 
     def _factory(ciks: list[str]) -> _LateFilingClient:

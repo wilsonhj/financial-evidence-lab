@@ -46,6 +46,10 @@ db-migrate: ## Apply pending migrations to $$DATABASE_URL / $$TEST_DATABASE_URL
 db-check: ## Fail if migrations are pending or an applied file changed
 	$(PY)/python scripts/db/migrate.py --check
 
+eval-retrieval-gate: ## Grade the benchmark seed through the retrieval pipeline (needs TEST_DATABASE_URL)
+	PYTHONPATH=evals:packages/providers:packages/retrieval:packages/retrieval-evals \
+		$(PY)/python -m harness.retrieval_gate --out evals/reports/retrieval-gate/latest.json
+
 security: ## Run static + dependency security scans
 	$(PY)/bandit -q -r apps workers evals packages/providers packages/retrieval packages/retrieval-evals packages/ontology scripts -c pyproject.toml
 	$(PY)/pip-audit -r requirements.txt

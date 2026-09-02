@@ -45,3 +45,6 @@ tmp/
 
 # Claude Code session state and agent worktrees (live checkouts - never commit)
 .claude/
+
+# Local retrieval-gate runs (the dated golden under evals/reports/retrieval-gate/ is committed)
+evals/reports/retrieval-gate/latest.json
