@@ -3,6 +3,17 @@
 Status: Accepted
 Date: 2026-07-12
 
+> **Amended by ADR-0012 (Proposed).** The "OpenAI for generation" pin below is
+> now the *default value of a configured selection* rather than a hard-coded
+> binding: ADR-0012 keeps the frozen provider protocols and adds live adapters
+> behind them for OpenAI (generation and embeddings) and Anthropic (generation
+> only — it has no embeddings endpoint), selected by `FEL_LLM_PROVIDER` and
+> `FEL_EMBEDDING_PROVIDER`, both defaulting to OpenAI. Nothing in this ADR's
+> body changes: the default is still OpenAI, `text-embedding-3` at <= 512
+> dimensions stored as `halfvec` is still the embedding contract, and the final
+> generation pin will be decided by the #177/#132 benchmark and recorded as an
+> amendment to ADR-0012, not by editing the text below.
+
 ## Decision
 
 This ADR is the single source of truth for the MVP technology stack. `specs/001-financial-evidence-lab/spec.md` Section 25, `plan.md` Section 4, and the constitution reference this document instead of restating the stack.
