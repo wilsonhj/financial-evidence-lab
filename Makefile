@@ -12,7 +12,20 @@ install-js: ## Install the JS/TS workspace
 	pnpm install
 
 install-py: ## Create .venv and install the Python toolchain
-	python3 -m venv .venv
+	@if command -v uv >/dev/null 2>&1; then \
+		echo "install-py: using uv venv --python $$(cat .python-version) --seed"; \
+		uv venv --python "$$(cat .python-version)" --seed .venv; \
+	else \
+		want="$$(cat .python-version)"; \
+		got="$$(python3 -c 'import sys; print("%d.%d" % sys.version_info[:2])')"; \
+		if [ "$$got" != "$$want" ]; then \
+			echo "install-py: python3 is $$got but .python-version pins $$want" >&2; \
+			echo "install-py: install uv (recommended) or a matching python3, see docs/development/local.md" >&2; \
+			exit 1; \
+		fi; \
+		echo "install-py: using python3 -m venv (python3 $$got matches .python-version)"; \
+		python3 -m venv .venv; \
+	fi
 	$(PY)/pip install --upgrade pip
 	$(PY)/pip install -r requirements-dev.txt
 

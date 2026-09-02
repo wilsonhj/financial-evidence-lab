@@ -19,6 +19,7 @@ behavior.
 | pnpm       | 10.33 via Corepack       | Monorepo package management              |
 | Python     | 3.11 (`.python-version`) | API, workers, retrieval, and evals       |
 | PostgreSQL | 16+ with pgvector        | Persistent API/worker flows and DB tests |
+| uv         | optional, recommended    | Pins the venv to 3.11 regardless of what `python3` resolves to |
 
 Install repository dependencies:
 
@@ -37,10 +38,15 @@ worker images install, and what `infra/railway/*.json` builds with);
 toolchain. Install the dev file locally — it covers both. There is no hashed
 lock file yet; the floors in these files are minimum versions, not pins.
 
-`make install` is a convenience wrapper (it runs `python3 -m venv .venv`, so
-it inherits whatever `python3` resolves to); prefer the explicit
-`python3.11 -m venv .venv` above and confirm first with `python3 --version`
-and `command -v python3.11`. If `python3.11` is missing, see
+`make install` (via `make install-py`) is a convenience wrapper: when `uv` is
+on `PATH` it runs `uv venv --python 3.11 --seed .venv`, which pins the
+interpreter to 3.11 regardless of what plain `python3` resolves to and seeds
+`pip` into the venv. Without `uv` it falls back to `python3 -m venv .venv`,
+but only after checking that `python3 --version` matches the major.minor
+pinned in `.python-version` — if it does not, the target fails loudly naming
+`.python-version` and this file instead of silently building a venv with the
+wrong interpreter. If you hit that failure, either install `uv` (simplest)
+or install/select a matching `python3.11` and see
 [`python3.11` is not installed](#python311-is-not-installed) below — do not
 substitute `python3.12`/`python3.13` for the venv; `.python-version` stays
 pinned to 3.11 because CI builds against it.
