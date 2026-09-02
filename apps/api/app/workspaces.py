@@ -7,11 +7,12 @@ import json
 import uuid
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Header, Request, Response
+from fastapi import APIRouter, Depends, Header, Query, Request, Response
 from psycopg import sql
 from pydantic import AwareDatetime, BaseModel, Field
 
 from app.auth import TenantContext
+from app.config import DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT
 from app.db import tenant_connection
 from app.dependencies import get_tenant_context
 from app.errors import api_error
@@ -114,9 +115,13 @@ def create_workspace(
 @router.get("")
 def list_workspaces(
     ctx: Annotated[TenantContext, Depends(get_tenant_context)],
+    limit: Annotated[int, Query(ge=1, le=MAX_LIST_LIMIT)] = DEFAULT_LIST_LIMIT,
 ) -> list[dict[str, Any]]:
+    """List the caller's workspaces, newest-last, bounded by ``limit`` (#191)."""
     with tenant_connection(ctx) as conn:
-        rows = conn.execute("SELECT * FROM workspaces ORDER BY created_at").fetchall()
+        rows = conn.execute(
+            "SELECT * FROM workspaces ORDER BY created_at LIMIT %s", (limit,)
+        ).fetchall()
     return [_row_to_body(r) for r in rows]
 
 

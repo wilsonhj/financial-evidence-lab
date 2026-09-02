@@ -2,18 +2,46 @@
 
 Soft limits warn (X-FEL-Cost-Warning header); hard limits refuse new
 billable work with COST_LIMIT_EXCEEDED — never a silent downgrade.
+
+The hard stop is 402 Payment Required, not 429: the caller is not being asked
+to slow down and retry (that is the rate limiter's 429, with Retry-After), it
+has exhausted a spending allowance that only a clock rollover or an
+administrator raising the limit will restore. Retrying sooner never helps, so
+the status must not invite it.
 """
 
 from __future__ import annotations
 
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
 import psycopg
+from psycopg.rows import tuple_row
 
 from app.auth import TenantContext
 from app.config import Settings
 from app.errors import api_error
+
+# usage_events.cost_usd is numeric(12, 6); every metered cost is quantized to
+# that scale before it is written so the stored value is exactly what was
+# computed, not a silently rounded one.
+_CENTI_MICRO = Decimal("0.000001")
+
+
+def token_cost_usd(cfg: Settings, *, input_tokens: int, output_tokens: int) -> Decimal:
+    """Convert reported provider token usage into a metered USD cost.
+
+    Only generation tokens are priced here. The frozen ``EmbeddingProvider``
+    protocol (``packages/providers``) returns vectors and reports no token
+    usage, so embedding spend cannot be metered without a contract change;
+    when the live provider factory lands with usage on its embedding results,
+    this is the one place that has to learn about it.
+    """
+    cost = (
+        Decimal(max(0, input_tokens)) * cfg.cost_per_1k_input_usd
+        + Decimal(max(0, output_tokens)) * cfg.cost_per_1k_output_usd
+    ) / Decimal(1000)
+    return cost.quantize(_CENTI_MICRO, rounding=ROUND_HALF_UP)
 
 
 def record_usage(
@@ -26,8 +54,13 @@ def record_usage(
 
 
 def spend_snapshot(conn: psycopg.Connection[Any], ctx: TenantContext) -> tuple[Decimal, Decimal]:
-    """(user spend today, org spend this month). Row-factory agnostic."""
-    with conn.cursor() as cur:
+    """(user spend today, org spend this month).
+
+    Row-factory agnostic by construction: the cursor pins ``tuple_row`` rather
+    than inheriting the connection's factory, so this works on both a bare
+    ``psycopg.connect()`` and the API's ``dict_row`` pooled connections.
+    """
+    with conn.cursor(row_factory=tuple_row) as cur:
         cur.execute(
             """
             SELECT
