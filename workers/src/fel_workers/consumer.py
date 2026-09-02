@@ -329,9 +329,20 @@ def run_worker(
     own connection so long-running jobs are never mistaken for dead ones, and
     every ``reap_interval_iterations`` claim attempts the loop calls
     :func:`queue.reap_stale` (threshold ``stale_after_seconds``) so jobs whose
-    worker crashed are requeued instead of staying 'running' forever. If the
-    heartbeat reports the lease lost, the job is treated as lost: the handler
-    result is discarded and no terminal state is written — the new owner wins.
+    worker crashed are recovered instead of staying 'running' forever —
+    requeued while attempts remain, dead-lettered once they are exhausted, so
+    a job that kills its worker cannot be reaped in a loop. If the heartbeat
+    reports the lease lost, the job is treated as lost: the handler result is
+    discarded and no terminal state is written — the new owner wins.
+
+    Two terminal outcomes bypass the retry budget entirely. A run the store
+    refuses as already terminal raises :class:`RunAlreadyTerminal` and is
+    parked immediately by :func:`_park_terminal_run_job`, which picks the job
+    write from the run's own status rather than assuming failure (#146, #204):
+    the remaining attempts could only repeat the refusal. And a handler that
+    accepts ``cancel_check`` is given one bound to
+    :func:`queue.is_cancel_requested`, so an operator can wind a long run down
+    cooperatively by setting ``jobs.cancel_requested_at`` (#189).
 
     ``extraction_memory_stores`` is the ONLY way to send ``extraction_run``
     output to in-memory stores while a connection is live, and it is off by
@@ -369,7 +380,12 @@ def run_worker(
         if reap_interval_iterations > 0 and (iterations - 1) % reap_interval_iterations == 0:
             reaped = queue.reap_stale(conn, stale_seconds=stale_after_seconds)
             if reaped:
-                log.warning("reaped %d stale job(s) back to queued", reaped)
+                log.warning(
+                    "reaped %d stale job(s): %d requeued, %d dead-lettered (attempts exhausted)",
+                    reaped,
+                    reaped.requeued,
+                    reaped.dead_lettered,
+                )
         job = queue.claim_one(conn, queue=queue_name)
         if job is None:
             if max_iterations is not None:
@@ -440,6 +456,19 @@ def run_worker(
             # the Callable[[], bool] parameter.
             return not hb.lease_lost
 
+        claimed_job_id = job.id
+
+        def _cancel_check(job_id: str = claimed_job_id) -> bool:
+            # Cooperative cancellation (issue #189): handlers poll this at
+            # stage boundaries so a cancelled run winds itself down to a
+            # consistent terminal state. Bound as a default for the same
+            # reason as _lease_check (ruff B023). The worker connection is
+            # safe here -- unlike the heartbeat, which needs its own
+            # connection because it runs on a separate thread, the handler
+            # calls this synchronously on the worker's own thread, between
+            # its own statements.
+            return queue.is_cancel_requested(conn, job_id=job_id)
+
         try:
             if job.kind == JOB_KIND_SEC_DISCOVERY:
                 run_discovery_job(conn, sec, job.payload, job_queue=queue_name)
@@ -469,7 +498,13 @@ def run_worker(
                     extraction_provider,
                     job.payload,
                     lease_check=_lease_check,
-                    cancel_check=job_cancel_check,
+                    # An injected check wins (that is the #211 seam, used by
+                    # tests); otherwise poll jobs.cancel_requested_at, which
+                    # is what #204 said this seam was waiting for and what
+                    # migration 0007 finally provides.
+                    cancel_check=job_cancel_check
+                    if job_cancel_check is not None
+                    else _cancel_check,
                     use_memory_stores=extraction_memory_stores,
                     job_org_id=job.org_id,
                 )
