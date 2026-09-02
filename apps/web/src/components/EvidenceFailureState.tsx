@@ -55,7 +55,13 @@ const COPY: Record<
 export function EvidenceFailureState({ kind }: { kind: EvidenceFailureStateKind }) {
   const copy = COPY[kind];
   return (
-    <main className="page-main" role="alert" aria-labelledby="evidence-failure-heading">
+    <main
+      id="main-content"
+      tabIndex={-1}
+      className="page-main"
+      role="alert"
+      aria-labelledby="evidence-failure-heading"
+    >
       <h2 id="evidence-failure-heading">{copy.heading}</h2>
       <p>{copy.description}</p>
       {copy.retry && <RetryEvidenceButton />}

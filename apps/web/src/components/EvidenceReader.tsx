@@ -182,7 +182,7 @@ export function EvidenceReader({
 
       <div className="reader-layout">
         <OutlineNav model={outline} activeId={activeSectionId} onSelect={handleSelectSection} />
-        <main aria-label="Document reader">
+        <main id="main-content" tabIndex={-1} aria-label="Document reader">
           <DocumentPane
             sections={ownSections}
             spans={spans}

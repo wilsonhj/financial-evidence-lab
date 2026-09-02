@@ -16,6 +16,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
       <body>
+        <a href="#main-content" className="skip-link">
+          Skip to main content
+        </a>
         <header className="site-header">
           <h1>
             <Link href="/">Financial Evidence Lab</Link>
