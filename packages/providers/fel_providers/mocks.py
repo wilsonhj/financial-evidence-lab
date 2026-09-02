@@ -6,6 +6,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import re
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -212,12 +213,78 @@ def _extraction_envelope_for(request: StructuredGenerationRequest) -> dict[str, 
     return {"proposals": [kpi], "notes": None}
 
 
+# Reader claims schema (packages/contracts/schemas/claims-output.schema.json),
+# consumed by fel_retrieval.generation.StructuredClaimGenerator.
+_CLAIMS_SCHEMA_NAME = "claims-output"
+
+# One rendered context line, as fel_retrieval.generation._render_context writes
+# it: ``[<item_id>] (<kind>) [numeric ...] <text>``.
+_CONTEXT_LINE = re.compile(r"^\[(?P<item_id>[^\]]+)\] \((?P<kind>[^)]*)\) (?P<rest>.*)$")
+_NUMERIC_MARKER = re.compile(r"^\[numeric (?P<fields>[^\]]*)\] (?P<text>.*)$")
+_CONTEXT_HEADER = "Selected context:"
+
+
+def _parse_numeric_marker(fields: str) -> dict[str, str | None]:
+    parsed: dict[str, str] = {}
+    for token in fields.split(" "):
+        key, _, value = token.partition("=")
+        if key:
+            parsed[key] = value
+    # ``scale`` is deliberately dropped: claims-output/v1 does not carry it (the
+    # base-ten exponent is an ingestion normalization, not a model assertion).
+    return {
+        "value": parsed.get("value", "0"),
+        "unit": parsed.get("unit") or None,
+        "period": parsed.get("period") or None,
+    }
+
+
+def _claims_envelope_for(request: StructuredGenerationRequest) -> dict[str, object]:
+    """Schema-valid ``claims-output/v1`` derived from the prompt's context block.
+
+    The mock reads back exactly the item ids the generator rendered, so a mock
+    run produces one claim per selected item, each citing that item with a quote
+    that really is a span of it. Deterministic and grounded: the citation
+    integrity and quote checks in ``fel_retrieval.generation`` hold for mock
+    output the same way they must hold for a live model's.
+    """
+    block: list[str] = []
+    for message in request.messages:
+        content = message.get("content") or ""
+        if _CONTEXT_HEADER in content:
+            block = content.split(_CONTEXT_HEADER, 1)[1].splitlines()
+    claims: list[dict[str, object]] = []
+    for line in block:
+        match = _CONTEXT_LINE.match(line.strip())
+        if match is None:
+            continue
+        rest = match.group("rest")
+        numeric: dict[str, str | None] | None = None
+        marker = _NUMERIC_MARKER.match(rest)
+        if marker is not None:
+            numeric = _parse_numeric_marker(marker.group("fields"))
+            rest = marker.group("text")
+        if not rest:
+            continue
+        claims.append(
+            {
+                "text": rest,
+                "citations": [{"item_id": match.group("item_id"), "quote": rest}],
+                "numeric": numeric,
+            }
+        )
+    return {"claims": claims, "abstain": None}
+
+
 class MockStructuredLLMProvider:
     """Deterministic structured mock: same request -> same result, no network.
 
     For M3 extraction role ``schema_name`` values, returns schema-valid envelopes
     shaped like worker-local classifier/fact-table schemas or contract
-    ``extraction-payload`` items inside ``proposals[]``. Protocol shape unchanged.
+    ``extraction-payload`` items inside ``proposals[]``. For the reader schema
+    ``claims-output``, returns claims parsed back out of the prompt's rendered
+    context block (one grounded claim per selected item). Protocol shape
+    unchanged.
 
     Refusal is a constructor switch (``MockStructuredLLMProvider(refuse=True)``),
     never message content: ``messages`` mixes trusted instructions with
@@ -255,6 +322,10 @@ class MockStructuredLLMProvider:
         if refused:
             parsed = None
             refusal = f"mock-refusal:{digest[:12]}"
+        elif request.schema_name == _CLAIMS_SCHEMA_NAME:
+            parsed = _claims_envelope_for(request)
+            refusal = None
+            output_tokens = min(request.max_output_tokens, 128)
         elif request.schema_name in _EXTRACTION_ROLE_SCHEMAS:
             parsed = _extraction_envelope_for(request)
             refusal = None
