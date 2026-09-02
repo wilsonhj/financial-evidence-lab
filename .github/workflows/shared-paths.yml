@@ -1,0 +1,50 @@
+name: Shared paths
+
+# Enforces the #141 ruling recorded in docs/handoff/STATUS.md: a PR that
+# touches any path in docs/handoff/workstreams.yaml's `shared_paths` list
+# must carry the `contract-change` label. This check is label-only — it does
+# not attempt to verify an ADR exists, since that review is done by a human
+# (integration-lead review), not automation.
+
+on:
+  pull_request:
+    types: [opened, synchronize, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+jobs:
+  shared-paths:
+    name: Shared-path changes need the contract-change label
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version-file: .python-version
+
+      - name: Install PyYAML
+        run: pip install "pyyaml>=6.0"
+
+      - name: Compute changed files against the base
+        id: changed
+        run: |
+          git diff --name-only \
+            "${{ github.event.pull_request.base.sha }}" \
+            "${{ github.event.pull_request.head.sha }}" \
+            > /tmp/changed-files.txt
+          cat /tmp/changed-files.txt
+
+      - name: Check shared paths
+        env:
+          HAS_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'contract-change') }}
+        run: |
+          if [ "$HAS_LABEL" = "true" ]; then
+            flag="--has-label"
+          else
+            flag=""
+          fi
+          python scripts/ci/shared_paths.py $flag < /tmp/changed-files.txt
