@@ -15,4 +15,24 @@ output — smoke runs only. See ``docs/runbooks/extraction-worker.md``.
 
 Budgets default to ADR-0007 caps. Telemetry is redacted — never logs prompts or
 filing text. All proposals enter ``needs_review``; there is no auto-approve path.
+
+A job whose ``extraction_runs`` row is already ``succeeded``/``failed``/
+``cancelled`` is refused with ``queue.PermanentFailure`` before any write and
+dead-lettered by the consumer (``error.code = JOB_PERMANENT_FAILURE``): 0004
+makes a terminal run unreopenable, so no retry can help. Re-enqueue against a
+NEW run row if the work is still wanted.
+
+Stage output is durable in ``extraction_run_steps.output`` with ``output_hash``
+over it (migration 0006, ADR-0011), written in one INSERT. A resume re-hashes
+what it read back and re-runs the stage on any mismatch, recording a
+``step_failed`` event with ``error.code = checkpoint_rejected`` and a ``reason``
+of ``checkpoint_hash_mismatch`` (investigate) or ``checkpoint_output_missing``
+(a pre-0006 row; expected and harmless). Event payloads carry NO stage output
+and no filing text — the ``stage_output`` carve-out is gone.
+
+``record_confidence`` is NULL until a calibrator exists (#62); it is not 0. Sort
+review queues on ``review_priority``, which is ``high`` for a proposal with any
+validator blocker or conflict membership and ``normal`` otherwise.
+
+See ``docs/runbooks/extraction-worker.md`` for the queries.
 """
