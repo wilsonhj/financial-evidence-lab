@@ -13,6 +13,11 @@ info:
     labels. Modeling and forecasting paths arrive in later minors.
 servers:
   - url: /
+# `x-fel-status: planned` on a path item means the contract is frozen but the
+# FastAPI service does not serve that path yet. apps/api/tests/test_openapi_parity.py
+# asserts the implemented route table equals exactly the set of path items
+# WITHOUT that marker, in both directions — so shipping a path means deleting
+# its marker, and deleting a route without deleting its path fails the build.
 paths:
   /health:
     get:
@@ -52,6 +57,8 @@ paths:
     get:
       operationId: listWorkspaces
       summary: List workspaces visible to the caller
+      parameters:
+        - $ref: "#/components/parameters/ListLimit"
       responses:
         "200":
           description: Workspaces.
@@ -111,6 +118,7 @@ paths:
         default:
           $ref: "#/components/responses/Error"
   /v1/entities:
+    x-fel-status: planned
     get:
       operationId: searchEntities
       summary: Search issuers/entities
@@ -133,6 +141,7 @@ paths:
         default:
           $ref: "#/components/responses/Error"
   /v1/entities/{entityId}:
+    x-fel-status: planned
     parameters:
       - $ref: "#/components/parameters/EntityId"
     get:
@@ -163,6 +172,7 @@ paths:
           schema:
             type: string
             format: date-time
+        - $ref: "#/components/parameters/ListLimit"
       responses:
         "200":
           description: Documents.
@@ -255,6 +265,17 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "413":
+          description: >-
+            READER_TOO_LARGE. The selected version has more spans or facts
+            than the server will assemble into one snapshot. The response is
+            never silently truncated: ReaderResponse is a closed object, and
+            a short evidence set would let a citation look absent when it is
+            merely unreturned.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         default:
           $ref: "#/components/responses/Error"
   /v1/source-spans/{sourceSpanId}:
@@ -278,6 +299,7 @@ paths:
         default:
           $ref: "#/components/responses/Error"
   /v1/ingestion/jobs:
+    x-fel-status: planned
     post:
       operationId: createIngestionJob
       summary: Enqueue an ingestion job (long-running; returns a run ID)
@@ -299,6 +321,7 @@ paths:
         default:
           $ref: "#/components/responses/Error"
   /v1/ingestion/jobs/{jobId}:
+    x-fel-status: planned
     parameters:
       - name: jobId
         in: path
@@ -350,12 +373,24 @@ paths:
                 $ref: "#/components/schemas/QueryAccepted"
         "401":
           $ref: "#/components/responses/Error"
+        "402":
+          description: >-
+            COST_LIMIT_EXCEEDED. A user daily or organization monthly hard
+            cost ceiling would be crossed by this run (spec 18.2). Retrying
+            does not help until the period rolls over or an administrator
+            raises the limit, which is why this is not a 429.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "403":
           $ref: "#/components/responses/Error"
         "409":
           $ref: "#/components/responses/Error"
         "422":
           $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/RateLimited"
         default:
           $ref: "#/components/responses/Error"
   /v1/queries/{queryId}:
@@ -366,6 +401,8 @@ paths:
       summary: Fetch an immutable query snapshot and its run history
       security:
         - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ListLimit"
       responses:
         "200":
           description: Query snapshot.
@@ -398,6 +435,16 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/QueryAccepted"
+        "402":
+          description: >-
+            COST_LIMIT_EXCEEDED. A rerun re-executes the pipeline and carries
+            the same hard cost ceiling as a new query.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          $ref: "#/components/responses/RateLimited"
         default:
           $ref: "#/components/responses/Error"
   /v1/retrieval-runs/{runId}:
@@ -472,9 +519,12 @@ paths:
       responses:
         "201":
           description: Feedback recorded.
+        "429":
+          $ref: "#/components/responses/RateLimited"
         default:
           $ref: "#/components/responses/Error"
   /v1/workspaces/{workspaceId}/extraction-runs:
+    x-fel-status: planned
     post:
       operationId: createExtractionRun
       summary: Create a bounded extraction run
@@ -527,6 +577,7 @@ paths:
         default:
           $ref: "#/components/responses/Error"
   /v1/extraction-runs/{runId}:
+    x-fel-status: planned
     parameters:
       - $ref: "#/components/parameters/RunId"
     get:
@@ -564,6 +615,7 @@ paths:
         default:
           $ref: "#/components/responses/Error"
   /v1/extraction-runs/{runId}/events:
+    x-fel-status: planned
     parameters:
       - $ref: "#/components/parameters/RunId"
     get:
@@ -600,6 +652,7 @@ paths:
         default:
           $ref: "#/components/responses/Error"
   /v1/extraction-runs/{runId}/rerun:
+    x-fel-status: planned
     post:
       operationId: rerunExtraction
       summary: Create a child extraction run from a parent
@@ -630,6 +683,7 @@ paths:
         default:
           $ref: "#/components/responses/Error"
   /v1/workspaces/{workspaceId}/extractions:
+    x-fel-status: planned
     get:
       operationId: listExtractions
       summary: List extraction proposals for a workspace
@@ -660,6 +714,7 @@ paths:
         default:
           $ref: "#/components/responses/Error"
   /v1/extractions/{extractionId}:
+    x-fel-status: planned
     parameters:
       - $ref: "#/components/parameters/ExtractionId"
     get:
@@ -680,6 +735,7 @@ paths:
         default:
           $ref: "#/components/responses/Error"
   /v1/extractions/review:
+    x-fel-status: planned
     post:
       operationId: reviewExtractions
       summary: Apply an atomic review command
@@ -703,6 +759,7 @@ paths:
         default:
           $ref: "#/components/responses/Error"
   /v1/approved-extractions/{recordId}:
+    x-fel-status: planned
     get:
       operationId: getApprovedExtraction
       summary: Read the current approved extraction version
@@ -725,6 +782,7 @@ paths:
         default:
           $ref: "#/components/responses/Error"
   /v1/approved-extractions/{recordId}/versions:
+    x-fel-status: planned
     get:
       operationId: listApprovedExtractionVersions
       summary: List immutable approved extraction versions
@@ -750,6 +808,7 @@ paths:
         default:
           $ref: "#/components/responses/Error"
   /v1/approved-extractions/{recordId}/corrections:
+    x-fel-status: planned
     post:
       operationId: correctApprovedExtraction
       summary: Append an immutable corrected approved version
@@ -852,6 +911,18 @@ components:
       required: false
       schema:
         type: string
+    ListLimit:
+      name: limit
+      in: query
+      required: false
+      description: >-
+        Maximum items to return. Optional and additive: omitting it yields the
+        server default (50), and no list response is ever unbounded.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 50
   headers:
     ETag:
       description: Version tag for optimistic concurrency.
@@ -860,6 +931,20 @@ components:
   responses:
     Error:
       description: Error envelope (all non-2xx responses use this shape).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    RateLimited:
+      description: >-
+        RATE_LIMITED. Per-organization request budget for this route is
+        exhausted. Retry-After gives the whole seconds to wait.
+      headers:
+        Retry-After:
+          description: Seconds to wait before retrying.
+          schema:
+            type: integer
+            minimum: 1
       content:
         application/json:
           schema:

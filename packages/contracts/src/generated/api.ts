@@ -1621,6 +1621,17 @@ export interface components {
         "application/json": components["schemas"]["Error"];
       };
     };
+    /** @description RATE_LIMITED. Per-organization request budget for this route is exhausted. Retry-After gives the whole seconds to wait. */
+    RateLimited: {
+      headers: {
+        /** @description Seconds to wait before retrying. */
+        "Retry-After"?: number;
+        [name: string]: unknown;
+      };
+      content: {
+        "application/json": components["schemas"]["Error"];
+      };
+    };
   };
   parameters: {
     /** @description Client-chosen key; retries with the same key return the original result and never duplicate work. */
@@ -1633,6 +1644,8 @@ export interface components {
     RunId: string;
     ExtractionId: string;
     Cursor: string;
+    /** @description Maximum items to return. Optional and additive: omitting it yields the server default (50), and no list response is ever unbounded. */
+    ListLimit: number;
   };
   requestBodies: never;
   headers: {
@@ -1665,7 +1678,10 @@ export interface operations {
   };
   listWorkspaces: {
     parameters: {
-      query?: never;
+      query?: {
+        /** @description Maximum items to return. Optional and additive: omitting it yields the server default (50), and no list response is ever unbounded. */
+        limit?: components["parameters"]["ListLimit"];
+      };
       header?: never;
       path?: never;
       cookie?: never;
@@ -1828,6 +1844,8 @@ export interface operations {
       query?: {
         /** @description Cutoff timestamp; only documents publicly available at or before this instant are returned. Enforced server-side. */
         as_of?: string;
+        /** @description Maximum items to return. Optional and additive: omitting it yields the server default (50), and no list response is ever unbounded. */
+        limit?: components["parameters"]["ListLimit"];
       };
       header?: never;
       path: {
@@ -1899,6 +1917,15 @@ export interface operations {
       };
       /** @description Target document missing, hidden by the cutoff (identical envelope in both cases), unreadable under the corpus pin, or unknown/draft corpus version. */
       404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description READER_TOO_LARGE. The selected version has more spans or facts than the server will assemble into one snapshot. The response is never silently truncated: ReaderResponse is a closed object, and a short evidence set would let a citation look absent when it is merely unreturned. */
+      413: {
         headers: {
           [name: string]: unknown;
         };
@@ -2011,15 +2038,28 @@ export interface operations {
         };
       };
       401: components["responses"]["Error"];
+      /** @description COST_LIMIT_EXCEEDED. A user daily or organization monthly hard cost ceiling would be crossed by this run (spec 18.2). Retrying does not help until the period rolls over or an administrator raises the limit, which is why this is not a 429. */
+      402: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
       403: components["responses"]["Error"];
       409: components["responses"]["Error"];
       422: components["responses"]["Error"];
+      429: components["responses"]["RateLimited"];
       default: components["responses"]["Error"];
     };
   };
   getQuery: {
     parameters: {
-      query?: never;
+      query?: {
+        /** @description Maximum items to return. Optional and additive: omitting it yields the server default (50), and no list response is ever unbounded. */
+        limit?: components["parameters"]["ListLimit"];
+      };
       header?: never;
       path: {
         queryId: components["parameters"]["QueryId"];
@@ -2064,6 +2104,16 @@ export interface operations {
           "application/json": components["schemas"]["QueryAccepted"];
         };
       };
+      /** @description COST_LIMIT_EXCEEDED. A rerun re-executes the pipeline and carries the same hard cost ceiling as a new query. */
+      402: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      429: components["responses"]["RateLimited"];
       default: components["responses"]["Error"];
     };
   };
@@ -2143,6 +2193,7 @@ export interface operations {
         };
         content?: never;
       };
+      429: components["responses"]["RateLimited"];
       default: components["responses"]["Error"];
     };
   };
