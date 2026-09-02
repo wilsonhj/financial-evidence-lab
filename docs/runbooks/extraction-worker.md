@@ -117,6 +117,23 @@ A steady trickle of `checkpoint_output_missing` on old runs is normal. Any
 `checkpoint_hash_mismatch` is not, and should be treated as a data-integrity
 incident rather than a retry.
 
+## Where the code lives
+
+- `extraction/workflow.py` — the FSM control loop and nothing else: stage
+  fencing (`_boundary`, `_commit_fence`), the content-addressed checkpoint
+  lookup and commit (`_run_stage`, `_commit_stage`, `_is_recoverable`),
+  stage-failure recording, dispatch, and terminal handling.
+- `extraction/stages/` — the twelve stage bodies, one module per stage or
+  family: `request.py`, `evidence.py`, `model.py` (all five model-backed
+  stages), `normalize.py`, `validate.py`, `citations.py`, `conflicts.py`,
+  `persist.py`.
+- `extraction/stages/io.py` — what each stage contributes to its `input_hash`,
+  and how a checkpointed output is restored into state on resume. Editing this
+  file moves checkpoint keys; `workers/tests/extraction/test_checkpoint_hash_golden.py`
+  pins them for a fixture run and fails if they move.
+- `extraction/context.py` — the store protocols, `WorkflowDeps`, and the
+  per-run execution context shared by the loop and the stages.
+
 ## Review semantics
 
 Every proposal is persisted as `needs_review`. There is no auto-approve path.

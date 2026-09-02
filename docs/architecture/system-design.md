@@ -287,7 +287,14 @@ Each model step allows at most one repair attempt (`MAX_ATTEMPTS = 2`); a
 provider refusal is a typed `ProviderRefused` failure and is never converted
 into an abstention (an injection vector otherwise).
 
-### Durable workflow FSM (`extraction/workflow.py`)
+### Durable workflow FSM (`extraction/workflow.py`, `extraction/stages/`)
+
+`workflow.py` is the control loop only — fencing, checkpoint lookup and
+commit, stage-failure recording, dispatch and terminal handling. The twelve
+stage bodies live one module (or family) per stage under
+`extraction/stages/`, the payload shaping that feeds the checkpoint key in
+`extraction/stages/io.py`, and the injected stores and per-run execution
+context in `extraction/context.py`.
 
 `run_extraction_workflow` advances a `WorkflowState` through a fixed
 `STAGE_ORDER`: `validate_request` → `assemble_evidence` → `classify` →

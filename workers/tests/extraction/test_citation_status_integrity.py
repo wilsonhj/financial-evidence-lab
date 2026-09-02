@@ -17,6 +17,7 @@ from typing import Any
 from fel_providers.mocks import MockStructuredLLMProvider
 from fel_workers.extraction.handler import handle_extraction_run
 from fel_workers.extraction.hashing import sha256_hex
+from fel_workers.extraction.stages.citations import stage_verify_citations
 from fel_workers.extraction.types import (
     WORKFLOW_VERSION,
     EvidenceBlock,
@@ -26,7 +27,6 @@ from fel_workers.extraction.types import (
 )
 from fel_workers.extraction.validate import validate_proposals
 from fel_workers.extraction.validate.pipeline import citation_status_for
-from fel_workers.extraction.workflow import _stage_verify_citations
 
 from .conftest import FIXTURE_DOC, FIXTURE_ENTITY, FIXTURE_SPAN
 
@@ -130,7 +130,7 @@ def test_row_without_a_source_span_id_is_never_verified() -> None:
     `else` branch for a falsy span id and stamped `verified`.
     """
     draft = _bare_draft([{"role": "supports"}])
-    out = _stage_verify_citations(_state([draft]))
+    out = stage_verify_citations(_state([draft]))
 
     assert draft.evidence[0]["citation_status"] == "invalid"
     assert out["invalid_citations"] == 1
@@ -138,7 +138,7 @@ def test_row_without_a_source_span_id_is_never_verified() -> None:
 
 def test_row_with_an_empty_source_span_id_is_never_verified() -> None:
     draft = _bare_draft([{"source_span_id": "", "role": "supports"}])
-    out = _stage_verify_citations(_state([draft]))
+    out = stage_verify_citations(_state([draft]))
 
     assert draft.evidence[0]["citation_status"] == "invalid"
     assert out["invalid_citations"] == 1
@@ -155,7 +155,7 @@ def test_model_supplied_verified_is_overwritten_not_preserved() -> None:
             }
         ]
     )
-    _stage_verify_citations(_state([draft]))
+    stage_verify_citations(_state([draft]))
 
     # Span membership alone is not proof the quoted content is right.
     assert draft.evidence[0]["citation_status"] == "partial"
@@ -163,7 +163,7 @@ def test_model_supplied_verified_is_overwritten_not_preserved() -> None:
 
 def test_model_supplied_verified_on_an_unpinned_span_becomes_invalid() -> None:
     draft = _bare_draft([{"source_span_id": _OTHER_SPAN, "citation_status": "verified"}])
-    out = _stage_verify_citations(_state([draft]))
+    out = stage_verify_citations(_state([draft]))
 
     assert draft.evidence[0]["citation_status"] == "invalid"
     assert out["invalid_citations"] == 1
@@ -178,14 +178,14 @@ def test_string_and_dict_citations_to_the_same_span_grade_identically() -> None:
     )
     assert len(result.proposals) == 2
 
-    _stage_verify_citations(_state(result.proposals))
+    stage_verify_citations(_state(result.proposals))
     statuses = [p.evidence[0]["citation_status"] for p in result.proposals]
     assert statuses == ["partial", "partial"]
 
 
 def test_pinned_span_without_an_asserted_hash_is_partial() -> None:
     draft = _bare_draft([{"source_span_id": FIXTURE_SPAN, "document_version_id": FIXTURE_DOC}])
-    out = _stage_verify_citations(_state([draft]))
+    out = stage_verify_citations(_state([draft]))
 
     assert draft.evidence[0]["citation_status"] == "partial"
     assert out["invalid_citations"] == 0
@@ -203,7 +203,7 @@ def test_a_matching_asserted_text_hash_earns_verified() -> None:
             }
         ]
     )
-    out = _stage_verify_citations(_state([draft]))
+    out = stage_verify_citations(_state([draft]))
 
     assert draft.evidence[0]["citation_status"] == "verified"
     assert out["verified_citations"] == 1
@@ -219,7 +219,7 @@ def test_a_mismatched_asserted_text_hash_is_invalid() -> None:
             }
         ]
     )
-    out = _stage_verify_citations(_state([draft]))
+    out = stage_verify_citations(_state([draft]))
 
     assert draft.evidence[0]["citation_status"] == "invalid"
     assert out["invalid_citations"] == 1
@@ -238,7 +238,7 @@ def test_invalid_citations_counts_every_downgraded_row() -> None:
             {"source_span_id": FIXTURE_SPAN},  # honest, unproven
         ]
     )
-    out = _stage_verify_citations(_state([draft]))
+    out = stage_verify_citations(_state([draft]))
 
     assert [row["citation_status"] for row in draft.evidence] == [
         "invalid",

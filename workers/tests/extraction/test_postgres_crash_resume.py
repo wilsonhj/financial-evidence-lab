@@ -571,7 +571,7 @@ def test_death_between_step_commit_and_its_event_does_not_silently_abstain(
     `output_hash` is not.
 
     Before the fix the workflow treated that as a completed stage:
-    `_restore_output` returned early, `extract_kpi` was skipped with ZERO model
+    `stages.io.restore_output` returned early, `extract_kpi` was skipped with ZERO model
     calls, and the run landed `succeeded` + `abstained=True` with no proposals —
     silent data loss reported as a legitimate abstention, and permanent, because
     0004 forbids re-opening a terminal run. Verified at PR #145 head: the resumed

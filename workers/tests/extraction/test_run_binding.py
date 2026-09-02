@@ -247,7 +247,7 @@ def test_fabricated_evidence_text_under_a_real_span_is_refused(extraction_db_url
     """Evidence text must verify against the canonical ``source_spans`` hash.
 
     ``_evidence_from_payload`` hashed the payload's own text, so the integrity
-    check in ``_stage_assemble_evidence`` compared a payload against itself and
+    check in ``stages.evidence.stage_assemble_evidence`` compared a payload against itself and
     always passed. ``source_spans`` is never SELECTed anywhere in
     ``workers/src`` (only INSERTed by ``ingestion/``), so the stored hash — the
     citation's real content address — was never consulted. The composite FK

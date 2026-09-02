@@ -63,13 +63,13 @@ def citation_errors(
 # The guarantees it appeared to make are enforced where they belong:
 #
 # * "pinned evidence text matches its content address" — `IntegrityError` in
-#   `workflow._stage_assemble_evidence`, on every run, and again in
-#   `workflow._restore_output` when a checkpoint is rehydrated on resume.
+#   `stages.evidence.stage_assemble_evidence`, on every run, and again in
+#   `stages.io.restore_output` when a checkpoint is rehydrated on resume.
 # * "a cited span exists in the pinned evidence" — `citation_errors` above.
 # * "a citation's asserted span hash matches the pinned span" — the
 #   `expected_hashes` branch of `citation_errors` above, which
 #   `validate/pipeline.py::_collect_blockers` now actually populates.
 # * "a citation marked invalid is recorded as such" —
-#   `workflow._stage_verify_citations`, which sets `citation_status`.
+#   `stages.citations.stage_verify_citations`, which sets `citation_status`.
 
 __all__ = ["citation_errors"]

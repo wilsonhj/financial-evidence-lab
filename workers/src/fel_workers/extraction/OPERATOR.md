@@ -34,5 +34,12 @@ and no filing text — the ``stage_output`` carve-out is gone.
 review queues on ``review_priority``, which is ``high`` for a proposal with any
 validator blocker or conflict membership and ``normal`` otherwise.
 
-See ``docs/runbooks/extraction-worker.md`` for the queries.
+Code map: ``workflow.py`` is the FSM control loop only; the twelve stage
+bodies are in ``extraction/stages/`` (one module per stage or family), the
+input/output payload shaping that fixes the checkpoint key is in
+``extraction/stages/io.py``, and the injected stores and per-run context are
+in ``extraction/context.py``.
+
+See ``docs/runbooks/extraction-worker.md`` for the queries and the fuller
+code map.
 """

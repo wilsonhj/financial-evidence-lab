@@ -23,8 +23,9 @@ from fel_workers.extraction.handler import _evidence_from_payload, request_from_
 from fel_workers.extraction.hashing import sha256_hex
 from fel_workers.extraction.persist import MemoryPersistStore
 from fel_workers.extraction.serialize import serialize_stage_output
+from fel_workers.extraction.stages.io import restore_output
 from fel_workers.extraction.types import StageRecord, WorkflowState
-from fel_workers.extraction.workflow import WorkflowDeps, _restore_output, run_extraction_workflow
+from fel_workers.extraction.workflow import WorkflowDeps, run_extraction_workflow
 
 from .conftest import sample_payload
 
@@ -102,7 +103,7 @@ def test_long_span_text_survives_the_durable_column_round_trip() -> None:
     stored = json.loads(json.dumps(serialized))
 
     state = WorkflowState(request=request)
-    _restore_output(state, "assemble_evidence", stored)
+    restore_output(state, "assemble_evidence", stored)
 
     assert state.evidence[0].text == LONG_SPAN_TEXT
     assert state.evidence[0].text_hash == sha256_hex(state.evidence[0].text)
@@ -144,7 +145,7 @@ def test_restore_output_fails_closed_on_text_hash_mismatch() -> None:
         }
     ]
     with pytest.raises(IntegrityError, match="text_hash"):
-        _restore_output(state, "assemble_evidence", tampered)
+        restore_output(state, "assemble_evidence", tampered)
 
 
 def test_cross_process_resume_keeps_full_evidence_text() -> None:
