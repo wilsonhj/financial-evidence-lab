@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Financial Evidence Lab API
-  version: 0.4.0
+  version: 0.5.0
   description: >-
     Frozen v1 contract surface (ADR-0001). This file seeds the M0 freeze:
     conventions (error envelope, idempotency, optimistic concurrency,
@@ -10,7 +10,16 @@ info:
     v0.4.0 adds bounded agentic extraction (ADR-0007): extraction runs,
     typed resumable SSE, proposals/review, approved versions, plus a
     compatible open-enum loosening for volatile M2 planner/lane/event
-    labels. Modeling and forecasting paths arrive in later minors.
+    labels. v0.5.0 is additive (ADR-0011, ADR-0012; issues #194, #193,
+    #157): the `claims-output/v1` schema and fixture join the registry;
+    `ExtractionProposal.record_confidence` widens to nullable (NULL means
+    "not yet scored" — the worker persists NULL until #62 ships the
+    calibrator) while staying required; the `x-fel-status: planned` marker
+    convention is documented above `paths`; list endpoints take a `limit`
+    query parameter; the reader answers 413 `READER_TOO_LARGE`; and
+    `extraction_run_steps` gains `output`/`output_hash` per ADR-0011, which
+    makes the metadata-only event-payload guarantee literally true.
+    Modeling and forecasting paths arrive in later minors.
 servers:
   - url: /
 # `x-fel-status: planned` on a path item means the contract is frozen but the
@@ -2137,8 +2146,14 @@ components:
           items:
             $ref: "#/components/schemas/EvidenceEdge"
         record_confidence:
-          type: string
+          type: ["string", "null"]
           pattern: "^(0(\\.\\d{1,3})?|1(\\.0{1,3})?)$"
+          description: >-
+            Calibrated record-level confidence as a decimal string in [0,1],
+            or NULL when no calibrator has scored the proposal. NULL means
+            "not yet scored" and is not comparable with "0" (issue #194); the
+            extraction worker persists NULL until #62 ships the calibrator.
+            The property stays required — it is always present on the wire.
         field_confidences:
           type: object
           additionalProperties:

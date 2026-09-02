@@ -1083,7 +1083,8 @@ export interface components {
       metric_id: string;
       payload: components["schemas"]["extraction-payload.schema"];
       evidence: components["schemas"]["EvidenceEdge"][];
-      record_confidence: string;
+      /** @description Calibrated record-level confidence as a decimal string in [0,1], or NULL when no calibrator has scored the proposal. NULL means "not yet scored" and is not comparable with "0" (issue #194); the extraction worker persists NULL until #62 ships the calibrator. The property stays required — it is always present on the wire. */
+      record_confidence: string | null;
       field_confidences: {
         [key: string]: string;
       };

@@ -83,11 +83,11 @@ describe("contract schemas", () => {
 });
 
 describe("contract version identity (VERSIONING.md)", () => {
-  it("openapi info.version and CONTRACT_VERSION agree on the 0.4.0 minor bump", () => {
+  it("openapi info.version and CONTRACT_VERSION agree on the 0.5.0 minor bump", () => {
     const yaml = readFileSync(join(here, "openapi/openapi.yaml"), "utf8");
     const infoVersion = /^ {2}version: (\d+\.\d+\.\d+)$/m.exec(yaml)?.[1];
     expect(infoVersion).toBe(CONTRACT_VERSION);
-    expect(CONTRACT_VERSION).toBe("0.4.0");
+    expect(CONTRACT_VERSION).toBe("0.5.0");
   });
 
   it("SCHEMA_IDS covers every schema file (and nothing else)", () => {
@@ -157,6 +157,16 @@ describe("generated client drift (check:generated in-suite)", () => {
     expect(api).toContain("ExtractionProposal:");
     expect(api).toMatch(/ExtractionRun:[\s\S]*modes: \(/);
     expect(api).toMatch(/"text\/event-stream": components\["schemas"\]\["ExtractionEvent"\]/);
+  });
+
+  it("record_confidence is required but nullable — NULL means not yet scored (#194)", () => {
+    const yaml = readFileSync(join(here, "openapi/openapi.yaml"), "utf8");
+    // Still required: the key is always on the wire, only its value may be null.
+    expect(yaml).toMatch(/ExtractionProposal:[\s\S]*required:[\s\S]*record_confidence,/);
+    expect(yaml).toMatch(/record_confidence:\n\s+type: \["string", "null"\]/);
+    const api = readFileSync(join(here, "src/generated/api.ts"), "utf8");
+    expect(api).toMatch(/record_confidence: string \| null;/);
+    expect(api).not.toMatch(/record_confidence\?:/);
   });
 });
 
