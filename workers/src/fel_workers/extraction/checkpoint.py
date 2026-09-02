@@ -13,6 +13,18 @@ class MemoryCheckpointStore:
 
     Success identity matches migration 0004:
     ``(run_id, step_name, input_hash, workflow_version) WHERE status='succeeded'``.
+
+    The stored ``StageRecord`` mirrors the durable row's shape exactly, which is
+    the point of the double: ``record.output`` holds the SERIALIZED stage output
+    (what ``extraction_run_steps.output`` receives) and ``record.output_hash``
+    holds ``hash_json`` over that same value, so ``workflow._is_recoverable``'s
+    hash verification exercises the identical code path here and against
+    Postgres. A double that kept the pre-serialization object would make the
+    memory suite unable to see a hash mismatch at all.
+
+    There is no ``commit_succeeded_atomic`` here on purpose: a dict has no
+    durability boundary for the step row and its event to straddle, so
+    ``workflow._commit_stage`` falls back to the two-call form.
     """
 
     _succeeded: dict[tuple[str, str, str, str], StageRecord] = field(default_factory=dict)
