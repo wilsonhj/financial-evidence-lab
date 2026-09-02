@@ -18,9 +18,18 @@ import { NotesPanel } from "./NotesPanel";
 const SECTION_ANCHOR: NoteAnchor = { kind: "section", id: "sec-1" };
 const describeAnchor = (anchor: NoteAnchor) => `anchor:${anchor.kind}:${anchor.id}`;
 
+// NotesPanel calls useState twice, in order: draft text, then the
+// visually-hidden live-region announcement. Queue both return values so each
+// call gets its own tuple instead of sharing one mocked setter.
+function stubUseState(draft: string, setDraft: (value: string) => void = vi.fn()) {
+  const setAnnouncement = vi.fn();
+  useStateMock.mockReturnValueOnce([draft, setDraft]).mockReturnValueOnce(["", setAnnouncement]);
+  return { setAnnouncement };
+}
+
 describe("NotesPanel rendering", () => {
   it("names the analyst-notes region and labels the draft field with the current anchor", () => {
-    useStateMock.mockReturnValue(["", vi.fn()]);
+    stubUseState("");
     const markup = renderToStaticMarkup(
       <NotesPanel
         notes={emptyNotesState}
@@ -37,8 +46,28 @@ describe("NotesPanel rendering", () => {
     expect(markup).toContain('id="note-draft"');
   });
 
+  // WCAG 2.2 SC 4.1.3 (Status Messages): note add/remove is a client-side
+  // state update with no page navigation and no focus move, so it needs a
+  // role="status" live region a screen reader announces without the user
+  // having to be focused on the notes list.
+  it("carries a visually-hidden role=status live region for add/remove outcomes", () => {
+    stubUseState("");
+    const markup = renderToStaticMarkup(
+      <NotesPanel
+        notes={emptyNotesState}
+        anchor={SECTION_ANCHOR}
+        anchorLabel="Section: Part I"
+        onAdd={vi.fn()}
+        onRemove={vi.fn()}
+        describeAnchor={describeAnchor}
+      />,
+    );
+    expect(markup).toContain('role="status"');
+    expect(markup).toContain('aria-live="polite"');
+  });
+
   it("disables submission until something is selected and text is entered", () => {
-    useStateMock.mockReturnValue(["", vi.fn()]);
+    stubUseState("");
     const noAnchor = renderToStaticMarkup(
       <NotesPanel
         notes={emptyNotesState}
@@ -53,7 +82,7 @@ describe("NotesPanel rendering", () => {
   });
 
   it("lists existing notes with a remove control and their anchor description", () => {
-    useStateMock.mockReturnValue(["", vi.fn()]);
+    stubUseState("");
     const state = addNote(emptyNotesState, SECTION_ANCHOR, "Watch this line item.", {
       id: "note-1",
       createdAt: "2026-05-01T12:34:00Z",
@@ -77,7 +106,7 @@ describe("NotesPanel rendering", () => {
 describe("NotesPanel callbacks", () => {
   it("submitting a non-empty draft calls onAdd with the anchor and trimmed body, then clears the draft", () => {
     const setDraft = vi.fn();
-    useStateMock.mockReturnValue(["  Check the restated figure.  ", setDraft]);
+    const { setAnnouncement } = stubUseState("  Check the restated figure.  ", setDraft);
     const onAdd = vi.fn();
     const element = NotesPanel({
       notes: emptyNotesState,
@@ -93,10 +122,13 @@ describe("NotesPanel callbacks", () => {
     });
     expect(onAdd).toHaveBeenCalledWith(SECTION_ANCHOR, "Check the restated figure.");
     expect(setDraft).toHaveBeenCalledWith("");
+    // 4.1.3: the live region is told about the outcome even though the
+    // visible list update alone would not reliably reach an AT user.
+    expect(setAnnouncement).toHaveBeenCalledWith("Note added.");
   });
 
   it("submitting a blank draft never calls onAdd", () => {
-    useStateMock.mockReturnValue(["   ", vi.fn()]);
+    stubUseState("   ");
     const onAdd = vi.fn();
     const element = NotesPanel({
       notes: emptyNotesState,
@@ -114,7 +146,7 @@ describe("NotesPanel callbacks", () => {
   });
 
   it("submitting with nothing selected never calls onAdd", () => {
-    useStateMock.mockReturnValue(["A note.", vi.fn()]);
+    stubUseState("A note.");
     const onAdd = vi.fn();
     const element = NotesPanel({
       notes: emptyNotesState,
@@ -131,8 +163,8 @@ describe("NotesPanel callbacks", () => {
     expect(onAdd).not.toHaveBeenCalled();
   });
 
-  it("clicking Remove on a note calls onRemove with that note's id", () => {
-    useStateMock.mockReturnValue(["", vi.fn()]);
+  it("clicking Remove on a note calls onRemove with that note's id and announces it", () => {
+    const { setAnnouncement } = stubUseState("");
     const state = addNote(emptyNotesState, SECTION_ANCHOR, "Note body", { id: "note-9" });
     const onRemove = vi.fn();
     const element = NotesPanel({
@@ -149,5 +181,6 @@ describe("NotesPanel callbacks", () => {
     );
     (removeButton.props as { onClick: () => void }).onClick();
     expect(onRemove).toHaveBeenCalledWith("note-9");
+    expect(setAnnouncement).toHaveBeenCalledWith("Note removed.");
   });
 });

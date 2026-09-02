@@ -101,4 +101,34 @@ describe("Observatory accessibility", () => {
     const css = readFileSync(new URL("../app/globals.css", import.meta.url), "utf8");
     expect(css).toContain("prefers-reduced-motion");
   });
+
+  // WCAG 2.2 SC 1.4.11 (Non-text Contrast), audited in ACCESSIBILITY.md: the
+  // plain --color-border grey is ~1.4:1 against white/surface, well under
+  // the 3:1 floor for an interactive control's visual boundary. Form
+  // controls (question/filter inputs, the lanes fieldset, the note
+  // textarea) use the ~4.5:1 --color-border-strong token instead.
+  it("gives interactive control borders a non-text contrast token, not the ~1.4:1 decorative border", () => {
+    const css = readFileSync(new URL("../app/globals.css", import.meta.url), "utf8");
+    expect(css).toContain("--color-border-strong: #6b7789");
+    expect(css).toMatch(
+      /\.obs-controls input\[type="text"\][\s\S]*?border: 1px solid var\(--color-border-strong\)/,
+    );
+    expect(css).toMatch(
+      /\.obs-controls fieldset \{[\s\S]*?border: 1px solid var\(--color-border-strong\)/,
+    );
+    expect(css).toMatch(
+      /\.note-form textarea \{[\s\S]*?border: 1px solid var\(--color-border-strong\)/,
+    );
+  });
+
+  // WCAG 2.2 SC 2.5.8 (Target Size, Minimum): standalone actionable controls
+  // that are not inline text need a 24x24 CSS px hit area. The notes-list
+  // "Remove" button and the unclassed feedback "Send" submit button used to
+  // rely on horizontal-only padding / browser defaults that render under
+  // 24px tall.
+  it("floors non-inline interactive controls at a 24x24 CSS px target size", () => {
+    const css = readFileSync(new URL("../app/globals.css", import.meta.url), "utf8");
+    expect(css).toMatch(/\.note-list button \{[\s\S]*?min-height: 24px/);
+    expect(css).toMatch(/\.obs-feedback button \{[\s\S]*?min-height: 24px/);
+  });
 });
