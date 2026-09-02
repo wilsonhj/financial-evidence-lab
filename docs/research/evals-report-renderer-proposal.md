@@ -123,7 +123,8 @@ hand.
 
 **Estimated total ≈ 640 changed lines, of which ~150 are generated golden
 bytes**; hand-written, review-bearing code is ~490. This is at/near the
-"roughly 600 changed lines" preference in `docs/handoff/README.md:35`.
+"Dispatch checklist" section's stated preference, "Prefer PRs below roughly
+600 changed lines and split work that cannot be reviewed independently."
 **Size lever if the lead wants a hard sub-600 diff:** drop the committed golden
 SVG (−110) and prove SVG determinism with the render-twice byte-equality
 assertion plus structural assertions instead. Take the lever or leave it, but
@@ -389,10 +390,13 @@ no API, no database, no migration, no queue, no provider.
 OpenAPI / DB contracts (v0.4.0, migrations `0001`–`0005`) are **not** inputs and
 must not be touched: this package has no API or database surface.
 
-### Path-overlap serialization (`docs/handoff/README.md:26-35`)
+### Path-overlap serialization (README's "Dispatch checklist" section)
 
 `evals/**` is **not** a shared path, but it is claimed by several packages, and
-overlap is "resolved by time, not ownership" (`workstreams.yaml:87-90`). Other
+overlap is "resolved by time, not ownership" (`workstreams.yaml:87-90`). The
+README's "Dispatch checklist" section states the same governing rule: "A
+package is ready only when: ... no active package overlaps its allowed
+paths ...". Other
 `evals/**` claimants: M1-CORPUS-QA (#56, merged), READER-CROSS-STACK (#96,
 merged), M2-CLAIMS-VERIFICATION (#58, merged), M3-CONFIDENCE-GATE (#62,
 pending), M5-BACKTEST (#67, pending), M5-AUDIT-RELEASE (#68, pending),
@@ -678,8 +682,10 @@ unset. `docs/handoff/CREDENTIALS.md` needs no new row.
    CLI.
 9. **No Spec Kit bookkeeping.** Do not add `T0113` (or any ID) to
    `specs/001-financial-evidence-lab/tasks.md`, do not check a box, do not edit
-   `workstreams.yaml` or `STATUS.md` (`AGENTS.md:24`,
-   `docs/handoff/README.md:22`).
+   `workstreams.yaml` or `STATUS.md` (`AGENTS.md:24`, and README's "Source of
+   truth" section: "Only the integration lead changes bundle status to
+   `merged`, checks tasks, changes dependencies, or updates shared
+   contracts.").
 10. **No refactor of `evals/harness/**` or `evals/graders/**`.** Read them,
     import `harness.corpus_qa` only inside the test module's drift guard, change
     nothing.
