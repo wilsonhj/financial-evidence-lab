@@ -3,6 +3,7 @@ line-length = 100
 target-version = "py311"
 src = [
     "apps/api",
+    "scripts/db",
     "workers/src",
     "evals",
     "packages/providers",
@@ -27,6 +28,7 @@ mypy_path = "apps/api:workers/src:evals:packages/providers:packages/retrieval:pa
 [tool.pytest.ini_options]
 pythonpath = [
     "apps/api",
+    "scripts/db",
     "workers/src",
     "evals",
     "packages/providers",
@@ -36,6 +38,7 @@ pythonpath = [
 ]
 testpaths = [
     "apps/api/tests",
+    "scripts/db/tests",
     "workers/tests",
     "evals/tests",
     "packages/providers/tests",
