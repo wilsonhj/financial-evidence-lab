@@ -32,29 +32,29 @@ Tasks are ordered by dependency. A task is complete only when its code, tests, t
 
 ## M2 — Observable hybrid retrieval
 
-- [ ] `T0201` Implement finance-aware passage, table-row, and fact chunking with stable provenance.
-- [ ] `T0202` Build PostgreSQL lexical and pgvector dense indexes (`FR-RAG-001`).
-- [ ] `T0203` Implement structured fact/table lookup and entity/time/document filters (`FR-RAG-002`).
-- [ ] `T0204` Implement the typed query plan and bounded query variants.
-- [ ] `T0205` Add reciprocal-rank fusion and a pluggable reranker (`FR-RAG-003`).
-- [ ] `T0206` Persist candidates, scores, filters, fusion, rejections, budgets, and latency (`FR-RAG-004`).
-- [ ] `T0207` Implement atomic claims and closed claim/citation states (`FR-RAG-005`, `007`, `008`).
-- [ ] `T0208` Implement citation entailment and numeric-consistency verification.
-- [ ] `T0209` Implement abstention and qualified contradiction responses (`FR-RAG-006`).
-- [ ] `T0210` Build the Search Observatory with lane toggles, trace timeline, evidence feedback, and replay.
+- [x] `T0201` Implement finance-aware passage, table-row, and fact chunking with stable provenance.
+- [x] `T0202` Build PostgreSQL lexical and pgvector dense indexes (`FR-RAG-001`).
+- [x] `T0203` Implement structured fact/table lookup and entity/time/document filters (`FR-RAG-002`).
+- [x] `T0204` Implement the typed query plan and bounded query variants.
+- [x] `T0205` Add reciprocal-rank fusion and a pluggable reranker (`FR-RAG-003`).
+- [x] `T0206` Persist candidates, scores, filters, fusion, rejections, budgets, and latency (`FR-RAG-004`).
+- [x] `T0207` Implement atomic claims and closed claim/citation states (`FR-RAG-005`, `007`, `008`).
+- [x] `T0208` Implement citation entailment and numeric-consistency verification.
+- [x] `T0209` Implement abstention and qualified contradiction responses (`FR-RAG-006`).
+- [x] `T0210` Build the Search Observatory with lane toggles, trace timeline, evidence feedback, and replay.
 - [ ] ~~`T0211` Generate and version passage/fact/company projections for the Embedding Atlas.~~ — deferred (post-MVP) with the Embedding Atlas.
 - [ ] ~~`T0212` Build Atlas pan/zoom/filter/lasso/query-neighbor interactions (`UX-ATL-001`–`004`).~~ — deferred (post-MVP) with the Embedding Atlas.
 - [ ] ~~`T0213` Add keyboard-accessible table and exact-distance fallback (`UX-ATL-005`).~~ — deferred (post-MVP) with the Embedding Atlas.
-- [ ] `T0214a` Build the 50–100-question smoke benchmark and automate the Section 19.6 gates against it for the M2 exit (`spec.md` Section 19.5).
-- [ ] `T0215` Run the reference-corpus retrieval performance suite (Atlas performance testing deferred post-MVP).
+- [x] `T0214a` Build the 50–100-question smoke benchmark and automate the Section 19.6 gates against it for the M2 exit (`spec.md` Section 19.5).
+- [ ] `T0215` Run the reference-corpus retrieval performance suite (Atlas performance testing deferred post-MVP). — Smoke gate merged in PR #122; `packages/retrieval/ACCEPTANCE.md` lists the p95/latency characterization beyond the smoke gate as residual, so this stays open (spec 004 §4.2 caveat).
 
 ## M3 — Agentic extraction
 
-- [ ] `T0301` Define the B2B SaaS ontology for ARR, retention, customers, seats, pricing, bookings, billings, and gross margin.
-- [ ] `T0302` Implement bounded durable agent workflows with typed inputs/outputs and allowlisted tools.
-- [ ] `T0303` Implement KPI, guidance, and revenue-driver extraction schemas and agents.
-- [ ] `T0304` Implement period, currency, unit, sign, scale, and dimension normalization (`FR-EXT-001`, `002`).
-- [ ] `T0305` Add deterministic accounting, schema, duplicate, and conflict validators.
+- [x] `T0301` Define the B2B SaaS ontology for ARR, retention, customers, seats, pricing, bookings, billings, and gross margin.
+- [x] `T0302` Implement bounded durable agent workflows with typed inputs/outputs and allowlisted tools.
+- [x] `T0303` Implement KPI, guidance, and revenue-driver extraction schemas and agents.
+- [x] `T0304` Implement period, currency, unit, sign, scale, and dimension normalization (`FR-EXT-001`, `002`).
+- [x] `T0305` Add deterministic accounting, schema, duplicate, and conflict validators.
 - [ ] `T0306` Calibrate confidence and enforce the 0.85 record/0.80 field review thresholds (`EXT-005`).
 - [ ] `T0307` Prevent auto-approval of monetary facts, guidance, and assumptions.
 - [ ] `T0308` Build accept/edit/reject/merge/rerun review workflows (`FR-EXT-003`).

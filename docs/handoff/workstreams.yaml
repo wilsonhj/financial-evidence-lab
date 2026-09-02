@@ -186,7 +186,7 @@ packages:
     allowed_paths: [apps/web/**, packages/ui/**]
   - id: M1-CORPUS-QA
     issue: 56
-    tasks: [T0111, T0112]
+    tasks: [T0111] # was [T0111, T0112]; T0112 moved to RELEASE-LIVE-CUTOVER (#177) per spec 004 §5.1
     depends_on: [M1-INGESTION]
     team: trust
     branch: agent/m1-corpus-qa
@@ -416,7 +416,7 @@ packages:
     # Fact/scenario dependency is inherited via M5-BACKTEST -> M5-FORECASTING ->
     # M4-FACT-SCENARIOS; the former lineage-UI edge was removed by the audit.
     tasks: [T0509, T0510, T0511, T0512, T0513, T0214b]
-    depends_on: [M5-BACKTEST]
+    depends_on: [M5-BACKTEST, RELEASE-LIVE-CUTOVER] # live-evaluation evidence must exist before the release artifact (spec 004 §5.1)
     team: trust
     branch: agent/m5-audit-release
     allowed_paths:
@@ -424,6 +424,53 @@ packages:
       - packages/export/**
       - evals/**
       - docs/release/**
+  - id: RELEASE-LIVE-CUTOVER # mock -> live cutover: credentials, provider selection by benchmark, live gates
+    issue: 177
+    tasks: [T0112] # deallocated from M1-CORPUS-QA in this same edit so no task is owned twice
+    depends_on: [M2-CLAIMS-VERIFICATION, M3-EXTRACTION-CORE]
+    team: trust
+    branch: agent/release-live-cutover
+    # Both depends_on edges are merged; the block is external: credentials
+    # requested 2026-09-02 but not provisioned, Alpha Vantage budget sign-off,
+    # adjudicator staffing, and the provider pin (ADR-0012 Accepted; the pin
+    # itself is chosen by the benchmark). Only the lead flips this.
+    status: blocked
+    credentials: hosted-required # overrides defaults.credentials mock-only; names only until the lead provisions
+    # Contends with #62/#67/#68/#108 on evals/** and with #62/#66/#67/#108 on
+    # workers/tests/** (the last by containment of workers/**); own wave, see spec 004 §6.2.
+    allowed_paths:
+      - evals/**
+      - workers/tests/**
+      - docs/handoff/CREDENTIALS.md
+  - id: ARCH-REVIEW-2026-09 # lead-architect review remediation (umbrella #188, sub-issues #189-#205)
+    issue: 188
+    tasks: [] # no Spec Kit task; correctness and platform fixes found by review
+    depends_on: []
+    team: platform
+    branch: claude/repo-analysis-improvements-m25v4u
+    # Lead-authorized contract-change package: it adds migrations 0006-0009
+    # (numbers reserved at dispatch), ADR-0012/0013/0014 (Accepted 2026-09-02),
+    # the migration ledger, contract 0.5.0, and CI gate changes. Serialized
+    # against everything else while active; paths return to their owners on merge.
+    status: active
+    allowed_paths:
+      - apps/api/**
+      - apps/web/**
+      - workers/**
+      - packages/**
+      - evals/**
+      - db/migrations/**
+      - scripts/**
+      - infra/**
+      - .github/**
+      - specs/003-agentic-extraction/data-model.md
+      - docs/**
+      - requirements.txt
+      - requirements-dev.txt
+      - pyproject.toml
+      - vitest.config.ts
+      - Makefile
+      - conftest.py
   - id: DOCS-ONBOARDING # developer onboarding, architecture, system design, testing guides
     issue: 148
     # Deliberately empty: documentation work has no Spec Kit task. Registered
