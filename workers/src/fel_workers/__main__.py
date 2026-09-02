@@ -39,6 +39,21 @@ Two modes:
   guessed at. With neither (or both) mode set, the process exits with
   status 2 before any database connection is attempted. ``--max-iterations``
   bounds the loop for tests/one-shot drains.
+
+Three further, independent opt-ins, all off when unset:
+
+- ``FEL_WORKER_DB_ROLE`` (#190, ADR-0013) — ``SET ROLE`` on every worker
+  connection right after connect, so the job path runs as the least-privilege
+  ``fel_worker`` role instead of the connection's login role. Unset keeps the
+  previous behaviour exactly; a value that is not a plain SQL identifier
+  exits 2.
+- ``FEL_WORKER_HEALTH_PORT`` (#200) — serve ``GET /health`` (see
+  :mod:`fel_workers.health`). The loop's liveness is observed here, by
+  wrapping the ``should_continue`` callback the consumer already takes, so
+  the consumer loop needs no knowledge of the endpoint.
+- ``FEL_SENTRY_DSN`` (#203) — initialise Sentry with PII off (see
+  :func:`init_sentry`); the SDK is imported lazily and its absence is a
+  warning, not a startup failure.
 """
 
 from __future__ import annotations
@@ -53,6 +68,8 @@ from types import FrameType
 from typing import TYPE_CHECKING
 
 import psycopg
+
+from fel_workers.health import HEALTH_PORT_ENV, Liveness, start_health_server
 
 if TYPE_CHECKING:
     from fel_providers.interfaces import SecClient, StorageProvider, StructuredLLMProvider
@@ -355,6 +372,71 @@ def validate_live_user_agent() -> str:
     return user_agent
 
 
+def resolve_health_port() -> int | None:
+    """Port for the ``GET /health`` endpoint, or ``None`` when unset.
+
+    Off by default: a worker with no platform health check has no use for an
+    open socket. A non-numeric or out-of-range value raises rather than being
+    ignored — an operator who asked for a health check and silently did not
+    get one is worse off than one whose deploy fails loudly (exit 2).
+    """
+    raw = os.environ.get(HEALTH_PORT_ENV)
+    if raw is None or not raw.strip():
+        return None
+    try:
+        port = int(raw.strip())
+    except ValueError:
+        raise RuntimeError(f"{HEALTH_PORT_ENV} must be an integer port; got {raw!r}.") from None
+    if not 1 <= port <= 65535:
+        raise RuntimeError(f"{HEALTH_PORT_ENV} must be in 1..65535; got {port}.")
+    return port
+
+
+def init_sentry() -> bool:
+    """Initialise Sentry when ``FEL_SENTRY_DSN`` is set; otherwise do nothing.
+
+    Returns whether the SDK was initialised. The import is lazy and optional
+    on purpose: ``sentry-sdk`` is not a worker dependency, so a deployment
+    that has not installed it must still start — but silently swallowing the
+    DSN would leave an operator believing errors are being reported when they
+    are not, so the missing SDK is logged as a warning.
+
+    ``send_default_pii=False`` is not the SDK default in every version and is
+    pinned here deliberately: worker jobs carry tenant identifiers and filing
+    payloads, none of which belongs in an error-tracking service.
+    ``traces_sample_rate`` comes from ``FEL_SENTRY_TRACES_SAMPLE_RATE`` and
+    defaults to 0 (errors only, no performance traces).
+    """
+    dsn = os.environ.get("FEL_SENTRY_DSN", "").strip()
+    if not dsn:
+        return False
+    try:
+        import sentry_sdk
+    except ImportError:
+        log.warning(
+            "FEL_SENTRY_DSN is set but the sentry-sdk package is not installed;"
+            " worker errors will NOT be reported. Install sentry-sdk or unset"
+            " FEL_SENTRY_DSN."
+        )
+        return False
+    raw_rate = os.environ.get("FEL_SENTRY_TRACES_SAMPLE_RATE", "").strip()
+    try:
+        traces_sample_rate = float(raw_rate) if raw_rate else 0.0
+    except ValueError:
+        log.warning(
+            "FEL_SENTRY_TRACES_SAMPLE_RATE has non-numeric value %r; using 0.0",
+            raw_rate,
+        )
+        traces_sample_rate = 0.0
+    sentry_sdk.init(
+        dsn=dsn,
+        send_default_pii=False,
+        traces_sample_rate=traces_sample_rate,
+    )
+    log.info("sentry initialised (traces_sample_rate=%s)", traces_sample_rate)
+    return True
+
+
 def run_entry(argv: list[str]) -> int:
     """Deployment entrypoint for ``python -m fel_workers run``.
 
@@ -391,6 +473,7 @@ def run_main(argv: list[str]) -> int:
     :func:`build_structured_llm` sees the explicit opt-in, on every path.
     """
     from fel_workers.consumer import run_worker
+    from fel_workers.storage import apply_worker_db_role
 
     _configure()
     args = parse_run_args(argv)
@@ -402,20 +485,43 @@ def run_main(argv: list[str]) -> int:
         sec, storage = build_run_providers()
         structured_llm = build_structured_llm(args.queue)
         memory_stores = resolve_extraction_memory_stores()
+        health_port = resolve_health_port()
     except RuntimeError as exc:
         log.error("%s", exc)
         return 2
+    init_sentry()
+    # Liveness is owned HERE, not by the consumer loop: the loop already takes
+    # a ``should_continue`` callback, so wrapping it is enough to observe every
+    # iteration without touching consumer.py.
+    liveness = Liveness(queue=args.queue)
+    health_server = start_health_server(liveness, port=health_port)[0] if health_port else None
+
+    def _alive() -> bool:
+        liveness.touch()
+        return _running
+
     with psycopg.connect(database_url, autocommit=True) as conn:
+        # Opt-in least-privilege role for the job path (#190); no-op unless
+        # FEL_WORKER_DB_ROLE is set. Applied here, before the first
+        # statement, so every worker write in this process runs under it.
+        try:
+            apply_worker_db_role(conn)
+        except RuntimeError as exc:
+            log.error("%s", exc)
+            return 2
         completed = run_worker(
             conn,
             storage,
             sec,
             queue_name=args.queue,
             max_iterations=args.max_iterations,
-            should_continue=lambda: _running,
+            should_continue=_alive,
             structured_llm=structured_llm,
             extraction_memory_stores=memory_stores,
         )
+    if health_server is not None:
+        health_server.shutdown()
+        health_server.server_close()
     log.info("worker run mode finished; %d job(s) completed", completed)
     return 0
 

@@ -77,12 +77,6 @@ cannot catch privilege/lock bugs of this class. Shared helper:
 `tests/_helpers.sql` (included via `\ir`; it does not match `*.test.sql`,
 so CI never runs it directly).
 
-Worker-role note: no service role exists yet. The index build path
-(`retrieval_items` / `retrieval_embeddings` inserts and index version
-status transitions) assumes one; when it is introduced it will need
-`UPDATE ON retrieval_index_versions` (for the status transitions and the
-guards' `FOR SHARE` locks) in addition to `INSERT` on the artifact tables.
-
 ## 0007 jobs hardening (#189)
 
 Additive changes to 0001's `jobs` table, for the three queue gaps in #189:
@@ -177,3 +171,47 @@ late INSERT, a late `output` rewrite and a DELETE.
 `tests/0004_extraction_core.test.sql` gained one line: its `fel_app` step
 advances `output` alongside `output_hash`, because the pair CHECK now forbids the
 hash on its own. The `0004` migration itself is byte-unchanged.
+Both roles are subject to this: `0008` gives `fel_worker` `UPDATE ON
+retrieval_index_versions` and column-level `UPDATE ON extraction_runs` for
+exactly the same lock reason, and a new guard that row-locks a table must be
+checked against **both** roles' privileges, not just `fel_app`'s.
+
+## 0008 — worker service role (`fel_worker`)
+
+The job path now has its own least-privilege role (issue #190, ADR-0013):
+`NOLOGIN`, no `DELETE` anywhere, no DDL, no `BYPASSRLS`, no ownership. Before
+`0008` the worker connected as the migration/owner superuser, which bypassed
+RLS, every grant and every DDL restriction.
+
+- Grants are derived EMPIRICALLY from the SQL the worker executes
+  (`workers/src/fel_workers/**` plus `fel_retrieval/{index_build,lanes}.py`),
+  including the privileges the guards' row locks need. TABLE-level `UPDATE`
+  on `jobs` and `extraction_run_steps` so later columns are covered; a column
+  list on `extraction_runs`, mirroring the `fel_app` grant.
+- Corpus and shared retrieval artifacts have no RLS — grants alone govern
+  them. The tenant tables get worker policies that pin ORG CONSISTENCY (a
+  child row's `org_id` must match its parent run/proposal/conflict/workspace);
+  they are not tenant isolation, which RLS cannot express for a cross-tenant
+  service. See ADR-0013.
+- Adoption is opt-in per deployment via `FEL_WORKER_DB_ROLE` (unset = previous
+  behaviour; set = `SET ROLE` on every worker connection).
+
+**Every new worker-written table must extend the `0008` grant set and
+`tests/0008_worker_role.test.sql` in the same migration that creates it.** The
+harness performs one representative write per granted table class as
+`fel_worker` and asserts `DELETE`/`ALTER TABLE`/`CREATE TABLE` raise `42501`.
+`workers/tests` additionally runs green under
+`FEL_WORKER_DB_ROLE=fel_worker`, which is the check that catches a grant the
+derivation missed.
+
+## 0009 — platform FK hygiene
+
+`audit_events.org_id`, `usage_events.org_id` and `jobs.org_id` were bare uuid
+columns; they now reference `organizations(id) ON DELETE RESTRICT`, added
+`NOT VALID` and then `VALIDATE`d so the lock is brief. `jobs.org_id` stays
+nullable (platform jobs carry no tenant) — a foreign key permits NULL.
+`RESTRICT`, never `CASCADE`: audit and usage rows are the compliance and
+billing record, so an organization carrying them is deliberately not
+deletable. `workspaces.active_scenario_id` gets a COMMENT marking it reserved
+for M4; the migration that creates `scenarios` must add the
+`(active_scenario_id, org_id)` composite FK.
