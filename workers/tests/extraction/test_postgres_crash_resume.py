@@ -9,8 +9,9 @@ connection serves the job queue only and the workflow never touches
 
 That gap is why three separate defects in this package hid in the same place:
 stage output not being restored after process death, span text being truncated
-to 64 chars inside the event payload that carries it, and usage flushes racing
-the terminal-run trigger. All three are invisible to an in-process run, because
+to 64 chars inside the event payload that used to carry it (before ADR-0011 gave
+it a column), and usage flushes racing the terminal-run trigger. All three are
+invisible to an in-process run, because
 `PostgresCheckpointStore._memory` answers from cache before the row is ever
 read back.
 
@@ -45,7 +46,7 @@ import pytest
 
 from fel_providers.mocks import MockStructuredLLMProvider
 from fel_workers.extraction.events import ExtractionEvent
-from fel_workers.extraction.hashing import sha256_hex
+from fel_workers.extraction.hashing import hash_json, sha256_hex
 from fel_workers.extraction.persist import (
     PostgresCheckpointStore,
     PostgresEventStore,
@@ -91,26 +92,84 @@ def ensure_extraction_database(base_url: str) -> str:
     fixture setup. An isolated sibling keeps that blast radius local. Roles are
     cluster-level, so grants inside the migrations resolve there too.
 
-    Idempotent: creation swallows DuplicateDatabase, and the non-idempotent
-    migrations run only when the marker table is absent.
+    Idempotent, and — since ADR-0011 — idempotent in the way that actually
+    matters. The old marker check was ``to_regclass('public.extraction_runs')``:
+    present means "migrated", so a sibling database created before a NEW
+    migration landed was never brought forward. Anyone with a pre-existing
+    ``<db>_extraction`` would have run this suite against a schema with no
+    ``extraction_run_steps.output`` column, and the whole crash-resume suite
+    would have been testing a code path the database could not support — a green
+    run proving nothing, which is worse than a red one.
+
+    The check is therefore against the CURRENT schema, not against the first
+    migration that ever created it. A database that is stale rather than absent
+    is dropped and rebuilt: migrations are not individually idempotent, so
+    replaying them over a partially-migrated database is not an option, and a
+    test sibling is disposable by construction (that is why it exists).
     """
     parsed = urlsplit(base_url)
     extraction_db = parsed.path.lstrip("/") + "_extraction"
     extraction_url = urlunsplit(parsed._replace(path="/" + extraction_db))
+    repo_root = Path(__file__).resolve().parents[3]
+
+    if _schema_is_current(extraction_url):
+        return extraction_url
 
     with psycopg.connect(base_url, autocommit=True) as conn:
-        try:
-            conn.execute(f'CREATE DATABASE "{extraction_db}"')  # noqa: S608 — derived name
-        except psycopg.errors.DuplicateDatabase:
-            pass
+        # DROP is safe: `_schema_is_current` already said this database is either
+        # absent or behind the migrations, and nothing outside this suite owns it.
+        conn.execute(f'DROP DATABASE IF EXISTS "{extraction_db}" WITH (FORCE)')  # noqa: S608
+        conn.execute(f'CREATE DATABASE "{extraction_db}"')  # noqa: S608 — derived name
 
-    repo_root = Path(__file__).resolve().parents[3]
     with psycopg.connect(extraction_url, autocommit=True) as conn:
-        marker = conn.execute("SELECT to_regclass('public.extraction_runs')").fetchone()
-        if marker is None or marker[0] is None:
-            for path in sorted(repo_root.glob("db/migrations/*.sql")):
-                conn.execute(path.read_text())
+        for path in sorted(repo_root.glob("db/migrations/*.sql")):
+            conn.execute(path.read_text())
+    if not _schema_is_current(extraction_url):  # pragma: no cover — defensive
+        raise RuntimeError(f"{extraction_db} is still behind db/migrations after applying them")
     return extraction_url
+
+
+# One probe per schema fact this suite depends on. Add to it whenever a new
+# migration lands something the extraction tests read or write, or the staleness
+# check silently stops being a check.
+_SCHEMA_PROBES: tuple[str, ...] = (
+    # 0004
+    "SELECT to_regclass('public.extraction_runs') IS NOT NULL",
+    "SELECT to_regclass('public.extraction_run_steps') IS NOT NULL",
+    # 0006 (ADR-0011): the durable stage-output column and its pair CHECK.
+    """
+    SELECT EXISTS (
+        SELECT 1 FROM information_schema.columns
+         WHERE table_schema = 'public' AND table_name = 'extraction_run_steps'
+           AND column_name = 'output'
+    )
+    """,
+    """
+    SELECT EXISTS (
+        SELECT 1 FROM pg_constraint
+         WHERE conname = 'extraction_run_steps_output_pair'
+    )
+    """,
+    # 0006 (issue #194): unscored proposals persist NULL, not 0.
+    """
+    SELECT NOT attnotnull FROM pg_attribute
+     WHERE attrelid = 'public.extraction_proposals'::regclass
+       AND attname = 'record_confidence'
+    """,
+)
+
+
+def _schema_is_current(extraction_url: str) -> bool:
+    """True when the sibling database exists AND every probe passes."""
+    try:
+        with psycopg.connect(extraction_url, autocommit=True) as conn:
+            for probe in _SCHEMA_PROBES:
+                row = conn.execute(probe).fetchone()
+                if row is None or row[0] is not True:
+                    return False
+    except psycopg.OperationalError:
+        return False  # database does not exist yet
+    return True
 
 
 @pytest.fixture(scope="module")
@@ -355,12 +414,13 @@ def test_crash_and_resume_through_real_postgres_stores(extraction_db_url: str) -
 
 
 @pytest.mark.skipif(TEST_DATABASE_URL is None, reason="TEST_DATABASE_URL not configured")
-def test_stage_output_round_trips_through_the_durable_event_row(extraction_db_url: str) -> None:
+def test_stage_output_round_trips_through_the_durable_step_row(extraction_db_url: str) -> None:
     """Narrow guard on the mechanism the resume above depends on.
 
-    `extraction_run_steps` has no output column, so `load_succeeded` hydrates
-    from the `step_completed` event payload. A fresh store proves the read
-    comes from Postgres rather than the in-process cache.
+    `load_succeeded` reads `extraction_run_steps.output` (migration 0006). A
+    fresh store proves the read comes from Postgres rather than the in-process
+    cache, and the recomputed hash proves the column and `output_hash` describe
+    the same bytes.
     """
     run_id = str(uuid.uuid4())
     request = _request(run_id)
@@ -399,8 +459,12 @@ def test_stage_output_round_trips_through_the_durable_event_row(extraction_db_ur
     assert record is not None
     assert record.status == "succeeded"
     assert record.output is not None, (
-        "stage output was not restored from the durable event row: a resumed run "
+        "stage output was not restored from the durable step row: a resumed run "
         "would silently re-extract with the stage's result lost"
+    )
+    assert record.output_hash == hash_json(record.output), (
+        "the durable output does not hash to its output_hash: the two are written "
+        "in one INSERT precisely so they cannot disagree"
     )
 
 
@@ -512,6 +576,12 @@ def test_death_between_step_commit_and_its_event_does_not_silently_abstain(
     silent data loss reported as a legitimate abstention, and permanent, because
     0004 forbids re-opening a terminal run. Verified at PR #145 head: the resumed
     run reported `status=succeeded abstained=True proposals=0 model_calls=0`.
+
+    Since migration 0006 this scenario is no longer about resume at all — the
+    output is on the step row and the resume succeeds from it (see
+    `test_resume_succeeds_with_the_step_completed_event_never_written`). What is
+    still asserted here is that the run does NOT abstain, whichever way it gets
+    there, because that is the observable defect.
     """
     run_id = str(uuid.uuid4())
     request = _request(run_id)
@@ -571,7 +641,190 @@ def test_death_between_step_commit_and_its_event_does_not_silently_abstain(
     )
     assert final.status == "waiting_review"
     assert final.validated, "the resumed run produced no proposals"
-    assert second.calls >= 1, "the unrecoverable stage was skipped instead of re-run"
+
+
+@pytest.mark.skipif(TEST_DATABASE_URL is None, reason="TEST_DATABASE_URL not configured")
+def test_resume_succeeds_with_the_step_completed_event_never_written(
+    extraction_db_url: str,
+) -> None:
+    """The load-bearing test for ADR-0011: the step ROW alone carries the output.
+
+    The `step_completed` event for `extract_kpi` is dropped on append — not
+    DELETEd, which 0004 forbids outright (`extraction_run_events` is append-only
+    and `fel_app` holds only SELECT, INSERT on it). What survives is exactly what
+    a death between the step commit and its event append leaves behind.
+
+    Three assertions, and the third is the one the old design could not express:
+
+    (a) zero `step_completed` rows for that step — the precondition;
+    (b) `load_succeeded` returns a non-null output anyway, hydrated from
+        `extraction_run_steps.output`, so `_run_stage` skips the stage;
+    (c) ZERO model calls on the resumed pass. Under the event-carried checkpoint
+        this had to be `>= 1` (the stage was re-run), which is a passing
+        assertion for a design that lost the stage's result.
+    """
+    run_id = str(uuid.uuid4())
+    request = _request(run_id)
+
+    with psycopg.connect(extraction_db_url, autocommit=True) as conn:
+        _seed_parents(conn)
+        _seed_run(conn, request)
+        PostgresPersistStore(conn).mark_running(run_id=run_id, org_id=_ORG)
+        run_extraction_workflow(
+            WorkflowState(request=request, evidence=_evidence()),
+            WorkflowDeps(
+                structured_llm=_CountingLLM(),
+                checkpoint=PostgresCheckpointStore(conn=conn),
+                events=_LosingEventStore(conn=conn, lose_on_step=_TORN_STEP),
+                persist=PostgresPersistStore(conn),
+                evidence_loader=lambda _r: _evidence(),
+            ),
+        )
+        # (a) The event really is absent.
+        lost = conn.execute(
+            """
+            SELECT count(*) FROM extraction_run_events
+             WHERE org_id = %s AND run_id = %s AND event_type = 'step_completed'
+               AND payload->>'step_name' = %s
+            """,
+            (_ORG, run_id, _TORN_STEP),
+        ).fetchone()
+        assert lost is not None and lost[0] == 0, "the step_completed event survived"
+        step = conn.execute(
+            """
+            SELECT input_hash, output_hash, output IS NOT NULL
+              FROM extraction_run_steps
+             WHERE org_id = %s AND run_id = %s AND step_name = %s AND status = 'succeeded'
+            """,
+            (_ORG, run_id, _TORN_STEP),
+        ).fetchone()
+        assert step is not None and step[1] is not None
+        assert step[2] is True, "the step row carries no output: 0006 is not in effect"
+
+    # Process death: nothing survives but the database.
+    with psycopg.connect(extraction_db_url, autocommit=True) as fresh_conn:
+        fresh_conn.execute("SELECT set_config('app.org_id', %s, false)", (_ORG,))
+        # (b) The output comes back off the row, with no event to read.
+        record = PostgresCheckpointStore(conn=fresh_conn).load_succeeded(
+            run_id=run_id,
+            org_id=_ORG,
+            step_name=_TORN_STEP,
+            input_hash=step[0],
+            workflow_version=request.workflow_version,
+        )
+        assert record is not None and record.output is not None
+        assert record.output_hash == hash_json(record.output)
+
+    with psycopg.connect(extraction_db_url, autocommit=True) as fresh_conn:
+        fresh_conn.execute("SELECT set_config('app.org_id', %s, false)", (_ORG,))
+        second = _CountingLLM()
+        final = run_extraction_workflow(
+            WorkflowState(request=request, evidence=_evidence()),
+            _postgres_deps(fresh_conn, second),
+        )
+
+    # (c) Nothing was re-extracted.
+    assert second.calls == 0, (
+        "the resumed run made model calls: a stage whose output was durable on "
+        "its step row was re-executed, which is the cost ADR-0011 removes"
+    )
+    assert final.status == "waiting_review"
+    assert not final.abstained
+    assert final.validated
+
+
+@pytest.mark.skipif(TEST_DATABASE_URL is None, reason="TEST_DATABASE_URL not configured")
+def test_no_persisted_event_payload_carries_evidence_text(extraction_db_url: str) -> None:
+    """`data-model.md:23`, machine-checked against a full durable run.
+
+    "Payload contains IDs/counts/status, never evidence or prompt text." That
+    sentence was false for as long as `step_completed` carried `stage_output`;
+    it is now true, and prose is not the place to keep a guarantee that a query
+    can settle.
+    """
+    run_id = str(uuid.uuid4())
+    request = _request(run_id)
+
+    with psycopg.connect(extraction_db_url, autocommit=True) as conn:
+        _seed_parents(conn)
+        _seed_run(conn, request)
+        PostgresPersistStore(conn).mark_running(run_id=run_id, org_id=_ORG)
+        run_extraction_workflow(
+            WorkflowState(request=request, evidence=_evidence()),
+            _postgres_deps(conn, _CountingLLM()),
+        )
+        rows = conn.execute(
+            "SELECT event_type, payload::text FROM extraction_run_events"
+            " WHERE org_id = %s AND run_id = %s",
+            (_ORG, run_id),
+        ).fetchall()
+
+    assert rows, "the run persisted no events"
+    # The pinned span text, and a distinctive fragment of it, must appear nowhere.
+    for event_type, payload_text in rows:
+        assert LONG_SPAN_TEXT not in payload_text, event_type
+        assert "ARR was $100 million as of June 30, 2026." not in payload_text, event_type
+        assert '"stage_output"' not in payload_text, event_type
+
+
+@pytest.mark.skipif(TEST_DATABASE_URL is None, reason="TEST_DATABASE_URL not configured")
+def test_tampered_durable_output_forces_re_execution(extraction_db_url: str) -> None:
+    """Issue #158 against the real column: the hash is what makes the row trustworthy.
+
+    `extraction_run_steps.output` is UPDATE-able within an open run — 0004's
+    guard pins identity columns, and its own comment says steps may advance
+    status/output — so the row is not a trusted memory space. A resumed run that
+    took it on faith would recompute `raw_payload_hash` and `proposal_id_for`
+    over the substituted payload and emit proposals describing something the
+    extractor never produced.
+    """
+    run_id = str(uuid.uuid4())
+    request = _request(run_id)
+
+    with psycopg.connect(extraction_db_url, autocommit=True) as conn:
+        _seed_parents(conn)
+        _seed_run(conn, request)
+        PostgresPersistStore(conn).mark_running(run_id=run_id, org_id=_ORG)
+        first = _CountingLLM(die_after=2)
+        with pytest.raises(_ProcessDeath):
+            run_extraction_workflow(
+                WorkflowState(request=request, evidence=_evidence()),
+                _postgres_deps(conn, first),
+            )
+        # Rewrite a committed stage's output, leaving output_hash describing the
+        # original — the state a corrupted backup or a bad hand-edit produces.
+        updated = conn.execute(
+            """
+            UPDATE extraction_run_steps
+               SET output = jsonb_set(
+                       output, '{tampered}', '"not what the stage produced"'::jsonb, true)
+             WHERE org_id = %s AND run_id = %s AND status = 'succeeded'
+               AND step_name = 'classify'
+            """,
+            (_ORG, run_id),
+        )
+        assert updated.rowcount == 1, "no committed classify step to tamper with"
+
+    with psycopg.connect(extraction_db_url, autocommit=True) as fresh_conn:
+        fresh_conn.execute("SELECT set_config('app.org_id', %s, false)", (_ORG,))
+        second = _CountingLLM()
+        final = run_extraction_workflow(
+            WorkflowState(request=request, evidence=_evidence()),
+            _postgres_deps(fresh_conn, second),
+        )
+        rejected = fresh_conn.execute(
+            """
+            SELECT count(*) FROM extraction_run_events
+             WHERE org_id = %s AND run_id = %s AND event_type = 'step_failed'
+               AND payload->'error'->>'code' = 'checkpoint_rejected'
+               AND payload->>'reason' = 'checkpoint_hash_mismatch'
+            """,
+            (_ORG, run_id),
+        ).fetchone()
+
+    assert second.calls >= 1, "the tampered checkpoint was trusted instead of re-run"
+    assert rejected is not None and rejected[0] >= 1, "the rejection was not recorded"
+    assert final.status == "waiting_review"
 
 
 @pytest.mark.skipif(TEST_DATABASE_URL is None, reason="TEST_DATABASE_URL not configured")

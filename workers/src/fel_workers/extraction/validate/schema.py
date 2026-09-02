@@ -5,9 +5,11 @@ from __future__ import annotations
 import json
 import re
 from functools import lru_cache
-from pathlib import Path
+from importlib import resources
 from typing import Any
 from uuid import UUID
+
+from fel_workers.extraction.contracts import EXTRACTION_PAYLOAD_SCHEMA_FILENAME
 
 _DECIMAL_RE = re.compile(r"^-?\d+(\.\d+)?$")
 _CURRENCY_RE = re.compile(r"^[A-Z]{3}$")
@@ -74,22 +76,28 @@ _DRIVER_REQUIRED = _COMMON_REQUIRED + (
 
 @lru_cache(maxsize=1)
 def load_extraction_payload_schema() -> dict[str, Any]:
-    """Load the frozen contract schema (read-only reference)."""
-    root = Path(__file__).resolve().parents[5]  # repo root via workers/src/...
-    path = root / "packages" / "contracts" / "schemas" / "extraction-payload.schema.json"
-    if not path.is_file():
-        # Fallback: walk up looking for packages/contracts
-        here = Path(__file__).resolve()
-        for parent in here.parents:
-            candidate = (
-                parent / "packages" / "contracts" / "schemas" / "extraction-payload.schema.json"
-            )
-            if candidate.is_file():
-                path = candidate
-                break
-        else:
-            raise FileNotFoundError("extraction-payload.schema.json not found")
-    loaded = json.loads(path.read_text(encoding="utf-8"))
+    """Load the frozen contract schema from package data (read-only reference).
+
+    Read out of ``fel_workers.extraction.contracts`` rather than off the
+    repository tree. The previous loader walked parent directories looking for
+    ``packages/contracts/schemas/…``, which resolves in a git checkout and in no
+    other deployment: installed as a wheel, ``fel_workers`` sits in
+    ``site-packages`` with no repository above it, the walk runs to the
+    filesystem root, and the worker raises ``FileNotFoundError`` on the first
+    payload it validates — at runtime, on a real job, not at build time
+    (issue #192).
+
+    ``packages/contracts/schemas/extraction-payload.schema.json`` remains
+    AUTHORITATIVE; the packaged copy is a byte-for-byte mirror of it and
+    ``test_vendored_contract_schema.py`` fails CI on any drift, so this cannot
+    become a second source of truth by accident.
+    """
+    raw = (
+        resources.files("fel_workers.extraction.contracts")
+        .joinpath(EXTRACTION_PAYLOAD_SCHEMA_FILENAME)
+        .read_text(encoding="utf-8")
+    )
+    loaded = json.loads(raw)
     if not isinstance(loaded, dict):
         raise TypeError("extraction payload schema root must be an object")
     return loaded
@@ -111,7 +119,9 @@ def _closed_branch_properties(node: dict[str, Any]) -> set[str]:
 def allowed_payload_keys(kind: Any, *, shape: Any) -> set[str]:
     """Keys this payload variant may carry, read off the frozen contract schema.
 
-    Derived at call time from `packages/contracts/schemas/extraction-payload.schema.json`
+    Derived at call time from the frozen contract schema
+    (`packages/contracts/schemas/extraction-payload.schema.json`, read from the
+    packaged mirror)
     (consumed, never modified) so the allowed set cannot drift from the contract.
     An empty set means the variant is unrecognisable — `kind`/`shape` is already
     reported as an error, and no unknown-key noise is added on top of it.

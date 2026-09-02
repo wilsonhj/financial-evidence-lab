@@ -28,16 +28,58 @@ from fel_workers.extraction.types import (
     WorkflowState,
 )
 from fel_workers.extraction.workflow import WorkflowDeps, run_extraction_workflow
+from fel_workers.queue import PermanentFailure
 
 JOB_KIND_EXTRACTION_RUN = "extraction_run"
 DEFAULT_EXTRACTION_QUEUE = "extraction"
 
+# 0004's run status CHECK: the three from which no run ever returns.
+TERMINAL_RUN_STATUSES = frozenset({"succeeded", "failed", "cancelled"})
+
 __all__ = [
     "DEFAULT_EXTRACTION_QUEUE",
     "JOB_KIND_EXTRACTION_RUN",
+    "TERMINAL_RUN_STATUSES",
     "handle_extraction_run",
     "request_from_payload",
 ]
+
+
+def _assert_run_not_terminal(persist: Any, request: ExtractionRunRequest) -> None:
+    """Refuse the job outright when its run has already finished (#146, Option 1).
+
+    Migration 0004 makes a terminal run final in the strongest sense available to
+    a schema: ``fel_guard_extraction_run`` refuses to move a run out of
+    ``succeeded``/``failed``/``cancelled``, ``fel_assert_extraction_run_open``
+    rejects every child INSERT and UPDATE on such a run, and DELETE is refused
+    outright. A worker handed a job for one can therefore do nothing at all — not
+    mark it running, not write a step, not append an event, not persist a
+    proposal.
+
+    Left to the ordinary failure path that job burns every remaining attempt,
+    failing identically each time, and each attempt spends real model budget
+    before hitting the first guarded write. Worse, the failure it reports is
+    whichever guard happened to fire first, which reads as a database fault
+    rather than as "this run is over".
+
+    ``PermanentFailure`` is the queue's word for "no retry can help": the
+    consumer dead-letters the job instead of requeueing it. The message names the
+    run id and the status and nothing else — a dead-lettered job's error is
+    durable and operator-visible, so it must not carry payload content.
+
+    Checked BEFORE ``mark_running`` and before any resume is dispatched, because
+    every one of those writes is one the guard would refuse anyway; the point is
+    to fail with a diagnosis rather than with a trigger error.
+    """
+    loader = getattr(persist, "load_run_status", None)
+    if not callable(loader):
+        return
+    status = loader(run_id=request.run_id, org_id=request.org_id)
+    if status in TERMINAL_RUN_STATUSES:
+        raise PermanentFailure(
+            f"extraction run {request.run_id} is already {status}; "
+            "terminal runs are final and cannot be resumed"
+        )
 
 
 def handle_extraction_run(
@@ -72,6 +114,11 @@ def handle_extraction_run(
     and is not one of them. The requirement is scoped to the durable path —
     memory stores write nothing, so there is no tenant to protect.
 
+    A run that has already reached ``succeeded``, ``failed`` or ``cancelled`` is
+    refused with :class:`fel_workers.queue.PermanentFailure` before any write —
+    see :func:`_assert_run_not_terminal`. The consumer dead-letters such a job
+    instead of retrying it.
+
     A durable run is also BOUND to its own ``extraction_runs`` row and to the
     canonical ``source_spans`` behind its evidence, before the first write. See
     :func:`_bind_request_to_run` and :func:`_bind_evidence_to_spans`: on this
@@ -104,6 +151,8 @@ def handle_extraction_run(
         evidence = _bind_evidence_to_spans(evidence, persist)
         # Assert ownership of the BOUND workspace — the one that will be written.
         assert_workspace_ownership(conn, org_id=request.org_id, workspace_id=request.workspace_id)
+        # A finished run is finished: dead-letter rather than burn attempts.
+        _assert_run_not_terminal(persist, request)
         persist.mark_running(run_id=request.run_id, org_id=request.org_id)
         from fel_workers.extraction.persist import PostgresCheckpointStore, PostgresEventStore
 
@@ -116,6 +165,9 @@ def handle_extraction_run(
 
         checkpoint = MemoryCheckpointStore()
         events = MemoryEventStore()
+        # Uniform with the durable path: a memory store starts with no status,
+        # so this is a no-op there unless a caller supplied a terminal one.
+        _assert_run_not_terminal(persist, request)
 
     state = WorkflowState(request=request, evidence=evidence)
     deps = WorkflowDeps(

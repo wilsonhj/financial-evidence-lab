@@ -130,3 +130,50 @@ Reaping is no longer unconditional. `queue.reap_stale` requeues a stale
 claim only while `attempts < max_attempts` and otherwise parks it as
 `failed` with a `REAPED_EXHAUSTED` error envelope — before this, a job that
 reliably killed its worker was reaped, re-claimed and killed again forever.
+
+## 0006 — `extraction_run_steps.output` (ADR-0011)
+
+Adds `output jsonb` (nullable) to `extraction_run_steps`, so a stage's result is
+durable on the step row instead of riding in the `step_completed` event payload.
+That is what makes the published "event payloads are metadata-only" guarantee
+true; the redaction carve-out the old arrangement required is deleted rather
+than narrowed. `0004` is untouched — append-only, corrected forward, as `0005`
+did for `0003`.
+
+Three things a reader of this migration should not have to rediscover:
+
+- **The pair CHECK is `NOT VALID`, permanently.**
+  `CHECK ((output IS NULL) = (output_hash IS NULL))` enforces the invariant on
+  every INSERT and UPDATE from 0006 onward, but declines to re-litigate history.
+  It has to: rows written before 0006 carry `output_hash` with no `output`, and
+  they cannot be repaired. Every UPDATE on `extraction_run_steps` runs
+  `fel_assert_extraction_run_open`, which raises for terminal runs, and DELETE is
+  refused outright. Do not run `VALIDATE CONSTRAINT` while such rows exist.
+  Backfill is impossible by construction, not merely inconvenient, which is why
+  the worker keeps a resume-side guard (`workflow._is_recoverable`) that re-runs
+  a stage whose checkpoint cannot hand back what it claims.
+- **No grant, RLS or trigger change was needed.** `0004`'s
+  `GRANT SELECT, INSERT, UPDATE ON extraction_run_steps TO fel_app` is at TABLE
+  level, so the new column is covered automatically; 0006 restates it as a no-op
+  for the reader. Do not generalise from that: `extraction_runs`' UPDATE grant is
+  COLUMN-scoped, so a new column there would need an explicit grant.
+  `extraction_run_steps_isolation` is column-agnostic, and
+  `fel_guard_extraction_run_child` enumerates its immutable pins explicitly —
+  `output` is not among them, so a step may advance it within an open run, which
+  is what `0004`'s own comment already said.
+- **`record_confidence` loses its `NOT NULL`** (issue #194). The extraction
+  pipeline has no calibrator yet (#62) and was persisting `0`, a legitimate value
+  on the column's 0-1 scale that reads as "certainly wrong". NULL is the only
+  spelling of "not scored". The range CHECK is untouched and still binds every
+  non-NULL value.
+
+Harness: `tests/0006_extraction_step_output.test.sql`. It exercises, as
+`fel_app` with `request.jwt.claims` set, an INSERT carrying `output`, both halves
+of the pair CHECK, an `output` UPDATE on an open run, an identity-pin UPDATE
+still being refused, a cross-org read returning nothing, and NULL confidence
+persisting; then, as the superuser, that the terminal-run guard still rejects a
+late INSERT, a late `output` rewrite and a DELETE.
+
+`tests/0004_extraction_core.test.sql` gained one line: its `fel_app` step
+advances `output` alongside `output_hash`, because the pair CHECK now forbids the
+hash on its own. The `0004` migration itself is byte-unchanged.

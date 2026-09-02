@@ -1,4 +1,9 @@
-"""JSON-safe stage output for event-backed crash-resume."""
+"""JSON-safe stage output for the durable ``extraction_run_steps.output`` column.
+
+Still load-bearing after ADR-0011: a ``jsonb`` column needs JSON-safe values, so
+``EvidenceBlock`` dataclasses and ``datetime`` still have to be converted. Only
+the destination changed — the checkpoint no longer rides on the event payload.
+"""
 
 from __future__ import annotations
 
@@ -10,7 +15,11 @@ from fel_workers.extraction.types import EvidenceBlock
 
 
 def serialize_stage_output(output: Any) -> Any:
-    """JSON-safe stage output (migration 0004 has no steps.output column)."""
+    """JSON-safe stage output, as stored in ``extraction_run_steps.output``.
+
+    ``output_hash`` is ``hash_json`` over the value THIS returns, so the hash and
+    the hashed value describe the same bytes and a resume can re-verify them.
+    """
     if output is None:
         return None
     if isinstance(output, EvidenceBlock):
