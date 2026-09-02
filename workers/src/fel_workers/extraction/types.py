@@ -13,6 +13,7 @@ ExtractionMode = Literal["kpi", "guidance", "revenue_driver"]
 RunStatus = Literal["queued", "running", "waiting_review", "succeeded", "failed", "cancelled"]
 StepStatus = Literal["pending", "running", "succeeded", "failed", "skipped", "cancelled"]
 ProposalState = Literal["proposed", "needs_review", "accepted", "rejected", "superseded"]
+ReviewPriority = Literal["normal", "high"]
 
 WORKFLOW_VERSION = "extraction-workflow/v1"
 NORMALIZER_VERSION = "normalize/v1"
@@ -148,10 +149,17 @@ class ProposalDraft:
     raw_payload_hash: str
     definition_hash: str
     comparability_key: dict[str, Any]
-    record_confidence: Decimal = Decimal("0")
+    # None means "no calibrator scored this", which is the truth today: #62
+    # carries the live scoring work. Decimal("0") was the previous default and
+    # was a lie on the column's own scale — 0 reads as "certainly wrong", and a
+    # review queue sorted by confidence put every proposal at the bottom
+    # (issue #194). Migration 0006 drops the NOT NULL that forced it.
+    record_confidence: Decimal | None = None
     field_confidences: dict[str, Any] = field(default_factory=dict)
     validation_summary: dict[str, Any] = field(default_factory=dict)
-    review_priority: Literal["normal", "high"] = "high"
+    # Derived from the validator's findings, never constant — see
+    # `validate/pipeline.py::_review_priority_for`.
+    review_priority: ReviewPriority = "normal"
     evidence: list[dict[str, Any]] = field(default_factory=list)
     id: str | None = None
 
@@ -200,6 +208,7 @@ __all__ = [
     "NORMALIZER_VERSION",
     "ProposalDraft",
     "ProposalState",
+    "ReviewPriority",
     "Role",
     "RunStatus",
     "RunUsage",
