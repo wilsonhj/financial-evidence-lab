@@ -186,7 +186,7 @@ packages:
     allowed_paths: [apps/web/**, packages/ui/**]
   - id: M1-CORPUS-QA
     issue: 56
-    tasks: [T0111] # was [T0111, T0112]; T0112 moved to RELEASE-LIVE-CUTOVER (#177) in this same commit
+    tasks: [T0111] # was [T0111, T0112]; T0112 moved to RELEASE-LIVE-CUTOVER (#177) in this same PR (#185)
     depends_on: [M1-INGESTION]
     team: trust
     branch: agent/m1-corpus-qa
@@ -350,8 +350,9 @@ packages:
     # Required by ADR-0011 (Accepted 2026-08-30 on PR #175), whose Consequences
     # state outright: "A new `workstreams.yaml` entry is required." The precedent
     # for a new retroactive migration entry is DB-GUARD-HARDENING (#125, created
-    # for the 0005 record); M3-CONTRACT (#101) is the only entry spanning both
-    # db/migrations/** and packages/contracts/** and it is merged. Implements the
+    # for the 0005 record); M2-CONTRACT (#100) and M3-CONTRACT (#101) are the only
+    # entries spanning both db/migrations/** and packages/contracts/**, and both
+    # are merged. Implements the
     # durable checkpoint column so a completed stage's result stops riding on the
     # step_completed event payload's stage_output key — the coupling that leaves
     # extraction_run_events carrying verbatim filing text while six published
@@ -403,7 +404,7 @@ packages:
   - id: M3-CONFIDENCE-GATE # confidence scoring + extraction quality gate
     issue: 62
     tasks: [T0306, T0307, T0310]
-    depends_on: [M3-REVIEW] # M3-EXTRACTION-CORE inherited via M3-REVIEW
+    depends_on: [M3-REVIEW, RELEASE-LIVE-CUTOVER] # M3-EXTRACTION-CORE inherited via M3-REVIEW; live-cutover edge added 2026-09-03 per spec 004 §6.2 / A-14 (see ORDERING below)
     team: trust
     branch: agent/m3-confidence-gate
     # This package CANNOT complete mock-only, so it must not inherit
@@ -414,20 +415,23 @@ packages:
     # mock-only, which is false. Adding it changes no status and dispatches
     # nothing; it records a precondition that already existed.
     #
-    # TWO CONSEQUENCES FOR THE LEAD, not resolved here:
-    # (1) ORDERING. specs/004-mvp-completion §6.2 places #62 at wave 2 and
-    #     RELEASE-LIVE-CUTOVER — which owns provisioning — at wave 6, putting the
-    #     consumer four waves ahead of its provisioner. The cheap fix is to split
-    #     provisioning from live evaluation: make FEL_OPENAI_API_KEY a wave-0
-    #     integration-lead action and leave the cutover owning live evaluation.
-    #     That needs no graph edge and matches #62's own "only for credentialed
-    #     smoke". The alternative, depends_on: [M3-REVIEW, RELEASE-LIVE-CUTOVER],
-    #     is cycle-free but drags the whole cutover ahead of wave 2.
-    # (2) PROVIDER. M3-304 names OpenAI; #132 directs claude-opus-4-8; ADR-0002
-    #     (Accepted) pins OpenAI; constitution principle V requires an approved
-    #     ADR plus benchmark evidence, and neither exists (finding A-1, ADR-0012
-    #     Proposed). So A-1 gates #62 at wave 2, not RELEASE-LIVE-CUTOVER at
-    #     wave 6 as previously recorded.
+    # TWO CONSEQUENCES, one ruled here and one still open:
+    # (1) ORDERING — RULED 2026-09-03 by the integration lead. specs/004 §6.2, as
+    #     reconciled by PR #187, places RELEASE-LIVE-CUTOVER (which owns
+    #     provisioning) at wave 2 and #62 at wave 3, conditioned on "#61 merged
+    #     and RELEASE-LIVE-CUTOVER merged" (finding A-14). This entry's depends_on
+    #     now carries that edge so the constraint lives in the graph rather than
+    #     in prose. It is cycle-free (the cutover depends only on merged
+    #     packages), and the two packages contend on evals/** and workers/tests/**
+    #     anyway, so the edge fixes an order that path contention already forced.
+    #     The alternative that was weighed — provisioning FEL_OPENAI_API_KEY as a
+    #     wave-0 lead action with no edge — was declined because it would leave
+    #     #62 dispatchable before the credential existed.
+    # (2) PROVIDER — OPEN. M3-304 names OpenAI; #132 directs claude-opus-4-8;
+    #     ADR-0002 (Accepted) pins OpenAI; constitution principle V requires an
+    #     approved ADR plus benchmark evidence, and neither exists (finding A-1;
+    #     ADR-0012, Proposed on PR #186). So A-1 gates #62 at wave 3, behind the
+    #     cutover, not at wave 6 as spec 004 first recorded.
     credentials: hosted-required # override defaults.credentials mock-only; M3-304 only
     allowed_paths:
       - workers/src/fel_workers/extraction/**
@@ -489,7 +493,7 @@ packages:
     # signed release artifact — while inheriting mock-only. A mock-only package
     # cannot produce that benchmark. #68 now carries the edge into this entry.
     issue: 177
-    # T0112 MOVED HERE from M1-CORPUS-QA (#56) in this same commit, where the
+    # T0112 MOVED HERE from M1-CORPUS-QA (#56) in this same PR (#185), where the
     # entry now reads [T0111]. Leaving it in both would have made T0112 the only
     # double-owned task in the file and left §4.2's reconciliation ambiguous
     # about who closes it. The rest of this package's scope carries no Spec Kit
@@ -506,8 +510,9 @@ packages:
       # evals/** is claimed by #62, #67, #68 and #108; workers/tests/** by #62,
       # #66 and #67, and by #108 through containment — #108 claims the enclosing
       # workers/** rather than the literal glob, which exact-string comparison
-      # does not catch. Spec 004 §6.2 gives this package its own wave, serialized
-      # ahead of #108, with #68 in the wave after.
+      # does not catch. Spec 004 §6.2 (as reconciled by PR #187) gives this
+      # package wave 2, serialized ahead of #108, with #62 at wave 3 and #68 at
+      # wave 7.
       - evals/** # live benchmark harness + evidence capture
       - workers/tests/**
       - docs/handoff/CREDENTIALS.md # record provisioned groups; not a shared path
