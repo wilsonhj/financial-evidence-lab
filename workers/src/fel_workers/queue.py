@@ -169,6 +169,47 @@ def fail(conn: psycopg.Connection, job: ClaimedJob, message: str) -> bool:
     return bool(cur.rowcount)
 
 
+def _terminal_write(
+    conn: psycopg.Connection, job: ClaimedJob, *, status: str, code: str, message: str
+) -> bool:
+    """Fenced, unconditionally terminal write (never requeues, whatever ``attempts``)."""
+    cur = conn.execute(
+        "UPDATE jobs SET status = %s, finished_at = now(), error = %s, lease = NULL"
+        " WHERE id = %s AND lease = %s AND status = 'running'",
+        (
+            status,
+            json.dumps(
+                {
+                    "error": {
+                        "code": code,
+                        "message": redact_job_error_text(message),
+                        "request_id": job.id,
+                    }
+                }
+            ),
+            job.id,
+            job.lease,
+        ),
+    )
+    return bool(cur.rowcount)
+
+
+def dead_letter(conn: psycopg.Connection, job: ClaimedJob, message: str) -> bool:
+    """Park the job ``failed`` NOW, regardless of attempts left (#146).
+
+    ``fail`` requeues until ``max_attempts``; that is wrong for a job whose
+    extraction run is already terminal, because frozen 0004 will never let a
+    retry reopen the run. False means the lease was lost and nothing was written.
+    """
+    return _terminal_write(conn, job, status="failed", code="JOB_DEAD_LETTERED", message=message)
+
+
+def cancel(conn: psycopg.Connection, job: ClaimedJob, message: str) -> bool:
+    """Fenced terminal ``cancelled`` write, so a cancelled run's job never reads
+    ``succeeded`` (#204). False means the lease was lost and nothing was written."""
+    return _terminal_write(conn, job, status="cancelled", code="JOB_CANCELLED", message=message)
+
+
 def reap_stale(conn: psycopg.Connection, *, stale_seconds: float = HEARTBEAT_STALE_SECONDS) -> int:
     """Requeue running jobs whose worker stopped heartbeating.
 
