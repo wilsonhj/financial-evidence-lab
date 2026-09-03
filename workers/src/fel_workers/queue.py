@@ -291,6 +291,40 @@ def dead_letter(conn: psycopg.Connection, job: ClaimedJob, message: str) -> bool
     return bool(cur.rowcount)
 
 
+def cancel(conn: psycopg.Connection, job: ClaimedJob, message: str) -> bool:
+    """Fenced terminal write for a job whose handler wound itself down.
+
+    Cancellation is cooperative (see :func:`is_cancel_requested`): the handler
+    polls at stage boundaries and brings its own run to a consistent
+    ``cancelled`` state, then the consumer records the same verdict on the job.
+    Without this primitive a cancelled handler outcome fell through to
+    :func:`complete`, so the job read ``succeeded`` while its run read
+    ``cancelled`` (issue #204) -- the two halves of one outcome disagreeing.
+
+    Mirrors :func:`complete` and :func:`dead_letter`: terminal, lease-fenced,
+    attempts-independent, with a sanitized error envelope. False means the
+    lease was lost and nothing was written.
+    """
+    cur = conn.execute(
+        "UPDATE jobs SET status = 'cancelled', finished_at = now(), error = %s, lease = NULL"
+        " WHERE id = %s AND lease = %s AND status = 'running'",
+        (
+            json.dumps(
+                {
+                    "error": {
+                        "code": "JOB_CANCELLED",
+                        "message": redact_job_error_text(message),
+                        "request_id": job.id,
+                    }
+                }
+            ),
+            job.id,
+            job.lease,
+        ),
+    )
+    return bool(cur.rowcount)
+
+
 def reap_stale(
     conn: psycopg.Connection, *, stale_seconds: float = HEARTBEAT_STALE_SECONDS
 ) -> ReapOutcome:

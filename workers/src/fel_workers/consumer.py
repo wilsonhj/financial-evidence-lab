@@ -212,7 +212,9 @@ def run_worker(
     never succeed, so the remaining attempts would only repeat the failure),
     and a handler that accepts ``cancel_check`` is given one bound to
     :func:`queue.is_cancel_requested` so an operator can wind a long run down
-    cooperatively.
+    cooperatively. A handler that reports ``cancelled`` is recorded with
+    :func:`queue.cancel`, so the job's terminal state agrees with the run's
+    instead of reading ``succeeded`` (issue #204).
 
     ``extraction_memory_stores`` is the ONLY way to send ``extraction_run``
     output to in-memory stores while a connection is live, and it is off by
@@ -297,6 +299,10 @@ def run_worker(
 
         claimed_job_id = job.id
 
+        # Set by a handler that wound itself down cooperatively; the job must
+        # then land on 'cancelled', not on 'succeeded' (issue #204).
+        cancelled_message: str | None = None
+
         def _cancel_check(job_id: str = claimed_job_id) -> bool:
             # Cooperative cancellation (issue #189): handlers poll this at
             # stage boundaries so a cancelled run winds itself down to a
@@ -341,6 +347,15 @@ def run_worker(
                     use_memory_stores=extraction_memory_stores,
                     job_org_id=job.org_id,
                 )
+                if result.status == "cancelled":
+                    # The run already brought itself to a consistent
+                    # 'cancelled' terminal state; record the SAME verdict on
+                    # the job. Before #204 this fell through to
+                    # ``queue.complete`` and the job read 'succeeded' while
+                    # its run read 'cancelled'.
+                    cancelled_message = (result.error or {}).get(
+                        "message"
+                    ) or "extraction_run cancelled at operator request"
                 if result.status == "failed":
                     raise RuntimeError(
                         (result.error or {}).get("message")
@@ -388,6 +403,12 @@ def run_worker(
         # explicitly so the outcome is deliberate, not incidental.
         if heartbeat.lease_lost:
             log.warning("lease lost during job %s; result discarded", job.id)
+            continue
+        if cancelled_message is not None:
+            # Fenced too: a cancelled outcome is a terminal write like any
+            # other, and a lost lease must refuse it.
+            log.info("job %s cancelled; recording cancelled terminal state", job.id)
+            queue.cancel(conn, job, cancelled_message)
             continue
         # Fenced completion: if the lease was reaped between the last
         # heartbeat and now, the terminal write is refused and discarded.
