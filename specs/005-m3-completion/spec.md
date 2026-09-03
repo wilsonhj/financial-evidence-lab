@@ -134,8 +134,8 @@ Give #62 an explicit `credentials:` override, and sequence `RELEASE-LIVE-CUTOVER
 | **0** | ~~Merge #175, #173~~ (done 2026-08-31); ~~ratify constitution 1.2.0~~ (done 2026-09-03, PR #183); merge the registration PR (#185) and ADR-0012 (#186); implement #146 Option 1; fix #153, #154, #158 (PR #208), #133 (PR #210); reconcile `tasks.md` (PR #206) | Now. Lead actions across several PRs |
 | **1** | **#61 (non-SSE)** ∥ **#63** — disjoint (`apps/**` vs `packages/calculation-engine/**`) | #146 implemented |
 | **2** | migration-`0006` (#157) | Registered; **must not overlap #62** |
-| **3** | **#62** | #61 merged, `0006` merged |
-| **4** | `RELEASE-LIVE-CUTOVER` → `M3-304` | Credentials provisioned; ADR-0012 ruled |
+| **3** | `RELEASE-LIVE-CUTOVER` | Credentials provisioned; ADR-0012 ruled; **must not overlap #62** (`evals/**`) |
+| **4** | **#62** including `M3-304` | #61 merged, `0006` merged, cutover merged |
 
 `#62` is placed after `0006` rather than beside it because they share two path globs. `#63` belongs to M4 but is `ready` on trunk and contends with nothing, so it runs alongside M3 throughout.
 
