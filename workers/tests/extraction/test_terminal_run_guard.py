@@ -148,10 +148,10 @@ def test_postgres_mark_running_refuses_a_terminal_run_before_the_trigger(
 
 @requires_db
 @pytest.mark.parametrize("terminal", TERMINAL)
-def test_postgres_set_run_status_on_a_terminal_run_is_what_0004_rejects(
+def test_postgres_set_run_status_refuses_a_terminal_run_before_the_trigger(
     extraction_db_url: str, terminal: str
 ) -> None:
-    """Characterisation of the trigger the memory guard mirrors (pre-existing)."""
+    """The typed refusal, not 0004's RaiseException, and the row is untouched."""
     request = _request(str(uuid.uuid4()))
     with psycopg.connect(extraction_db_url, autocommit=True) as conn:
         conn.execute("SELECT set_config('app.org_id', %s, false)", (_ORG,))
@@ -160,5 +160,21 @@ def test_postgres_set_run_status_on_a_terminal_run_is_what_0004_rejects(
         store = PostgresPersistStore(conn)
         store.mark_running(run_id=request.run_id, org_id=_ORG)
         store.set_run_status(run_id=request.run_id, org_id=_ORG, status=terminal)
-        with pytest.raises(psycopg.errors.RaiseException, match="terminal extraction run"):
+        before = conn.execute(
+            "SELECT status, started_at, finished_at FROM extraction_runs WHERE id = %s",
+            (request.run_id,),
+        ).fetchone()
+
+        with pytest.raises(RunAlreadyTerminal) as info:
             store.set_run_status(run_id=request.run_id, org_id=_ORG, status="failed")
+
+        after = conn.execute(
+            "SELECT status, started_at, finished_at FROM extraction_runs WHERE id = %s",
+            (request.run_id,),
+        ).fetchone()
+
+    assert info.value.run_id == request.run_id
+    assert info.value.status == terminal
+    assert not isinstance(info.value, psycopg.Error)
+    assert before is not None and before[0] == terminal
+    assert after == before, "set_run_status touched a terminal row"
