@@ -22,7 +22,7 @@ from fel_workers.extraction.errors import (
     ProviderRefused,
     StepFailed,
 )
-from fel_workers.extraction.events import MemoryEventStore
+from fel_workers.extraction.events import MemoryEventStore, redact_event_payload
 from fel_workers.extraction.hashing import hash_json, sha256_hex, stage_input_hash
 from fel_workers.extraction.normalize.pipeline import normalize_payload
 from fel_workers.extraction.persist import MemoryPersistStore, UsageSnapshot
@@ -348,7 +348,10 @@ def _commit_fence(ctx: _ExecCtx, step_name: str) -> None:
     committed the step row and its ``step_completed`` event. That is not a
     harmless duplicate. ``extraction_run_events`` has no uniqueness constraint and
     ``_load_stage_output`` takes ``ORDER BY id DESC LIMIT 1``, so the zombie's
-    output is what the run's real owner reads back on resume.
+    output is what the run's real owner reads back on resume. (Since #158 the
+    read side also binds the event to the committed step row's ``output_hash``
+    and re-hashes the restored payload, so a disagreeing zombie row is rejected
+    on read — but this fence is what stops the write from landing at all.)
 
     Raising here writes nothing and the owner re-runs the stage, which is
     idempotent by construction (keyed on ``input_hash``). The wall-clock cap is
@@ -373,6 +376,21 @@ def _is_recoverable(record: StageRecord, *, run_id: str) -> bool:
     ``abstained=True`` with no proposals: silent data loss dressed up as a
     legitimate abstention. Re-running the stage is the fail-closed answer; the
     stage is idempotent by construction, keyed on ``input_hash``.
+
+    ``durable_output_hash`` is the second gate (#158). ``_load_stage_output``
+    hands back ``stage_output`` verbatim from the durable event, and the workflow
+    recomputes ``raw_payload_hash`` / ``proposal_id_for`` from it — so a payload
+    that diverged after commit (bit rot, an errant repair script, replication or
+    restore skew, the zombie double-commit ``_commit_fence`` documents) silently
+    forked the run's proposal identity, and 0004 made the fork permanent.
+    Re-hashing the restored subtree against the hash stamped beside it at write
+    time (``_durable_stage_output_hash``) catches that. A mismatch is handled
+    exactly like the torn state — the stage re-runs — and deliberately NOT as an
+    ``IntegrityError``: that would take the ``StepFailed`` branch and land the
+    run terminal ``failed``, unretryable under #146, so a corrupted checkpoint
+    would kill the run outright. The telemetry names both hashes and never the
+    payload. ``None`` means the row predates the field; the check is skipped and
+    those rows resume exactly as before.
     """
     if record.output_hash is not None and record.output is None:
         emit(
@@ -383,7 +401,37 @@ def _is_recoverable(record: StageRecord, *, run_id: str) -> bool:
             output_hash=record.output_hash,
         )
         return False
+    if record.durable_output_hash is not None:
+        restored_hash = hash_json(record.output)
+        if restored_hash != record.durable_output_hash:
+            emit(
+                "stage_checkpoint_payload_mismatch",
+                run_id=run_id,
+                step_name=record.step_name,
+                input_hash=record.input_hash,
+                output_hash=record.output_hash,
+                stage_output_hash=record.durable_output_hash,
+                restored_hash=restored_hash,
+            )
+            return False
     return True
+
+
+def _durable_stage_output_hash(event_payload: dict[str, Any]) -> str:
+    """Hash the ``stage_output`` bytes the event row will actually hold.
+
+    ``output_hash`` is ``hash_json`` over the stage's LIVE return value, taken one
+    line before ``serialize_stage_output`` produces what is stored — two different
+    functions of the same value. They agree today because every stage returns
+    JSON-native values, but a dataclass hashes as its ``repr`` while it serializes
+    through ``asdict``, and a tuple hashes as an array while it stringifies. A
+    resume can only re-hash what it reads back, so the hash it is checked
+    against must be taken over the post-serialize, post-redact subtree — through
+    the same ``redact_event_payload`` the event sinks apply, so the stamp and the
+    stored bytes cannot drift apart. ``_is_recoverable`` compares against this.
+    """
+    durable = redact_event_payload(event_payload, event_type="step_completed")
+    return hash_json(durable.get("stage_output"))
 
 
 def _commit_stage(
@@ -532,6 +580,9 @@ def _run_stage(ctx: _ExecCtx, step_name: str) -> None:
         # Frozen 0004 has no steps.output column; persist resume payload here.
         "stage_output": serialize_stage_output(output),
     }
+    # Additive sibling of `stage_output`; the payload is an open object in the
+    # frozen event schema. Verified by `_is_recoverable` on resume (#158).
+    event_payload["stage_output_hash"] = _durable_stage_output_hash(event_payload)
     audit = ctx.model_audit
     if audit is not None:
         record.attempt = audit.attempts

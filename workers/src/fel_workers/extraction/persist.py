@@ -678,11 +678,12 @@ class PostgresCheckpointStore:
         ).fetchone()
         if row is None:
             return None
-        output = self._load_stage_output(
+        output, durable_output_hash = self._load_stage_output(
             org_id=org_id,
             run_id=run_id,
             step_name=step_name,
             input_hash=input_hash,
+            output_hash=row[4],
         )
         return StageRecord(
             step_name=row[0],
@@ -696,6 +697,8 @@ class PostgresCheckpointStore:
             cost_usd=Decimal(str(row[8] if row[8] is not None else 0)),
             error=row[9],
             output=output,
+            # Only a durably hydrated record carries this — see StageRecord.
+            durable_output_hash=durable_output_hash,
         )
 
     def _load_stage_output(
@@ -705,8 +708,30 @@ class PostgresCheckpointStore:
         run_id: str,
         step_name: str,
         input_hash: str,
-    ) -> Any:
-        """Hydrate stage output from step_completed events (no steps.output column)."""
+        output_hash: str | None,
+    ) -> tuple[Any, str | None]:
+        """Hydrate stage output from step_completed events (no steps.output column).
+
+        Returns ``(stage_output, stage_output_hash)`` from the newest matching
+        event, or ``(None, None)`` when there is none.
+
+        The event is bound to the step ROW it is read for (#158).
+        ``extraction_run_events`` has no uniqueness constraint and 0004 forbids
+        UPDATE and DELETE but not INSERT, so a second ``step_completed`` for the
+        same ``(step_name, input_hash)`` — a zombie worker's, or a corrupting
+        append — lands, and ``ORDER BY id DESC`` would hand it back. Requiring the
+        payload's ``output_hash`` to equal the committed column (a different
+        table, frozen once the run is terminal) rejects any competitor that
+        disagrees with the step the run actually committed, while the honest,
+        older event stays selectable. ``IS NOT DISTINCT FROM`` keeps a stage
+        whose output was ``None`` matching its ``null`` payload hash.
+
+        ``stage_output_hash`` is the write-side stamp over the serialized,
+        redacted ``stage_output`` (``workflow._durable_stage_output_hash``);
+        ``_is_recoverable`` re-hashes the restored subtree against it. Events
+        written before the field existed return ``None`` here and resume
+        unchecked, exactly as before.
+        """
         row = self.conn.execute(
             """
             SELECT payload
@@ -714,19 +739,21 @@ class PostgresCheckpointStore:
              WHERE org_id = %s AND run_id = %s AND event_type = 'step_completed'
                AND payload->>'step_name' = %s
                AND payload->>'input_hash' = %s
+               AND payload->>'output_hash' IS NOT DISTINCT FROM %s
              ORDER BY id DESC
              LIMIT 1
             """,
-            (org_id, run_id, step_name, input_hash),
+            (org_id, run_id, step_name, input_hash, output_hash),
         ).fetchone()
         if row is None:
-            return None
+            return None, None
         payload = row[0]
         if isinstance(payload, str):
             payload = json.loads(payload)
         if not isinstance(payload, dict):
-            return None
-        return payload.get("stage_output")
+            return None, None
+        stamped = payload.get("stage_output_hash")
+        return payload.get("stage_output"), (None if stamped is None else str(stamped))
 
     def commit_succeeded(
         self,
