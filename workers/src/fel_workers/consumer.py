@@ -27,6 +27,7 @@ import threading
 import time
 from collections.abc import Callable
 from datetime import UTC, datetime
+from functools import partial
 from typing import Any
 
 import psycopg
@@ -36,7 +37,14 @@ from fel_workers import queue
 from fel_workers.extraction.handler import (
     JOB_KIND_EXTRACTION_RUN,
     handle_extraction_run,
+    run_id_from_payload,
 )
+from fel_workers.extraction.persist import (
+    TERMINAL_RUN_STATUSES,
+    PostgresPersistStore,
+    RunAlreadyTerminal,
+)
+from fel_workers.extraction.telemetry import emit
 from fel_workers.ingestion.company_facts import (
     JOB_KIND_SEC_COMPANY_FACTS,
     CompanyFactsSecClient,
@@ -169,6 +177,62 @@ def handle_sec_filing_fetch(
     )
 
 
+def _terminal_run_status(
+    conn: psycopg.Connection[Any], job: queue.ClaimedJob
+) -> tuple[str, str] | None:
+    """``(run_id, status)`` when the job's extraction run is already terminal.
+
+    Never raises. An unreadable status is *unknown*, and unknown keeps the
+    retry: the resumable case — a row still ``running`` after a process death
+    or a dropped connection — must not be dead-lettered on a flaky read.
+    """
+    run_id = run_id_from_payload(job.payload)
+    if run_id is None or job.org_id is None:
+        return None
+    try:
+        status = PostgresPersistStore(conn).load_run_status(run_id=run_id, org_id=job.org_id)
+    except Exception:  # noqa: BLE001 — a failed read must fall back to the retry path
+        log.exception("could not read extraction run %s status for job %s", run_id, job.id)
+        return None
+    if status is None or status not in TERMINAL_RUN_STATUSES:
+        return None
+    return run_id, status
+
+
+def _dead_letter_terminal_run(
+    conn: psycopg.Connection[Any],
+    job: queue.ClaimedJob,
+    *,
+    run_id: str,
+    status: str,
+    detail: str | None = None,
+) -> None:
+    """Terminal runs are final (#146): park the job, never requeue it.
+
+    The telemetry line carries identifiers and the run status only — never the
+    payload — and the durable reason carries no issuer or document text.
+    """
+    emit(
+        "terminal_run_job_dead_lettered",
+        run_id=run_id,
+        job_id=job.id,
+        run_status=status,
+        attempt=job.attempts,
+    )
+    reason = (
+        f"extraction run {run_id} is already {status}: terminal runs are final (#146);"
+        " job dead-lettered, not retried"
+    )
+    if detail:
+        reason = f"{reason}; last attempt: {detail}"
+    if not queue.dead_letter(conn, job, reason):
+        log.warning("lease lost during job %s; dead-letter not recorded", job.id)
+
+
+def _result_message(error: dict[str, Any] | None, fallback: str) -> str:
+    return str((error or {}).get("message") or (error or {}).get("code") or fallback)
+
+
 def run_worker(
     conn: psycopg.Connection[Any],
     storage: StorageProvider,
@@ -185,6 +249,7 @@ def run_worker(
     stale_after_seconds: float = queue.HEARTBEAT_STALE_SECONDS,
     structured_llm: StructuredLLMProvider | None = None,
     extraction_memory_stores: bool = False,
+    cancel_check: Callable[[queue.ClaimedJob], bool] | None = None,
 ) -> int:
     """Claim-and-dispatch loop; returns the number of jobs completed.
 
@@ -212,6 +277,23 @@ def run_worker(
     ``extraction_run_events`` stayed empty. Enqueuers do not get to decide
     whether their output is durable; operators do, out loud, and every job run
     this way is logged as discarding its output.
+
+    Terminal runs are final (#146, integration-lead ruling, Option 1). An
+    ``extraction_run`` job whose ``extraction_runs`` row is already
+    ``succeeded`` / ``failed`` / ``cancelled`` can never make progress — frozen
+    0004 refuses every write to it — so it is dead-lettered (``queue.dead_letter``,
+    redacted reason, redacted telemetry) before ``mark_running`` and before the
+    retry loop can spend attempts on it. The same applies when the run becomes
+    terminal during the attempt: a ``failed`` result, or an untyped escape after
+    the workflow's catch-all landed the row. A run still ``running`` keeps its
+    retry, so crash-resume is unchanged.
+
+    Job and run terminal states agree (#204): a ``cancelled`` result is recorded
+    with ``queue.cancel``, never ``queue.complete``. ``cancel_check`` is the
+    cancel signal, evaluated by the workflow at every stage boundary; the
+    consumer owns it so the signal's storage (``jobs.cancel_requested_at``, a
+    migration this package does not make) can be bound here later without the
+    handler changing.
     """
     completed = 0
     iterations = 0
@@ -267,6 +349,19 @@ def run_worker(
                     f"required by job kind {job.kind!r}",
                 )
                 continue
+        if job.kind == JOB_KIND_EXTRACTION_RUN and not extraction_memory_stores:
+            already_terminal = _terminal_run_status(conn, job)
+            if already_terminal is not None:
+                _dead_letter_terminal_run(
+                    conn, job, run_id=already_terminal[0], status=already_terminal[1]
+                )
+                continue
+        job_cancel_check: Callable[[], bool] | None = (
+            partial(cancel_check, job) if cancel_check is not None else None
+        )
+        # A terminal write other than `complete`, decided by the handler result:
+        # ("dead_letter" | "cancel", redacted-at-the-sink reason).
+        verdict: tuple[str, str] | None = None
         heartbeat = LeaseHeartbeat(
             connection_factory, job, interval_seconds=heartbeat_interval_seconds
         )
@@ -307,20 +402,27 @@ def run_worker(
                     extraction_provider,
                     job.payload,
                     lease_check=_lease_check,
+                    cancel_check=job_cancel_check,
                     use_memory_stores=extraction_memory_stores,
                     job_org_id=job.org_id,
                 )
                 if result.status == "failed":
-                    raise RuntimeError(
-                        (result.error or {}).get("message")
-                        or (result.error or {}).get("code")
-                        or "extraction_run failed"
+                    # The workflow has already written the run terminal; a
+                    # requeue would only meet the guard above on the next claim.
+                    emit(
+                        "terminal_run_job_dead_lettered",
+                        run_id=result.request.run_id,
+                        job_id=job.id,
+                        run_status="failed",
+                        attempt=job.attempts,
                     )
-                log.info(
-                    "extraction_run %s -> %s",
-                    job.payload.get("run_id") or (job.payload.get("run") or {}).get("run_id"),
-                    result.status,
-                )
+                    verdict = (
+                        "dead_letter",
+                        _result_message(result.error, "extraction_run failed"),
+                    )
+                elif result.status == "cancelled":
+                    verdict = ("cancel", _result_message(result.error, "extraction_run cancelled"))
+                log.info("extraction_run %s -> %s", result.request.run_id, result.status)
             else:
                 outcome = handle_sec_filing_fetch(conn, storage, sec, job.payload)
                 log.info(
@@ -329,12 +431,30 @@ def run_worker(
                     outcome.status,
                     outcome.reason_code or "ok",
                 )
+        except RunAlreadyTerminal as exc:
+            # The store refused the run between the pre-dispatch read and
+            # mark_running: same verdict as the pre-dispatch drop, never a retry.
+            heartbeat.stop()
+            if heartbeat.lease_lost:
+                log.warning("lease lost during job %s; failure not recorded", job.id)
+                continue
+            _dead_letter_terminal_run(conn, job, run_id=exc.run_id, status=exc.status)
+            continue
         except Exception as exc:  # noqa: BLE001 — job isolation boundary
             heartbeat.stop()
             if heartbeat.lease_lost:
                 log.warning("lease lost during job %s; failure not recorded", job.id)
                 continue
             log.exception("job %s failed", job.id)
+            if job.kind == JOB_KIND_EXTRACTION_RUN and not extraction_memory_stores:
+                # An untyped escape: the workflow's catch-all may have landed
+                # the row failed before re-raising, and that row is final.
+                now_terminal = _terminal_run_status(conn, job)
+                if now_terminal is not None:
+                    _dead_letter_terminal_run(
+                        conn, job, run_id=now_terminal[0], status=now_terminal[1], detail=str(exc)
+                    )
+                    continue
             queue.fail(conn, job, str(exc))
             continue
         heartbeat.stop()
@@ -343,6 +463,16 @@ def run_worker(
         # explicitly so the outcome is deliberate, not incidental.
         if heartbeat.lease_lost:
             log.warning("lease lost during job %s; result discarded", job.id)
+            continue
+        if verdict is not None:
+            write, reason = verdict
+            written = (
+                queue.cancel(conn, job, reason)
+                if write == "cancel"
+                else queue.dead_letter(conn, job, reason)
+            )
+            if not written:
+                log.warning("lease lost during job %s; result discarded", job.id)
             continue
         # Fenced completion: if the lease was reaped between the last
         # heartbeat and now, the terminal write is refused and discarded.
