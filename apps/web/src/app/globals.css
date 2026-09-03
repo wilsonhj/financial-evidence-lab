@@ -15,6 +15,7 @@
   --color-info-border: #1f4e8c;
   --color-ok-bg: #e7f4ea;
   --color-ok-border: #1d6b35;
+  --color-on-accent: #f8fbff;
 }
 
 html[data-fel-theme="oled"] {
@@ -34,6 +35,7 @@ html[data-fel-theme="oled"] {
   --color-info-border: #5d97ef;
   --color-ok-bg: #0d2319;
   --color-ok-border: #53bd83;
+  --color-on-accent: #081428;
 }
 @media (prefers-color-scheme: dark) {
   html[data-fel-theme="system"] {
@@ -53,6 +55,7 @@ html[data-fel-theme="oled"] {
     --color-info-border: #5d97ef;
     --color-ok-bg: #0d2319;
     --color-ok-border: #53bd83;
+    --color-on-accent: #081428;
   }
 }
 
@@ -129,11 +132,8 @@ a {
   min-height: calc(100dvh - 58px);
   display: grid;
   grid-template-columns: 218px minmax(0, 1fr);
-  background: linear-gradient(135deg, #e7eef6, #f5f8fb 48%, #e1eaf4);
+  background: var(--color-bg);
   color: var(--color-text);
-}
-html[data-fel-theme="oled"] .desk-shell {
-  background: #000;
 }
 .desk-sidebar {
   padding: 22px 12px 16px;
@@ -392,12 +392,12 @@ html[data-fel-theme="oled"] .desk-shell {
   margin-left: auto;
   font-style: normal;
   font-size: 0.75rem;
-  color: #996817;
+  color: var(--color-warning-text);
 }
 .event-row i {
   font-style: normal;
   background: var(--color-accent);
-  color: #f7fbff;
+  color: var(--color-on-accent);
   border-radius: 12px;
   padding: 10px 13px;
   font-size: 0.78rem;
@@ -433,7 +433,7 @@ html[data-fel-theme="oled"] .desk-shell {
   cursor: pointer;
 }
 .claim small {
-  color: #976a18;
+  color: var(--color-warning-text);
   text-transform: uppercase;
   font-size: 0.65rem;
   font-weight: 750;
@@ -457,7 +457,7 @@ html[data-fel-theme="oled"] .desk-shell {
   border: 0;
   border-radius: 14px;
   background: var(--color-accent);
-  color: #f8fbff;
+  color: var(--color-on-accent);
   padding: 0 15px;
   font:
     650 0.84rem system-ui,
@@ -532,7 +532,7 @@ html[data-fel-theme="oled"] .desk-shell {
 }
 .inspector-metric span {
   font-size: 0.73rem;
-  color: #a25b48;
+  color: var(--color-warning-text);
 }
 .inspector h4 {
   margin: 22px 0 8px;
@@ -543,7 +543,7 @@ html[data-fel-theme="oled"] .desk-shell {
 }
 .coverage-bar {
   height: 9px;
-  background: #cad5e2;
+  background: var(--color-border);
   border-radius: 10px;
   overflow: hidden;
   margin-bottom: 7px;
@@ -638,7 +638,7 @@ html[data-fel-theme="oled"] .desk-shell {
   width: max-content;
   gap: 3px;
   padding: 4px;
-  background: #d9e2ec;
+  background: var(--color-border);
   border-radius: 15px;
   margin-bottom: 18px;
 }
@@ -686,9 +686,6 @@ html[data-fel-theme="oled"] .desk-shell {
   border-radius: 12px;
   padding: 0 13px;
   font-weight: 650;
-}
-html[data-fel-theme="oled"] .scenario-tabs {
-  background: #151e29;
 }
 .site-header {
   background: var(--color-surface);
@@ -906,7 +903,7 @@ html[data-fel-theme="oled"] .site-header {
   border: 1px solid var(--color-accent);
   border-radius: 0.3rem;
   background: var(--color-accent);
-  color: #fff;
+  color: var(--color-on-accent);
   cursor: pointer;
 }
 
@@ -948,12 +945,12 @@ html[data-fel-theme="oled"] .site-header {
 }
 
 .outline-item:hover {
-  background: #e9edf3;
+  background: var(--color-info-bg);
 }
 
 .outline-item[aria-current="true"] {
   border-left-color: var(--color-accent);
-  background: #e2eaf6;
+  background: var(--color-info-bg);
   font-weight: 600;
 }
 
@@ -1116,7 +1113,7 @@ html[data-fel-theme="oled"] .site-header {
   border: 1px solid var(--color-accent);
   border-radius: 0.3rem;
   background: var(--color-accent);
-  color: #fff;
+  color: var(--color-on-accent);
   cursor: pointer;
 }
 
