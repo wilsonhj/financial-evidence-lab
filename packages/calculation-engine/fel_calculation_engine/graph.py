@@ -9,11 +9,13 @@ targets) so a graph that builds is a graph that can be evaluated.
 
 from __future__ import annotations
 
+import dataclasses
 import heapq
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from types import MappingProxyType
 
+from fel_calculation_engine.canonical import canonical_json
 from fel_calculation_engine.errors import (
     CycleError,
     GraphError,
@@ -37,6 +39,11 @@ from fel_calculation_engine.nodes import (
 from fel_calculation_engine.periods import FiscalYear
 from fel_calculation_engine.units import Unit
 
+#: Node kinds a scenario override may shadow (an override of an override layers scenarios).
+_OVERRIDABLE = frozenset(
+    {NodeKind.ANALYST_ASSUMPTION, NodeKind.OPERATIONAL_DRIVER, NodeKind.SCENARIO_OVERRIDE}
+)
+
 
 @dataclass(frozen=True, slots=True)
 class Edge:
@@ -53,6 +60,9 @@ class ModelGraph:
     by_id: Mapping[str, Node] = field(compare=False, repr=False)
     _dependencies: Mapping[str, tuple[str, ...]] = field(compare=False, repr=False)
     _dependents: Mapping[str, tuple[str, ...]] = field(compare=False, repr=False)
+    #: Canonical JSON of each node *definition* (label blanked — presentation only), computed
+    #: once per graph so evaluation can content-address results without re-encoding nodes.
+    definitions: Mapping[str, str] = field(compare=False, repr=False)
 
     @classmethod
     def build(cls, nodes: Iterable[Node]) -> ModelGraph:
@@ -85,6 +95,10 @@ class ModelGraph:
 
         order = _topological_order(by_id, dependencies, dependents)
         _check_types(by_id, order)
+        definitions = {
+            node.node_id: canonical_json(dataclasses.replace(node, label=""))
+            for node in sorted_nodes
+        }
         return cls(
             nodes=sorted_nodes,
             edges=tuple(edges),
@@ -92,6 +106,7 @@ class ModelGraph:
             by_id=MappingProxyType(by_id),
             _dependencies=MappingProxyType(dependencies),
             _dependents=MappingProxyType({k: tuple(v) for k, v in dependents.items()}),
+            definitions=MappingProxyType(definitions),
         )
 
     def node(self, node_id: str) -> Node:
@@ -245,10 +260,10 @@ def _check_types(by_id: Mapping[str, Node], order: tuple[str, ...]) -> None:
                 _require_period_kind(node, operand)
         elif isinstance(node, ScenarioOverrideNode):
             target = inputs[0]
-            if target.kind not in (NodeKind.ANALYST_ASSUMPTION, NodeKind.OPERATIONAL_DRIVER):
+            if target.kind not in _OVERRIDABLE:
                 raise ScenarioError(
-                    f"{node.node_id}: overrides may target assumptions or drivers, "
-                    f"not {target.kind.value}",
+                    f"{node.node_id}: overrides may target assumptions, drivers or "
+                    f"earlier overrides, not {target.kind.value}",
                     node_id=node.node_id,
                     target=target.node_id,
                 )
@@ -256,4 +271,6 @@ def _check_types(by_id: Mapping[str, Node], order: tuple[str, ...]) -> None:
             _require_same_period(node, target)
 
 
-__all__ = ["Edge", "ModelGraph"]
+OVERRIDABLE_KINDS = _OVERRIDABLE
+
+__all__ = ["OVERRIDABLE_KINDS", "Edge", "ModelGraph"]

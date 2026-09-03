@@ -26,6 +26,7 @@ from fel_calculation_engine.units import Unit, UnitKind
 from fel_calculation_engine.values import (
     Lineage,
     Provenance,
+    Quantity,
     require_decimal,
     require_safe_id,
 )
@@ -127,6 +128,9 @@ class _LeafNode(Node):
 
     def lineage(self) -> Lineage:
         raise NotImplementedError
+
+    def lineage_quantity(self) -> Quantity:
+        return Quantity(self.value, self.unit)
 
 
 @dataclass(frozen=True, slots=True)

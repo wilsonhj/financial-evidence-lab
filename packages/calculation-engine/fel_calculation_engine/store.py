@@ -12,6 +12,7 @@ from typing import Protocol
 
 from fel_calculation_engine.errors import SnapshotError
 from fel_calculation_engine.snapshot import GraphSnapshot
+from fel_calculation_engine.telemetry import TelemetrySink, emit
 
 
 class SnapshotStore(Protocol):
@@ -28,9 +29,10 @@ class SnapshotStore(Protocol):
 
 
 class InMemorySnapshotStore:
-    def __init__(self) -> None:
+    def __init__(self, *, sink: TelemetrySink | None = None) -> None:
         self._by_id: dict[str, GraphSnapshot] = {}
         self._by_model: dict[str, list[str]] = {}
+        self._sink = sink
 
     def put(self, snapshot: GraphSnapshot) -> str:
         if not snapshot.verify():
@@ -48,6 +50,16 @@ class InMemorySnapshotStore:
             )
         self._by_id[snapshot.snapshot_id] = snapshot
         self._by_model.setdefault(snapshot.model_id, []).append(snapshot.snapshot_id)
+        emit(
+            self._sink,
+            "calc.snapshot.stored",
+            snapshot_id=snapshot.snapshot_id,
+            model_id=snapshot.model_id,
+            version=snapshot.version,
+            parent_snapshot_id=snapshot.parent_snapshot_id,
+            scenario_id=snapshot.scenario_id,
+            node_count=len(snapshot.graph),
+        )
         return snapshot.snapshot_id
 
     def get(self, snapshot_id: str) -> GraphSnapshot:
