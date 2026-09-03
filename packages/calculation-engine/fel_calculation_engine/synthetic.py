@@ -150,7 +150,7 @@ def _segment(i: int, rng: Random, *, override: bool) -> list[Node]:
 def build_synthetic_model(node_count: int, *, seed: int = 63) -> list[Node]:
     if node_count < 1:
         raise ValueError("node_count must be positive")
-    rng = Random(seed)  # noqa: S311 - deterministic fixture generation, not security
+    rng = Random(seed)  # nosec B311
     nodes: list[Node] = []
     i = 0
     while True:

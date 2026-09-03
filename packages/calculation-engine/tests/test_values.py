@@ -31,6 +31,8 @@ USD = currency("USD")
         Decimal("sNaN"),
         Decimal("Infinity"),
         Decimal("-Infinity"),
+        Decimal(0.1),
+        Decimal(0.2),
     ],
 )
 def test_only_finite_decimals_are_values(bad: object) -> None:
