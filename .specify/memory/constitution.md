@@ -1,5 +1,27 @@
 <!--
 Sync Impact Report
+- Version change: 1.1.0 -> 1.2.0
+- Modified sections: Development and Review Workflow — the "sole canonical" clause
+  now scopes to the canonical LEDGER (001/tasks.md) and permits subordinate
+  spec/plan artifacts in milestone feature directories. Rationale: the clause was
+  written when 001/ was the only feature directory. specs/002-observable-hybrid-retrieval/
+  and specs/003-agentic-extraction/ have each shipped their own spec.md AND tasks.md
+  since 2026-07, and specs/004-mvp-completion/ adds a subordinate plan.md, so a
+  literal reading has been in breach for two months. Impact assessment: this
+  legitimises existing practice rather than authorising anything new; no principle
+  changes; no gate is relaxed; the single canonical task ledger is preserved, which
+  is the property the clause existed to protect. Raised as finding C-1 in
+  specs/004-mvp-completion/clarify-analyse.md; ruled by the integration lead
+  2026-08-31.
+- Modified principles: none
+- Added principles: none
+- Removed sections: none
+- Templates: ✅ .specify/templates/plan-template.md (no change needed — it already
+  describes a per-feature plan.md); ✅ .specify/templates/spec-template.md;
+  ✅ .specify/templates/tasks-template.md
+- Follow-up TODOs: none
+
+Prior report (1.0.0 -> 1.1.0)
 - Version change: 1.0.0 -> 1.1.0
 - Modified principles: Simplicity and Provider Isolation (stack now referenced via ADR-0002, not restated); Test-First Quality Gates (gate reference updated to the canonical feature-directory spec)
 - Modified sections: Approved Technical Constraints (now references docs/decisions/ADR-0002-mvp-stack.md; deck.gl removed with the deferred Embedding Atlas); Development and Review Workflow (specs/001-financial-evidence-lab/ is canonical; root SPEC.md/PLAN.md/TASKS.md are pointer stubs, no mirroring)
@@ -36,7 +58,8 @@ The MVP MUST use the smallest architecture that satisfies measured requirements.
 
 ## Development and Review Workflow
 
-- The active Spec Kit feature directory, `specs/001-financial-evidence-lab/`, holds the sole canonical `spec.md`, `plan.md`, and `tasks.md`. Root `SPEC.md`, `PLAN.md`, and `TASKS.md` are pointer stubs only; nothing is mirrored.
+- `specs/001-financial-evidence-lab/` holds the **sole canonical task ledger** (`tasks.md`) and the parent `spec.md` and `plan.md`. There is exactly one ledger: no other file may restate the `T####` task list or its completion state, because a duplicated ledger drifts and an agent reading the stale copy redoes merged work.
+- Milestone and completion feature directories (`specs/002-*`, `specs/003-*`, `specs/004-*`, and their successors) MAY hold a subordinate `spec.md`, `plan.md`, and milestone-scoped `tasks.md` whose task IDs map onto the canonical `T####` IDs rather than replacing them. Each MUST name its parent and state that the parent governs on conflict. Root `SPEC.md`, `PLAN.md`, and `TASKS.md` are pointer stubs only; nothing is mirrored.
 - Work proceeds by Spec Kit phase and dependency order. Parallel agents MUST own disjoint files or modules.
 - Context7 and primary documentation MUST be consulted for version-sensitive framework behavior.
 - Each logical change is reviewed against this constitution, the active feature spec, and its acceptance tests.
@@ -46,4 +69,4 @@ The MVP MUST use the smallest architecture that satisfies measured requirements.
 
 This constitution supersedes conflicting implementation practices. Amendments require a documented rationale, impact assessment, user approval, semantic version bump, and propagation to dependent templates and active feature artifacts. Every pull request MUST include a constitution check. Unjustified complexity or a failed mandatory gate blocks merge.
 
-**Version**: 1.1.0 | **Ratified**: 2026-07-11 | **Last Amended**: 2026-07-12
+**Version**: 1.2.0 | **Ratified**: 2026-07-11 | **Last Amended**: 2026-08-31
