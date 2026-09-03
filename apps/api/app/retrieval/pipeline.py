@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable
+from contextlib import AbstractContextManager
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
@@ -33,7 +34,7 @@ import psycopg
 from app.auth import TenantContext
 from app.config import settings
 from app.costs import record_usage, token_cost_usd
-from app.db import tenant_connection
+from app.db import corpus_read_connection, tenant_connection
 from app.retrieval.persistence import (
     _STATEMENT_TIMEOUT,
     _context_tokens,
@@ -75,19 +76,14 @@ _LANE_FUNCS: dict[str, Callable[[Any, LaneQuery], list[LaneCandidate]]] = {
 }
 
 
-def _corpus_read_connection() -> psycopg.Connection[Any]:
-    """A tuple-row read connection over the public corpus for lane SQL.
+def _corpus_read_connection() -> AbstractContextManager[psycopg.Connection[Any]]:
+    """A pooled tuple-row read connection over the public corpus for lane SQL.
 
-    Corpus/retrieval tables carry no org_id and no RLS (0002/0003), so a
-    plain read connection observes exactly what the pinned lanes filter to;
-    all org-scoped work stays on the RLS-bound tenant connection.
+    Thin binding of ``db.corpus_read_connection`` to retrieval's statement
+    timeout, so the timeout lives with the rest of the retrieval budget rather
+    than in the generic pool module.
     """
-    url = settings().database_url
-    if url is None:
-        raise RuntimeError("FEL_DATABASE_URL is not configured")
-    conn = psycopg.connect(url, autocommit=True)
-    conn.execute("SELECT set_config('statement_timeout', %s, false)", (_STATEMENT_TIMEOUT,))
-    return conn
+    return corpus_read_connection(statement_timeout=_STATEMENT_TIMEOUT)
 
 
 def _parse_iso(value: str) -> datetime:
@@ -293,7 +289,13 @@ def _execute_pipeline(
     # Missing supporting evidence yields abstention; a contradicted claim is
     # preserved and displayed (the run still succeeds).
     if should_abstain(claims):
-        writer.emit("run_abstained", {"reason": "insufficient_evidence"})
+        # A provider refusal and an evidence gap both end in zero supported
+        # claims, but they are different operational facts: a refusal is a
+        # provider-side event to alert on, an evidence gap is a corpus/retrieval
+        # quality signal. Collapsing them into one reason makes a refusal spike
+        # invisible, so the terminal event names which one happened (#137).
+        reason = "provider_refusal" if generation.refused else "insufficient_evidence"
+        writer.emit("run_abstained", {"reason": reason})
         writer.finish_abstained(budget_usage=budget_usage, timings_ms=timings_ms, cost_usd=cost_usd)
     else:
         writer.emit("run_completed", {"status": "succeeded"})

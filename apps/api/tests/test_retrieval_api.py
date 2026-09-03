@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import threading
 import time
 import uuid
 from datetime import UTC, datetime
@@ -364,12 +365,49 @@ def test_provider_refusal_abstains(
     assert trace["status"] == "abstained"
     assert trace["claims"] == []
     assert trace["events"][-1]["type"] == "run_abstained"
+    # #137: a refusal is a provider-side event, not an evidence gap. The two
+    # abstention causes must stay distinguishable in the terminal event.
+    assert trace["events"][-1]["payload"]["reason"] == "provider_refusal"
     # Retrieval still ran: context was selected before the abstention.
     assert trace["candidates"], "expected candidates even when abstaining"
 
     row = _run_row(db_url, created["run_id"])
     assert row["status"] == "abstained"
     assert row["last_event"] == "run_abstained"
+
+
+def test_evidence_gap_abstains_with_insufficient_evidence_reason(
+    client: TestClient,
+    org: tuple[str, str],
+    seeded: dict[str, str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """#137: an abstention with no refusal keeps the insufficient_evidence reason.
+
+    Paired with test_provider_refusal_abstains: both runs end abstained with a
+    terminal run_abstained event, and the reason is the only thing that tells
+    an operator which of the two happened.
+    """
+    from fel_retrieval.generation import GenerationResult, StructuredClaimGenerator
+
+    def _no_claims(self: Any, question: str, context: Any, *, as_of: str) -> GenerationResult:
+        return GenerationResult(
+            claims=(),
+            provider="mock",
+            model="mock",
+            input_tokens=3,
+            output_tokens=0,
+            refused=False,
+        )
+
+    monkeypatch.setattr(StructuredClaimGenerator, "generate", _no_claims)
+
+    created = _create(client, org, seeded["workspace_id"])
+    trace = client.get(f"/v1/retrieval-runs/{created['run_id']}", headers=_headers(*org)).json()
+
+    assert trace["status"] == "abstained"
+    assert trace["events"][-1]["type"] == "run_abstained"
+    assert trace["events"][-1]["payload"]["reason"] == "insufficient_evidence"
 
 
 def test_question_containing_refuse_still_answers(
@@ -766,3 +804,138 @@ def test_rls_cross_org_is_404(
         client.get(f"/v1/retrieval-runs/{created['run_id']}/events", headers=other).status_code
         == 404
     )
+
+
+def test_generation_provenance_persisted_on_run_row(
+    client: TestClient, org: tuple[str, str], seeded: dict[str, str], db_url: str
+) -> None:
+    """#137: a completed run carries its full generation provenance on the row.
+
+    Read the run row directly rather than the assembled trace: only the stored
+    columns prove the lineage survived the request that produced it. cost_usd,
+    the pinned provider/model and the provider's reported token counts must all
+    be there — a run whose cost is NULL cannot be reconciled against
+    usage_events, and one without token counts cannot have that cost re-derived.
+    """
+    from app.config import settings
+    from app.costs import token_cost_usd
+
+    created = _create(client, org, seeded["workspace_id"])
+
+    with psycopg.connect(db_url, autocommit=True) as conn:
+        row = conn.execute(
+            "SELECT status, cost_usd, generation_provider, generation_model, budget_usage"
+            " FROM retrieval_runs WHERE id = %s",
+            (created["run_id"],),
+        ).fetchone()
+        usage = conn.execute(
+            "SELECT cost_usd FROM usage_events WHERE org_id = %s AND kind = 'research_query'",
+            (org[0],),
+        ).fetchall()
+    assert row is not None
+    status, cost_usd, provider, model, budget_usage = row
+
+    assert status == "succeeded"
+    assert (provider, model) == retrieval.generation_pin() == retrieval.MOCK_GENERATION_PIN
+    assert cost_usd is not None, "a completed run must record what it cost"
+    assert cost_usd > 0
+    assert budget_usage["input_tokens"] > 0
+    assert budget_usage["output_tokens"] > 0
+
+    # The stored cost is exactly what the stored token counts price out to, so
+    # the row is self-consistent and the cost is re-derivable from it.
+    assert cost_usd == token_cost_usd(
+        settings(),
+        input_tokens=budget_usage["input_tokens"],
+        output_tokens=budget_usage["output_tokens"],
+    )
+    # usage_events was metered against that same figure.
+    assert [u[0] for u in usage] == [cost_usd]
+
+
+def test_lanes_run_in_parallel_threads(
+    client: TestClient,
+    org: tuple[str, str],
+    seeded: dict[str, str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """#137: pooling the lane connections must not serialize the lanes.
+
+    Every lane is wrapped so it blocks on a barrier before returning. If the
+    lanes ran one after another — or contended on a single shared connection —
+    no lane could reach the barrier while the others waited and the barrier
+    would time out. Passing proves all lanes were in flight simultaneously, in
+    distinct threads, each holding its own pooled connection.
+    """
+    # The plan decides how many lanes actually run, so size the barrier from a
+    # warm-up run rather than assuming all four.
+    warmup = _create(client, org, seeded["workspace_id"])
+    warm_trace = client.get(f"/v1/retrieval-runs/{warmup['run_id']}", headers=_headers(*org)).json()
+    expected = sorted(
+        e["payload"]["lane"] for e in warm_trace["events"] if e["type"] == "lane_started"
+    )
+    assert len(expected) > 1, "need at least two lanes to observe parallelism"
+
+    barrier = threading.Barrier(len(expected), timeout=30)
+    threads: dict[str, int] = {}
+    connections: dict[str, int] = {}
+    lock = threading.Lock()
+
+    def _wrap(lane: str, inner: Any) -> Any:
+        def _call(conn: Any, query: Any) -> Any:
+            candidates = inner(conn, query)
+            with lock:
+                threads[lane] = threading.get_ident()
+                connections[lane] = id(conn)
+            barrier.wait()
+            return candidates
+
+        return _call
+
+    for lane in expected:
+        monkeypatch.setitem(retrieval._LANE_FUNCS, lane, _wrap(lane, retrieval._LANE_FUNCS[lane]))
+
+    created = _create(client, org, seeded["workspace_id"])
+    trace = client.get(f"/v1/retrieval-runs/{created['run_id']}", headers=_headers(*org)).json()
+
+    assert trace["status"] == "succeeded", trace.get("events")
+    assert sorted(threads) == expected, "every lane must have run"
+    assert len(set(threads.values())) == len(expected), "lanes must run in distinct threads"
+    assert len(set(connections.values())) == len(expected), "each lane needs its own connection"
+
+
+def test_corpus_read_connection_is_pooled_with_tuple_rows(db_url: str) -> None:
+    """#137: lane reads come from the pool, in the row shape the lane SQL needs.
+
+    A raw ``psycopg.connect()`` per lane is closed when its block ends; a pooled
+    one is handed back open and reused. The statement timeout must be
+    transaction-local, or a recycled connection would inherit the previous
+    borrower's timeout.
+    """
+    from app.db import corpus_pool_for, corpus_read_connection, pool_for
+
+    with corpus_read_connection(statement_timeout="15s") as conn:
+        assert conn.execute("SELECT 1, 2").fetchone() == (1, 2), "lane SQL needs tuple rows"
+        timeout = conn.execute("SHOW statement_timeout").fetchone()
+        assert timeout is not None and timeout[0] == "15s"
+        borrowed = conn
+
+    assert not borrowed.closed, "a pooled connection is returned open, not closed"
+
+    # Sequential borrows recycle what is already open instead of connecting
+    # again — the whole point of pooling the lane reads.
+    pool = corpus_pool_for(db_url)
+    before = pool.get_stats()["connections_num"]
+    for _ in range(5):
+        with corpus_read_connection(statement_timeout="15s") as reused:
+            assert not reused.closed
+    assert pool.get_stats()["connections_num"] == before, "expected no new connections"
+
+    # Borrowed raw (no timeout applied): the previous borrower's transaction-local
+    # setting did not survive the return to the pool.
+    with corpus_pool_for(db_url).connection() as raw:
+        timeout = raw.execute("SHOW statement_timeout").fetchone()
+        assert timeout is not None and timeout[0] != "15s"
+
+    # Same URL, different row factory: the corpus pool is never the tenant pool.
+    assert corpus_pool_for(db_url) is not pool_for(db_url)

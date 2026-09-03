@@ -38,14 +38,20 @@ from contextlib import contextmanager
 from typing import Any
 
 import psycopg
-from psycopg.rows import dict_row
+from psycopg.rows import dict_row, tuple_row
 
 from app.auth import TenantContext
 from app.config import settings
 
-# url -> psycopg_pool.ConnectionPool. Guarded by _POOL_LOCK.
+# pool key -> psycopg_pool.ConnectionPool. Guarded by _POOL_LOCK.
+#
+# The key is the connection string for tenant pools and the connection string
+# plus ``_CORPUS_POOL_SUFFIX`` for corpus-read pools. Two pools over one URL are
+# deliberate: they bind different row factories (dict_row vs tuple_row), and a
+# single pool would hand a lane the wrong row shape.
 _POOLS: dict[str, Any] = {}
 _POOL_LOCK = threading.Lock()
+_CORPUS_POOL_SUFFIX = "#corpus-read"
 
 
 def _connection_pool_class() -> Any:
@@ -59,13 +65,13 @@ def _connection_pool_class() -> Any:
     return module.ConnectionPool
 
 
-def _new_pool(url: str) -> Any:
+def _new_pool(url: str, *, row_factory: Any) -> Any:
     cfg = settings()
     pool = _connection_pool_class()(
         url,
         min_size=cfg.db_pool_min,
         max_size=cfg.db_pool_max,
-        kwargs={"row_factory": dict_row},
+        kwargs={"row_factory": row_factory},
         # Opened explicitly below: the constructor's implicit open is
         # deprecated in psycopg_pool 3.2+.
         open=False,
@@ -74,14 +80,23 @@ def _new_pool(url: str) -> Any:
     return pool
 
 
-def pool_for(url: str) -> Any:
-    """Return (creating on first use) the pool for one connection string."""
+def _pool(key: str, url: str, row_factory: Any) -> Any:
     with _POOL_LOCK:
-        pool = _POOLS.get(url)
+        pool = _POOLS.get(key)
         if pool is None:
-            pool = _new_pool(url)
-            _POOLS[url] = pool
+            pool = _new_pool(url, row_factory=row_factory)
+            _POOLS[key] = pool
         return pool
+
+
+def pool_for(url: str) -> Any:
+    """Return (creating on first use) the tenant pool for one connection string."""
+    return _pool(url, url, dict_row)
+
+
+def corpus_pool_for(url: str) -> Any:
+    """Return (creating on first use) the tuple-row corpus-read pool for one URL."""
+    return _pool(url + _CORPUS_POOL_SUFFIX, url, tuple_row)
 
 
 def open_pool() -> None:
@@ -132,3 +147,35 @@ def tenant_connection(
             conn.execute("SET LOCAL ROLE fel_app")
             conn.execute("SELECT set_config('request.jwt.claims', %s, true)", (claims,))
             yield conn
+
+
+@contextmanager
+def corpus_read_connection(
+    *, statement_timeout: str
+) -> Iterator[psycopg.Connection[tuple[Any, ...]]]:
+    """One pooled, tuple-row connection over the public corpus.
+
+    Corpus/retrieval tables carry no org_id and no RLS by design (0002/0003), so
+    a plain read connection observes exactly what the pinned lanes filter to;
+    all org-scoped work stays on the RLS-bound ``tenant_connection``. The row
+    factory is ``tuple_row`` because the lane SQL consumes positional rows.
+
+    Retrieval lanes run concurrently in threads and a psycopg connection is not
+    thread-safe, so each lane holds its own connection for the whole of its call
+    — the pool hands out one per lane and takes it back at the end. This
+    replaces a raw ``psycopg.connect()`` per lane call (#137): a TCP handshake
+    and a backend fork per lane, four lanes per run, was pure request latency,
+    and an unbounded connect-per-lane pattern is also how a burst exhausts
+    ``max_connections``.
+
+    ``statement_timeout`` is applied transaction-locally (``true``) rather than
+    for the session: a pooled connection is reused, and a session-scoped GUC
+    would leak one caller's timeout onto the next lane to borrow it.
+    """
+    url = settings().database_url
+    if url is None:
+        raise RuntimeError("FEL_DATABASE_URL is not configured")
+    with corpus_pool_for(url).connection() as pooled:
+        conn: psycopg.Connection[tuple[Any, ...]] = pooled
+        conn.execute("SELECT set_config('statement_timeout', %s, true)", (statement_timeout,))
+        yield conn
