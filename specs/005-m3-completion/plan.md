@@ -77,7 +77,7 @@ db/migrations/, packages/contracts/           # the 0006 entry only
 
 Wave contents: **`spec.md` §6.** Rules:
 
-- Wave 0 is lead actions across several PRs and may land in any order, except that **#146's implementation gates wave 1** and the four correctness fixes gate wave 3.
+- Wave 0 is lead actions across several PRs and may land in any order, except that **#146's implementation gates wave 1** and the four correctness fixes gate wave 4 (`#62` / `M3-304`).
 - A package-bearing wave opens only when every package in the prior wave reads `merged`.
 - **#62 must never be concurrent with the `0006` entry** — two shared globs.
 - **#63 is wave-independent.** It belongs to M4, reads `status: ready` on trunk, contends with nothing, and can run beside any M3 wave.
