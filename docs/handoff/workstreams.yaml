@@ -367,8 +367,9 @@ packages:
     branch: agent/extraction-steps-output # not yet created
     status: blocked # NOT dispatchable. The integration lead must first sequence it against #62 (see allowed_paths), and must land it before #61's SSE surface per ADR-0011's first revisit trigger, which the spec records as mandatory rather than advisory. #157 already carries both the contract-change and agent-task labels; db/migrations/**, packages/contracts/**, specs/** and docs/decisions/** are all shared paths, so dispatch needs explicit integration-lead authorization.
     allowed_paths:
-      # CONTENTION: the last two paths below are EXACTLY M3-CONFIDENCE-GATE
-      # (#62)'s claim set, so these two packages can NEVER run concurrently —
+      # CONTENTION: the last two paths below are a SUBSET of M3-CONFIDENCE-GATE
+      # (#62)'s claim set (#62 also claims evals/**), so these two packages can
+      # NEVER run concurrently —
       # ADR-0011 says so itself: "That path overlap needs the integration lead to
       # sequence it against #62." workers/tests/** is additionally claimed by #66
       # and #67, and is contained in the workers/** claimed by #108 — containment
