@@ -198,7 +198,7 @@ def reranker_triggered(recall_at_10: Decimal) -> bool:
 def build_gate_report(
     metrics: dict[str, Decimal],
     *,
-    supports: dict[str, int],
+    supports: dict[str, int] | None = None,
     thresholds: dict[str, Decimal] | None = None,
 ) -> GateReport:
     """Grade every metric against its threshold and decide the reranker trigger.
@@ -206,7 +206,22 @@ def build_gate_report(
     ``supports`` (from :func:`metric_supports`) is required so the gate fails
     closed: a metric whose denominator is zero was never measured and cannot
     PASS, regardless of the vacuous ``1.0`` its rate reports.
+
+    Requiring it is enforced here rather than left to the signature (#137). A
+    keyword-only parameter with no default already raises, but it raises
+    ``TypeError`` from the interpreter — a message about a missing argument,
+    which reads like a call-site typo and invites "just pass ``{}``". The gate's
+    failure mode is not a typo: a report built without supports PASSES every
+    metric on no data at all. So an omitted or ``None`` ``supports`` raises
+    ``ValueError`` naming what is actually wrong, and an empty mapping still
+    fails every metric closed rather than being treated as "no constraint".
     """
+    if supports is None:
+        raise ValueError(
+            "build_gate_report requires supports=metric_supports(outcomes): a metric "
+            "whose denominator is zero was never measured and must never PASS on the "
+            "vacuous 1.0 its rate reports"
+        )
     active = thresholds if thresholds is not None else SMOKE_THRESHOLDS
     results = tuple(
         GateResult(

@@ -139,18 +139,27 @@ class _RecordCompiler:
 
         if self.violations:
             return None
-        return ManifestEntry(
-            id=self._id,
-            category=str(record["category"]),
-            issuer={k: str(v) for k, v in dict(record["issuer"]).items()},
-            question=str(record["question"]),
-            as_of=str(record["as_of"]),
-            answerable=answerable,
-            expected_answer=expected,
-            evidence=tuple(evidence),
-            documents_reviewed=tuple(str(a) for a in record["documents_reviewed"]),
-            future_revisions=future_revisions,
-        )
+        try:
+            return ManifestEntry(
+                id=self._id,
+                category=str(record["category"]),
+                issuer={k: str(v) for k, v in dict(record["issuer"]).items()},
+                question=str(record["question"]),
+                as_of=str(record["as_of"]),
+                answerable=answerable,
+                expected_answer=expected,
+                evidence=tuple(evidence),
+                documents_reviewed=tuple(str(a) for a in record["documents_reviewed"]),
+                future_revisions=future_revisions,
+            )
+        except ValueError as exc:
+            # The model's own invariants (#137). Everything they check is
+            # already refused above with a typed violation, so reaching here
+            # means a check was lost from this compiler -- report it the way
+            # every other seed defect is reported (one violation, exit 1, no
+            # manifest) rather than crashing the CLI with a traceback.
+            self._fail("MALFORMED_RECORD", str(exc))
+            return None
 
     def _compile_future_revisions(self, record: dict[str, Any]) -> tuple[str, ...]:
         """Validate the optional post-cutoff revisions a temporal trap references.
@@ -413,11 +422,19 @@ def compile_manifest(
     if violations:
         raise CompilationError(violations)
 
-    manifest = Manifest(
-        corpus_version_id=corpus_version_id,
-        resolved=corpus is not None,
-        entries=tuple(entries),
-    )
+    try:
+        manifest = Manifest(
+            corpus_version_id=corpus_version_id,
+            resolved=corpus is not None,
+            entries=tuple(entries),
+        )
+    except ValueError as exc:
+        # Manifest-level invariant (#137): a resolved manifest may not carry an
+        # unresolved anchor. Already refused per record above, so this is the
+        # same "a check was lost" fallback the entry constructor takes.
+        raise CompilationError(
+            [CompilationViolation("<manifest>", "UNRESOLVED_ANCHOR", str(exc))]
+        ) from exc
     return Manifest(
         corpus_version_id=manifest.corpus_version_id,
         resolved=manifest.resolved,
