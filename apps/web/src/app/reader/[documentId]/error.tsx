@@ -1,5 +1,9 @@
 "use client";
 
+import { useEffect } from "react";
+
+import { recordError } from "../../../lib/telemetry";
+
 /**
  * Error boundary for the reader route: evidence-source failures that are NOT
  * "document does not exist" (network faults, API 5xx, auth problems —
@@ -13,6 +17,10 @@ export default function ReaderError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  useEffect(() => {
+    recordError("reader.fetch.error", error);
+  }, [error]);
+
   return (
     <main
       id="main-content"

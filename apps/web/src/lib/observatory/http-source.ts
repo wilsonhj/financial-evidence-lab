@@ -20,6 +20,19 @@ import type {
 } from "./query-source";
 import type { RetrievalStreamOpener } from "./sse";
 import { LANES } from "./trace-view";
+import { recordError, recordTiming } from "../telemetry";
+
+/**
+ * Timing/error emitters below are best-effort: this module only ever runs
+ * server-side (see the node:process tripwire above), where `lib/telemetry`'s
+ * browser gate makes every call an inert no-op today. They are wired here —
+ * the seam nearest the actual network call — so that if a caller of this
+ * source is ever invoked from a browser context, timing and errors for the
+ * Observatory query/trace fetches are captured with no further changes.
+ */
+function now(): number {
+  return typeof performance !== "undefined" ? performance.now() : Date.now();
+}
 
 export type BearerTokenProvider = string | (() => string | Promise<string>);
 
@@ -225,9 +238,17 @@ export class HttpObservatorySource implements ObservatoryQuerySource {
 
   async getQuery(queryId: string): Promise<QuerySnapshot> {
     const path = `/v1/queries/${encodeURIComponent(queryId)}`;
-    const response = await this.request(path, { method: "GET" });
-    if (!response.ok) throw await this.toApiError(response, path);
-    return validateQuerySnapshot(await this.json(response, path), path);
+    const started = now();
+    try {
+      const response = await this.request(path, { method: "GET" });
+      if (!response.ok) throw await this.toApiError(response, path);
+      const snapshot = validateQuerySnapshot(await this.json(response, path), path);
+      recordTiming("observatory.query.fetch", now() - started, { queryId });
+      return snapshot;
+    } catch (error) {
+      recordError("observatory.fetch.error", error, { queryId });
+      throw error;
+    }
   }
 
   async createRerun(queryId: string, idempotencyKey: string): Promise<QueryAccepted> {
@@ -242,9 +263,17 @@ export class HttpObservatorySource implements ObservatoryQuerySource {
 
   async getRun(runId: string): Promise<RetrievalTrace> {
     const path = `/v1/retrieval-runs/${encodeURIComponent(runId)}`;
-    const response = await this.request(path, { method: "GET" });
-    if (!response.ok) throw await this.toApiError(response, path);
-    return validateTrace(await this.json(response, path), path);
+    const started = now();
+    try {
+      const response = await this.request(path, { method: "GET" });
+      if (!response.ok) throw await this.toApiError(response, path);
+      const trace = validateTrace(await this.json(response, path), path);
+      recordTiming("observatory.trace.fetch", now() - started, { runId });
+      return trace;
+    } catch (error) {
+      recordError("observatory.fetch.error", error, { runId });
+      throw error;
+    }
   }
 
   async submitFeedback(
