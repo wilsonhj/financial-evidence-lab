@@ -149,8 +149,12 @@ def test_division_by_zero_fails_closed_at_evaluation() -> None:
 
 
 def test_terminal_value_style_guard_wacc_must_exceed_growth() -> None:
-    """A Gordon-growth denominator (wacc - g) must be positive: the check flags it and
-    the division itself fails closed when they are equal, across every sensitivity band."""
+    """Validation checks report; they do not halt evaluation.
+
+    Equality (wacc == g) still fails closed because the TV division is 0.
+    wacc < g computes a negative TV and records the failed check — callers
+    must consult ``failed_checks`` rather than treating the number as a guard.
+    """
     for wacc, growth in (("0.08", "0.08"), ("0.07", "0.08"), ("0.09", "0.08")):
         nodes = [
             assumption("wacc", wacc),
@@ -225,7 +229,7 @@ def test_validation_checks_report_pass_fail_and_residual() -> None:
     assert run.result("nonneg").passed is False
     assert run.result("le").passed is True
     assert run.failed_checks == ("eq-strict", "nonneg")
-    assert run.result("price" if False else "eq").kind is NodeKind.VALIDATION_CHECK
+    assert run.result("eq").kind is NodeKind.VALIDATION_CHECK
 
 
 def test_rollup_year_sums_the_four_quarters() -> None:
@@ -258,9 +262,12 @@ def test_rounding_happens_once_at_the_reported_edge_and_never_compounds() -> Non
 def test_reported_output_uses_iso_4217_minor_units_or_explicit_quantum() -> None:
     jpy = currency("JPY")
     kwd = currency("KWD")
+    gnf = currency("GNF")
     nodes = [
         source("y", "1234.56", unit=jpy),
         output("y-out", "y", unit=jpy),
+        source("g", "1234.56", unit=gnf),
+        output("g-out", "g", unit=gnf),
         source("k", "1.23456", unit=kwd),
         output("k-out", "k", unit=kwd),
         source("r", "0.123456", unit=RATIO),
@@ -278,12 +285,13 @@ def test_reported_output_uses_iso_4217_minor_units_or_explicit_quantum() -> None
     ]
     run = evaluate(GraphSnapshot.build("m", nodes), cutoff=CUTOFF)
     assert run.quantity("y-out").value == Decimal("1235")
+    assert run.quantity("g-out").value == Decimal("1235")
     assert run.quantity("k-out").value == Decimal("1.235")
     assert run.quantity("r-out").value == Decimal("0.1235")
     assert run.quantity("half-out").value == Decimal("2")  # banker's rounding, ties to even
 
 
-def test_driver_seeded_from_an_approved_fact_recalculates_downstream(tmp_path: object) -> None:
+def test_driver_seeded_from_an_approved_fact_recalculates_downstream() -> None:
     """Milestone 4 exit criterion: an approved extraction seeds a driver, downstream
     outputs recalculate, and provenance is complete."""
     base = GraphSnapshot.build("m", revenue_model())

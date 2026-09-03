@@ -59,6 +59,15 @@ def require_decimal(value: object, field: str) -> Decimal:
         raise ValueTypeError(f"{field} must be a Decimal, got {type(value).__name__}", field=field)
     if not value.is_finite():
         raise ValueTypeError(f"{field} must be finite, got {value}", field=field)
+    # Decimal(0.1) captures the IEEE-754 binary expansion (~55 digits). A
+    # string-constructed Decimal("0.1") is one digit. Intermediate arithmetic
+    # stays inside CALC_CONTEXT.prec (34). Anything longer is a from_float sneak.
+    if len(value.as_tuple().digits) > CALC_CONTEXT.prec:
+        raise ValueTypeError(
+            f"{field} looks like a binary float converted to Decimal; "
+            f"construct from a decimal string",
+            field=field,
+        )
     return value
 
 
