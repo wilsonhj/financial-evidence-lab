@@ -128,6 +128,25 @@ def test_restore_output_fails_closed_on_text_hash_mismatch() -> None:
         _restore_output(state, "assemble_evidence", tampered)
 
 
+class _ProcessDeath(BaseException):
+    """SIGKILL/OOM: bypasses every handler, so the run row stays ``running``.
+
+    A handled crash lands the row ``failed``, and terminal runs are final
+    (#146): the consumer never re-dispatches that job and both persist stores
+    refuse to reopen the row. Resume exists only for this shape of death.
+    """
+
+
+class _DyingLLM:
+    """Dies on the first model call — after assemble_evidence has committed."""
+
+    provider = "mock"
+    model = "mock-structured-v1"
+
+    def generate_structured(self, request: Any) -> Any:
+        raise _ProcessDeath("simulated process death")
+
+
 def test_cross_process_resume_keeps_full_evidence_text() -> None:
     """Crash then resume in a fresh process: evidence must come back intact."""
     payload = sample_payload(text=LONG_SPAN_TEXT)
@@ -138,18 +157,19 @@ def test_cross_process_resume_keeps_full_evidence_text() -> None:
     checkpoint = ReplayCheckpointStore(events=events)
 
     crashed = WorkflowState(request=request, evidence=list(evidence))
-    with pytest.raises(RuntimeError, match="injected crash"):
+    with pytest.raises(_ProcessDeath):
         run_extraction_workflow(
             crashed,
             WorkflowDeps(
-                structured_llm=MockStructuredLLMProvider(),
+                structured_llm=_DyingLLM(),
                 checkpoint=checkpoint,
                 events=events,
                 persist=persist,
                 evidence_loader=lambda _r: list(evidence),
-                crash_after_stages=2,
             ),
         )
+    # No handler ran: no terminal status was written, so the run is resumable.
+    assert persist.run_status.get(request.run_id) is None
 
     resumed = WorkflowState(request=request)
     final = run_extraction_workflow(

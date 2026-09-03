@@ -79,9 +79,17 @@ def test_full_mock_workflow_proposals_needs_review() -> None:
 
 
 def test_crash_after_every_stage_resumes_without_redo() -> None:
-    """Inject a crash after each newly committed stage; resume must skip hashes."""
+    """Inject a crash after each newly committed stage; resume must skip hashes.
+
+    Each attempt gets its own run-row double. ``crash_after_stages`` is a
+    HANDLED RuntimeError, which the workflow's catch-all lands as run
+    ``failed`` — and terminal runs are final (#146): the consumer dead-letters
+    that job rather than re-dispatching it, and a shared ``MemoryPersistStore``
+    now (correctly) refuses every resume below. What this test exercises is the
+    checkpoint/event stores' content-addressed skip — what a resume after
+    PROCESS death (row still ``running``) reads — so those two are shared.
+    """
     checkpoint = MemoryCheckpointStore()
-    persist = MemoryPersistStore()
     events = MemoryEventStore()
     llm = MockStructuredLLMProvider()
     request = _request()
@@ -114,7 +122,7 @@ def test_crash_after_every_stage_resumes_without_redo() -> None:
             structured_llm=counting,
             checkpoint=checkpoint,
             events=events,
-            persist=persist,
+            persist=MemoryPersistStore(),
             evidence_loader=lambda _r: list(evidence),
             crash_after_stages=crash_at,
         )
@@ -130,6 +138,7 @@ def test_crash_after_every_stage_resumes_without_redo() -> None:
     # Final clean run — should skip all succeeded stages (no new model calls
     # if classify/candidates/kpi already checkpointed).
     final_state = WorkflowState(request=request, evidence=list(evidence))
+    persist = MemoryPersistStore()
     final = run_extraction_workflow(
         final_state,
         WorkflowDeps(
