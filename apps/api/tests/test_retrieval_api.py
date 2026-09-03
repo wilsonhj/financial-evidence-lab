@@ -356,7 +356,7 @@ def test_provider_refusal_abstains(
     def _refusing_provider() -> MockStructuredLLMProvider:
         return MockStructuredLLMProvider(refuse=True)
 
-    monkeypatch.setattr(retrieval, "MockStructuredLLMProvider", _refusing_provider)
+    monkeypatch.setattr(retrieval.providers, "MockStructuredLLMProvider", _refusing_provider)
 
     created = _create(client, org, seeded["workspace_id"])
     trace = client.get(f"/v1/retrieval-runs/{created['run_id']}", headers=_headers(*org)).json()
