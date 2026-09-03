@@ -42,7 +42,7 @@ Every count, status and identifier was produced by a command run against `origin
 
 ## 3. Verified state
 
-- Trunk `ebe77af`; five of five checks pass.
+- Trunk at the 2026-08-31 measurement: `ebe77af`, five of five checks passing. Trunk has since moved to `b8dc8a6` (#175, #173, #183) and its JS/TS audit gate is red on a `fast-uri` advisory batch unrelated to this document; every count below was re-verified against `b8dc8a6` on 2026-09-03 and none changed.
 - Packages: **32 registered — 23 `merged`, 1 `ready`, 8 not started.** Two more await registration (§4.3).
 - M3 core (`M3-EXTRACTION-CORE`, #60) merged @ `61058e4`. `T0301`–`T0305` are delivered but still read `[ ]` in the canonical ledger — one of the 17 drifted checkboxes.
 - **M3 remaining: 5 canonical tasks, 10 milestone tasks, 2 packages.**
@@ -131,7 +131,7 @@ Give #62 an explicit `credentials:` override, and sequence `RELEASE-LIVE-CUTOVER
 
 | Wave | Content | Opens when |
 |---|---|---|
-| **0** | Merge #175, #173, the registration PR, ADR-0012, constitution 1.2.0; implement #146 Option 1; fix #153, #154, #158, #133; reconcile `tasks.md` | Now. Lead actions across several PRs |
+| **0** | ~~Merge #175, #173~~ (done 2026-08-31); ~~ratify constitution 1.2.0~~ (done 2026-09-03, PR #183); merge the registration PR (#185) and ADR-0012 (#186); implement #146 Option 1; fix #153, #154, #158 (PR #208), #133 (PR #210); reconcile `tasks.md` (PR #206) | Now. Lead actions across several PRs |
 | **1** | **#61 (non-SSE)** ∥ **#63** — disjoint (`apps/**` vs `packages/calculation-engine/**`) | #146 implemented |
 | **2** | migration-`0006` (#157) | Registered; **must not overlap #62** |
 | **3** | **#62** | #61 merged, `0006` merged |
@@ -165,13 +165,16 @@ Each package additionally owes `defaults.required_evidence`: tests, telemetry wh
 
 ## 8. Owed by the integration lead
 
-1. Merge #175, then #173.
-2. Review and merge the registration PR (`chore/register-live-cutover-and-0006`) — both entries `blocked`.
-3. Rule **ADR-0012** (Proposed) — until then `M3-304` has no lawful provider.
-4. Ratify **constitution 1.2.0**.
+Struck items were completed after this document was drafted; they are kept so the
+sequence stays legible rather than silently renumbered.
+
+1. ~~Merge #175, then #173.~~ Both merged 2026-08-31 (`f158e05`, `fdcb3d2`).
+2. Review and merge the registration PR #185 (`chore/register-live-cutover-and-0006`) — both entries `blocked`.
+3. Rule **ADR-0012** (Proposed, PR #186) — until then `M3-304` has no lawful provider.
+4. ~~Ratify **constitution 1.2.0**.~~ Ratified 2026-09-03 (PR #183 @ `b8dc8a6`), which is what permits this directory's subordinate `spec.md` and `plan.md`.
 5. Provision the credential `M3-304` needs, or rule it deferred (§5.2).
-6. Schedule implementation of **#146 Option 1** — the last gate on #61.
-7. Reconcile `tasks.md` — 17 checkboxes, `T0215` caveat.
+6. Schedule implementation of **#146 Option 1** — the last gate on #61. In progress on `fix/146-terminal-runs-final`, together with #204.
+7. Reconcile `tasks.md` — 17 checkboxes, `T0215` caveat. PR #206 does this: 16 flipped, `T0112` and `T0215` deliberately left with the reason recorded on each line.
 8. Ratify or return this spec.
 
 ---

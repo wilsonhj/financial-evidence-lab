@@ -2,7 +2,7 @@
 
 **Feature:** `specs/005-m3-completion/`
 **Date:** 2026-08-31
-**Baseline:** `origin/main` @ `ebe77af`
+**Baseline:** `origin/main` @ `ebe77af`; re-verified against `b8dc8a6` on 2026-09-03 with no count changed
 
 ---
 
