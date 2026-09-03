@@ -89,6 +89,12 @@ class ScenarioError(CalculationEngineError):
     code = "SCENARIO_ERROR"
 
 
+class CanonicalizationError(CalculationEngineError):
+    """A value cannot be encoded as typed canonical JSON (floats, naive datetimes, forged keys)."""
+
+    code = "CANONICALIZATION_ERROR"
+
+
 class SnapshotError(CalculationEngineError):
     """Snapshot store integrity failure (unknown id, content-hash mismatch)."""
 
@@ -97,6 +103,7 @@ class SnapshotError(CalculationEngineError):
 
 __all__ = [
     "CalculationEngineError",
+    "CanonicalizationError",
     "CutoffViolationError",
     "CycleError",
     "FormulaError",
