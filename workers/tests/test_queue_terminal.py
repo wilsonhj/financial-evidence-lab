@@ -95,7 +95,7 @@ def test_terminal_writes_are_lease_fenced(conn: psycopg.Connection, write: str) 
     status, _attempts, finished_at, lease, error = _row(conn, stale.id)
     assert status == "running", "the zombie's write disturbed the new claim"
     assert finished_at is None
-    assert lease == fresh.lease
+    assert str(lease) == fresh.lease, "the zombie's write cleared the new owner's lease"
     assert error is None
 
 
