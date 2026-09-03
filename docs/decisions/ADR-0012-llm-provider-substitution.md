@@ -24,11 +24,9 @@ latter outright: "**Unresolved — needs a superseding ADR before
 
 All `file:line` references are verified against this branch's base, `origin/main`
 @ `fdcb3d2`. Where a claim could not be verified from the repository, the text
-says so at the point of use rather than asserting it. Note that the dispatch
-brief for this ADR named `ebe77af` as the base; `ebe77af` is two commits behind
-(`git log --oneline -5 origin/main`), and the `specs/004-mvp-completion/` files
-cited throughout are on `origin/main` as of `fdcb3d2` (PR #173), not only on a
-feature branch — so every `specs/004` citation below is a trunk citation.
+says so at the point of use rather than asserting it. The base is `fdcb3d2`, the
+merge commit of PR #173, so the `specs/004-mvp-completion/` files cited
+throughout are trunk citations rather than feature-branch ones.
 
 ## Context
 
@@ -145,14 +143,16 @@ exercised.
 
 Note also that #62's acceptance thresholds — "guidance F1 >=90%, KPI/driver F1
 >=88%, numeric value/unit/period/sign/scale accuracy >=99%, temporal validity
-100%" — are three of the four LLM-sensitive gates this ADR's Arm A uses, plus one
-of the two it excludes. #62's own eval work is therefore most of Arm A's
+100%" — are two of the four LLM-sensitive gates this ADR's Arm A uses (guidance
+F1 and KPI/driver F1), plus **both** of the two it excludes as deterministic
+(numeric accuracy and temporal validity). #62's own eval work is therefore most of Arm A's
 apparatus, which is an argument for running the benchmark *as part of* #62 rather
 than building a second harness for it.
 
-### The repository already contains three mutually inconsistent provider pins
+### Three provider pins ship in the repository, and one contradicts the other two
 
-Two shipped fixtures disagree with each other and with ADR-0002:
+Two shipped fixtures disagree with each other; only the second disagrees with
+ADR-0002:
 
 - `packages/contracts/fixtures/retrieval-trace.json:28-31` pins
   `"embedding_provider": "openai"`, `"embedding_model": "text-embedding-3-small"`,
@@ -161,10 +161,16 @@ Two shipped fixtures disagree with each other and with ADR-0002:
   `embedding_provider: "voyage"`, `embedding_model: "voyage-3-large"`,
   `generation_provider: "anthropic"`, `generation_model: "claude-opus-4-8"`.
 
-The second fixture is the **only** occurrence of `claude-opus-4-8` anywhere in
-the repository (`git grep -n 'claude-opus' origin/main`), and the only occurrence
-of `voyage` in any form (`git grep -n -i 'voyage' origin/main`). No runtime code
-pins either. Two things follow, and both matter:
+The first fixture is **consistent** with `ADR-0002:22` and with `ADR-0006:15`
+(OpenAI `text-embedding-3-small` at 512 dimensions); it is the second that
+contradicts both, on both roles at once.
+
+That second fixture is the only occurrence of `claude-opus-4-8` **in code or
+fixtures**, and the only occurrence of `voyage` in any form (`git grep -n -i
+'voyage' origin/main`). `git grep -n 'claude-opus' origin/main` returns four
+further hits, all prose in `specs/004-mvp-completion/` — `clarify-analyse.md:28`,
+`plan.md:49`, `spec.md:213` and `spec.md:309` — which describe this conflict
+rather than pin a provider. No runtime code pins either vendor. Two things follow, and both matter:
 
 1. The directive has already leaked into a shipped artifact ahead of its ADR —
    which is the drift this ADR exists to stop.
@@ -230,7 +236,12 @@ Two outcomes are admissible, and **this ADR selects neither**:
   preference, but it is a *hypothesis about a measurement that has not been
   taken*, not a decision this ADR is entitled to make.
 
-The choice between (i) and (ii) is deferred to the benchmark, deliberately.
+**Outcome (ii) is not this ADR's to ratify.** Retiring `ADR-0002:22`'s
+`text-embedding-3` pin supersedes the embeddings half of the clause this ADR
+explicitly leaves intact, so it needs the separate embeddings ADR #132
+anticipates; what Arm B produces here is the evidence that ADR would rest on, not
+the decision itself. Subject to that, the choice between (i) and (ii) is deferred
+to the benchmark, deliberately.
 `ADR-0002:22`'s <= 512 / `halfvec` constraint survives either way and constrains
 both: `DIMENSIONS = 512` (`packages/retrieval/fel_retrieval/index_version.py:21`)
 is hashed into the index identity.
@@ -393,6 +404,18 @@ subsequent PR owns, not a note:
   `synthetic-trace.ts:245-248`, must be reconciled to whatever is ratified. The
   `voyage` / `voyage-3-large` values in the latter must either be justified by an
   ADR or removed; they are currently ungoverned.
+- **The other documents that restate the pin.** `constitution.md:28` says the
+  locked stack "MUST NOT be restated elsewhere"; it is restated in five places,
+  so superseding `ADR-0002:22` alone does not finish the job. For the generation
+  role: `ADR-0007:16` (**Status: Accepted**) — "The OpenAI adapter uses JSON
+  Schema Structured Outputs and records provider/model/response/usage/refusal
+  metadata" — and `ADR-0007:30`; `specs/003-agentic-extraction/spec.md:204` ("The
+  first live provider is OpenAI structured output behind an additive provider
+  interface") and `:190`; and `specs/001-financial-evidence-lab/spec.md:512`.
+  Under outcome (ii) additionally `ADR-0006:15` and
+  `specs/002-observable-hybrid-retrieval/spec.md:53` (M2-FR-003), both of which
+  the separate embeddings ADR would own. Leaving `ADR-0007:16` unamended would
+  leave an **Accepted** ADR pinning OpenAI for the very role this one moves.
 - **`ADR-0002` itself** gains a `Superseded (in part):` line naming this ADR and
   scoping it to the "OpenAI for generation" clause of `:22`. Per ADR-0011's
   precedent, that insertion shifts subsequent line numbers — any PR citing
@@ -602,7 +625,9 @@ benchmark evidence, not before it.
   What *is* verifiable is that the repository contains no Anthropic embeddings
   adapter and no reference to one (`git grep -n -i 'anthropic' origin/main --
   packages/providers workers/src apps/api` returns nothing; the only `anthropic`
-  string anywhere is `synthetic-trace.ts:247`, a `generation_provider` field).
+  string in code or fixtures is `synthetic-trace.ts:247`, a `generation_provider`
+  field, the other occurrence being prose at
+  `specs/004-mvp-completion/spec.md:213`).
   The ratifying PR should confirm the vendor fact against current provider
   documentation rather than inheriting it from an issue opened 2026-07-21.
 - **#132's MTEB figures** (`3-small ≈62.3`, `nomic-v1.5 ≈62.3`, `Qwen3-0.6B
