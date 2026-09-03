@@ -7,6 +7,7 @@ import hashlib
 import os
 import pathlib
 import threading
+import time
 import uuid
 from datetime import UTC, datetime
 
@@ -388,9 +389,18 @@ def test_publish_race_surfaces_domain_error_not_db_error(
     conflicts: list[PublishConflictError] = []
     failures: list[BaseException] = []
 
+    # Readiness handshake: the publisher announces that its connection is up
+    # and it is about to issue the statement that must block. Polling
+    # pg_stat_activity alone was timing-dependent — the old loop gave up after
+    # ~5s of 10ms polls and committed the competitor anyway, so under load the
+    # publisher had not reached the index yet and the race it is meant to lose
+    # never happened.
+    publisher_ready = threading.Event()
+
     def publish() -> None:
         try:
             with psycopg.connect(url, autocommit=True) as conn:
+                publisher_ready.set()
                 publish_corpus_version(conn, draft)
         except PublishConflictError as exc:
             conflicts.append(exc)
@@ -407,18 +417,28 @@ def test_publish_race_surfaces_domain_error_not_db_error(
         )
         thread = threading.Thread(target=publish)
         thread.start()
-        # Wait until the publisher is actually blocked on the index before
-        # committing the competitor, so the ordering is deterministic.
-        for _ in range(500):
-            waiting = corpus_conn.execute(
-                "SELECT count(*) FROM pg_stat_activity"
-                " WHERE wait_event_type = 'Lock' AND state = 'active'"
-            ).fetchone()
+        # Wait until the publisher is actually blocked on the partial unique
+        # index before committing the competitor, so the ordering is
+        # deterministic. Generous ceiling, short interval: the loop exits on
+        # the observed lock wait (or on the thread finishing), never on a
+        # deadline that a loaded machine can hit while the publisher is merely
+        # slow. 30s is a failure bound, not an expected duration.
+        assert publisher_ready.wait(timeout=30), "the publisher never opened its connection"
+        deadline = time.monotonic() + 30.0
+        while time.monotonic() < deadline:
+            waiting = corpus_conn.execute("""
+                SELECT count(*) FROM pg_stat_activity a
+                JOIN pg_locks l ON l.pid = a.pid AND NOT l.granted
+                WHERE a.wait_event_type = 'Lock' AND a.state = 'active'
+                  AND a.pid <> pg_backend_pid()
+                """).fetchone()
             if waiting is not None and int(waiting[0]) > 0:
                 break
-            thread.join(timeout=0.01)
             if not thread.is_alive():
                 break
+            thread.join(timeout=0.05)
+        else:  # pragma: no cover — only on a pathologically stalled server
+            pytest.fail("publisher never blocked on the single-active index within 30s")
         blocker.commit()
         thread.join(timeout=30)
     assert not failures, f"raw database errors escaped the publish path: {failures!r}"
