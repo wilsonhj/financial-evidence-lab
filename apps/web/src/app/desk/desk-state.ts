@@ -29,6 +29,44 @@ export function resolveDeskTheme(value: string | null): DeskTheme {
   return isValidDeskTheme(value) ? value : "system";
 }
 
+type ThemeStorage = {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+};
+
+function defaultThemeStorage(): ThemeStorage | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
+export function readStoredTheme(
+  fallback: string | null = null,
+  storage: ThemeStorage | null = defaultThemeStorage(),
+): DeskTheme {
+  if (storage === null) return resolveDeskTheme(fallback);
+  try {
+    return resolveDeskTheme(storage.getItem("fel-theme") ?? fallback);
+  } catch {
+    return resolveDeskTheme(fallback);
+  }
+}
+
+export function writeStoredTheme(
+  theme: DeskTheme,
+  storage: ThemeStorage | null = defaultThemeStorage(),
+): void {
+  if (storage === null) return;
+  try {
+    storage.setItem("fel-theme", theme);
+  } catch {
+    // Storage can throw when blocked (private mode, iframe). Cookie + dataset remain.
+  }
+}
+
 export function canSaveResolution(sourceId: EvidenceSourceId | null, rationale: string): boolean {
   return sourceId !== null && rationale.trim().length >= 24;
 }

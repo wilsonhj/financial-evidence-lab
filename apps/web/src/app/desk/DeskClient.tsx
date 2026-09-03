@@ -6,7 +6,8 @@ import {
   buildReviewDecision,
   canApplyApprovedFacts,
   canSaveResolution,
-  resolveDeskTheme,
+  readStoredTheme,
+  writeStoredTheme,
   resolveVisibleClaimId,
   type AppliedFacts,
   type DeskTheme,
@@ -78,19 +79,13 @@ export default function DeskClient() {
   );
 
   useEffect(() => {
-    setTheme(
-      resolveDeskTheme(
-        window.localStorage.getItem("fel-theme") ??
-          document.documentElement.dataset.felTheme ??
-          null,
-      ),
-    );
+    setTheme(readStoredTheme(document.documentElement.dataset.felTheme ?? null));
     setThemeReady(true);
   }, []);
   useEffect(() => {
     if (!themeReady) return;
     document.documentElement.dataset.felTheme = theme;
-    window.localStorage.setItem("fel-theme", theme);
+    writeStoredTheme(theme);
     document.cookie = `fel-theme=${theme}; Path=/; Max-Age=31536000; SameSite=Lax`;
   }, [theme, themeReady]);
   useEffect(() => {
@@ -504,15 +499,21 @@ function Model({
       <div className="model-card">
         <p className="eyebrow">FY27 revenue · {scenario} case</p>
         <strong data-testid="text-fy27-revenue">{values[scenario]}</strong>
-        <span>{applied ? "Updated from approved evidence" : "Awaiting approved facts"}</span>
+        <span data-testid="text-fy27-caption">
+          {applied
+            ? "Facts staged in this session · preview figures unchanged"
+            : "Awaiting approved facts"}
+        </span>
       </div>
       <div className="packet-card">
         <h3>PM packet</h3>
         <p data-testid="text-packet-readiness">
-          {applied ? "Ready for PM review" : "Not ready · 3 review gates remain"}
+          {applied
+            ? "Session gates complete · packet export is not available"
+            : "Not ready · 3 review gates remain"}
         </p>
-        <button data-testid="button-packet-readiness" disabled={!applied}>
-          {applied ? "Open PM packet" : "Complete review gates"}
+        <button data-testid="button-packet-readiness" disabled>
+          {applied ? "Packet export not available" : "Complete review gates"}
         </button>
       </div>
     </>
@@ -524,9 +525,9 @@ function Inspector({ gatesReady, applied }: { gatesReady: boolean; applied: bool
       <h3>Impact Inspector</h3>
       <p>Model v19 · evidence-linked</p>
       <div className="inspector-metric">
-        <small>FY27 revenue</small>
+        <small>FY27 revenue (fixture preview)</small>
         <b>$842.4m</b>
-        <span>Down $18.6m vs prior</span>
+        <span>Static fixture copy · not a computed impact</span>
       </div>
       <h4>Evidence coverage</h4>
       <div className="coverage-bar">
