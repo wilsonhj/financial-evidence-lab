@@ -301,7 +301,7 @@ re-verified for this ADR.**
   consumer instead of a no-op diff. Add this work to #61's `depends_on`.
   ADR-0009 flags the same trigger from the other side (`ADR-0009:166-168`).
 
-  > **Erratum — 2026-08-31, integration lead.** The bullet above reads as a
+  > **Erratum — 2026-08-31, integration lead; recorded on merge of PR #187.** The bullet above reads as a
   > package-level sequencing requirement on #61; the `Blocks:` header at the top
   > of this ADR scopes the block to #61's SSE surface. **The header governs.**
   > The migration-`0006` work blocks the SSE surface until its implementing PR

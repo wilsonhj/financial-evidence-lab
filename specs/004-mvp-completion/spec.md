@@ -20,13 +20,13 @@ Answer one question with evidence: **what remains before Financial Evidence Lab 
 
 ### 1.2 Standing relative to the canonical feature directory
 
-This directory is **subordinate** to `specs/001-financial-evidence-lab/`, which the constitution names as holding the sole canonical `spec.md`, `plan.md`, and `tasks.md`.
+This directory is **subordinate** to `specs/001-financial-evidence-lab/`, which constitution 1.2.0 names as holding the sole canonical task ledger (`tasks.md`) together with the parent `spec.md` and `plan.md`; every artifact here names that parent and yields to it on conflict.
 
 - It defines **no new requirements**. Every gate cited here is quoted from parent §19.5, §19.6 or §26.
 - It ships **no `tasks.md`**. The 29 outstanding units of work already carry canonical IDs (`T0112`, `T0214b`, `T0306`–`T0513`, less the deferred `T0506`) in the parent ledger. A fourth copy of those rows would drift exactly as §4.2 documents — that risk is the single most load-bearing finding in this spec, and duplicating the ledger to describe it would be self-defeating.
 - It does not follow `.specify/templates/spec-template.md`. That template marks "User Scenarios & Testing", "Requirements" and "Success Criteria" as mandatory; this document has none of them, because it specifies no product behaviour — it inventories work already specified elsewhere and sequences it. The omission is deliberate and declared here rather than left for a reader to discover.
 - The constitution's "sole canonical" clause is **already strained by existing practice, not first by this directory**: `002-observable-hybrid-retrieval/` and `003-agentic-extraction/` have each shipped their own `spec.md` and `tasks.md` since July 2026, and the clause speaks of "*the* active Spec Kit feature directory" in the singular where four now exist. See **C-1**.
-- Its `plan.md` is a **release-sequencing plan**, not a competing implementation plan. Where it and `001/plan.md` disagree, `001/plan.md` governs. See `clarify-analyse.md` finding **C-1** for the constitutional disposition this requires from the integration lead.
+- Its `plan.md` is a **release-sequencing plan**, not a competing implementation plan. Where it and `001/plan.md` disagree, `001/plan.md` governs. Constitution 1.2.0 (PR #183 @ `b8dc8a6`) permits it as a subordinate artifact; `clarify-analyse.md` finding **C-1** records the ruling and the options weighed.
 
 ### 1.3 What this document does not do
 
@@ -56,9 +56,9 @@ Statements of *judgement* are not covered by that claim and are marked where the
 
 ## 3. Verified state, 2026-08-31
 
-- Trunk: `main` @ `ebe77af` (PR #172, the handoff reconciliation). Its parent `a4bb356` (PR #174, closing #171) remains the **measurement baseline** for every structural count below, and #172 is docs-only. All five GitHub Actions checks pass.
+- Trunk at the 2026-08-31 measurement: `main` @ `ebe77af` (PR #172, the handoff reconciliation). Its parent `a4bb356` (PR #174, closing #171) remains the **measurement baseline** for every structural count below, and #172 is docs-only. All five GitHub Actions checks passed at that tip; trunk has moved since (next bullet).
 - Open PRs: both have since **merged** — #175 (ADR-0011) @ `f158e05` and #173 (this specification) @ `fdcb3d2`, both on 2026-08-31, carrying trunk past the `ebe77af` tip recorded above. The open count has moved on and will keep moving; re-run §2's `gh pr list --state open` rather than reading a number here.
-- Open issues: **31**.
+- Open issues: **31** at the 2026-08-31 measurement. The count moves with every filing — the 2026-09-01 architecture review alone added a dozen — so re-run §2's `gh issue list --state open --limit 100 --json number --jq length` rather than reading a number here.
 
 **Resolved since this document was first drafted** (2026-08-25 → 2026-08-31), each an item §8 listed as owed:
 
@@ -331,6 +331,6 @@ Four decisions were resolved in `clarify-analyse.md` (Q-1 through Q-4). These re
 | Packages with every dependency merged | **3** — #61, #63, #108 |
 | Of those, dispatchable with no ruling and no credential | **1** — #63, which contends with nothing and was dispatched by #172 (`status: ready`) |
 | Safe parallel pairs among the 3 dispatchable | 2 of 3 (#61∥#63, #63∥#108; #61 vs #108 contends) |
-| Open issues | 31 — 14 release-blocking, 5 epics, 2 rollup trackers, **10 package issues (the 9 outstanding packages + #56)**. Not the same 10 as the row above: neither package awaiting registration has an issue yet, and #56 is not an outstanding package. Was 33; #171 and #134 closed 2026-08-29 |
+| Open issues | 31 at the 2026-08-31 measurement — 14 release-blocking, 5 epics, 2 rollup trackers, **10 package issues (the 9 outstanding packages + #56)**. Not the same 10 as the row above: #56 is not an outstanding package, and `RELEASE-LIVE-CUTOVER`'s issue #177 was filed after this measurement (#157, the migration-`0006` issue, predates it). Was 33; #171 and #134 closed 2026-08-29. Re-run the §2 command for the live count |
 | Release gates to satisfy | 10 numeric + 11 definition-of-done items |
 | Ledger drift to correct | 17 checkboxes |
