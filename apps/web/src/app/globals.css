@@ -2,6 +2,16 @@
   --color-bg: #ffffff;
   --color-surface: #f6f7f9;
   --color-border: #d4d9e0;
+  /*
+   * WCAG 2.2 SC 1.4.11 (Non-text Contrast): the plain --color-border grey is
+   * only ~1.4:1 against white/surface, well under the 3:1 minimum required
+   * for the visual boundary of an interactive UI component (form control
+   * borders, fieldset grouping). --color-border-strong is ~4.5:1 against
+   * both white and surface and is used ONLY on interactive-control borders;
+   * plain decorative container borders (.panel-card, .fact-card, table
+   * rules) are not "UI components" under 1.4.11 and keep --color-border.
+   */
+  --color-border-strong: #6b7789;
   --color-text: #1a2330;
   --color-muted: #55637a;
   --color-accent: #1f4e8c;
@@ -413,7 +423,7 @@ a {
   min-height: 4rem;
   font: inherit;
   font-size: 0.88rem;
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--color-border-strong);
   border-radius: 0.3rem;
   padding: 0.4rem;
 }
@@ -461,9 +471,14 @@ a {
   font: inherit;
   font-size: 0.75rem;
   background: none;
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--color-border-strong);
   border-radius: 0.25rem;
-  padding: 0 0.4rem;
+  padding: 0.4rem;
+  /* WCAG 2.2 SC 2.5.8 (Target Size, Minimum): a standalone actionable
+     control (not inline text) must be at least 24x24 CSS px; the old
+     horizontal-only padding left it ~18px tall. */
+  min-width: 24px;
+  min-height: 24px;
   cursor: pointer;
   float: right;
 }
@@ -565,6 +580,12 @@ a {
 }
 
 .candidate-ref {
+  /* WCAG 2.2 SC 2.5.8: this link is the sole actionable content of its table
+     cell (a row action), not a link inline within a run of surrounding
+     text, so the "inline" target-size exception does not apply; pad it to
+     a 24px-tall hit area. */
+  display: inline-block;
+  padding: 0.2rem 0;
   font-size: 0.9rem;
 }
 
@@ -592,13 +613,13 @@ a {
 .obs-controls textarea {
   width: 100%;
   padding: 0.4rem;
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--color-border-strong);
   border-radius: 4px;
   font: inherit;
 }
 
 .obs-controls fieldset {
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--color-border-strong);
   border-radius: 4px;
   display: flex;
   flex-wrap: wrap;
@@ -631,6 +652,19 @@ a {
 .obs-feedback input {
   font: inherit;
   padding: 0.25rem;
+}
+
+/* WCAG 2.2 SC 2.5.8: the plain, unclassed submit button previously relied on
+   the browser's default ~20px-tall rendering; give it an explicit floor. */
+.obs-feedback button {
+  font: inherit;
+  padding: 0.3rem 0.8rem;
+  min-height: 24px;
+  min-width: 24px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 4px;
+  background: var(--color-surface);
+  cursor: pointer;
 }
 
 .obs-feedback-list {
