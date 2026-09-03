@@ -296,6 +296,15 @@ class PostgresPersistStore:
         status: str,
         error: dict[str, Any] | None = None,
     ) -> None:
+        """Write a new run status, or raise :class:`RunAlreadyTerminal`.
+
+        Same pre-check as :meth:`mark_running`: a terminal row is refused with
+        the typed error BEFORE the UPDATE, so the consumer never sees 0004's
+        ``terminal extraction run cannot be mutated`` (#146).
+        """
+        current = self.load_run_status(run_id=run_id, org_id=org_id)
+        if current is not None and current in TERMINAL_RUN_STATUSES:
+            raise RunAlreadyTerminal(run_id=run_id, status=current)
         finished = status in {"succeeded", "failed", "cancelled"}
         self.conn.execute(
             """
