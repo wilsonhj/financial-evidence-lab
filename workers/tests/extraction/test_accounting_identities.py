@@ -850,8 +850,55 @@ def _sum_breaks(draft: Any) -> list[str]:
     return [b for b in draft.validation_summary["blockers"] if "segments_do_not_sum" in b]
 
 
+# A blocker that impugns the row's MAGNITUDE, so `validate/pipeline.py` really
+# does withhold the row from the identities. The two live-path tests below used
+# to mark their withheld row with `dimensions_non_string`, which #162
+# classified as NON-magnitude: the row was never withheld, the sum balanced
+# with all four members present, and both tests passed with the suppression in
+# `_check_segment_sums` deleted outright (#178). Anything not listed in
+# NON_MAGNITUDE_NORMALIZER_BLOCKERS gates, and a sign contradiction is the
+# canonical example.
+GATING_BLOCKER = "sign contradicts value: declared positive, value is negative"
+
+
+def test_the_gating_blocker_these_tests_rely_on_really_does_withhold_a_row() -> None:
+    """Guard the premise, so #178 cannot recur by reclassification.
+
+    If ``GATING_BLOCKER`` ever became a non-magnitude advisory, the two
+    live-path tests below would stop exercising the suppression at all and
+    would still pass.
+    """
+    assert GATING_BLOCKER not in NON_MAGNITUDE_NORMALIZER_BLOCKERS
+
+
+def test_withholding_a_single_dimension_addend_suppresses_its_slice() -> None:
+    """The lower bound: the suppression must actually DO something (#178).
+
+    100 against 50 + 30 + 20 balances with every member present, so nothing is
+    reported. Withhold the 20 and the survivors sum to 80 against a reported
+    100 -- a shortfall that is purely an artefact of the exclusion. The group
+    can no longer be evaluated, so it is suppressed rather than guessed at, and
+    ``identity_errors`` must stay silent for every row in it.
+
+    Asserted directly against ``identity_errors`` (the #174 style below) so the
+    check does not depend on how ``validate/pipeline.py`` classifies blockers.
+    Replacing the ``suppressed`` set in ``_check_segment_sums`` with an empty
+    set fails here.
+    """
+    payloads = [
+        kpi("arr", "100", period=DURATION),
+        kpi("arr", "50", period=DURATION, dimensions={"segment": "emea"}),
+        kpi("arr", "30", period=DURATION, dimensions={"segment": "apac"}),
+        kpi("arr", "20", period=DURATION, dimensions={"segment": "amer"}),
+    ]
+    # The breakdown is complete and correct while every member is present.
+    assert identity_errors(payloads) == {}
+
+    assert identity_errors(payloads, excluded_indices=frozenset({3})) == {}
+
+
 def test_a_withheld_segment_does_not_fabricate_a_sum_break_for_its_clean_siblings() -> None:
-    """The mirror image of the PR #145 review M1 case above.
+    """The mirror image of the PR #145 review M1 case above, on the live path.
 
     There, a normalizer-rejected row had to be dropped so a *comparison*
     identity could still run for its clean siblings. An *aggregation* is the
@@ -867,7 +914,7 @@ def test_a_withheld_segment_does_not_fabricate_a_sum_break_for_its_clean_sibling
     emea = kpi("arr", "50", period=DURATION, dimensions={"segment": "emea"})
     apac = kpi("arr", "30", period=DURATION, dimensions={"segment": "apac"})
     amer = kpi("arr", "20", period=DURATION, dimensions={"segment": "amer"})
-    amer[NORMALIZER_BLOCKERS_KEY] = ["dimensions_non_string"]
+    amer[NORMALIZER_BLOCKERS_KEY] = [GATING_BLOCKER]
 
     result = validate_proposals(
         run_id="00000000-0000-4000-8000-0000000000a7",
@@ -875,6 +922,8 @@ def test_a_withheld_segment_does_not_fabricate_a_sum_break_for_its_clean_sibling
     )
 
     assert len(result.proposals) == 4
+    # The premise: the marked row really was withheld from the identities.
+    assert GATING_BLOCKER in result.proposals[3].validation_summary["blockers"]
     for draft in result.proposals:
         assert _sum_breaks(draft) == []
 
@@ -894,7 +943,7 @@ def test_suppressing_one_slice_does_not_silence_a_real_break_in_another() -> Non
         kpi("arr", "30", period=DURATION, dimensions={"segment": "apac"}),
         kpi("arr", "20", period=DURATION, dimensions={"segment": "amer"}),
     ]
-    withheld_slice[3][NORMALIZER_BLOCKERS_KEY] = ["dimensions_non_string"]
+    withheld_slice[3][NORMALIZER_BLOCKERS_KEY] = [GATING_BLOCKER]
     broken_slice = [
         kpi("revenue", "100", period=DURATION),
         kpi("revenue", "50", period=DURATION, dimensions={"segment": "emea"}),
@@ -907,6 +956,8 @@ def test_suppressing_one_slice_does_not_silence_a_real_break_in_another() -> Non
     )
 
     arr_rows, revenue_rows = result.proposals[:4], result.proposals[4:]
+    # The premise: the marked row really was withheld from the identities.
+    assert GATING_BLOCKER in arr_rows[3].validation_summary["blockers"]
     assert [_sum_breaks(draft) for draft in arr_rows] == [[], [], [], []]
     assert all(_sum_breaks(draft) for draft in revenue_rows)
 

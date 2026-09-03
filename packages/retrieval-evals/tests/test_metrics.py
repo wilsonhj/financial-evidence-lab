@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from decimal import Decimal
 
+import pytest
+
 from fel_retrieval.oracle import recall_at_k as oracle_recall
 from fel_retrieval_evals.metrics import (
     RERANKER_RECALL_TRIGGER,
@@ -124,3 +126,29 @@ def test_gate_fails_metric_with_zero_support() -> None:
     numeric = next(r for r in report.results if r.name == "numeric_accuracy")
     assert numeric.passed is False
     assert report.passed is False
+
+
+# --- supports is required by construction (#137 item 3) --------------------
+def test_gate_report_without_supports_raises() -> None:
+    """Omitting ``supports`` must be a refusal, not a fail-open report.
+
+    A gate built without supports PASSES every metric on data that was never
+    measured, so the omission is refused with a message that says so -- not the
+    interpreter's "missing keyword argument", which reads like a call-site typo
+    and invites passing an empty dict to make it go away.
+    """
+    metrics = aggregate_metrics([])
+    with pytest.raises(ValueError, match="requires supports"):
+        build_gate_report(metrics)  # type: ignore[call-arg]
+
+
+def test_gate_report_with_none_supports_raises() -> None:
+    with pytest.raises(ValueError, match="never measured"):
+        build_gate_report(aggregate_metrics([]), supports=None)
+
+
+def test_gate_report_with_empty_supports_fails_every_metric() -> None:
+    """The other half: an explicit empty mapping is not "no constraint"."""
+    report = build_gate_report(aggregate_metrics([]), supports={})
+    assert report.passed is False
+    assert all(result.passed is False for result in report.results)
