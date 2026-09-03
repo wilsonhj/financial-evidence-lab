@@ -52,6 +52,11 @@ packages:
 #   floor at 3.1.4; 7p8r is the incomplete-fix follow-up covering >=3.0.0 <3.1.5, so
 #   the floor moves to patched 3.x (>=3.1.5). Same pattern as postcss's fxqj and
 #   brace-expansion's rgw5 — treat every "backslash authority" fix as provisional.
+#   2026-09-03: four more (GHSA-5jgf-p345-68v8 IDN canonicalization, GHSA-f65p-4m7j-42xc
+#   IPv6 normalization SSRF, GHSA-fph4-wmhf-6fwf repeated percent-decoding SSRF,
+#   GHSA-jqff-g426-hqxp percent-encoded scheme) cover <3.1.6; floor is now >=3.1.6.
+#   Found by the audit gate mid-review, exactly the discovery mode #143's scheduled
+#   sweep exists to replace.
 # - next>sharp (GHSA-f88m-g3jw-g9cj): next@16.2.11 declares sharp ^0.34.5 as an
 #   optionalDependency for image optimization (libvips CVEs); scoped to next,
 #   force patched 0.35.x (^0.35.0).
@@ -69,5 +74,5 @@ overrides:
   "minimatch@^10>brace-expansion": "^5.0.9"
   "minimatch@^5>brace-expansion": "^2.1.4"
   "js-yaml": "^4.3.1"
-  "fast-uri": "^3.1.5"
+  "fast-uri": "^3.1.6"
   "next>sharp": "^0.35.0"
