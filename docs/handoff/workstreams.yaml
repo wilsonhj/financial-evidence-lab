@@ -419,7 +419,7 @@ packages:
     # mock-only, which is false. Adding it changes no status and dispatches
     # nothing; it records a precondition that already existed.
     #
-    # TWO CONSEQUENCES, one ruled here and one still open:
+    # TWO CONSEQUENCES, one ruled here and one conditional:
     # (1) ORDERING — RULED 2026-09-03 by the integration lead. specs/004 §6.2, as
     #     reconciled by PR #187, places RELEASE-LIVE-CUTOVER (which owns
     #     provisioning) at wave 2 and #62 at wave 3, conditioned on "#61 merged
@@ -431,11 +431,11 @@ packages:
     #     The alternative that was weighed — provisioning FEL_OPENAI_API_KEY as a
     #     wave-0 lead action with no edge — was declined because it would leave
     #     #62 dispatchable before the credential existed.
-    # (2) PROVIDER — OPEN. M3-304 names OpenAI; #132 directs claude-opus-4-8;
-    #     ADR-0002 (Accepted) pins OpenAI; constitution principle V requires an
-    #     approved ADR plus benchmark evidence, and neither exists (finding A-1;
-    #     ADR-0012, Proposed on PR #186). So A-1 gates #62 at wave 3, behind the
-    #     cutover, not at wave 6 as spec 004 first recorded.
+    # (2) PROVIDER — CONDITIONAL. M3-304 names OpenAI and ADR-0002 (Accepted)
+    #     approves that baseline; ADR-0012 is not a prerequisite for it. If #132's
+    #     claude-opus-4-8 substitution is selected, principle V requires benchmark
+    #     evidence plus an approved ADR-0012 first. In either case #62 still waits
+    #     for the selected provider's real credential and live adapter.
     credentials: hosted-required # override defaults.credentials mock-only; M3-304 only
     allowed_paths:
       - workers/src/fel_workers/extraction/**
@@ -507,7 +507,7 @@ packages:
     depends_on: [M2-CLAIMS-VERIFICATION, M3-EXTRACTION-CORE]
     team: trust
     branch: agent/release-live-cutover # not yet created
-    status: blocked # NOT dispatchable, and NOT a dependency block — both depends_on edges are already merged. Held instead by preconditions outside the repository, which depends_on has no vocabulary for: (1) credentials are not provisioned — all five CREDENTIALS.md groups read "Not requested"; (2) the embeddings-provider ADR does not exist — ADR-0002 (Accepted) pins OpenAI generation and text-embedding-3, #132 records that Anthropic ships no embeddings endpoint so index build and query embedding cannot use Claude under the replace-OpenAI directive, and constitution principle V requires benchmark evidence plus an approved ADR for any provider substitution (finding A-1); (3) Alpha Vantage budget authorization — a provisioning item, NOT a tier decision, since ADR-0002 already ruled the paid tier required and CREDENTIALS.md's "or an ADR revisiting the market-data adapter choice" is an escape hatch ADR-0002 closed (finding A-6); (4) adjudicator staffing and budget for §19.5's two qualified reviewers. Flipping this key is a dispatch decision reserved to the integration lead.
+    status: blocked # NOT dispatchable, and NOT a dependency block — both depends_on edges are already merged. Held instead by preconditions outside the repository, which depends_on has no vocabulary for: (1) credentials are not provisioned — all five CREDENTIALS.md groups read "Not requested" — and the live adapter must be ready; ADR-0002's approved OpenAI baseline needs no new provider ADR, while an Anthropic or other substitution additionally requires benchmark evidence plus an approved ADR (ADR-0012 remains Proposed); (2) the separate embeddings-provider ADR is required only if replacing ADR-0002's text-embedding-3 baseline; #132 records that Anthropic ships no embeddings endpoint; (3) Alpha Vantage budget authorization — a provisioning item, NOT a tier decision, since ADR-0002 already ruled the paid tier required and CREDENTIALS.md's "or an ADR revisiting the market-data adapter choice" is an escape hatch ADR-0002 closed (finding A-6); (4) adjudicator staffing and budget for §19.5's two qualified reviewers. Flipping this key is a dispatch decision reserved to the integration lead.
     credentials: hosted-required # override defaults.credentials mock-only; names only until lead provisions
     allowed_paths:
       # CONTENTION: cannot run concurrently with #62, #66, #67, #68 or #108.

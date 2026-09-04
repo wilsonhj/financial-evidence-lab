@@ -56,7 +56,7 @@ Statements of *judgement* are not covered by that claim and are marked where the
 
 ## 3. Verified state, 2026-08-31
 
-- Trunk at the 2026-08-31 measurement: `main` @ `ebe77af` (PR #172, the handoff reconciliation). Its parent `a4bb356` (PR #174, closing #171) remains the **measurement baseline** for every structural count below, and #172 is docs-only. All five GitHub Actions checks passed at that tip; trunk has moved since (next bullet).
+- Trunk at the 2026-08-31 measurement: `main` @ `ebe77af` (PR #172, the handoff reconciliation). Its parent `a4bb356` (PR #174, closing #171) remains the **measurement baseline** for every structural count below, and #172 is docs-only. All five required CI checks passed at that tip; trunk has moved since (next bullet).
 - Open PRs: both have since **merged** — #175 (ADR-0011) @ `f158e05` and #173 (this specification) @ `fdcb3d2`, both on 2026-08-31, carrying trunk past the `ebe77af` tip recorded above. The open count has moved on and will keep moving; re-run §2's `gh pr list --state open` rather than reading a number here.
 - Open issues: **31** at the 2026-08-31 measurement. The count moves with every filing — the 2026-09-01 architecture review alone added a dozen — so re-run §2's `gh issue list --state open --limit 100 --json number --jq length` rather than reading a number here.
 
@@ -67,7 +67,7 @@ Statements of *judgement* are not covered by that claim and are marked where the
 | #171 over-suppression regression | **Fixed and merged** — PR #174 @ `a4bb356`, red-green verified; issue closed |
 | #146 terminal-run retry semantics | **Ruled** 2026-08-29 — Option 1, *terminal runs are final*; consumer drops or dead-letters a job whose run row is terminal. Issue stays open pending implementation |
 | ADR-0009 vs #157 fork | **Ruled** — ADR-0011 accepted on PR #175; ADR-0009 marked `Superseded by ADR-0011`. #157 remains the implementing work |
-| #134 Playwright E2E in CI | **Closed** — its work had already merged as PR #131 @ `bc6a2a3`, exactly as §8 item 7 recorded |
+| #134 browser E2E in CI | **Closed** — its work had already merged as PR #131 @ `bc6a2a3`, exactly as §8 item 7 recorded |
 | #172 handoff reconciliation | **Merged** 2026-08-31 @ `ebe77af`. It flipped `EVALS-REPORT-RENDER` from `ready` to `merged`, and added `status: ready` to `M4-MODEL-CALC` — which **dispatches #63**, discharging §8 items 1 and 4 |
 
 Structural measurements were **unchanged by #174**, which touched only `workers/src/fel_workers/extraction/validate/accounting.py` and `workers/tests/extraction/test_accounting_identities.py`. **#172 moved exactly one of them** — the `merged` package count — by flipping `EVALS-REPORT-RENDER`; it also added a `status:` key to `M4-MODEL-CALC` without changing any total. The rest hold: 32 packages, 21 ledger checkboxes, 2 `credentials:` keys, 5 "Not requested". Re-run and confirmed against `a4bb356` and `ebe77af`.
@@ -216,7 +216,13 @@ Per `clarify-analyse.md` **Q-2**, register a new package that owns the provision
 
 ### 5.2 Decisions this package must resolve
 
-- **Embeddings provider, selected by benchmark rather than preference.** #132 records that Anthropic ships no embeddings endpoint, so index build and query embedding cannot use Claude, even though generation and verification are directed to `claude-opus-4-8` under the replace-OpenAI directive. #132 marks this as blocking everything else within it. **This directive has no ADR.** ADR-0002 (Accepted) states "OpenAI for generation" and `text-embedding-3` embeddings; constitution principle V requires benchmark evidence and an approved ADR for any AI-provider substitution. See `clarify-analyse.md` finding **A-1** — a superseding ADR must land before this package can select a provider without violating the constitution.
+- **Provider readiness.** ADR-0002 (Accepted) authorizes OpenAI generation and
+  `text-embedding-3` embeddings. The required credentials and live adapters must
+  exist before cutover. #132 proposes `claude-opus-4-8` for generation and a
+  benchmark-selected embeddings provider; those substitutions require benchmark
+  evidence and an accepted ADR. See `clarify-analyse.md` finding **A-1**.
+  ADR-0012 is therefore a prerequisite only for the Anthropic generation path,
+  not for the approved OpenAI baseline.
 - **Alpha Vantage budget authorization** — *not* a tier decision. ADR-0002 (Accepted) already rules that "the paid tier (≥ USD 49.99/month) is required," giving the free tier's 25 requests/day and premium-only adjusted series as the reason. `CREDENTIALS.md` goes further than restating it: it presents "a paid tier ... **or** an ADR revisiting the market-data adapter choice" as a live either/or, which is an escape hatch ADR-0002 already closed. Under ADR-0002's own change rule, that second branch requires benchmark evidence that the current default fails a requirement — it is not a free alternative. What is outstanding is provisioning and budget sign-off. See finding **A-6**.
 - **Hosted Supabase and deployment secrets** for #108.
 - **Adjudicator staffing and budget** — parent §19.5 requires two qualified reviewers to adjudicate disagreements across ≥ 300 questions.
@@ -251,7 +257,7 @@ Downstream contention is heavy: #62/#67/#68 all claim `evals/**`; #65/#66 both c
 
 | Wave | Dispatch | Precondition |
 |---|---|---|
-| **0** | ~~fix #171~~ ✅ merged @ `a4bb356`; ~~rule #146~~ ✅ Option 1; ~~rule ADR-0009/#157~~ ✅ ADR-0011 accepted; ~~re-scope #134~~ ✅ closed; ~~merge #172~~ ✅ merged @ `ebe77af`, which also dispatched #63; ~~merge #175~~ ✅ merged @ `f158e05`; ~~merge #173~~ ✅ merged @ `fdcb3d2`. **Remaining:** reconcile `tasks.md`; register `RELEASE-LIVE-CUTOVER`; **register and land ADR-0011's migration-`0006` entry for #157** (§4.4); land the ADR for **A-1**; resolve #141 and #143; implement the #146 ruling | None — integration-lead actions across several PRs. **The wave-1 gate (#171) has cleared** |
+| **0** | ~~fix #171~~ ✅ merged @ `a4bb356`; ~~rule #146~~ ✅ Option 1; ~~rule ADR-0009/#157~~ ✅ ADR-0011 accepted; ~~re-scope #134~~ ✅ closed; ~~merge #172~~ ✅ merged @ `ebe77af`, which also dispatched #63; ~~merge #175~~ ✅ merged @ `f158e05`; ~~merge #173~~ ✅ merged @ `fdcb3d2`; ~~reconcile `tasks.md`~~ ✅ PR #206 merged. **Remaining:** register `RELEASE-LIVE-CUTOVER`; **register and land ADR-0011's migration-`0006` entry for #157** (§4.4); resolve #141 and #143; implement the #146 ruling; ratify ADR-0012 only if selecting Anthropic | None — integration-lead actions across several PRs. **The wave-1 gate (#171) has cleared** |
 | **1** | #61 ∥ #63 | Both rulings are made. #61 needs #146's Option 1 *implemented*, and its dispatch is **non-SSE only** until #157's migration `0006` lands (§4.4); #63 needs nothing and already reads `status: ready` |
 | **2** | `RELEASE-LIVE-CUTOVER`, **then** #108 — contended, serialize | Credentials provisioned (§5.2 — an integration-lead action, item 5 of §8); `evals/**` and `workers/tests/**` free once the migration-`0006` entry has landed |
 | **3** | #62 | #61 merged **and `RELEASE-LIVE-CUTOVER` merged** — #62 owns `M3-304`, whose live OpenAI structured-output smoke needs an approved `FEL_OPENAI_API_KEY` (§5, **A-14**); `evals/**` and `workers/tests/**` free |
@@ -297,7 +303,9 @@ Four decisions were resolved in `clarify-analyse.md` (Q-1 through Q-4). These re
 3. ~~**#146**~~ — **ruled** 2026-08-29: Option 1, terminal runs are final. Still a producer gate for #61 until implemented; the issue remains open for that reason.
 4. ~~**Dispatch #63**~~ — **done by item 1.** PR #172 added the `status: ready` key; #63 had zero contention and was independent of items 2 and 3.
 5. **Register `RELEASE-LIVE-CUTOVER`** and file its issue (§5.1), then answer its four questions (§5.2). **Separately, register ADR-0011's migration-`0006` entry for #157** and sequence it before wave 1 (§4.4) — these are two distinct registrations, not one.
-6. **Reconcile `tasks.md`** — 17 checkboxes, with the `T0215` caveat in §4.2. While there, **cite `FOR-004` on `T0510`**: of the 53 parent-spec requirement IDs, **fourteen are referenced by no task**, but `FOR-004` is the only one that is *also* uncovered by any task's prose — and it carries constitution principle II's provenance guarantee into exports (finding **A-11**).
+6. ~~**Reconcile `tasks.md`** — 17 checkboxes, with the `T0215` caveat in
+   §4.2.~~ PR #206 merged the canonical-ledger correction on 2026-09-03.
+   `FOR-004` citation coverage remains a separate follow-up under finding A-11.
 7. ~~**Re-scope or close #134**~~ — **closed** 2026-08-29; its work had merged as PR #131 @ `bc6a2a3`.
 8. ~~**Ratify this spec**~~ — **done.** The integration lead recorded a constitution-gate waiver for all three failed checks as a comment on PR #173 on 2026-08-29 and merged the PR @ `fdcb3d2` on 2026-08-31.
 
@@ -310,11 +318,11 @@ Four decisions were resolved in `clarify-analyse.md` (Q-1 through Q-4). These re
 | Release gates unevaluable in mock mode | §5; `CREDENTIALS.md` all-"Not requested"; `workstreams.yaml:73` | Register `RELEASE-LIVE-CUTOVER` now and sequence it at wave 2 — it is a precondition of #62, not only of #68 (**A-14**) |
 | Canonical ledger under-reports by 17 tasks | §4.2, measured | Reconcile now — #172 has merged, so nothing blocks it; confirm `T0215` against `packages/retrieval/ACCEPTANCE.md` |
 | Stale `status:` re-dispatches finished work | `EVALS-REPORT-RENDER` read `ready` for the twenty days from PR #164's merge on 2026-08-11 until PR #172 corrected it on 2026-08-31 | Confirm the issue is open on GitHub before trusting `ready` |
-| Green CI is not a correctness claim | #171 was live on `5b4b77c` with all five checks passing, because no test covered it. **Fixed by PR #174**, which added the missing coverage | The principle stands even though this instance is closed: read gate-green as "nothing we check is broken". A live example remains — the whole 1009-test Python suite passes with the `_check_segment_sums` suppression mechanism deleted outright, so its lower bound is still untested |
+| Green CI is not a correctness claim | #171 was live on `5b4b77c` with all five checks passing, because no test covered it. **Fixed by PR #174**, which added the missing coverage | The principle stands even though this instance is closed: read gate-green as "nothing we check is broken". A live example remains — the whole 1009-test suite passes with the `_check_segment_sums` suppression mechanism deleted outright, so its lower bound is still untested |
 | Six-deep critical path, one uncontended package | §6.1, measured | #63 is now dispatched (`status: ready` via #172); it blocks nothing and is blocked by nothing |
 | M2 exit criterion not actually met | #132 open; PR #122 merged mock plumbing only | Folded into `RELEASE-LIVE-CUTOVER`; do not treat M2 as closed |
 | Alpha Vantage paid tier is an accepted-ADR obligation, unbudgeted | ADR-0002 (Accepted) requires ≥ USD 49.99/mo; `CREDENTIALS.md` reads "Not requested" | Budget sign-off, or a new ADR reversing ADR-0002 |
-| **Replace-OpenAI directive contradicts ADR-0002 with no superseding ADR** | #132 directs `claude-opus-4-8`; ADR-0002 (Accepted) says OpenAI; constitution V requires an ADR + benchmark | Land the superseding ADR before `RELEASE-LIVE-CUTOVER` selects a provider (finding A-1) |
+| **Anthropic substitution is not authorized** | ADR-0002 approves OpenAI; #132 proposes `claude-opus-4-8`; ADR-0012 is Proposed without benchmark evidence | Retain OpenAI, or ratify ADR-0012 with evidence before selecting Anthropic (finding A-1) |
 | **Zero-open-backlog scope adds four non-gated blockers** | #135, #137, #138, #143 are required by no §19.6 gate and no T-task | Deliberate choice (Q-1). Revisit if schedule pressure appears; dropping them costs no gate |
 | **ADR-0011 mandates a second registration that no wave owned** | ADR-0011 Consequences: "A new `workstreams.yaml` entry is required"; #157 sat in §4.3 as backlog only | Register it and sequence before wave 1 (§4.4); scope #61's wave-1 dispatch non-SSE until migration `0006` lands |
 | Registering a new package is itself a shared-path change | `workstreams.yaml` is in `shared_paths` | `contract-change` + authorization record per #141, and this now applies **twice** — once per registration |

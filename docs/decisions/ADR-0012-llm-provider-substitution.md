@@ -2,25 +2,23 @@
 
 Status: Proposed
 Date: 2026-08-31
-Supersedes: ADR-0002 (`docs/decisions/ADR-0002-mvp-stack.md`, Status: Accepted) —
+Proposes to supersede: ADR-0002
+(`docs/decisions/ADR-0002-mvp-stack.md`, Status: Accepted) —
 **the phrase "OpenAI for generation" at `ADR-0002:22` and nothing else.** The
 remainder of that same line (the `text-embedding-3` / <= 512-dimension /
 `halfvec` embedding pin) is explicitly **left intact and load-bearing**; so is
 every other section of ADR-0002. See "Decision" point 1 for the exact split.
 Occasioned by: issue #132 ("[M2-CLAIMS] Live 65-question exit gate (close
-M2-024)", open, label `agent-task`), which records the replace-OpenAI directive;
-finding **A-1** in `specs/004-mvp-completion/clarify-analyse.md:28`; and the
-failed Constitution Check at `specs/004-mvp-completion/plan.md:49` with its
-Complexity Tracking entry at `plan.md:115`.
-Blocks: **M3 and M5 both, and M3 first.** `M3-304`
-(`specs/003-agentic-extraction/tasks.md:36`) requires a "live OpenAI
-structured-output smoke with approved secret", and it is an acceptance criterion
-of #62 (M3-CONFIDENCE-GATE) — so the conflict bites at the milestone gate, not
-only at release. Downstream, `RELEASE-LIVE-CUTOVER`
-(`specs/004-mvp-completion/spec.md:179-198`) cannot select any provider until
-this ADR — or a successor — is ratified. `clarify-analyse.md:28` states the
-latter outright: "**Unresolved — needs a superseding ADR before
-`RELEASE-LIVE-CUTOVER` selects any provider.**" See "When the conflict bites".
+M2-024)", open, label `agent-task`), which records the replace-OpenAI directive,
+and finding **A-1** in
+`specs/004-mvp-completion/clarify-analyse.md`. That finding now correctly records
+that this ADR gates substitution only.
+Blocks: **Only substitution of Anthropic (or another provider) for the
+ADR-0002-approved OpenAI generation baseline.** It does not block M3 or M5 from
+using OpenAI. `M3-304` (`specs/003-agentic-extraction/tasks.md:36`) expressly
+requires a live OpenAI structured-output smoke; that baseline still requires a
+real credential and working adapter, but not this Proposed ADR. See "When the
+conflict bites".
 
 All `file:line` references are verified against this branch's base, `origin/main`
 @ `fdcb3d2`. Where a claim could not be verified from the repository, the text
@@ -55,25 +53,19 @@ Constitution principle V says, verbatim (`.specify/memory/constitution.md:28`):
 > **additional AI providers**, and full OpenTelemetry infrastructure — requires
 > benchmark evidence and an approved ADR, per the change rule in ADR-0002.
 
-Issue #132 directs the opposite of ADR-0002 for the LLM roles. There is no
-superseding ADR and no benchmark evidence. `clarify-analyse.md:28` states the
-resulting bind precisely: "Either choice violates something today: following the
-directive breaches ADR-0002, following ADR-0002 contradicts a standing
-directive." `plan.md:49` records the same as a **failed** Constitution Check:
+Issue #132 proposes the opposite of ADR-0002 for the LLM roles. There is no
+superseding ADR and no benchmark evidence, so **that substitution is not
+authorized**. ADR-0002 remains Accepted and OpenAI remains the lawful generation
+baseline; following it does not violate policy merely because issue #132 proposes
+a different direction. The completion artifacts now record the same distinction:
+`RELEASE-LIVE-CUTOVER` may select OpenAI subject to ordinary credential and
+adapter readiness, while selecting Anthropic first requires evidence and
+ratification of this ADR.
 
-> - [ ] **The design stays within the approved modular-monolith stack or includes
->   an approved complexity ADR.** — **FAILS.** The replace-OpenAI directive in
->   #132 substitutes `claude-opus-4-8` for ADR-0002's accepted "OpenAI for
->   generation", with no superseding ADR and no benchmark evidence. Principle V
->   requires both.
-
-`specs/004-mvp-completion/spec.md:309` lists the same item in its risk table with
-the remediation "Land the superseding ADR before `RELEASE-LIVE-CUTOVER` selects a
-provider (finding A-1)". `plan.md:118` orders the remediations: "land the A-1 ADR"
-is first. **This ADR is that document, and only that document — it proposes; it
-does not amend, and it edits no other file.** Per `AGENTS.md:41`, a change to a
-shared path requires an ADR, the `contract-change` label, and integration-lead
-review; the ADR comes first.
+**This ADR is the proposed substitution record, and only that record — it does
+not amend ADR-0002 while its status is Proposed.** Per `AGENTS.md:41`, a change
+to a shared path requires an ADR, the `contract-change` label, and
+integration-lead review; the ADR comes first.
 
 ### What the code actually does today
 
@@ -107,11 +99,11 @@ evidence that *the current default fails a requirement*. The current default has
 never been executed against anything, because no adapter for it exists. See
 "Evidence question" below — this is why the ADR is `Proposed` and not `Accepted`.
 
-### When the conflict bites: at M3's gate, not at release
+### When the conflict bites: when substitution is selected
 
-The conflict record frames this as a release-time problem — `clarify-analyse.md:28`
-and `plan.md:115` both scope it to `RELEASE-LIVE-CUTOVER`. **That framing is too
-late by a milestone, and the ADR records the correction here.**
+The original conflict record framed every provider choice as a release-time
+problem. That was too broad: the approved OpenAI baseline is available now, and
+this ADR becomes relevant only when a substitution is selected.
 
 `specs/003-agentic-extraction/tasks.md:36` reads, verbatim:
 
@@ -125,21 +117,15 @@ independent review, immutable report pass", and its closing line reads "Request
 `FEL_OPENAI_API_KEY` only for credentialed smoke" (`gh issue view 62 -R
 wilsonhj/financial-evidence-lab`).
 
-**`M3-304` names OpenAI in its acceptance text.** So the bind is not deferred to
-release; it is already sitting on an M3 exit criterion:
+**`M3-304` names OpenAI in its acceptance text.** Therefore it can be satisfied
+as written under ADR-0002 without this ADR. Issue #132 is a proposed direction,
+not a superseding decision, and does not make the Accepted baseline unlawful.
 
-- Satisfy `M3-304` as written and the run uses OpenAI for structured generation —
-  which is what the #132 directive says not to do.
-- Follow the directive and `M3-304` is **unsatisfiable as written**, because the
-  artifact it demands is an *OpenAI* smoke. The task text itself would need
-  amending, and per `AGENTS.md:41` amending `specs/**` requires an ADR — this one.
-
-Either way #62 cannot close cleanly while the conflict stands. This matters for
-sequencing: the ADR must be ratified before **#62** is dispatched, not merely
-before `RELEASE-LIVE-CUTOVER` selects a provider. #62 also has the credential
-dependency in its own body, so it is the first place the unexercised
-approved-secret flow of finding A-4 (`clarify-analyse.md:31`) is actually
-exercised.
+The conflict bites only if the integration lead selects Anthropic. Then
+`M3-304` becomes unsatisfiable as written and must be amended under the shared
+path rule, after benchmark evidence supports ratification. Independently of that
+choice, #62 still needs the selected provider's real credential and working
+adapter; those readiness gates are not removed by retaining OpenAI.
 
 Note also that #62's acceptance thresholds — "guidance F1 >=90%, KPI/driver F1
 >=88%, numeric value/unit/period/sign/scale accuracy >=99%, temporal validity
@@ -181,9 +167,10 @@ rather than pin a provider. No runtime code pins either vendor. Two things follo
 
 ## Decision
 
-**1. The supersession is surgical.** This ADR supersedes exactly one clause of
-ADR-0002: the phrase **"OpenAI for generation"** at `ADR-0002:22`. Everything
-else in ADR-0002 remains in force unchanged, including — and this is the part
+**1. The proposed supersession is surgical.** If ratified with the required
+evidence, this ADR supersedes exactly one clause of ADR-0002: the phrase
+**"OpenAI for generation"** at `ADR-0002:22`. Until then it supersedes nothing.
+Everything else in ADR-0002 remains in force unchanged, including — and this is the part
 most easily lost, because it sits on the *same line* — the embedding storage pin
 "`text-embedding-3` embeddings truncated to <= 512 dimensions and stored as
 `halfvec`". The <= 512-dimension and `halfvec` half of that sentence is a storage
@@ -315,6 +302,32 @@ with structured outputs**, holding the corpus, chunker config, index config and
 question set fixed, and varying only the provider under test. Record model,
 config and cost provenance alongside every metric, as #132 separately requires.
 
+Before any run, publish an immutable benchmark protocol and do not revise its
+pass rule after seeing outcomes. The protocol and resulting evidence bundle must
+contain:
+
+1. Cryptographic checksums for the immutable source corpus, adjudicated question
+   set, expected answers, and the complete manifest that maps every question to
+   its source material.
+2. The exact code revision under test and checksums (or content-addressed
+   artifacts) for every prompt, schema, provider setting, chunker/index setting,
+   evaluator configuration, and scoring script.
+3. Raw, machine-readable per-question outcomes for every run and arm, including
+   the answer/refusal, citations, adjudicated labels, metric contributions,
+   errors, retries, and latency. Aggregate scores alone are insufficient.
+4. Provider, exact model/version identifier, endpoint/version where applicable,
+   token/usage counts, and actual or reproducibly calculated cost for every run.
+5. A **predeclared repeated-run design** for each arm, including the number of
+   independent runs, random-seed handling where supported, the statistical
+   summary and variance/uncertainty measure, and the exact pass rule. The rule
+   must state whether every run, a confidence-bound criterion, or another
+   specified statistic must clear each frozen threshold, and how ties, partial
+   failures, missing responses, and multiple comparisons are handled.
+
+A single successful run, a post-hoc variance band, or aggregates without the raw
+question-level record cannot support ratification. These are requirements for a
+future benchmark; **no such evidence is asserted to exist today.**
+
 **Arm A — generation and verification (LLM-sensitive gates).** Same embedder in
 both arms; vary only the generation provider between OpenAI and
 `claude-opus-4-8`. Judge against `specs/001-financial-evidence-lab/spec.md`
@@ -441,13 +454,10 @@ The following must **not** change, and a PR that changes them is out of scope:
   real cost.** Under outcome (i) production depends on two external AI vendors
   where ADR-0002 contemplated one. This is a genuine loss, not a formality, and
   it is the strongest argument against this ADR (see "Alternatives rejected").
-- **`RELEASE-LIVE-CUTOVER` becomes able to select a provider without violating
-  the constitution** — but only once the Arm A/Arm B evidence is appended.
-  Ratifying this ADR *without* that evidence would unblock the package by fiat
-  and re-open finding A-1 under a new number.
-- **Finding A-1 is resolved only in form until the benchmark runs.**
-  `clarify-analyse.md:28` asks for "a superseding ADR"; the substance it is
-  standing in for is the evidence, not the file.
+- **`RELEASE-LIVE-CUTOVER` may select OpenAI under ADR-0002 now.** It may select
+  Anthropic only after the applicable Arm A/Arm B evidence is appended and this
+  ADR is ratified. Ratifying without that evidence would authorize substitution
+  by fiat.
 - **The `claude-opus-4-8` model id becomes a real pin.** Today it exists only in
   one web fixture (`synthetic-trace.ts:248`). Once pinned in
   `GENERATION_MODEL`, it enters persisted run lineage (`retrieval.py:96-100`
@@ -457,16 +467,10 @@ The following must **not** change, and a PR that changes them is out of scope:
   who takes "replace OpenAI" at face value will expect the OpenAI row to be
   deleted from `CREDENTIALS.md`. Under outcome (i) it is not, and that
   expectation gap is the single most likely source of a botched cutover.
-- **#62 cannot close cleanly until this is ratified, and that is the earliest
-  binding consequence.** `M3-304` (`tasks.md:36`) names an OpenAI smoke in an
-  acceptance criterion #62 inherits; ratifying the directive makes that task
-  unsatisfiable as written and obliges the amending PR to rewrite it. This ADR
-  does not by itself unblock #62 for dispatch — it remains `blocked`
-  (`STATUS.md:101,117`: it `depends_on: [M3-REVIEW]` and has no `status` key, so
-  it inherits `defaults.status: blocked`) and its `allowed_paths` gap stands
-  (`workstreams.yaml:363-366`) — but it removes the governance obstacle that
-  would otherwise make #62's exit criteria contradictory whichever provider it
-  used.
+- **#62 may close against OpenAI without this ADR.** Its real credential,
+  adapter, and live-smoke evidence remain mandatory. If Anthropic is selected,
+  this ADR must first be supported and ratified, and the task text must then be
+  amended to match the ratified provider.
 - **`M3-304`'s task text must be amended if the substitution is ratified**, and
   that amendment touches `specs/**`, which `AGENTS.md:41` gates behind an ADR and
   a `contract-change` label. It is listed under "What must change".
@@ -541,10 +545,11 @@ The following must **not** change, and a PR that changes them is out of scope:
   provider decision that Decision point 2c deliberately leaves uncovered.
 - **A provider named in neither ADR-0002 nor #132 appears outside a fixture** —
   Voyage being the live instance today (`synthetic-trace.ts:245-246`).
-- **#62 is dispatched before this ADR is ratified.** Its `M3-304` acceptance
-  criterion (`tasks.md:36`) names an OpenAI smoke, so dispatching it under the
-  unresolved conflict hands an agent a task that cannot be completed without
-  breaching either ADR-0002 or the directive. This trigger is mandatory.
+- **#62 is configured or dispatched with Anthropic (or another substitute)
+  before this ADR is supported and ratified.** That would attempt the
+  unauthorized substitution this ADR governs. Dispatching #62/M3-304 with the
+  ADR-0002-approved OpenAI baseline is not a revisit trigger and may proceed
+  subject to the normal credential, live-adapter, and smoke-evidence gates.
 - **#132 is closed, superseded, or its embeddings finding is contradicted** —
   in particular if Anthropic ships an embeddings endpoint, which would collapse
   the role split this ADR is built on and permit a genuinely single-vendor stack.
@@ -564,10 +569,15 @@ The ratifying PR must show:
    outputs, embedder held constant.
 3. **Arm B** Recall@10 (`spec.md:1034`) for each candidate embedder truncated to
    512 dimensions, generation provider held constant.
-4. Model, config and cost provenance recorded alongside every metric, per #132.
-5. A statement of how non-determinism was handled — single recorded run versus a
-   variance band — given that the thresholds are exact `Decimal` comparisons
-   (`metrics.py:53-59`).
+4. Immutable corpus, question-set, answer-key, and manifest checksums; the exact
+   code revision; checksums for prompts, schemas, and all benchmark/provider/
+   evaluator configurations; and raw machine-readable per-question outcomes for
+   every arm and run.
+5. Exact provider and model/version identifiers, usage, latency, and cost for
+   every run, plus the **predeclared repeated-run/statistical protocol**: run
+   count, seed handling, variance/uncertainty statistic, and the pass rule that
+   was fixed before outcomes were observed. A single run or post-hoc rule is not
+   acceptable.
 6. The output of `git grep -n 'openai\|OpenAI' origin/main -- packages/providers
    workers/src` at the ratification commit, so the "no adapter exists" premise is
    re-checked rather than inherited from this draft.
@@ -582,9 +592,8 @@ The ratifying PR must show:
    so, that a full re-embed and new index version are budgeted.
 10. `retrieval-trace.json:28-31` and `synthetic-trace.ts:245-248` reconciled to
     the ratified decision, with the ungoverned `voyage` values resolved.
-11. `plan.md:49`'s Constitution Check flipped with a reference to this ADR, and
-    `clarify-analyse.md:28`'s A-1 status updated — neither of which this ADR
-    edits.
+11. The completion plans continue to identify OpenAI as the lawful baseline and
+    this ADR as a prerequisite only for the substitution they select.
 12. `M3-304` (`specs/003-agentic-extraction/tasks.md:36`) re-worded to match the
     ratified provider, and #62's issue body updated in step, so no acceptance
     criterion still names a provider the ADR has superseded.
@@ -643,7 +652,7 @@ benchmark evidence, not before it.
 
 **Format.** This ADR matches ADR-0011
 (`docs/decisions/ADR-0011-extraction-step-output-column.md`): unbolded
-`Status:` / `Date:` / `Supersedes:` / `Occasioned by:` / `Blocks:` metadata, the
+`Status:` / `Date:` / supersession / `Occasioned by:` / `Blocks:` metadata, the
 verified-against-base paragraph, and the section set Context / Decision / an
 open-question section / What must change (and what must not) / Consequences /
 Alternatives rejected / Revisit triggers / Verification / Notes. ADR-0010 uses

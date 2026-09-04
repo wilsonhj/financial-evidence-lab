@@ -10,21 +10,18 @@
 
 Two packages stand between `ebe77af` and M3's exit criterion: `M3-REVIEW` (#61) and `M3-CONFIDENCE-GATE` (#62), carrying five canonical tasks as ten milestone tasks that `specs/003-agentic-extraction/` already specifies.
 
-The plan's contribution is not design. It is the observation that **M3 is unreachable in the repository's current configuration** — `M3-304` requires a live provider credential, none is provisioned, #62 inherits `mock-only`, and the provider it names is contested by a directive with no ADR behind it. `specs/004-mvp-completion/` identifies the same gap but places it at M5; it arrives at M3.
+The plan's contribution is not design. It is the observation that **M3 is unreachable in the repository's current configuration** — `M3-304` requires a live provider credential, none is provisioned, and #62 inherits `mock-only`. OpenAI remains the approved ADR-0002 baseline. The unevidenced Anthropic directive creates a gate only if that substitution is chosen. `specs/004-mvp-completion/` identifies the credential gap at M5; it arrives at M3.
 
 ## Technical Context
 
-> **Deliberate omission.** Constitution principle V states the locked stack "MUST NOT be restated elsewhere". Only sequencing-relevant facts appear below.
+> **Architecture pointer.** Runtime, tooling, storage, and topology are defined
+> only by `docs/decisions/ADR-0002-mvp-stack.md` (Accepted) and are not restated
+> here. ADR-0012 remains a Proposed provider substitution and has no effect
+> unless ratified — see spec §5.1.
 
-**Stack of record**: `docs/decisions/ADR-0002-mvp-stack.md` (Accepted), except its provider clause, which `ADR-0012` (Proposed) would supersede — see spec §5.1
-
-**Language/Version**: Python 3.11; Node 22
-
-**Storage**: migrations frozen through `0005`. **M3 requires `0006`** (`extraction_run_steps.output`, per ADR-0011) — the only contract movement in this milestone
-
-**Testing**: pytest; vitest; Playwright. `M3-204` adds RLS, temporal, race, merge, SSE-replay, accessibility and browser suites
-
-**Project Type**: web application — no new service, package or module
+**Sequencing-specific contract movement**: M3 requires migration `0006`
+(`extraction_run_steps.output`, per ADR-0011). This plan introduces no new
+service, package, or module.
 
 **Performance Goals**: none specific to M3 beyond the parent gates
 
@@ -40,11 +37,11 @@ The plan's contribution is not design. It is the observation that **M3 is unreac
 - [x] **Financial calculations are deterministic, decimal, typed, and source-linked.** M3 proposes values for human review; it computes no authoritative financial result.
 - [x] **Tests and numeric evaluation gates precede implementation tasks.** Wave 0 places #153, #154, #158 and #133 before `M3-303`, so the 99%-accuracy gate is not measured against a validator with known defects.
 - [ ] **Tenant isolation, secrets, auditability, prompt-injection defenses, and cost ceilings are covered.** — **FAILS (A-1).** The approved secret-management flow has never been exercised; all five credential groups read "Not requested", and `M3-304` requires one.
-- [ ] **The design stays within the approved modular-monolith stack or includes an approved complexity ADR.** — **FAILS (A-2).** The provider substitution directed by #132 has neither an approved ADR nor benchmark evidence. ADR-0012 is drafted, not ratified.
+- [x] **The design stays within the approved stack or includes an approved complexity ADR.** See ADR-0002. This plan may use its approved OpenAI baseline; the Anthropic substitution directed by #132 remains unavailable unless ADR-0012 is ratified with benchmark evidence.
 
 ### Gate result
 
-**FAILS — two of five.** The Governance clause is unqualified: *"Unjustified complexity or a failed mandatory gate blocks merge."* Merging this specification therefore requires an integration-lead waiver recorded on the PR, or prior remediation. Both failures are pre-existing conditions this plan surfaces rather than introduces — an argument for granting the waiver, not a reason the gate does not apply.
+**FAILS — one of five.** The Governance clause is unqualified: *"Unjustified complexity or a failed mandatory gate blocks merge."* Merging this specification therefore requires an integration-lead waiver recorded on the PR, or prior remediation. The credential failure is a pre-existing condition this plan surfaces rather than introduces — an argument for granting the waiver, not a reason the gate does not apply.
 
 ## Project Structure
 
@@ -89,6 +86,7 @@ Wave contents: **`spec.md` §6.** Rules:
 | Violation | Why it stands | Simpler alternative rejected because |
 |-----------|---------------|--------------------------------------|
 | Principle IV: the secret flow has never been exercised | `M3-304` requires a live provider smoke and an immutable eval report; no mock configuration produces either | "Complete M3 mock-only" makes `M3-304` unachievable by construction. "Defer `M3-304`" is defensible but is a scope decision for the lead, not an inference — spec §5.2 |
-| Principle V: the provider substitution has no ADR and no benchmark evidence | #132 is a standing directive already shaping provider work; unreconciled, `M3-304` violates something whichever provider it uses | "Follow the directive" breaches principle V. "Follow ADR-0002" contradicts a standing directive. Only a superseding ADR resolves it — ADR-0012 |
 
-Remediations, in order: ratify ADR-0012; register `RELEASE-LIVE-CUTOVER` and provision or formally defer `M3-304`'s credential.
+Remediation: register `RELEASE-LIVE-CUTOVER` and provision the OpenAI credential
+and adapter, or formally defer `M3-304`. If Anthropic is selected instead,
+ADR-0012, its evidence, credential, and adapter become additional prerequisites.
