@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { evaluate } from "./audit-bulk.mjs";
+import { evaluate, fetchBulkAdvisories } from "./audit-bulk.mjs";
 
 // A bulk-endpoint-shaped advisory for `pkg` carrying GHSA id `id`.
 const advisory = (pkg, id) => ({
@@ -126,5 +126,82 @@ describe("audit-bulk evaluate", () => {
     expect(r.ok).toBe(false);
     expect(r.allowlisted.map((a) => a.id)).toEqual(["GHSA-v2hh-gcrm-f6hx"]);
     expect(r.blocking.map((b) => b.id)).toEqual(["GHSA-zzzz-zzzz-zzzz"]);
+  });
+});
+
+// The bulk POST is fail-closed (a 503 must not pass as "zero advisories") but a
+// single registry blip must not fail the JS CI job either. fetchBulkAdvisories
+// retries transient statuses, then still throws if they persist.
+const jsonResponse = (status, body = {}) => ({
+  ok: status >= 200 && status < 300,
+  status,
+  json: async () => body,
+});
+
+describe("fetchBulkAdvisories", () => {
+  it("retries a 503 and returns the subsequent 200 body", async () => {
+    const calls = [];
+    const fetchImpl = async () => {
+      calls.push(calls.length + 1);
+      if (calls.length === 1) return jsonResponse(503);
+      return jsonResponse(200, { "left-pad": [] });
+    };
+
+    const body = await fetchBulkAdvisories(
+      { "left-pad": ["1.0.0"] },
+      { fetchImpl, sleep: async () => {}, log: () => {} },
+    );
+
+    expect(body).toEqual({ "left-pad": [] });
+    expect(calls).toHaveLength(2);
+  });
+
+  it("does not retry a 410 (retired endpoint is not transient)", async () => {
+    const calls = [];
+    const fetchImpl = async () => {
+      calls.push(calls.length + 1);
+      return jsonResponse(410);
+    };
+
+    await expect(
+      fetchBulkAdvisories(
+        { "left-pad": ["1.0.0"] },
+        { fetchImpl, sleep: async () => {}, log: () => {} },
+      ),
+    ).rejects.toMatchObject({ status: 410, message: "bulk advisory endpoint responded 410" });
+    expect(calls).toHaveLength(1);
+  });
+
+  it("retries a thrown fetch error and returns the subsequent 200 body", async () => {
+    const calls = [];
+    const fetchImpl = async () => {
+      calls.push(calls.length + 1);
+      if (calls.length === 1) throw new TypeError("fetch failed");
+      return jsonResponse(200, { "left-pad": [] });
+    };
+
+    const body = await fetchBulkAdvisories(
+      { "left-pad": ["1.0.0"] },
+      { fetchImpl, sleep: async () => {}, log: () => {} },
+    );
+
+    expect(body).toEqual({ "left-pad": [] });
+    expect(calls).toHaveLength(2);
+  });
+
+  it("fails closed after three 503 responses", async () => {
+    const calls = [];
+    const fetchImpl = async () => {
+      calls.push(calls.length + 1);
+      return jsonResponse(503);
+    };
+
+    await expect(
+      fetchBulkAdvisories(
+        { "left-pad": ["1.0.0"] },
+        { fetchImpl, sleep: async () => {}, log: () => {} },
+      ),
+    ).rejects.toMatchObject({ status: 503, message: "bulk advisory endpoint responded 503" });
+    expect(calls).toHaveLength(3);
   });
 });

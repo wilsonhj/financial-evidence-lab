@@ -7,7 +7,12 @@
 // A triage allowlist (audit-allowlist.json) suppresses individual advisories
 // that have no non-breaking fix yet, but fails closed: an expired or malformed
 // entry breaks the gate rather than silently disabling it. See evaluate().
+// Transient registry failures (HTTP 429/502/503/504 and network errors) are
+// retried up to three attempts; exhausted retries still fail closed. A 410 is
+// not retried — that is the retired-endpoint contract break this script exists
+// to replace.
 import { readFileSync } from "node:fs";
+import { setTimeout as sleepMs } from "node:timers/promises";
 import { pathToFileURL } from "node:url";
 
 // The GitHub advisory id (GHSA-...) is what an allowlist entry keys on. The
@@ -83,6 +88,51 @@ export function evaluate(advisories, allowlist, now) {
   return { ok, blocking, allowlisted, expired, malformed, configError: null };
 }
 
+const BULK_ADVISORY_URL = "https://registry.npmjs.org/-/npm/v1/security/advisories/bulk";
+const TRANSIENT_ADVISORY_STATUS = new Set([429, 502, 503, 504]);
+const ADVISORY_ATTEMPTS = 3;
+
+// POST the lockfile package map to npm's bulk advisory endpoint. Transient
+// registry failures (429/502/503/504) are retried; a 410 or other 4xx is not —
+// that is a contract break, not a blip. Exhausted retries still fail closed.
+export async function fetchBulkAdvisories(
+  payload,
+  {
+    fetchImpl = fetch,
+    sleep = (ms) => sleepMs(ms),
+    attempts = ADVISORY_ATTEMPTS,
+    log = console.error,
+  } = {},
+) {
+  const init = {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload),
+  };
+  let lastStatus = 0;
+  for (let i = 1; i <= attempts; i++) {
+    let res;
+    try {
+      res = await fetchImpl(BULK_ADVISORY_URL, init);
+    } catch (err) {
+      if (i === attempts) throw err;
+      log(
+        `audit-bulk: bulk advisory endpoint request failed — ${err.message}; retrying (${i}/${attempts})`,
+      );
+      await sleep(1000 * 2 ** (i - 1));
+      continue;
+    }
+    if (res.ok) return await res.json();
+    lastStatus = res.status;
+    if (!TRANSIENT_ADVISORY_STATUS.has(res.status) || i === attempts) break;
+    log(`audit-bulk: bulk advisory endpoint responded ${res.status}; retrying (${i}/${attempts})`);
+    await sleep(1000 * 2 ** (i - 1));
+  }
+  const err = new Error(`bulk advisory endpoint responded ${lastStatus}`);
+  err.status = lastStatus;
+  throw err;
+}
+
 async function main() {
   const lock = readFileSync("pnpm-lock.yaml", "utf8");
   const section = lock.split(/^packages:$/m)[1]?.split(/^\S/m)[0] ?? "";
@@ -96,16 +146,17 @@ async function main() {
     process.exit(2);
   }
   const body = Object.fromEntries(names.map((n) => [n, [...pkgs[n]]]));
-  const res = await fetch("https://registry.npmjs.org/-/npm/v1/security/advisories/bulk", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    console.error(`audit-bulk: bulk advisory endpoint responded ${res.status}`);
+  let advisories;
+  try {
+    advisories = await fetchBulkAdvisories(body);
+  } catch (err) {
+    const detail =
+      err.status != null
+        ? `bulk advisory endpoint responded ${err.status}`
+        : `bulk advisory endpoint request failed — ${err.message}`;
+    console.error(`audit-bulk: ${detail}`);
     process.exit(2);
   }
-  const advisories = await res.json();
 
   let allowlist;
   try {
