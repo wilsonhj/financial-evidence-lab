@@ -5,8 +5,9 @@
 
 * values are finite Decimals computed under :data:`CALC_CONTEXT` with the
   typed-unit algebra — nothing is quantized until a reported-output node;
-* ``available_at`` is the node's own ``as_of`` for leaves and the maximum of
-  its parents' ``available_at`` for derived nodes — a caller cannot supply it
+* ``available_at`` is the node's own availability bound for leaves (the maximum
+  of ``as_of`` and ``dataset_cutoff`` for forecasts) and the maximum of its
+  parents' ``available_at`` for derived nodes — a caller cannot supply it
   (derived nodes have no ``as_of`` field), and every leaf newer than the cutoff
   raises :class:`CutoffViolationError` (Constitution I, no look-ahead);
 * ``result_id`` is a SHA-256 over typed canonical JSON of the node definition,
@@ -167,7 +168,8 @@ def _compute(
     if isinstance(node, ForecastModelOutputNode):
         _require_available(node, node.as_of, cutoff, "as_of")
         _require_available(node, node.dataset_cutoff, cutoff, "dataset_cutoff")
-        return node.lineage_quantity(), node.as_of, node.lineage(), None, None
+        available_at = max(node.as_of, node.dataset_cutoff)
+        return node.lineage_quantity(), available_at, node.lineage(), None, None
 
     available_at = max(parent.available_at for parent in inputs)
     lineage = Lineage(Provenance.DERIVED, derived_from=tuple(p.result_id for p in inputs))

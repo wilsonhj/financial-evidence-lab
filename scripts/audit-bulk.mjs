@@ -7,7 +7,12 @@
 // A triage allowlist (audit-allowlist.json) suppresses individual advisories
 // that have no non-breaking fix yet, but fails closed: an expired or malformed
 // entry breaks the gate rather than silently disabling it. See evaluate().
+// Transient registry failures (HTTP 429/502/503/504, network errors, and
+// unreadable bodies) are retried up to three attempts; exhausted retries still
+// fail closed. A 410 is not retried — that is the retired-endpoint contract
+// break this script exists to replace.
 import { readFileSync } from "node:fs";
+import { setTimeout as sleepMs } from "node:timers/promises";
 import { pathToFileURL } from "node:url";
 
 // The GitHub advisory id (GHSA-...) is what an allowlist entry keys on. The
@@ -83,6 +88,190 @@ export function evaluate(advisories, allowlist, now) {
   return { ok, blocking, allowlisted, expired, malformed, configError: null };
 }
 
+const BULK_ADVISORY_URL = "https://registry.npmjs.org/-/npm/v1/security/advisories/bulk";
+
+// Node's fetch puts the useful network diagnostic (DNS, TLS, proxy, etc.) on
+// cause, while the top-level message is commonly only "fetch failed".
+const describeError = (err) => {
+  const cause = err?.cause;
+  if (!cause) return err?.message ?? String(err);
+  return `${err.message}: ${cause.message ?? cause}`;
+};
+
+const TRANSIENT_ADVISORY_STATUS = new Set([429, 502, 503, 504]);
+const ADVISORY_ATTEMPTS = 3;
+const RETRY_BASE_DELAY_MS = 1000;
+const MAX_RETRY_DELAY_MS = 30_000;
+const REQUEST_TIMEOUT_MS = 15_000;
+const MAX_REQUEST_TIMEOUT_MS = 30_000;
+
+function boundedInteger(value, fallback, maximum) {
+  return Number.isFinite(value) ? Math.min(maximum, Math.max(1, Math.trunc(value))) : fallback;
+}
+
+function boundedDelay(value) {
+  return Number.isFinite(value)
+    ? Math.min(MAX_RETRY_DELAY_MS, Math.max(0, Math.trunc(value)))
+    : MAX_RETRY_DELAY_MS;
+}
+
+function retryDelay(response, attempt, now, maximum) {
+  const fallback = RETRY_BASE_DELAY_MS * 2 ** (attempt - 1);
+  const value = response?.headers?.get?.("retry-after");
+  let requested;
+
+  if (typeof value === "string" && /^\s*\d+\s*$/.test(value)) {
+    requested = Number(value) * 1000;
+  } else if (typeof value === "string") {
+    const date = Date.parse(value);
+    const currentTime = typeof now === "function" ? now() : now;
+    if (Number.isFinite(date)) requested = Math.max(0, date - currentTime);
+  }
+
+  return Math.min(
+    maximum,
+    requested !== undefined && !Number.isNaN(requested) ? requested : fallback,
+  );
+}
+
+function timeoutError(timeoutMs) {
+  const error = new Error(`bulk advisory endpoint request timed out after ${timeoutMs}ms`);
+  error.name = "TimeoutError";
+  return error;
+}
+
+async function interruptibleSleep(ms, sleep, signal) {
+  if (!signal) {
+    await sleep(ms);
+    return;
+  }
+  if (signal.aborted) throw signal.reason;
+
+  let onAbort;
+  const abortPromise = new Promise((_, reject) => {
+    onAbort = () => reject(signal.reason);
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+  try {
+    await Promise.race([Promise.resolve().then(() => sleep(ms)), abortPromise]);
+  } finally {
+    signal.removeEventListener("abort", onAbort);
+  }
+}
+
+// POST the lockfile package map to npm's bulk advisory endpoint. Retries the
+// explicitly transient statuses and failures while reaching or reading the
+// response. Permanent statuses are contract failures and are not retried.
+export async function fetchBulkAdvisories(
+  payload,
+  {
+    fetchImpl = fetch,
+    sleep = (ms) => sleepMs(ms),
+    attempts = ADVISORY_ATTEMPTS,
+    log = console.error,
+    now = () => Date.now(),
+    maxRetryDelayMs = MAX_RETRY_DELAY_MS,
+    requestTimeoutMs = REQUEST_TIMEOUT_MS,
+    signal,
+    setTimeoutImpl = globalThis.setTimeout,
+    clearTimeoutImpl = globalThis.clearTimeout,
+  } = {},
+) {
+  const boundedAttempts = boundedInteger(attempts, ADVISORY_ATTEMPTS, ADVISORY_ATTEMPTS);
+  const boundedRetryDelay = boundedDelay(maxRetryDelayMs);
+  const boundedTimeout = boundedInteger(
+    requestTimeoutMs,
+    REQUEST_TIMEOUT_MS,
+    MAX_REQUEST_TIMEOUT_MS,
+  );
+  const init = {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload),
+  };
+  let lastStatus = 0;
+  let lastError;
+  for (let i = 1; i <= boundedAttempts; i++) {
+    if (signal?.aborted) throw signal.reason;
+
+    const controller = new globalThis.AbortController();
+    let timedOut = false;
+    let rejectAttempt;
+    const abortPromise = new Promise((_, reject) => {
+      rejectAttempt = reject;
+    });
+    const onCallerAbort = () => {
+      controller.abort(signal.reason);
+      rejectAttempt(signal.reason);
+    };
+    signal?.addEventListener("abort", onCallerAbort, { once: true });
+    const timer = setTimeoutImpl(() => {
+      timedOut = true;
+      const error = timeoutError(boundedTimeout);
+      controller.abort(error);
+      rejectAttempt(error);
+    }, boundedTimeout);
+
+    let res;
+    let attemptError;
+    let readingBody = false;
+    try {
+      res = await Promise.race([
+        fetchImpl(BULK_ADVISORY_URL, { ...init, signal: controller.signal }),
+        abortPromise,
+      ]);
+      if (res.ok) {
+        // Body reads are part of the attempt: a dropped socket or stalled body
+        // is retryable and remains covered by this attempt's same deadline.
+        readingBody = true;
+        return await Promise.race([res.json(), abortPromise]);
+      }
+    } catch (err) {
+      if (signal?.aborted) throw signal.reason;
+      if (timedOut) {
+        attemptError = controller.signal.reason ?? timeoutError(boundedTimeout);
+      } else if (readingBody) {
+        attemptError = new Error(
+          `bulk advisory endpoint returned ${res.status} with an unreadable body — ${describeError(err)}`,
+          { cause: err },
+        );
+        attemptError.bodyError = true;
+      } else {
+        attemptError = err;
+      }
+    } finally {
+      clearTimeoutImpl(timer);
+      signal?.removeEventListener("abort", onCallerAbort);
+    }
+
+    if (attemptError) {
+      lastError = attemptError;
+      if (i === boundedAttempts) throw lastError;
+      const detail = lastError.bodyError
+        ? lastError.message
+        : `bulk advisory endpoint request failed — ${describeError(lastError)}`;
+      log(`audit-bulk: ${detail}; retrying (${i}/${boundedAttempts})`);
+      await interruptibleSleep(
+        Math.min(boundedRetryDelay, RETRY_BASE_DELAY_MS * 2 ** (i - 1)),
+        sleep,
+        signal,
+      );
+      continue;
+    }
+
+    lastStatus = res.status;
+    if (!TRANSIENT_ADVISORY_STATUS.has(res.status) || i === boundedAttempts) break;
+    log(
+      `audit-bulk: bulk advisory endpoint responded ${res.status}; retrying (${i}/${boundedAttempts})`,
+    );
+    await interruptibleSleep(retryDelay(res, i, now, boundedRetryDelay), sleep, signal);
+  }
+  if (lastStatus === 0 && lastError) throw lastError;
+  const err = new Error(`bulk advisory endpoint responded ${lastStatus}`);
+  err.status = lastStatus;
+  throw err;
+}
+
 async function main() {
   const lock = readFileSync("pnpm-lock.yaml", "utf8");
   const section = lock.split(/^packages:$/m)[1]?.split(/^\S/m)[0] ?? "";
@@ -96,16 +285,19 @@ async function main() {
     process.exit(2);
   }
   const body = Object.fromEntries(names.map((n) => [n, [...pkgs[n]]]));
-  const res = await fetch("https://registry.npmjs.org/-/npm/v1/security/advisories/bulk", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    console.error(`audit-bulk: bulk advisory endpoint responded ${res.status}`);
+  let advisories;
+  try {
+    advisories = await fetchBulkAdvisories(body);
+  } catch (err) {
+    const detail =
+      err.status != null
+        ? `bulk advisory endpoint responded ${err.status}`
+        : err.bodyError
+          ? err.message
+          : `bulk advisory endpoint request failed — ${describeError(err)}`;
+    console.error(`audit-bulk: ${detail}`);
     process.exit(2);
   }
-  const advisories = await res.json();
 
   let allowlist;
   try {

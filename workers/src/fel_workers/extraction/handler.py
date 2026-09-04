@@ -83,20 +83,22 @@ def handle_extraction_run(
     request = request_from_payload(payload)
     memory = use_memory_stores if use_memory_stores is not None else conn is None
     if job_org_id is not None and request.org_id != job_org_id:
-        raise ValueError(
+        raise IntegrityError(
             f"extraction_run payload org_id {request.org_id} does not match "
-            f"job org_id {job_org_id}"
+            f"job org_id {job_org_id}",
+            code="job_org_id_mismatch",
         )
     evidence = _evidence_from_payload(payload)
     if not memory:
         if conn is None:
             raise RuntimeError("database persistence selected without a connection")
         if job_org_id is None:
-            raise ValueError(
+            raise IntegrityError(
                 "extraction_run reached the durable path with no job org_id: "
                 f"refusing to persist run {request.run_id} on the payload's own "
                 f"claim to org {request.org_id}. Enqueue extraction_run jobs "
-                "tenant-bound — queue.enqueue(..., org_id=<tenant>)."
+                "tenant-bound — queue.enqueue(..., org_id=<tenant>).",
+                code="job_org_id_missing",
             )
         persist: Any = PostgresPersistStore(conn)
         # Bind BEFORE mark_running: a payload that contradicts its run row must

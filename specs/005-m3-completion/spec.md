@@ -44,7 +44,8 @@ Every count, status and identifier was produced by a command run against `origin
 
 - Trunk at the 2026-08-31 measurement: `ebe77af`, five of five checks passing. Trunk has moved since — through `b8dc8a6` (#175, #173, #183) and on — so re-resolve it with §2's `git log -1 origin/main` rather than reading a SHA here. Every count below was re-verified against `b8dc8a6` on 2026-09-03 and none changed. A `fast-uri` advisory batch reddened the JS/TS audit gate on 2026-09-03 and was fixed the same day by PR #207; it never touched this document's subject.
 - Packages: **32 registered — 23 `merged`, 1 `ready`, 8 not started.** Two more await registration (§4.3).
-- M3 core (`M3-EXTRACTION-CORE`, #60) merged @ `61058e4`. `T0301`–`T0305` are delivered but still read `[ ]` in the canonical ledger — one of the 17 drifted checkboxes.
+- M3 core (`M3-EXTRACTION-CORE`, #60) merged @ `61058e4`. PR #206 reconciled
+  `T0301`–`T0305` to `[x]` in the canonical ledger on 2026-09-03.
 - **M3 remaining: 5 canonical tasks, 10 milestone tasks, 2 packages.**
 
 | Package | Issue | Canonical | Milestone tasks | Paths |
@@ -113,9 +114,14 @@ Against that:
 
 **This is the same structural defect `specs/004-mvp-completion/` §5 identifies for `M5-AUDIT-RELEASE`, and it bites two milestones earlier than that document says.** 004 frames mock-only as blocking the *release*; it blocks the *next milestone*.
 
-### 5.1 And the credential named is contested
+### 5.1 Provider substitution is a separate, optional gate
 
-`M3-304` says *OpenAI*. Issue #132's replace-OpenAI directive says `claude-opus-4-8`. ADR-0002 (Accepted) says "OpenAI for generation". Constitution principle V requires an approved ADR **and benchmark evidence** for any AI-provider substitution, and neither exists — so `M3-304` cannot be executed against any provider without violating something. This is finding **A-1** in `specs/004-mvp-completion/clarify-analyse.md`; **ADR-0012 (Proposed)** is drafted to resolve it.
+`M3-304` says *OpenAI*, and ADR-0002 (Accepted) approves OpenAI for generation.
+That baseline is lawful without ADR-0012. Issue #132 separately directs a move to
+`claude-opus-4-8`; that **substitution** requires benchmark evidence and an
+approved ADR. ADR-0012 remains Proposed and therefore does not authorize the
+Anthropic path. It is a prerequisite only if the integration lead chooses that
+substitution, not a prerequisite for running `M3-304` as written against OpenAI.
 
 Note the embeddings asymmetry #132 records: Anthropic ships no embeddings endpoint, so index-build and query embedding cannot use Claude regardless. An OpenAI credential may be required even if generation moves.
 
@@ -131,10 +137,10 @@ Give #62 an explicit `credentials:` override, and sequence `RELEASE-LIVE-CUTOVER
 
 | Wave | Content | Opens when |
 |---|---|---|
-| **0** | ~~Merge #175, #173~~ (done 2026-08-31); ~~ratify constitution 1.2.0~~ (done 2026-09-03, PR #183); merge the registration PR (#185) and ADR-0012 (#186); implement #146 Option 1; fix #153, #154, #158 (PR #208), #133 (PR #210); reconcile `tasks.md` (PR #206) | Now. Lead actions across several PRs |
+| **0** | ~~Merge #175, #173~~ (done 2026-08-31); ~~ratify constitution 1.2.0~~ (done 2026-09-03, PR #183); merge the registration PR (#185); implement #146 Option 1; fix #153, #154, #158 (PR #208), #133 (PR #210); ~~reconcile `tasks.md` (PR #206)~~ (done 2026-09-03) | Now. Lead actions across several PRs |
 | **1** | **#61 (non-SSE)** ∥ **#63** — disjoint (`apps/**` vs `packages/calculation-engine/**`) | #146 implemented |
 | **2** | migration-`0006` (#157) | Registered; **must not overlap #62** |
-| **3** | `RELEASE-LIVE-CUTOVER` | Credentials provisioned; ADR-0012 ruled; **must not overlap #62** (`evals/**`) |
+| **3** | `RELEASE-LIVE-CUTOVER` | OpenAI credentials and adapter ready for the approved baseline; if substituting Anthropic, ADR-0012 ratified and the Anthropic credential and adapter ready; **must not overlap #62** (`evals/**`) |
 | **4** | **#62** including `M3-304` | #61 merged, `0006` merged, cutover merged |
 
 `#62` is placed after `0006` rather than beside it because they share two path globs. `#63` belongs to M4 but is `ready` on trunk and contends with nothing, so it runs alongside M3 throughout.
@@ -170,11 +176,14 @@ sequence stays legible rather than silently renumbered.
 
 1. ~~Merge #175, then #173.~~ Both merged 2026-08-31 (`f158e05`, `fdcb3d2`).
 2. Review and merge the registration PR #185 (`chore/register-live-cutover-and-0006`) — both entries `blocked`.
-3. Rule **ADR-0012** (Proposed, PR #186) — until then `M3-304` has no lawful provider.
+3. Rule **ADR-0012** (Proposed, PR #186) before any Anthropic substitution. It
+   does not gate the ADR-0002-approved OpenAI baseline.
 4. ~~Ratify **constitution 1.2.0**.~~ Ratified 2026-09-03 (PR #183 @ `b8dc8a6`), which is what permits this directory's subordinate `spec.md` and `plan.md`.
 5. Provision the credential `M3-304` needs, or rule it deferred (§5.2).
 6. Schedule implementation of **#146 Option 1** — the last gate on #61. In progress on `fix/146-terminal-runs-final`, together with #204.
-7. Reconcile `tasks.md` — 17 checkboxes, `T0215` caveat. PR #206 does this: 16 flipped, `T0112` and `T0215` deliberately left with the reason recorded on each line.
+7. ~~Reconcile `tasks.md` — 17 checkboxes, `T0215` caveat.~~ PR #206 merged
+   2026-09-03: 16 flipped, with `T0112` and `T0215` deliberately left unchecked
+   and the reason recorded on each line.
 8. Ratify or return this spec.
 
 ---
@@ -184,11 +193,10 @@ sequence stays legible rather than silently renumbered.
 | Risk | Evidence | Mitigation |
 |---|---|---|
 | M3 unreachable in mock-only mode | §5; all five credential groups "Not requested" | Register `RELEASE-LIVE-CUTOVER`; give #62 a `credentials:` override |
-| `M3-304`'s provider is contested | ADR-0002 vs #132; principle V unsatisfied | ADR-0012 |
+| Anthropic substitution is not authorized | ADR-0002 approves OpenAI; #132 proposes Anthropic; ADR-0012 is Proposed and lacks benchmark evidence | Use the OpenAI baseline, or ratify ADR-0012 with evidence before substituting |
 | #62 measures a validator with known defects | #153, #154, #158, #133 open | Fix before `M3-303` |
 | `0006` and #62 contend | Both claim two globs | Wave 2 before wave 3; never concurrent |
 | A reader re-opens the settled SSE scope | ADR-0011 contradicts itself | §4.2 records the ruling and the alternative |
-| Ledger says M3-core unstarted | `T0301`–`T0305` read `[ ]` | Reconcile |
 | Suppression lower bound untested | Full suite passes with the mechanism deleted | Test-only fix; filed |
 
 ---
@@ -201,7 +209,7 @@ sequence stays legible rather than silently renumbered.
 | Milestone tasks remaining | **10** (M3-200…204, M3-300…304) |
 | Packages | **2** (#61, #62) + 2 to register |
 | Rulings made | 3 (#146, ADR-0009/#157, ADR-0011 scope) |
-| Rulings owed | 1 (ADR-0012) + credential decision |
+| Rulings owed | Credential decision; ADR-0012 only if substituting Anthropic |
 | Correctness defects gating `M3-303` | 4 |
 | Dispatchable today | **#61 non-SSE**, once #146 is implemented; **#63** now |
 | Blocking gate with no owner until registered | `M3-304`'s credential |
