@@ -7,13 +7,10 @@
 // A triage allowlist (audit-allowlist.json) suppresses individual advisories
 // that have no non-breaking fix yet, but fails closed: an expired or malformed
 // entry breaks the gate rather than silently disabling it. See evaluate().
-// Transient registry failures (HTTP 429/502/503/504, and any failure to reach
-// or read the response) are retried up to three attempts; exhausted retries
-// still fail closed. A 410 is not retried, and note what one would mean here:
-// the endpoint below is the *replacement* for the audits/quick endpoint that
-// 410'd in 2026-07. A 410 from the bulk endpoint says the replacement has been
-// retired too and this script needs its own successor — the loudest signal it
-// can emit, not a known and handled case.
+// Transient registry failures (HTTP 429/502/503/504, network errors, and
+// unreadable bodies) are retried up to three attempts; exhausted retries still
+// fail closed. A 410 is not retried — that is the retired-endpoint contract
+// break this script exists to replace.
 import { readFileSync } from "node:fs";
 import { setTimeout as sleepMs } from "node:timers/promises";
 import { pathToFileURL } from "node:url";
@@ -93,89 +90,183 @@ export function evaluate(advisories, allowlist, now) {
 
 const BULK_ADVISORY_URL = "https://registry.npmjs.org/-/npm/v1/security/advisories/bulk";
 
-// Node's fetch throws `TypeError: fetch failed` and puts the reason that
-// actually identifies the failure — ENOTFOUND, ECONNRESET, a TLS rejection, a
-// proxy refusing egress — on `err.cause`. Reporting only `err.message` makes
-// every one of those indistinguishable in a CI log.
+// Node's fetch puts the useful network diagnostic (DNS, TLS, proxy, etc.) on
+// cause, while the top-level message is commonly only "fetch failed".
 const describeError = (err) => {
   const cause = err?.cause;
   if (!cause) return err?.message ?? String(err);
   return `${err.message}: ${cause.message ?? cause}`;
 };
+
 const TRANSIENT_ADVISORY_STATUS = new Set([429, 502, 503, 504]);
 const ADVISORY_ATTEMPTS = 3;
-// A healthy bulk request answers in ~21s. The stalls that motivate the retry
-// ran 300s before returning 503, so a per-attempt deadline well under that
-// bounds the worst case instead of tripling it.
-const ADVISORY_REQUEST_TIMEOUT_MS = 60_000;
+const RETRY_BASE_DELAY_MS = 1000;
+const MAX_RETRY_DELAY_MS = 30_000;
+const REQUEST_TIMEOUT_MS = 15_000;
+const MAX_REQUEST_TIMEOUT_MS = 30_000;
+
+function boundedInteger(value, fallback, maximum) {
+  return Number.isFinite(value) ? Math.min(maximum, Math.max(1, Math.trunc(value))) : fallback;
+}
+
+function boundedDelay(value) {
+  return Number.isFinite(value)
+    ? Math.min(MAX_RETRY_DELAY_MS, Math.max(0, Math.trunc(value)))
+    : MAX_RETRY_DELAY_MS;
+}
+
+function retryDelay(response, attempt, now, maximum) {
+  const fallback = RETRY_BASE_DELAY_MS * 2 ** (attempt - 1);
+  const value = response?.headers?.get?.("retry-after");
+  let requested;
+
+  if (typeof value === "string" && /^\s*\d+\s*$/.test(value)) {
+    requested = Number(value) * 1000;
+  } else if (typeof value === "string") {
+    const date = Date.parse(value);
+    const currentTime = typeof now === "function" ? now() : now;
+    if (Number.isFinite(date)) requested = Math.max(0, date - currentTime);
+  }
+
+  return Math.min(
+    maximum,
+    requested !== undefined && !Number.isNaN(requested) ? requested : fallback,
+  );
+}
+
+function timeoutError(timeoutMs) {
+  const error = new Error(`bulk advisory endpoint request timed out after ${timeoutMs}ms`);
+  error.name = "TimeoutError";
+  return error;
+}
+
+async function interruptibleSleep(ms, sleep, signal) {
+  if (!signal) {
+    await sleep(ms);
+    return;
+  }
+  if (signal.aborted) throw signal.reason;
+
+  let onAbort;
+  const abortPromise = new Promise((_, reject) => {
+    onAbort = () => reject(signal.reason);
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+  try {
+    await Promise.race([Promise.resolve().then(() => sleep(ms)), abortPromise]);
+  } finally {
+    signal.removeEventListener("abort", onAbort);
+  }
+}
 
 // POST the lockfile package map to npm's bulk advisory endpoint. Retries the
-// statuses in TRANSIENT_ADVISORY_STATUS and any failure to reach or read the
-// response; every other status is a contract break, not a blip, and is not
-// retried. Exhausted retries still fail closed.
+// explicitly transient statuses and failures while reaching or reading the
+// response. Permanent statuses are contract failures and are not retried.
 export async function fetchBulkAdvisories(
   payload,
   {
     fetchImpl = fetch,
     sleep = (ms) => sleepMs(ms),
     attempts = ADVISORY_ATTEMPTS,
-    requestTimeoutMs = ADVISORY_REQUEST_TIMEOUT_MS,
     log = console.error,
+    now = () => Date.now(),
+    maxRetryDelayMs = MAX_RETRY_DELAY_MS,
+    requestTimeoutMs = REQUEST_TIMEOUT_MS,
+    signal,
+    setTimeoutImpl = setTimeout,
+    clearTimeoutImpl = clearTimeout,
   } = {},
 ) {
-  const body = JSON.stringify(payload);
-  const backoff = (i) => 1000 * 2 ** (i - 1);
+  const boundedAttempts = boundedInteger(attempts, ADVISORY_ATTEMPTS, ADVISORY_ATTEMPTS);
+  const boundedRetryDelay = boundedDelay(maxRetryDelayMs);
+  const boundedTimeout = boundedInteger(
+    requestTimeoutMs,
+    REQUEST_TIMEOUT_MS,
+    MAX_REQUEST_TIMEOUT_MS,
+  );
+  const init = {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload),
+  };
   let lastStatus = 0;
-  for (let i = 1; i <= attempts; i++) {
-    // Built per attempt, deliberately. The transient this retry exists for is
-    // not a fast 503 — both occurrences in this repo were a 300-second stall
-    // that ended in one, against a ~21s healthy request. Without a deadline,
-    // three attempts turn a 5-minute failure into a 15-minute one on the exact
-    // scenario the retry targets. A signal hoisted out of the loop would be
-    // worse than none: one deadline shared across all three attempts expires
-    // mid-sequence and aborts the later ones instantly.
-    const init = {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body,
-      signal: globalThis.AbortSignal.timeout(requestTimeoutMs),
+  let lastError;
+  for (let i = 1; i <= boundedAttempts; i++) {
+    if (signal?.aborted) throw signal.reason;
+
+    const controller = new AbortController();
+    let timedOut = false;
+    let rejectAttempt;
+    const abortPromise = new Promise((_, reject) => {
+      rejectAttempt = reject;
+    });
+    const onCallerAbort = () => {
+      controller.abort(signal.reason);
+      rejectAttempt(signal.reason);
     };
+    signal?.addEventListener("abort", onCallerAbort, { once: true });
+    const timer = setTimeoutImpl(() => {
+      timedOut = true;
+      const error = timeoutError(boundedTimeout);
+      controller.abort(error);
+      rejectAttempt(error);
+    }, boundedTimeout);
+
     let res;
+    let attemptError;
+    let readingBody = false;
     try {
-      res = await fetchImpl(BULK_ADVISORY_URL, init);
+      res = await Promise.race([
+        fetchImpl(BULK_ADVISORY_URL, { ...init, signal: controller.signal }),
+        abortPromise,
+      ]);
+      if (res.ok) {
+        // Body reads are part of the attempt: a dropped socket or stalled body
+        // is retryable and remains covered by this attempt's same deadline.
+        readingBody = true;
+        return await Promise.race([res.json(), abortPromise]);
+      }
     } catch (err) {
-      if (i === attempts) throw err;
-      log(
-        `audit-bulk: bulk advisory endpoint request failed — ${describeError(err)}; retrying (${i}/${attempts})`,
-      );
-      await sleep(backoff(i));
-      continue;
-    }
-    if (res.ok) {
-      // Parsing sits inside the retry, not after it. A socket dropped mid-body
-      // surfaces here as a rejected json(); one dropped before the headers
-      // surfaces at the fetch above. Both are the registry blip this retry
-      // exists to absorb, and covering only the second half would leave the CI
-      // flake half-handled. A persistently unreadable body still exhausts the
-      // attempts and fails closed.
-      try {
-        return await res.json();
-      } catch (err) {
-        const unreadable = new Error(
+      if (signal?.aborted) throw signal.reason;
+      if (timedOut) {
+        attemptError = controller.signal.reason ?? timeoutError(boundedTimeout);
+      } else if (readingBody) {
+        attemptError = new Error(
           `bulk advisory endpoint returned ${res.status} with an unreadable body — ${describeError(err)}`,
           { cause: err },
         );
-        if (i === attempts) throw unreadable;
-        log(`audit-bulk: ${unreadable.message}; retrying (${i}/${attempts})`);
-        await sleep(backoff(i));
-        continue;
+        attemptError.bodyError = true;
+      } else {
+        attemptError = err;
       }
+    } finally {
+      clearTimeoutImpl(timer);
+      signal?.removeEventListener("abort", onCallerAbort);
     }
+
+    if (attemptError) {
+      lastError = attemptError;
+      if (i === boundedAttempts) throw lastError;
+      const detail = lastError.bodyError
+        ? lastError.message
+        : `bulk advisory endpoint request failed — ${describeError(lastError)}`;
+      log(`audit-bulk: ${detail}; retrying (${i}/${boundedAttempts})`);
+      await interruptibleSleep(
+        Math.min(boundedRetryDelay, RETRY_BASE_DELAY_MS * 2 ** (i - 1)),
+        sleep,
+        signal,
+      );
+      continue;
+    }
+
     lastStatus = res.status;
-    if (!TRANSIENT_ADVISORY_STATUS.has(res.status) || i === attempts) break;
-    log(`audit-bulk: bulk advisory endpoint responded ${res.status}; retrying (${i}/${attempts})`);
-    await sleep(backoff(i));
+    if (!TRANSIENT_ADVISORY_STATUS.has(res.status) || i === boundedAttempts) break;
+    log(
+      `audit-bulk: bulk advisory endpoint responded ${res.status}; retrying (${i}/${boundedAttempts})`,
+    );
+    await interruptibleSleep(retryDelay(res, i, now, boundedRetryDelay), sleep, signal);
   }
+  if (lastStatus === 0 && lastError) throw lastError;
   const err = new Error(`bulk advisory endpoint responded ${lastStatus}`);
   err.status = lastStatus;
   throw err;
@@ -199,7 +290,11 @@ async function main() {
     advisories = await fetchBulkAdvisories(body);
   } catch (err) {
     const detail =
-      err.status != null ? `bulk advisory endpoint responded ${err.status}` : describeError(err);
+      err.status != null
+        ? `bulk advisory endpoint responded ${err.status}`
+        : err.bodyError
+          ? err.message
+          : `bulk advisory endpoint request failed — ${describeError(err)}`;
     console.error(`audit-bulk: ${detail}`);
     process.exit(2);
   }

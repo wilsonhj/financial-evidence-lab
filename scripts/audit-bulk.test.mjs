@@ -137,24 +137,17 @@ describe("audit-bulk evaluate", () => {
 
 // The bulk POST is fail-closed (a 503 must not pass as "zero advisories") but a
 // single registry blip must not fail the JS CI job either. fetchBulkAdvisories
-// retries transient statuses and unreadable responses, then still throws if
-// they persist; the final describe covers the other half of that claim — that
-// main() turns the throw into a failed gate rather than a clean pass.
-const jsonResponse = (status, body = {}) => ({
+// retries transient statuses, then still throws if they persist.
+const jsonResponse = (status, body = {}, headers = {}) => ({
   ok: status >= 200 && status < 300,
   status,
+  headers: { get: (name) => headers[name.toLowerCase()] ?? null },
   json: async () => body,
 });
 
 describe("fetchBulkAdvisories", () => {
-  it("retries a 503, asks the right endpoint the right question, and returns the 200 body", async () => {
+  it("retries a 503 with the exact request and a distinct signal per attempt", async () => {
     const calls = [];
-    // The args are captured, not ignored. Without asserting them the suite
-    // cannot see the one mutation that fails OPEN: replace the POST body with
-    // "{}" and the gate stops asking about any package, so a critical advisory
-    // becomes "No blocking vulnerabilities found" and exit 0 — with every test
-    // still green. A stub that drops its arguments verifies how the code reacts
-    // to answers while never checking what it asked.
     const fetchImpl = async (url, init) => {
       calls.push({ url, init });
       if (calls.length === 1) return jsonResponse(503);
@@ -172,8 +165,6 @@ describe("fetchBulkAdvisories", () => {
       expect(call.url).toBe("https://registry.npmjs.org/-/npm/v1/security/advisories/bulk");
       expect(call.init.method).toBe("POST");
       expect(JSON.parse(call.init.body)).toEqual({ "left-pad": ["1.0.0"] });
-      // Each attempt carries its own deadline; a shared one would expire
-      // mid-sequence and abort the later attempts instantly.
       expect(call.init.signal).toBeInstanceOf(globalThis.AbortSignal);
     }
     expect(calls[0].init.signal).not.toBe(calls[1].init.signal);
@@ -212,6 +203,23 @@ describe("fetchBulkAdvisories", () => {
     expect(calls).toHaveLength(2);
   });
 
+  it("includes err.cause diagnostics when a network failure is retried", async () => {
+    const logged = [];
+    const fetchImpl = async () => {
+      const err = new TypeError("fetch failed");
+      err.cause = new Error("getaddrinfo ENOTFOUND registry.npmjs.org");
+      throw err;
+    };
+
+    await expect(
+      fetchBulkAdvisories(
+        { "left-pad": ["1.0.0"] },
+        { fetchImpl, sleep: async () => {}, log: (message) => logged.push(message) },
+      ),
+    ).rejects.toThrow("fetch failed");
+    expect(logged[0]).toContain("getaddrinfo ENOTFOUND registry.npmjs.org");
+  });
+
   it("fails closed after three 503 responses", async () => {
     const calls = [];
     const fetchImpl = async () => {
@@ -227,17 +235,170 @@ describe("fetchBulkAdvisories", () => {
     ).rejects.toMatchObject({ status: 503, message: "bulk advisory endpoint responded 503" });
     expect(calls).toHaveLength(3);
   });
-  it("retries a body that arrives unreadable, then returns the good one", async () => {
-    // A socket dropped mid-body surfaces as a rejected json() on an ok
-    // response; one dropped before the headers surfaces at the fetch. Both are
-    // the registry blip this retry exists to absorb, so both must retry.
-    const calls = [];
+
+  it.each([
+    ["delta-seconds", "7", () => 0, 10_000, 7000],
+    ["HTTP-date", "Wed, 22 Jul 2026 00:00:09 GMT", NOW, 10_000, 9000],
+    ["malformed", "eventually", () => 0, 10_000, 1000],
+    ["configured cap", "120", () => 0, 2500, 2500],
+  ])("uses Retry-After %s", async (_label, retryAfter, now, maximum, expected) => {
+    const delays = [];
+    let calls = 0;
     const fetchImpl = async () => {
-      calls.push(calls.length + 1);
-      const attempt = calls.length;
+      calls += 1;
+      return calls === 1
+        ? jsonResponse(429, {}, { "retry-after": retryAfter })
+        : jsonResponse(200, { recovered: [] });
+    };
+
+    await expect(
+      fetchBulkAdvisories(
+        { recovered: ["1.0.0"] },
+        {
+          fetchImpl,
+          now,
+          maxRetryDelayMs: maximum,
+          sleep: async (ms) => delays.push(ms),
+          log: () => {},
+        },
+      ),
+    ).resolves.toEqual({ recovered: [] });
+    expect(delays).toEqual([expected]);
+  });
+
+  it("does not retry another permanent 4xx response", async () => {
+    let calls = 0;
+    const fetchImpl = async () => {
+      calls += 1;
+      return jsonResponse(404);
+    };
+
+    await expect(
+      fetchBulkAdvisories({ pkg: ["1.0.0"] }, { fetchImpl, sleep: async () => {}, log: () => {} }),
+    ).rejects.toMatchObject({ status: 404 });
+    expect(calls).toBe(1);
+  });
+
+  it.each([502, 504])("retries a %i response", async (status) => {
+    let calls = 0;
+    const fetchImpl = async () =>
+      ++calls === 1 ? jsonResponse(status) : jsonResponse(200, { recovered: [] });
+
+    await expect(
+      fetchBulkAdvisories(
+        { recovered: ["1.0.0"] },
+        { fetchImpl, sleep: async () => {}, log: () => {} },
+      ),
+    ).resolves.toEqual({ recovered: [] });
+    expect(calls).toBe(2);
+  });
+
+  it("retries an attempt timeout, clears its timers, and can recover", async () => {
+    let calls = 0;
+    let timers = 0;
+    const cleared = [];
+    const timerDelays = [];
+    const setTimeoutImpl = (callback, ms) => {
+      const id = ++timers;
+      timerDelays.push(ms);
+      if (id === 1) callback();
+      return id;
+    };
+    const fetchImpl = async (_url, { signal }) => {
+      calls += 1;
+      if (signal.aborted) throw signal.reason;
+      return jsonResponse(200, { recovered: [] });
+    };
+
+    await expect(
+      fetchBulkAdvisories(
+        { recovered: ["1.0.0"] },
+        {
+          fetchImpl,
+          sleep: async () => {},
+          log: () => {},
+          requestTimeoutMs: 1_000_000,
+          setTimeoutImpl,
+          clearTimeoutImpl: (id) => cleared.push(id),
+        },
+      ),
+    ).resolves.toEqual({ recovered: [] });
+    expect(calls).toBe(2);
+    expect(cleared).toEqual([1, 2]);
+    expect(timerDelays).toEqual([30_000, 30_000]);
+  });
+
+  it("fails closed when every attempt times out", async () => {
+    let calls = 0;
+    const fetchImpl = async () => {
+      calls += 1;
+      return new Promise(() => {});
+    };
+
+    await expect(
+      fetchBulkAdvisories(
+        { pkg: ["1.0.0"] },
+        {
+          fetchImpl,
+          sleep: async () => {},
+          log: () => {},
+          requestTimeoutMs: 25,
+          setTimeoutImpl: (callback) => {
+            callback();
+            return calls;
+          },
+          clearTimeoutImpl: () => {},
+        },
+      ),
+    ).rejects.toMatchObject({ name: "TimeoutError" });
+    expect(calls).toBe(3);
+  });
+
+  it("keeps the attempt timeout active through a stalled response body and retries", async () => {
+    const timeoutCallbacks = [];
+    const cleared = [];
+    let calls = 0;
+    const fetchImpl = async () => {
+      calls += 1;
+      if (calls === 1) {
+        return {
+          ...jsonResponse(200),
+          json: () => {
+            timeoutCallbacks[0]();
+            return new Promise(() => {});
+          },
+        };
+      }
+      return jsonResponse(200, { recovered: [] });
+    };
+
+    await expect(
+      fetchBulkAdvisories(
+        { recovered: ["1.0.0"] },
+        {
+          fetchImpl,
+          sleep: async () => {
+            expect(cleared).toEqual([1]);
+          },
+          log: () => {},
+          setTimeoutImpl: (callback) => {
+            timeoutCallbacks.push(callback);
+            return timeoutCallbacks.length;
+          },
+          clearTimeoutImpl: (id) => cleared.push(id),
+        },
+      ),
+    ).resolves.toEqual({ recovered: [] });
+    expect(calls).toBe(2);
+    expect(cleared).toEqual([1, 2]);
+  });
+
+  it("retries a body read failure and returns a subsequent readable body", async () => {
+    let calls = 0;
+    const fetchImpl = async () => {
+      const attempt = ++calls;
       return {
-        ok: true,
-        status: 200,
+        ...jsonResponse(200, { "left-pad": [] }),
         json: async () => {
           if (attempt === 1) throw new SyntaxError("Unexpected end of JSON input");
           return { "left-pad": [] };
@@ -245,63 +406,168 @@ describe("fetchBulkAdvisories", () => {
       };
     };
 
-    const body = await fetchBulkAdvisories(
-      { "left-pad": ["1.0.0"] },
-      { fetchImpl, sleep: async () => {}, log: () => {} },
-    );
-
-    expect(body).toEqual({ "left-pad": [] });
-    expect(calls).toHaveLength(2);
-  });
-
-  it("fails closed on a persistently unreadable body, and does not call it a failed request", async () => {
-    const calls = [];
-    const fetchImpl = async () => {
-      calls.push(calls.length + 1);
-      return {
-        ok: true,
-        status: 200,
-        json: async () => {
-          throw new SyntaxError("Unexpected token < in JSON at position 0");
-        },
-      };
-    };
-
-    // The request returned 200. Reporting it as a failed request would send an
-    // operator to look at connectivity rather than at the response body.
     await expect(
       fetchBulkAdvisories(
         { "left-pad": ["1.0.0"] },
         { fetchImpl, sleep: async () => {}, log: () => {} },
       ),
-    ).rejects.toThrow(/returned 200 with an unreadable body/);
-    expect(calls).toHaveLength(3);
+    ).resolves.toEqual({ "left-pad": [] });
+    expect(calls).toBe(2);
   });
 
-  it("surfaces err.cause, where node's fetch puts the reason that identifies the failure", async () => {
-    const logged = [];
+  it("fails closed with body diagnostics after three unreadable 200 responses", async () => {
+    let calls = 0;
+    const parseError = new SyntaxError("Unexpected token < in JSON");
     const fetchImpl = async () => {
-      const err = new TypeError("fetch failed");
-      err.cause = new Error("getaddrinfo ENOTFOUND registry.npmjs.org");
-      throw err;
+      calls += 1;
+      return {
+        ...jsonResponse(200),
+        json: async () => {
+          throw parseError;
+        },
+      };
     };
 
     await expect(
       fetchBulkAdvisories(
         { "left-pad": ["1.0.0"] },
-        { fetchImpl, sleep: async () => {}, log: (m) => logged.push(m) },
+        { fetchImpl, sleep: async () => {}, log: () => {} },
       ),
-    ).rejects.toThrow("fetch failed");
-    // Without the cause, DNS, TLS and a refused proxy all read "fetch failed".
-    expect(logged[0]).toContain("getaddrinfo ENOTFOUND registry.npmjs.org");
+    ).rejects.toMatchObject({
+      message: expect.stringContaining("returned 200 with an unreadable body"),
+      cause: parseError,
+    });
+    expect(calls).toBe(3);
+  });
+
+  it("preserves a caller abort and does not retry it", async () => {
+    const caller = new AbortController();
+    const reason = new Error("stop requested");
+    let calls = 0;
+    const fetchImpl = async (_url, { signal }) => {
+      calls += 1;
+      caller.abort(reason);
+      throw signal.reason;
+    };
+
+    await expect(
+      fetchBulkAdvisories(
+        { pkg: ["1.0.0"] },
+        {
+          fetchImpl,
+          signal: caller.signal,
+          sleep: async () => {},
+          log: () => {},
+          setTimeoutImpl: () => 1,
+          clearTimeoutImpl: () => {},
+        },
+      ),
+    ).rejects.toBe(reason);
+    expect(calls).toBe(1);
+  });
+
+  it("interrupts response body parsing with the original caller abort", async () => {
+    const caller = new AbortController();
+    const reason = new Error("stop reading");
+    let calls = 0;
+    const fetchImpl = async () => {
+      calls += 1;
+      return {
+        ...jsonResponse(200),
+        json: () => {
+          caller.abort(reason);
+          return new Promise(() => {});
+        },
+      };
+    };
+
+    await expect(
+      fetchBulkAdvisories(
+        { pkg: ["1.0.0"] },
+        {
+          fetchImpl,
+          signal: caller.signal,
+          sleep: async () => {},
+          log: () => {},
+          setTimeoutImpl: () => 1,
+          clearTimeoutImpl: () => {},
+        },
+      ),
+    ).rejects.toBe(reason);
+    expect(calls).toBe(1);
+  });
+
+  it.each([
+    ["HTTP-status", async () => jsonResponse(503)],
+    ["thrown-error", async () => Promise.reject(new TypeError("offline"))],
+  ])(
+    "interrupts %s backoff with the original caller abort after request cleanup",
+    async (_label, fetchImpl) => {
+      const caller = new AbortController();
+      const reason = new Error("cancel backoff");
+      const cleared = [];
+      const activeListeners = new Set();
+      const addEventListener = caller.signal.addEventListener.bind(caller.signal);
+      const removeEventListener = caller.signal.removeEventListener.bind(caller.signal);
+      caller.signal.addEventListener = (type, listener, options) => {
+        if (type === "abort") activeListeners.add(listener);
+        return addEventListener(type, listener, options);
+      };
+      caller.signal.removeEventListener = (type, listener, options) => {
+        if (type === "abort") activeListeners.delete(listener);
+        return removeEventListener(type, listener, options);
+      };
+
+      await expect(
+        fetchBulkAdvisories(
+          { pkg: ["1.0.0"] },
+          {
+            fetchImpl,
+            signal: caller.signal,
+            sleep: () => {
+              expect(cleared).toEqual([1]);
+              expect(activeListeners.size).toBe(1);
+              caller.abort(reason);
+              return new Promise(() => {});
+            },
+            log: () => {},
+            setTimeoutImpl: () => 1,
+            clearTimeoutImpl: (id) => cleared.push(id),
+          },
+        ),
+      ).rejects.toBe(reason);
+      expect(cleared).toEqual([1]);
+      expect(activeListeners.size).toBe(0);
+    },
+  );
+
+  it("bounds attempts and exponential backoff delays", async () => {
+    const delays = [];
+    let calls = 0;
+    const fetchImpl = async () => {
+      calls += 1;
+      throw new TypeError("offline");
+    };
+
+    await expect(
+      fetchBulkAdvisories(
+        { pkg: ["1.0.0"] },
+        {
+          fetchImpl,
+          attempts: 100,
+          maxRetryDelayMs: 1500,
+          sleep: async (ms) => delays.push(ms),
+          log: () => {},
+        },
+      ),
+    ).rejects.toThrow("offline");
+    expect(calls).toBe(3);
+    expect(delays).toEqual([1000, 1500]);
   });
 });
 
-// The tests above prove fetchBulkAdvisories THROWS. That only matters if the
-// throw becomes a failed gate: evaluate({}, [], now) returns ok:true, so an
-// empty map is a legitimate clean pass, and the only thing standing between a
-// persistent 503 and a green build is main()'s catch. These run the real script
-// end to end with a stubbed global fetch and assert the process exit code.
+// Exercise main's catch: an endpoint failure must be exit 2 rather than being
+// mistaken for the legitimate clean response represented by an empty map.
 describe("main() fail-closed exit code", () => {
   const runWithStubbedFetch = (stub) => {
     const dir = mkdtempSync(join(tmpdir(), "audit-bulk-"));
@@ -324,15 +590,15 @@ describe("main() fail-closed exit code", () => {
     }
   };
 
-  it("exits 2 when every advisory request is a transient 503", () => {
+  it("exits 2 after exhausting transient 503 responses", () => {
     expect(
       runWithStubbedFetch("async () => ({ ok: false, status: 503, json: async () => ({}) })"),
     ).toBe(2);
-  }, 30000);
+  }, 30_000);
 
-  it("exits 2 on a retired endpoint (410) rather than retrying it green", () => {
+  it("exits 2 immediately for the retired 410 endpoint", () => {
     expect(
       runWithStubbedFetch("async () => ({ ok: false, status: 410, json: async () => ({}) })"),
     ).toBe(2);
-  }, 30000);
+  }, 30_000);
 });
