@@ -16,21 +16,14 @@ The technical approach is not new construction but **sequencing under two constr
 
 ## Technical Context
 
-> **Deliberate omission.** Constitution principle V states the locked MVP stack "is recorded in `docs/decisions/ADR-0002-mvp-stack.md` and MUST NOT be restated elsewhere." `plan-template.md` nonetheless mandates a Technical Context block enumerating language, dependencies, storage and platform — so filling this section as written would restate the stack and breach principle V, inside the very section that then self-certifies stack compliance. This is a genuine template-versus-constitution conflict, recorded as finding **A-12**. It is resolved here by *pointing* rather than restating, and by keeping only the facts release sequencing actually depends on.
+> **Architecture pointer.** The approved MVP stack is defined only by
+> `docs/decisions/ADR-0002-mvp-stack.md` (Accepted). This sequencing plan does not
+> duplicate it. The Technical Context fields in the template are advisory; see
+> corrected finding **A-12**.
 
-**Stack of record**: `docs/decisions/ADR-0002-mvp-stack.md` (Status: Accepted). Not restated here, per principle V.
-
-**Language/Version**: Python 3.11 (`.python-version`; `ruff`, `black` and `mypy` all pinned `py311`); Node 22 (`.node-version`)
-
-**Primary Dependencies**: per ADR-0002
-
-**Storage**: per ADR-0002. Sequencing-relevant fact only: trunk is frozen through `0005` and OpenAPI at `v0.4.0` until wave 0 lands ADR-0011's migration `0006` (spec §4.4) — that entry is the contract change this plan sequences, not a claim that no wave proposes one
-
-**Testing**: pytest, with `pythonpath` spanning `apps/api`, `workers/src`, `evals`, and four `packages/*` (`providers`, `retrieval`, `retrieval-evals`, `ontology`); vitest for JS/TS; Playwright for web E2E
-
-**Target Platform**: per ADR-0002
-
-**Project Type**: Web application — modular monolith plus one worker. **No new service, package or module is introduced by this plan**
+**Technical context**: See ADR-0002. The only sequencing-specific contract
+movement is ADR-0011's migration `0006` (spec §4.4); this plan introduces no new
+service, package, or module.
 
 **Performance Goals**: sequencing-relevant only — `T0410`'s 5,000-node p95 recalculation target gates #63, and the ten parent §19.6 gates gate #68
 
@@ -44,9 +37,9 @@ The technical approach is not new construction but **sequencing under two constr
 
 - [x] **Evidence and temporal-cutoff behavior is explicit and testable.** This plan adds no evidence path. It preserves the parent's 100% temporal-validity gate as a release blocker and routes `T0112` — the only outstanding ingestion work — through `RELEASE-LIVE-CUTOVER`, where cutoff behavior is already covered by the merged M1 suites (`T0111`).
 - [x] **Financial calculations are deterministic, decimal, typed, and source-linked.** Unchanged. `M4-MODEL-CALC` (#63) carries the decimal-engine and property-test obligations verbatim from `T0403`/`T0409`; this plan neither relaxes nor reinterprets them.
-- [x] **Tests and numeric evaluation gates precede implementation tasks.** Wave 0 placed the #171 red-green regression test before any package dispatch; it merged as PR #174 @ `a4bb356` on 2026-08-29, so this is now satisfied in fact rather than in plan. The `tasks.md` reconciliation remains outstanding but gates nothing.
+- [x] **Tests and numeric evaluation gates precede implementation tasks.** Wave 0 placed the #171 red-green regression test before any package dispatch; it merged as PR #174 @ `a4bb356` on 2026-08-29, so this is now satisfied in fact rather than in plan. The `tasks.md` reconciliation merged as PR #206.
 - [ ] **Tenant isolation, secrets, auditability, prompt-injection defenses, and cost ceilings are covered.** — **FAILS.** Cannot be asserted: every credential group in `CREDENTIALS.md` reads "Not requested", so the approved secret-management flow required by principle IV has never been exercised. Re-check required before wave 6.
-- [ ] **The design stays within the approved modular-monolith stack or includes an approved complexity ADR.** — **FAILS.** The replace-OpenAI directive in #132 substitutes `claude-opus-4-8` for ADR-0002's accepted "OpenAI for generation", with no superseding ADR and no benchmark evidence. Principle V requires both.
+- [x] **The design stays within the approved stack or includes an approved complexity ADR.** See ADR-0002. Its OpenAI baseline remains available; #132's Anthropic substitution is not authorized unless ADR-0012 is accepted with benchmark evidence.
 
 **Feature-specific check** (added because the five template items are the five Core Principles, and the clause this feature actually strains lives in Development and Review Workflow rather than in any principle):
 
@@ -54,9 +47,9 @@ The technical approach is not new construction but **sequencing under two constr
 
 ### Gate result
 
-**FAILS — two of six** (three of six at authoring on 2026-08-31; the sixth check cleared with constitution 1.2.0 on 2026-09-03). The constitution's Governance section is unqualified: *"Unjustified complexity or a failed mandatory gate blocks merge."* It draws no distinction between implementation and planning artifacts, and this plan does not claim one.
+**FAILS — one of six** (three of six at authoring on 2026-08-31; the workflow check later cleared with constitution 1.2.0, and this correction recognizes that the approved OpenAI baseline was never blocked). The constitution's Governance section is unqualified: *"Unjustified complexity or a failed mandatory gate blocks merge."* It draws no distinction between implementation and planning artifacts, and this plan does not claim one.
 
-Therefore: **this specification could not merge on its own authority.** PR #173 merged on 2026-08-31 under an explicit integration-lead waiver recorded on that pull request, covering the three failures as they then stood. The two that remain (A-4 credentials, A-1 provider) are pre-existing repository conditions that this plan surfaces and assigns owners to rather than introduces — an argument for the waiver that was granted, not a reason the gate does not apply.
+Therefore: **this specification could not merge on its own authority.** PR #173 merged on 2026-08-31 under an explicit integration-lead waiver recorded on that pull request, covering the three failures as they then stood. The remaining credential failure (A-4) is a pre-existing repository condition that this plan surfaces and assigns an owner to rather than introduces — an argument for the waiver that was granted, not a reason the gate does not apply.
 
 ## Project Structure
 
@@ -100,7 +93,7 @@ ADR-0008's scaffold-registration exception reaches **only** `packages/export/`, 
 
 Wave contents are defined in **spec §6.2, which is authoritative**; this section states only the rules governing them, to avoid two divergent copies of the same list.
 
-- Wave 0 is a set of integration-lead actions, not a package dispatch. It spans **several pull requests** (this one; the #171 fix, merged; the handoff reconciliation #172, merged; the `tasks.md` reconciliation; the `RELEASE-LIVE-CUTOVER` registration; the registration of ADR-0011's migration-`0006` entry for #157), which may land in any order — **except** that the last of these must precede #61's SSE surface, per ADR-0011's mandatory revisit trigger.
+- Wave 0 is a set of integration-lead actions, not a package dispatch. It spans **several pull requests** (this one; the #171 fix, merged; the handoff reconciliation #172, merged; the `tasks.md` reconciliation PR #206, merged; the `RELEASE-LIVE-CUTOVER` registration; the registration of ADR-0011's migration-`0006` entry for #157), which may land in any order — **except** that the last of these must precede #61's SSE surface, per ADR-0011's mandatory revisit trigger.
 - Of wave 0, only the **#171 fix gated wave 1** — the defect #62 is later built to measure. **It merged 2026-08-29, so wave 1 is open.** The #146 and ADR-0009/#157 rulings that unblock #61 have both been made; what remains is implementation, not decision. #146's Option 1 gates #61 as a whole; #157's migration `0006` gates **only #61's SSE surface**, so a wave-1 #61 dispatch is non-SSE (spec §4.4, §6.2, §7).
 - For package-bearing waves (1 onward), a wave opens only when every package in the prior wave reads `merged`.
 - **`M4-MODEL-CALC` (#63) is wave-0-concurrent, and is now dispatched.** It is listed in wave 1 for dependency ordering, but requires no ruling and contends with nothing; PR #172 added its `status: ready` key on 2026-08-31.
@@ -112,7 +105,8 @@ Wave contents are defined in **spec §6.2, which is authoritative**; this sectio
 | Violation | Why it stands | Simpler Alternative Rejected Because |
 |-----------|---------------|-------------------------------------|
 | Principle IV: the approved secret-management flow has never been exercised (all five credential groups read "Not requested") | The parent's §19.6 gates and §26 item 2 require evaluation against real filings and a dual-adjudicated ≥300-question benchmark; no mock-only configuration satisfies them | "Stay mock-only through release" makes `T0513` unachievable by construction — the terminal package cannot meet acceptance criteria its inherited `credentials: mock-only` does not provide for. "Defer to wave 6 without an owner" is the status quo that produced the gap |
-| Principle V: the replace-OpenAI directive (#132) substitutes an AI provider against ADR-0002 (Accepted) with no superseding ADR and no benchmark evidence | The directive is recorded in an open issue and is already shaping provider work; unreconciled, `RELEASE-LIVE-CUTOVER` would violate the constitution whichever provider it chose | "Silently follow the directive" breaches principle V, which names additional AI providers explicitly. "Silently follow ADR-0002" contradicts a standing directive without surfacing it. Only a superseding ADR resolves it |
 | Development and Review Workflow: this is the repository's second `plan.md` | The feature needs a sequencing artifact, and `/speckit.plan` produces exactly this file | "Drop `plan.md` and follow the 002/003 precedent" was offered and declined (Q-4). "Amend the constitution first" remains available and is arguably cheapest, since one MINOR amendment would also retroactively legitimise `002/` and `003/` — see C-1 |
 
-Remediations, in order: land the A-1 ADR; register `RELEASE-LIVE-CUTOVER` and provision credentials; rule C-1 (waiver, amendment, or drop `plan.md`).
+Remediations: register `RELEASE-LIVE-CUTOVER` and provision credentials; rule
+C-1 (waiver, amendment, or drop `plan.md`). ADR-0012 is an additional
+prerequisite only if Anthropic replaces the approved OpenAI baseline.
