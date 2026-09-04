@@ -12,7 +12,19 @@ install-js: ## Install the JS/TS workspace
 	pnpm install
 
 install-py: ## Create .venv and install the Python toolchain (interpreter from .python-version)
-	@pin=$$(tr -d '[:space:]' < .python-version); \
+	@if [ ! -r .python-version ]; then \
+		echo "make install-py: .python-version is missing or unreadable; cannot" >&2; \
+		echo "  determine which interpreter CI builds against." >&2; \
+		exit 1; \
+	fi; \
+	pin=$$(tr -d '[:space:]' < .python-version); \
+	if [ -z "$$pin" ]; then \
+		echo "make install-py: .python-version is empty. Refusing to guess: an" >&2; \
+		echo "  empty pin would make the check below look for a command named" >&2; \
+		echo "  plain 'python', which on many machines exists and is some other" >&2; \
+		echo "  interpreter entirely." >&2; \
+		exit 1; \
+	fi; \
 	if command -v python$$pin >/dev/null 2>&1; then \
 		py=python$$pin; \
 	elif command -v python3 >/dev/null 2>&1 && \
