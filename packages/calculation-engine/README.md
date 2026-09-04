@@ -12,7 +12,7 @@ typed-unit, and deterministic. Language models must not execute it.
 - Decimal arithmetic under `CALC_CONTEXT` (34 digits, banker's rounding)
 - Closed unit algebra, typed fiscal periods, percent → ratio normalization
 - Provenance retained through recalculation; derived cutoffs are `max(parents)`
-- Property tests and a deterministic 5,000-node p95 recalculation gate
+- Property tests and a deterministic 5,000-node recalculation benchmark (opt-in)
 
 ## Leaf values
 
@@ -33,7 +33,7 @@ pytest packages/calculation-engine/tests
 | `canonical.py`, `graph.py`, `snapshot.py`, `store.py` | T0402 | Typed canonical JSON + sha256 content hashes; `ModelGraph` (edges from `Node.inputs()`, cycle detection, build-time type checks, deterministic order); `GraphSnapshot` (versioned, content-addressed, parent-linked); `SnapshotStore` Protocol + `InMemorySnapshotStore` |
 | `engine.py`, `scenario.py`, `telemetry.py` | T0403 | `evaluate()` → immutable `CalcResult`s with full lineage; sparse `Scenario` + `apply_scenario()`; redacted structured events |
 | `tests/_gen.py`, `tests/test_properties.py` | T0409 | Seeded deterministic property tests |
-| `synthetic.py`, `tests/test_benchmark_recalc.py` | T0410 | Deterministic 5,000-node model and the p95 recalculation gate |
+| `synthetic.py`, `tests/test_benchmark_recalc.py` | T0410 | Deterministic 5,000-node model and the opt-in recalculation benchmark |
 
 ## Graph model
 
@@ -177,14 +177,35 @@ cost-ratio assumption, cost, gross profit, a validation check, a reported
 output and a forecast leaf; a fiscal-year rollup every four quarterly
 segments; a scenario override every eighth). `test_benchmark_recalc.py` builds
 the snapshot once, warms up, then times 11 full recalculations (`gc.collect()`
-before each) and asserts the p95 (nearest-rank) is under the spec budget of
+before each) and asserts the **slowest** of them is under the spec budget of
 **< 500 ms** for "Model recalculation, 5k nodes" (spec §16.1). Measured on the
-development machine (Python 3.11.14, Apple silicon): **p95 43.2 ms, median
-42.0 ms**. Run with `-s` to print the measurement:
+development machine (Python 3.11.14, Apple silicon): **slowest 43.2 ms, median
+42.0 ms**.
+
+The statistic is the maximum and is named that way. Nearest-rank p95 over 11
+samples resolves to index 10 — the last element — so the original `_p95` helper
+returned the maximum while claiming a percentile; the formula does not yield an
+interior statistic below 21 samples. Reporting the maximum is the stricter
+claim, so the budget check is unchanged.
+
+**The timing assertion is opt-in and does not run in CI:**
 
 ```bash
-.venv/bin/pytest packages/calculation-engine/tests/test_benchmark_recalc.py -p no:warnings -s
+FEL_RUN_BENCHMARKS=1 .venv/bin/pytest packages/calculation-engine/tests/test_benchmark_recalc.py -p no:warnings
 ```
+
+Without that variable the timing test skips and only the determinism and
+node-kind coverage checks run. A wall-clock assertion on a shared runner flakes:
+review of PR #212 measured **322 ms** under 3x CPU oversubscription on hardware
+faster than a GitHub runner, against the same 500 ms gate, with the engine
+unchanged. The measurement is now carried in the assertion message rather than a
+`print`, because `addopts` includes `-q` and printed output never reaches a CI
+log.
+
+Note also that the spec's target is a p95 under 25 concurrent users on the
+§16.1 reference profile. This single-process proxy does not reproduce that
+profile, so a green run here is evidence of no gross regression, not of the
+spec target being met.
 
 ## Limitations
 

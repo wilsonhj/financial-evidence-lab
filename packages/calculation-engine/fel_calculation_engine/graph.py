@@ -153,33 +153,54 @@ def _topological_order(
 def _find_cycle(
     remaining: set[str], dependencies: Mapping[str, tuple[str, ...]]
 ) -> tuple[str, ...]:
-    """Return one concrete cycle ``(n0, n1, ..., n0)`` among the unresolved nodes."""
-    stack: list[str] = []
-    on_stack: dict[str, int] = {}
+    """Return one concrete cycle ``(n0, n1, ..., n0)`` among the unresolved nodes.
+
+    Iterative on purpose. The recursive form recursed once per node on the path,
+    so a cycle longer than the interpreter's recursion limit raised a bare
+    ``RecursionError`` instead of ``CycleError`` — in a package whose stated
+    target is 5,000-node graphs. That escapes ``except CalculationEngineError``
+    and every ``code``-based classification, so a large cyclic model failed as an
+    interpreter error rather than a modelling one. Detection was never the
+    problem (Kahn's algorithm upstream is correct); only this reporter was.
+    """
     visited: set[str] = set()
 
-    def walk(node_id: str) -> tuple[str, ...] | None:
-        visited.add(node_id)
-        on_stack[node_id] = len(stack)
-        stack.append(node_id)
-        for dep in dependencies[node_id]:
-            if dep not in remaining:
-                continue
-            if dep in on_stack:
-                return tuple(stack[on_stack[dep] :]) + (dep,)
-            if dep not in visited:
-                found = walk(dep)
-                if found is not None:
-                    return found
-        stack.pop()
-        del on_stack[node_id]
-        return None
-
     for start in sorted(remaining):
-        if start not in visited:
-            cycle = walk(start)
-            if cycle is not None:
-                return cycle
+        if start in visited:
+            continue
+        # (node, index of the next dependency to examine) — an explicit stack in
+        # place of the call stack.
+        stack: list[tuple[str, int]] = [(start, 0)]
+        on_stack: dict[str, int] = {start: 0}
+        visited.add(start)
+
+        while stack:
+            node_id, cursor = stack[-1]
+            deps = dependencies[node_id]
+            advanced = False
+
+            while cursor < len(deps):
+                dep = deps[cursor]
+                cursor += 1
+                if dep not in remaining:
+                    continue
+                if dep in on_stack:
+                    stack[-1] = (node_id, cursor)
+                    return tuple(entry for entry, _ in stack[on_stack[dep] :]) + (dep,)
+                if dep not in visited:
+                    stack[-1] = (node_id, cursor)
+                    visited.add(dep)
+                    on_stack[dep] = len(stack)
+                    stack.append((dep, 0))
+                    advanced = True
+                    break
+
+            if not advanced:
+                stack[-1] = (node_id, cursor)
+                if cursor >= len(deps):
+                    del on_stack[node_id]
+                    stack.pop()
+
     raise CycleError(tuple(sorted(remaining)))  # pragma: no cover - unresolved but acyclic
 
 

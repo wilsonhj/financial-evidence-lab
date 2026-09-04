@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import sys
+
 import pytest
 from _fixtures import Q1, Q2, USD, assumption, driver, formula, output, rollup, source
 
@@ -86,6 +88,29 @@ def test_two_node_cycle_is_rejected() -> None:
                 formula("b", Operator.ADD, ("s", "a")),
             ]
         )
+
+
+def test_a_cycle_longer_than_the_recursion_limit_still_raises_CycleError() -> None:
+    """A big cyclic model must fail as a modelling error, not an interpreter one.
+
+    The cycle *reporter* used to recurse once per node on the path, so a cycle
+    longer than ``sys.getrecursionlimit()`` raised a bare ``RecursionError``.
+    That is not a ``CalculationEngineError``, so it escaped every ``except``
+    clause and every ``code``-based classification in this package — in a
+    package whose stated target is 5,000-node graphs. Detection was always
+    correct; only the reporter was recursive.
+    """
+    size = sys.getrecursionlimit() + 500
+    nodes = [source("s", "1")]
+    nodes += [formula(f"n{i}", Operator.ADD, ("s", f"n{(i + 1) % size}")) for i in range(size)]
+
+    with pytest.raises(CycleError) as excinfo:
+        ModelGraph.build(nodes)
+
+    cycle = excinfo.value.cycle
+    assert cycle[0] == cycle[-1], "the reported path is not closed"
+    assert len(cycle) == size + 1
+    assert excinfo.value.code == "CYCLE_DETECTED"
 
 
 def test_formula_units_are_type_checked_at_build_time() -> None:
