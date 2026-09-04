@@ -593,3 +593,23 @@ def test_reader_refuses_a_version_beyond_the_span_cap(
     )
     assert facts_too_large.status_code == 413, facts_too_large.text
     assert facts_too_large.json()["error"]["details"]["resource"] == "facts"
+
+    monkeypatch.setenv("FEL_READER_MAX_FACTS", "5000")
+    monkeypatch.setenv("FEL_READER_MAX_SECTIONS", "0")
+    sections_too_large = client.get(
+        f"/v1/documents/{ids['target_id']}/reader",
+        headers=_headers(org_fixture),
+        params=params,
+    )
+    assert sections_too_large.status_code == 413, sections_too_large.text
+    assert sections_too_large.json()["error"]["details"]["resource"] == "sections"
+
+    monkeypatch.setenv("FEL_READER_MAX_SECTIONS", "5000")
+    monkeypatch.setenv("FEL_READER_MAX_SIBLINGS", "0")
+    siblings_too_large = client.get(
+        f"/v1/documents/{ids['target_id']}/reader",
+        headers=_headers(org_fixture),
+        params=params,
+    )
+    assert siblings_too_large.status_code == 413, siblings_too_large.text
+    assert siblings_too_large.json()["error"]["details"]["resource"] == "siblings"

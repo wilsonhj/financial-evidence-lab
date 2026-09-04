@@ -155,6 +155,7 @@ def test_query_snapshot_run_list_is_bounded(
 
     bounded = client.get(f"/v1/queries/{query_id}", params={"limit": 1}, headers=_headers(*org))
     assert len(bounded.json()["runs"]) == 1
+    assert bounded.json()["runs"][0]["run_id"] == rerun.json()["run_id"]
 
     for out_of_range in (0, 201):
         rejected = client.get(
@@ -164,3 +165,27 @@ def test_query_snapshot_run_list_is_bounded(
         )
         assert rejected.status_code == 422, out_of_range
         assert rejected.json()["error"]["code"] == "VALIDATION_ERROR"
+
+
+def test_metering_fault_does_not_leave_a_succeeded_unbilled_run(
+    client: TestClient,
+    org: tuple[str, str],
+    seeded: dict[str, str],
+    db_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A usage insert failure must not 500 a durable success, nor skip billing
+    forever on replay. Metering shares the pipeline transaction, so the run
+    lands ``failed`` and usage stays empty."""
+
+    def _boom(*_args: object, **_kwargs: object) -> None:
+        raise RuntimeError("usage insert failed")
+
+    monkeypatch.setattr("app.retrieval.record_usage", _boom)
+    resp = _create(client, org, seeded["workspace_id"])
+    assert resp.status_code == 202, resp.text
+    run_id = resp.json()["run_id"]
+    trace = client.get(f"/v1/retrieval-runs/{run_id}", headers=_headers(*org))
+    assert trace.status_code == 200, trace.text
+    assert trace.json()["status"] == "failed"
+    assert _metered(db_url, org) == []

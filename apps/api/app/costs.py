@@ -44,6 +44,19 @@ def token_cost_usd(cfg: Settings, *, input_tokens: int, output_tokens: int) -> D
     return cost.quantize(_CENTI_MICRO, rounding=ROUND_HALF_UP)
 
 
+def billed_query_cost(cfg: Settings, *, input_tokens: int, output_tokens: int) -> Decimal:
+    """Metered cost for one research query, never above the spec 18.2 ceiling.
+
+    ``token_cost_usd`` is the honest provider bill; this is what we persist as
+    usage. Generation has already run by the time we know the token count, so
+    the cap cannot un-spend tokens — it stops the overage from accumulating
+    toward daily/monthly hard limits and from being recorded as billed spend.
+    """
+    actual = token_cost_usd(cfg, input_tokens=input_tokens, output_tokens=output_tokens)
+    ceiling = cfg.research_query_cost_usd
+    return actual if actual <= ceiling else ceiling
+
+
 def record_usage(
     conn: psycopg.Connection[Any], ctx: TenantContext, kind: str, cost_usd: Decimal
 ) -> None:
@@ -51,6 +64,48 @@ def record_usage(
         "INSERT INTO usage_events (org_id, user_id, kind, cost_usd) VALUES (%s, %s, %s, %s)",
         (ctx.org_id, ctx.user_id, kind, cost_usd),
     )
+
+
+def _inflight_reservations(
+    conn: psycopg.Connection[Any], ctx: TenantContext, reservation_usd: Decimal
+) -> tuple[Decimal, Decimal]:
+    """USD reserved by non-terminal retrieval runs (user today, org this month).
+
+    ``usage_events`` is INSERT-only for ``fel_app``, so a ceiling check cannot
+    write a hold row and update it later. In-flight runs (inserted in the
+    create transaction, still open while the pipeline runs) stand in as the
+    hold; concurrent createQuery calls see them once this session takes the
+    advisory lock below.
+    """
+    with conn.cursor(row_factory=tuple_row) as cur:
+        cur.execute(
+            """
+            SELECT
+              COALESCE(COUNT(*) FILTER (
+                WHERE q.created_by = %s AND r.started_at >= date_trunc('day', now())), 0),
+              COALESCE(COUNT(*) FILTER (
+                WHERE r.started_at >= date_trunc('month', now())), 0)
+            FROM retrieval_runs r
+            JOIN queries q ON q.id = r.query_id AND q.org_id = r.org_id
+            WHERE r.org_id = %s
+              AND r.status NOT IN ('succeeded', 'abstained', 'failed', 'cancelled')
+            """,
+            (ctx.user_id, ctx.org_id),
+        )
+        row = cur.fetchone()
+    if row is None:
+        raise RuntimeError("aggregate query returned no row")
+    return reservation_usd * int(row[0]), reservation_usd * int(row[1])
+
+
+def _lock_org_spend(conn: psycopg.Connection[Any], org_id: str) -> None:
+    """Serialize ceiling checks for one org until this transaction commits.
+
+    Without it, concurrent createQuery requests all read the same snapshot,
+    all pass, and all run. The lock is transaction-scoped so a recycled pool
+    connection cannot leak it.
+    """
+    conn.execute("SELECT pg_advisory_xact_lock(hashtext(%s), 191)", (org_id,))
 
 
 def spend_snapshot(conn: psycopg.Connection[Any], ctx: TenantContext) -> tuple[Decimal, Decimal]:
@@ -85,7 +140,11 @@ def enforce_ceilings(
     upcoming_cost_usd: Decimal,
 ) -> str | None:
     """Returns a soft-limit warning string, or raises on a hard limit."""
+    _lock_org_spend(conn, ctx.org_id)
     user_day, org_month = spend_snapshot(conn, ctx)
+    reserved_user, reserved_org = _inflight_reservations(conn, ctx, upcoming_cost_usd)
+    user_day += reserved_user
+    org_month += reserved_org
     if user_day + upcoming_cost_usd > cfg.user_daily_cost_limit_usd:
         raise api_error(
             402,

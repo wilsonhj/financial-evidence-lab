@@ -114,9 +114,9 @@ def test_point_in_time_document_listing(
     )
     assert [d["id"] for d in at_publication.json()] == [ids["early_doc"]]
 
-    # No cutoff returns everything, ordered by publication time.
+    # No cutoff returns everything, newest publication first.
     everything = client.get(f"/v1/entities/{ids['entity_id']}/documents", headers=headers)
-    assert [d["id"] for d in everything.json()] == [ids["early_doc"], ids["late_doc"]]
+    assert [d["id"] for d in everything.json()] == [ids["late_doc"], ids["early_doc"]]
 
     # A pre-publication cutoff sees nothing.
     nothing = client.get(
@@ -283,7 +283,7 @@ def test_document_listing_is_bounded(
 
     bounded = client.get(url, params={"limit": 1}, headers=headers)
     assert bounded.status_code == 200
-    assert [d["id"] for d in bounded.json()] == [ids["early_doc"]]
+    assert [d["id"] for d in bounded.json()] == [ids["late_doc"]]
 
     # The bound composes with the cutoff rather than replacing it.
     with_cutoff = client.get(
@@ -295,3 +295,22 @@ def test_document_listing_is_bounded(
         rejected = client.get(url, params={"limit": out_of_range}, headers=headers)
         assert rejected.status_code == 422, out_of_range
         assert rejected.json()["error"]["code"] == "VALIDATION_ERROR"
+
+
+def test_omitted_document_limit_fails_closed_instead_of_dropping_newest(
+    client: TestClient,
+    org_fixture: tuple[str, str],
+    db_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An omitted limit must not keep the oldest filing and hide the latest."""
+    monkeypatch.setattr("app.corpus.DEFAULT_LIST_LIMIT", 1)
+    ids = _seed_corpus(db_url)
+    response = client.get(
+        f"/v1/entities/{ids['entity_id']}/documents",
+        headers=_headers(org_fixture),
+    )
+    assert response.status_code == 413, response.text
+    error = response.json()["error"]
+    assert error["code"] == "LIST_TOO_LARGE"
+    assert error["details"] == {"resource": "documents", "limit": 1}

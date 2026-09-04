@@ -36,7 +36,8 @@ from app.auth import TenantContext
 from app.config import DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT
 from app.db import tenant_connection
 from app.dependencies import get_tenant_context
-from app.errors import api_error
+from app.errors import api_error, list_too_large
+from app.listing import ListTooLarge, newest_page
 from app.serializers import document_body
 
 router = APIRouter(prefix="/v1", tags=["corpus"])
@@ -58,7 +59,7 @@ _LIST_DOCUMENTS_SQL = """
         SELECT 1 FROM document_versions dv
         WHERE dv.document_id = documents.id AND dv.status = 'parsed'
     )
-    ORDER BY published_at, accession
+    ORDER BY published_at DESC, accession DESC, id::text COLLATE "C" DESC
     LIMIT %s
 """
 
@@ -71,7 +72,7 @@ _LIST_DOCUMENTS_AS_OF_SQL = """
         SELECT 1 FROM document_versions dv
         WHERE dv.document_id = documents.id AND dv.status = 'parsed'
     )
-    ORDER BY published_at, accession
+    ORDER BY published_at DESC, accession DESC, id::text COLLATE "C" DESC
     LIMIT %s
 """
 
@@ -92,19 +93,33 @@ def list_entity_documents(
     entity_id: uuid.UUID,
     ctx: Annotated[TenantContext, Depends(get_tenant_context)],
     as_of: Annotated[AwareDatetime | None, Query()] = None,
-    limit: Annotated[int, Query(ge=1, le=MAX_LIST_LIMIT)] = DEFAULT_LIST_LIMIT,
+    limit: Annotated[int | None, Query(ge=1, le=MAX_LIST_LIMIT)] = None,
 ) -> list[dict[str, Any]]:
     """List an entity's documents, point-in-time filtered by ``as_of``.
 
-    Bounded by ``limit`` (#191): a prolific filer has thousands of documents,
-    and an unbounded listing is both a slow scan and an unbounded response.
+    Newest-first, bounded by ``limit`` (#191). An omitted limit uses the
+    default cap and fails closed (413) when more documents exist, so a
+    prolific filer cannot silently lose the latest 10-K. An explicit limit
+    returns that many newest rows.
     """
+    effective = DEFAULT_LIST_LIMIT if limit is None else limit
     with tenant_connection(ctx) as conn:
         if as_of is not None:
-            rows = conn.execute(_LIST_DOCUMENTS_AS_OF_SQL, (entity_id, as_of, limit)).fetchall()
+            rows = conn.execute(
+                _LIST_DOCUMENTS_AS_OF_SQL, (entity_id, as_of, effective + 1)
+            ).fetchall()
         else:
-            rows = conn.execute(_LIST_DOCUMENTS_SQL, (entity_id, limit)).fetchall()
-    return [document_body(row) for row in rows]
+            rows = conn.execute(_LIST_DOCUMENTS_SQL, (entity_id, effective + 1)).fetchall()
+    try:
+        page = newest_page(
+            rows,
+            requested_limit=limit,
+            default_limit=DEFAULT_LIST_LIMIT,
+            resource="documents",
+        )
+    except ListTooLarge as exc:
+        raise list_too_large(exc.resource, exc.limit) from exc
+    return [document_body(row) for row in page]
 
 
 @router.get("/documents/{document_id}")

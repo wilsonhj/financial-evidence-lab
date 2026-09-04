@@ -59,6 +59,17 @@ def _connection_pool_class() -> Any:
     return module.ConnectionPool
 
 
+def _reset_pooled_connection(conn: Any) -> None:
+    """Return a recycled connection to a clean session GUC state.
+
+    ``SET LOCAL`` is unwound at COMMIT. ``RESET ALL`` is defense in depth so a
+    leaked session GUC cannot ride into the next tenant's checkout. (``DISCARD
+    ALL`` cannot run inside a transaction, and psycopg connections are not
+    autocommit by default, so it is the wrong command here.)
+    """
+    conn.execute("RESET ALL")
+
+
 def _new_pool(url: str) -> Any:
     cfg = settings()
     pool = _connection_pool_class()(
@@ -66,6 +77,7 @@ def _new_pool(url: str) -> Any:
         min_size=cfg.db_pool_min,
         max_size=cfg.db_pool_max,
         kwargs={"row_factory": dict_row},
+        reset=_reset_pooled_connection,
         # Opened explicitly below: the constructor's implicit open is
         # deprecated in psycopg_pool 3.2+.
         open=False,

@@ -7,8 +7,12 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 
 # Bounds for every list endpoint (#191). A list route without a ceiling is an
-# unbounded scan waiting for a large tenant; these are the contract-documented
-# `limit` default and maximum, shared so all three routes agree.
+# unbounded scan waiting for a large tenant. An omitted `limit` uses
+# DEFAULT_LIST_LIMIT and fails closed (413 LIST_TOO_LARGE) when more rows
+# exist — silent oldest-first truncation is an evidence leak. An explicit
+# `limit` (max MAX_LIST_LIMIT) is an opted-in page of the newest rows.
+# OpenAPI 0.4.0 does not yet declare `limit`; documenting it is a
+# contract-change follow-up.
 DEFAULT_LIST_LIMIT = 50
 MAX_LIST_LIMIT = 200
 
@@ -63,6 +67,12 @@ class Settings:
     )
     reader_max_facts: int = field(
         default_factory=lambda: int(os.environ.get("FEL_READER_MAX_FACTS", "5000"))
+    )
+    reader_max_sections: int = field(
+        default_factory=lambda: int(os.environ.get("FEL_READER_MAX_SECTIONS", "5000"))
+    )
+    reader_max_siblings: int = field(
+        default_factory=lambda: int(os.environ.get("FEL_READER_MAX_SIBLINGS", "200"))
     )
     # Connection pool sizing (#191).
     db_pool_min: int = field(default_factory=lambda: int(os.environ.get("FEL_DB_POOL_MIN", "1")))

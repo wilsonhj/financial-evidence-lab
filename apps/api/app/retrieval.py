@@ -52,10 +52,11 @@ from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
 from app.auth import TenantContext
 from app.config import DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT, settings
-from app.costs import enforce_ceilings, record_usage, token_cost_usd
+from app.costs import billed_query_cost, enforce_ceilings, record_usage
 from app.db import tenant_connection
 from app.dependencies import get_tenant_context
-from app.errors import api_error
+from app.errors import api_error, list_too_large
+from app.listing import ListTooLarge, newest_page
 from app.ratelimit import rate_limit
 from fel_providers import EmbeddingProvider, MockEmbeddingProvider
 from fel_providers.interfaces import StructuredLLMProvider
@@ -494,7 +495,7 @@ def _execute_pipeline(
         "verifying": verifying_ms,
         "total": planning_ms + retrieving_ms + fusing_ms + generating_ms + verifying_ms,
     }
-    cost_usd = token_cost_usd(
+    cost_usd = billed_query_cost(
         settings(),
         input_tokens=generation.input_tokens,
         output_tokens=generation.output_tokens,
@@ -849,10 +850,12 @@ def _run_pipeline_or_fail(
     transaction, so a failure is always durably observable.
 
     A completed run's actual provider usage is metered into ``usage_events``
-    (#191) in its own transaction, so metering cannot roll back the trace and a
-    metering fault cannot lose the run. A run that failed before generation is
-    deliberately not metered: no provider tokens were reported for it, and the
-    ceiling check already ran before any billable work started.
+    in the **same** transaction as the terminal run status (#191 follow-up):
+    a metering fault rolls the trace back and the failure path records a
+    durable ``failed`` run, so we never return 500 for a succeeded run that
+    then skips billing on idempotent replay. A run that failed before
+    generation is deliberately not metered: no provider tokens were reported
+    for it, and the ceiling check already reserved in-flight capacity.
     """
     try:
         with tenant_connection(ctx) as conn:
@@ -866,11 +869,10 @@ def _run_pipeline_or_fail(
                 embedding_provider=embedding_provider,
                 embedding_model=embedding_model,
             )
+            record_usage(conn, ctx, usage_kind, cost_usd)
     except Exception as exc:
         _record_run_failure(ctx, run_id=run_id, exc=exc)
         return
-    with tenant_connection(ctx) as conn:
-        record_usage(conn, ctx, usage_kind, cost_usd)
 
 
 def _record_run_failure(ctx: TenantContext, *, run_id: str, exc: Exception) -> None:
@@ -896,6 +898,46 @@ def _enforce_query_ceilings(conn: psycopg.Connection[Any], ctx: TenantContext) -
     return enforce_ceilings(conn, ctx, cfg, cfg.research_query_cost_usd)
 
 
+def _ensure_metered(
+    conn: psycopg.Connection[Any],
+    ctx: TenantContext,
+    *,
+    run_id: str,
+    usage_kind: str,
+) -> None:
+    """Backfill usage if a succeeded run has no matching usage_events row.
+
+    Idempotent replay used to skip metering entirely, so a first request that
+    persisted the run and then failed to insert usage would never be billed.
+    Metering now shares the pipeline transaction; this is the remaining
+    safety net for rows written before that fix.
+    """
+    run = conn.execute(
+        "SELECT status, cost_usd, started_at, finished_at FROM retrieval_runs WHERE id = %s",
+        (run_id,),
+    ).fetchone()
+    if run is None or run["status"] not in {"succeeded", "abstained"}:
+        return
+    cost = Decimal(run["cost_usd"])
+    if cost <= 0:
+        return
+    finished = run["finished_at"] or run["started_at"]
+    found = conn.execute(
+        "SELECT 1 FROM usage_events WHERE org_id = %s AND kind = %s"
+        " AND created_at >= %s AND created_at <= %s LIMIT 1",
+        (ctx.org_id, usage_kind, run["started_at"], finished),
+    ).fetchone()
+    if found is None:
+        record_usage(conn, ctx, usage_kind, cost)
+
+
+def _set_cost_warning(response: Response, warning: str | None) -> None:
+    if warning is None:
+        return
+    response.headers[_COST_WARNING_HEADER] = warning
+    response.headers["Access-Control-Expose-Headers"] = _COST_WARNING_HEADER
+
+
 # --- Endpoints --------------------------------------------------------------
 @router.post(
     "/workspaces/{workspace_id}/queries",
@@ -912,8 +954,9 @@ def create_query(
     with tenant_connection(ctx) as conn:
         replay = _idempotent_replay(conn, ctx, "createQuery", idempotency_key)
         if replay is not None:
-            # A replay bills nothing and is not a new billable run, so it is
-            # neither ceiling-checked nor metered.
+            # A replay is not new billable work. Backfill usage if the original
+            # run succeeded without a matching usage_events row.
+            _ensure_metered(conn, ctx, run_id=str(replay["run_id"]), usage_kind="research_query")
             return replay
 
         cost_warning = _enforce_query_ceilings(conn, ctx)
@@ -975,8 +1018,7 @@ def create_query(
         embedding_model=index["embedding_model"],
         usage_kind="research_query",
     )
-    if cost_warning is not None:
-        response.headers[_COST_WARNING_HEADER] = cost_warning
+    _set_cost_warning(response, cost_warning)
     response.status_code = 202
     return accepted
 
@@ -995,6 +1037,9 @@ def create_query_rerun(
     with tenant_connection(ctx) as conn:
         replay = _idempotent_replay(conn, ctx, "createQueryRerun", idempotency_key)
         if replay is not None:
+            _ensure_metered(
+                conn, ctx, run_id=str(replay["run_id"]), usage_kind="research_query_rerun"
+            )
             return replay
 
         # A rerun re-executes the whole pipeline, so it is billable exactly like
@@ -1044,8 +1089,7 @@ def create_query_rerun(
         embedding_model=embedding_model,
         usage_kind="research_query_rerun",
     )
-    if cost_warning is not None:
-        response.headers[_COST_WARNING_HEADER] = cost_warning
+    _set_cost_warning(response, cost_warning)
     response.status_code = 202
     return accepted
 
@@ -1054,13 +1098,15 @@ def create_query_rerun(
 def get_query(
     query_id: uuid.UUID,
     ctx: Annotated[TenantContext, Depends(get_tenant_context)],
-    limit: Annotated[int, Query(ge=1, le=MAX_LIST_LIMIT)] = DEFAULT_LIST_LIMIT,
+    limit: Annotated[int | None, Query(ge=1, le=MAX_LIST_LIMIT)] = None,
 ) -> dict[str, Any]:
     """Return the immutable query snapshot with its run history.
 
-    ``limit`` bounds the embedded run list (#191): a heavily rerun query
-    otherwise grows this response without limit.
+    Newest-first. An omitted ``limit`` uses the default cap and fails closed
+    when more runs exist, so a heavily rerun query cannot hide its latest
+    child. An explicit ``limit`` is an opted-in page of the newest runs.
     """
+    effective = DEFAULT_LIST_LIMIT if limit is None else limit
     with tenant_connection(ctx, snapshot_read=True) as conn:
         query = conn.execute(
             "SELECT id, parent_query_id, question, plan, created_at FROM queries WHERE id = %s",
@@ -1068,11 +1114,21 @@ def get_query(
         ).fetchone()
         if query is None:
             raise api_error(404, "NOT_FOUND", "Query not found.")
-        runs = conn.execute(
+        run_rows = conn.execute(
             "SELECT id, parent_run_id, status, mode, started_at FROM retrieval_runs"
-            " WHERE query_id = %s ORDER BY started_at, id::text LIMIT %s",
-            (str(query_id), limit),
+            ' WHERE query_id = %s ORDER BY started_at DESC, id::text COLLATE "C" DESC'
+            " LIMIT %s",
+            (str(query_id), effective + 1),
         ).fetchall()
+    try:
+        runs = newest_page(
+            run_rows,
+            requested_limit=limit,
+            default_limit=DEFAULT_LIST_LIMIT,
+            resource="runs",
+        )
+    except ListTooLarge as exc:
+        raise list_too_large(exc.resource, exc.limit) from exc
     return {
         "query_id": str(query["id"]),
         "parent_query_id": str(query["parent_query_id"]) if query["parent_query_id"] else None,

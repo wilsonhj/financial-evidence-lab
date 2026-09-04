@@ -74,6 +74,24 @@ def configure_error_reporting() -> None:
     sentry_sdk.init(dsn=dsn, send_default_pii=False)
 
 
+def report_exception(exc: BaseException) -> None:
+    """Forward an exception to Sentry when the SDK is installed.
+
+    FastAPI's process-wide exception handlers convert failures into JSON
+    *inside* ``call_next``, so RequestContextMiddleware never sees them and
+    ``sentry_sdk.init`` without an ASGI integration reports nothing. The 500
+    handler calls this; a missing SDK is a no-op so mock-first boots stay
+    quiet.
+    """
+    try:
+        sentry_sdk = importlib.import_module("sentry_sdk")
+    except ImportError:
+        return
+    capture = getattr(sentry_sdk, "capture_exception", None)
+    if capture is not None:
+        capture(exc)
+
+
 class RequestContextMiddleware(BaseHTTPMiddleware):
     """Assigns a request ID, times the request, and emits one JSON log line."""
 

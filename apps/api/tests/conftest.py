@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import os
 import uuid
+from collections.abc import Iterator
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 
@@ -88,7 +89,14 @@ def org_fixture(db_url: str) -> tuple[str, str]:
 
 
 @pytest.fixture()
-def client() -> TestClient:
+def client() -> Iterator[TestClient]:
+    """Per-test client; closes any pools this test opened so the next test
+    cannot inherit a pool bound to a previous ``FEL_DATABASE_URL``."""
+    from app.db import close_pools
     from app.main import app
 
-    return TestClient(app)
+    test_client = TestClient(app)
+    try:
+        yield test_client
+    finally:
+        close_pools()

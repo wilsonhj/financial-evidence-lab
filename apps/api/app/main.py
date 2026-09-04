@@ -24,6 +24,7 @@ from app.observability import (
     RequestContextMiddleware,
     configure_error_reporting,
     configure_logging,
+    report_exception,
 )
 from app.reader import router as reader_router
 from app.retrieval import router as retrieval_router
@@ -96,6 +97,7 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> JSONRe
 
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    report_exception(exc)
     return _envelope(request, 500, "INTERNAL", "Unexpected server error.", None)
 
 

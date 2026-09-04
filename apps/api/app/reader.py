@@ -58,7 +58,8 @@ _SIBLING_DOCUMENTS_SQL = """
            valid_from, valid_to
     FROM documents
     WHERE entity_id = %s AND id <> %s AND published_at <= %s
-    ORDER BY published_at, accession, id::text COLLATE "C"
+    ORDER BY published_at DESC, accession DESC, id::text COLLATE "C" DESC
+    LIMIT %s
 """
 
 _LATEST_PARSED_SQL = """
@@ -91,6 +92,7 @@ _SECTIONS_SQL = """
     FROM sections
     WHERE document_version_id = %s
     ORDER BY ord, id::text COLLATE "C"
+    LIMIT %s
 """
 
 _ALL_SPANS_SQL = """
@@ -278,7 +280,11 @@ def _build_document_block(
     version_id = str(version_row["id"])
     entity_id = str(document_row["entity_id"])
     canonical_text = _read_canonical_text(version_row["canonical_text_key"])
-    section_rows = conn.execute(_SECTIONS_SQL, (version_row["id"],)).fetchall()
+    cfg = settings()
+    max_sections = cfg.reader_max_sections
+    section_rows = conn.execute(_SECTIONS_SQL, (version_row["id"], max_sections + 1)).fetchall()
+    if len(section_rows) > max_sections:
+        raise _too_large("sections", max_sections)
     if any(str(row["document_version_id"]) != version_id for row in section_rows):
         raise _integrity_error("section_crosses_selected_version")
     section_ids = {str(row["id"]) for row in section_rows}
@@ -292,7 +298,6 @@ def _build_document_block(
 
     # Read one row past the cap: a full page means the version is larger than
     # this endpoint will assemble, which is a 413 rather than a short answer.
-    cfg = settings()
     max_spans, max_facts = cfg.reader_max_spans, cfg.reader_max_facts
     if include_sections:
         span_rows = conn.execute(_ALL_SPANS_SQL, (version_row["id"], max_spans + 1)).fetchall()
@@ -370,10 +375,13 @@ def get_document_reader(
             raise _not_found()
 
         target_block = _build_document_block(conn, target, target_version, include_sections=True)
+        max_siblings = settings().reader_max_siblings
         sibling_rows = conn.execute(
             _SIBLING_DOCUMENTS_SQL,
-            (target["entity_id"], document_id, effective_as_of),
+            (target["entity_id"], document_id, effective_as_of, max_siblings + 1),
         ).fetchall()
+        if len(sibling_rows) > max_siblings:
+            raise _too_large("siblings", max_siblings)
         sibling_blocks: list[dict[str, Any]] = []
         for sibling in sibling_rows:
             sibling_version = _select_version(conn, sibling["id"], corpus_version_id)

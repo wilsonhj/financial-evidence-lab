@@ -26,3 +26,13 @@ def api_error(
         detail={"code": code, "message": message, "details": details or {}},
         headers=headers,
     )
+
+
+def list_too_large(resource: str, limit: int) -> HTTPException:
+    """413 when an omitted list cap would silently drop rows (#191)."""
+    return api_error(
+        413,
+        "LIST_TOO_LARGE",
+        "Listing exceeds the default bound; pass an explicit limit to page the newest rows.",
+        {"resource": resource, "limit": limit},
+    )
