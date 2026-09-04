@@ -22,7 +22,14 @@ from enum import Enum
 from typing import Any
 
 from fel_calculation_engine.errors import CanonicalizationError
-from fel_calculation_engine.values import canonical_decimal
+from fel_calculation_engine.values import CALC_CONTEXT, canonical_decimal
+
+# A financial quantity does not legitimately carry a 10^6 exponent. Bounding it
+# keeps one node from expanding into a megabyte of canonical JSON (`1E+999999`
+# encodes to just over a million characters, hashed once per snapshot and again
+# per result id) and keeps `1E+1000000` from raising an untyped
+# `decimal.Overflow` that escapes `except CalculationEngineError`.
+_MAX_EXPONENT = 1_000_000 // 4
 
 RESERVED_PREFIX = "$"
 
@@ -37,6 +44,26 @@ def _encode(value: Any) -> Any:
     if isinstance(value, Decimal):
         if not value.is_finite():
             raise CanonicalizationError(f"non-finite Decimal {value} cannot be canonicalized")
+        # Injective by construction rather than by caller discipline.
+        # `canonical_decimal` is exact only within CALC_CONTEXT.prec; beyond it
+        # `normalize` rounds, so two unequal Decimals encode identically —
+        # `Decimal("1." + "0"*40 + "1")` and `...2` both became `"1"`. Every
+        # value reaching here through a node has passed `require_decimal`, which
+        # rejects exactly that, but `canonical_json` and `content_hash` are
+        # public exports and were trusting the caller to have done so.
+        digits = len(value.as_tuple().digits)
+        if digits > CALC_CONTEXT.prec:
+            raise CanonicalizationError(
+                f"Decimal with {digits} significant digits exceeds the "
+                f"{CALC_CONTEXT.prec}-digit calculation precision and cannot be "
+                "canonicalized without rounding, which would not be injective"
+            )
+        exponent = value.as_tuple().exponent
+        if isinstance(exponent, int) and not -_MAX_EXPONENT <= exponent <= _MAX_EXPONENT:
+            raise CanonicalizationError(
+                f"Decimal exponent {exponent} is outside +/-{_MAX_EXPONENT}; "
+                "expanding it would produce a megabyte-scale encoding or overflow"
+            )
         return {"$decimal": canonical_decimal(value)}
     if isinstance(value, datetime):
         if value.tzinfo is None:

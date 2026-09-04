@@ -21,7 +21,7 @@ from fel_calculation_engine.periods import FiscalCalendar, FiscalYear, parse_per
 from fel_calculation_engine.scenario import Scenario, apply_scenario
 from fel_calculation_engine.snapshot import GraphSnapshot
 from fel_calculation_engine.units import COUNT, PERCENT, RATIO, Unit, UnitKind
-from fel_calculation_engine.values import Quantity
+from fel_calculation_engine.values import CALC_CONTEXT, Quantity
 
 # --- decimal arithmetic -----------------------------------------------------------------------
 
@@ -100,7 +100,12 @@ def test_percent_normalization_round_trips_exactly() -> None:
     for seed, rng in cases():
         p = Quantity(decimal(rng), PERCENT)
         assert p.to_ratio().to_percent() == p, seed
-        assert p.to_ratio().value == p.value / Decimal(100), seed
+        # The expectation must be computed in CALC_CONTEXT, not the ambient
+        # context. `to_ratio` divides at prec 34; a bare `/` here divides at the
+        # process default of 28, so the two agree only while the generator stays
+        # under 28 digits. Same root cause as the `canonical_decimal` defect this
+        # PR fixes — an operation silently taking the ambient precision.
+        assert p.to_ratio().value == CALC_CONTEXT.divide(p.value, Decimal(100)), seed
         with pytest.raises(UnitError):
             _ = p * Quantity(Decimal(1), USD)
 

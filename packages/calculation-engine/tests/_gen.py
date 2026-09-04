@@ -26,6 +26,19 @@ def cases(count: int = 200, *, base_seed: int = 63) -> Iterator[tuple[int, Rando
 
 
 def decimal(rng: Random, *, digits: int = 12, places: int = 6) -> Decimal:
+    """Draw a Decimal with at most ``digits`` significant digits.
+
+    KNOWN LIMIT, recorded rather than papered over: 12 digits never reaches the
+    region where precision bites. The ``canonical_decimal`` injectivity defect
+    (PR #212 review, finding 1) lived at 29-34 digits, above the ambient
+    context's default 28, and this suite structurally could not have found it —
+    seven mutations were killed and that one was unreachable. An explicit
+    boundary test now covers it (``test_canonical.py``).
+
+    Widening this generator is worth doing and is not a one-liner: properties
+    that multiply or quantize need their own headroom, so the bound has to be
+    per-property rather than global. Filed as follow-up work.
+    """
     magnitude = rng.randint(0, 10**digits - 1)
     exponent = rng.randint(0, places)
     sign = "-" if rng.random() < 0.3 else ""

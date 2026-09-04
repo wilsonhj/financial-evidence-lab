@@ -132,3 +132,48 @@ def test_canonical_decimal_still_collapses_value_equal_forms() -> None:
         assert first == second
         assert canonical_decimal(first) == canonical_decimal(second)
     assert "E" not in canonical_decimal(Decimal("1E+30"))
+
+
+def test_canonicalizer_refuses_over_precision_rather_than_rounding_it_away() -> None:
+    """`canonical_json` and `content_hash` are public; they must not trust callers.
+
+    `canonical_decimal` is exact only within ``CALC_CONTEXT.prec``. Beyond it
+    ``normalize`` rounds, so two unequal Decimals encode identically — before
+    this guard, ``1.0…01`` and ``1.0…02`` at 42 digits both became ``"1"`` and
+    ``content_hash`` collided. Every value arriving through a node has passed
+    ``require_decimal``, which rejects that shape; these two entry points had
+    only an ``is_finite`` check, so injectivity held by caller discipline rather
+    than by construction.
+    """
+    over = Decimal("1." + "0" * 40 + "1")
+    twin = Decimal("1." + "0" * 40 + "2")
+    assert over != twin
+    assert len(over.as_tuple().digits) > CALC_CONTEXT.prec
+
+    for value in (over, twin):
+        with pytest.raises(CanonicalizationError, match="significant digits"):
+            canonical_json(value)
+        with pytest.raises(CanonicalizationError, match="significant digits"):
+            content_hash(value)
+
+    # Exactly at the precision is still accepted: the bound is the engine's own.
+    at_limit = CALC_CONTEXT.divide(Decimal(1), Decimal(3))
+    assert len(at_limit.as_tuple().digits) == CALC_CONTEXT.prec
+    assert canonical_json(at_limit)
+
+
+def test_canonicalizer_refuses_an_exponent_it_would_have_to_expand() -> None:
+    """A financial quantity does not carry a 10^6 exponent, and expanding one hurts.
+
+    ``1E+999999`` encoded to just over a million characters — hashed once per
+    snapshot and again per result id — and ``1E+1000000`` raised an untyped
+    ``decimal.Overflow`` that escapes ``except CalculationEngineError``, the same
+    class of leak as the recursive cycle reporter.
+    """
+    for literal in ("1E+999999", "1E+1000000", "1E-999999"):
+        with pytest.raises(CanonicalizationError, match="exponent"):
+            canonical_json(Decimal(literal))
+
+    # Ordinary magnitudes are untouched.
+    for literal in ("0", "1.5", "-0", "1E+2", "1E-20", "123456789.123456789"):
+        assert canonical_json(Decimal(literal))
