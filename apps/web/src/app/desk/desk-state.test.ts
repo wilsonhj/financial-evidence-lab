@@ -6,7 +6,6 @@ import {
   canApplyApprovedFacts,
   canSaveResolution,
   isValidDeskTheme,
-  readStoredTheme,
   resolveDeskTheme,
   resolveVisibleClaimId,
   writeStoredTheme,
@@ -28,17 +27,12 @@ describe("desk theme selection", () => {
     expect(resolveDeskTheme("dark")).toBe("system");
   });
 
-  it("falls back when localStorage throws", () => {
+  it("treats localStorage as a best-effort mirror only", () => {
     const blocked = {
-      getItem(): string | null {
-        throw new Error("The operation is insecure.");
-      },
       setItem(): void {
         throw new Error("The operation is insecure.");
       },
     };
-    expect(readStoredTheme("oled", blocked)).toBe("oled");
-    expect(readStoredTheme("dark", blocked)).toBe("system");
     expect(() => writeStoredTheme("light", blocked)).not.toThrow();
   });
 });

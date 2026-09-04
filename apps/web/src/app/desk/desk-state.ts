@@ -30,7 +30,6 @@ export function resolveDeskTheme(value: string | null): DeskTheme {
 }
 
 type ThemeStorage = {
-  getItem(key: string): string | null;
   setItem(key: string, value: string): void;
 };
 
@@ -40,18 +39,6 @@ function defaultThemeStorage(): ThemeStorage | null {
     return window.localStorage;
   } catch {
     return null;
-  }
-}
-
-export function readStoredTheme(
-  fallback: string | null = null,
-  storage: ThemeStorage | null = defaultThemeStorage(),
-): DeskTheme {
-  if (storage === null) return resolveDeskTheme(fallback);
-  try {
-    return resolveDeskTheme(storage.getItem("fel-theme") ?? fallback);
-  } catch {
-    return resolveDeskTheme(fallback);
   }
 }
 

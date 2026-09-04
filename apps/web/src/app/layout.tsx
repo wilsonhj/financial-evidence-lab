@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { cookies } from "next/headers";
 import Link from "next/link";
 
+import { resolveDeskTheme } from "./desk/desk-state";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -15,13 +16,10 @@ export const metadata: Metadata = {
 
 export default async function RootLayout({ children }: { children: ReactNode }) {
   const storedTheme = (await cookies()).get("fel-theme")?.value;
-  const theme =
-    storedTheme === "light" || storedTheme === "oled" || storedTheme === "system"
-      ? storedTheme
-      : "system";
+  const theme = resolveDeskTheme(storedTheme ?? null);
 
   return (
-    <html lang="en" data-fel-theme={theme} suppressHydrationWarning>
+    <html lang="en" data-fel-theme={theme}>
       <body>
         <header className="site-header">
           <h1>

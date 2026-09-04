@@ -104,8 +104,14 @@ test("blocked localStorage still renders the desk", async ({ page }) => {
   await expect(page.getByTestId("desk-shell")).toBeVisible();
 });
 
-test("OLED appearance restores before interaction and persists", async ({ page }) => {
-  await page.addInitScript(() => window.localStorage.setItem("fel-theme", "oled"));
+test("validated cookie restores OLED appearance and mirrors changes", async ({ context, page }) => {
+  await context.addCookies([
+    {
+      name: "fel-theme",
+      value: "oled",
+      url: "http://127.0.0.1:3210",
+    },
+  ]);
   await page.goto("/desk");
 
   await expect(page.locator("html")).toHaveAttribute("data-fel-theme", "oled");
@@ -118,4 +124,14 @@ test("OLED appearance restores before interaction and persists", async ({ page }
   await expect
     .poll(() => page.evaluate(() => window.localStorage.getItem("fel-theme")))
     .toBe("light");
+});
+
+test("localStorage cannot override the server-selected theme", async ({ page }) => {
+  await page.addInitScript(() => window.localStorage.setItem("fel-theme", "oled"));
+  await page.goto("/desk");
+
+  await expect(page.locator("html")).toHaveAttribute("data-fel-theme", "system");
+  await expect
+    .poll(() => page.evaluate(() => window.localStorage.getItem("fel-theme")))
+    .toBe("system");
 });

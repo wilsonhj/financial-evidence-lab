@@ -6,9 +6,8 @@ import {
   buildReviewDecision,
   canApplyApprovedFacts,
   canSaveResolution,
-  readStoredTheme,
-  writeStoredTheme,
   resolveVisibleClaimId,
+  writeStoredTheme,
   type AppliedFacts,
   type DeskTheme,
   type EvidenceSourceId,
@@ -51,7 +50,7 @@ const themeLabels: Record<DeskTheme, string> = {
   oled: "OLED Black",
 };
 
-export default function DeskClient() {
+export default function DeskClient({ initialTheme }: { initialTheme: DeskTheme }) {
   const [section, setSection] = useState<Section>("coverage");
   const [claim, setClaim] = useState<ClaimId | null>("nrr");
   const [search, setSearch] = useState("");
@@ -64,8 +63,7 @@ export default function DeskClient() {
   ]);
   const [scenario, setScenario] = useState("Base");
   const [inspector, setInspector] = useState(true);
-  const [theme, setTheme] = useState<DeskTheme>("system");
-  const [themeReady, setThemeReady] = useState(false);
+  const [theme, setTheme] = useState<DeskTheme>(initialTheme);
   const [appliedFacts, setAppliedFacts] = useState<AppliedFacts | null>(null);
   const [themeOpen, setThemeOpen] = useState(false);
   const gatesReady = canApplyApprovedFacts(decision, approvals);
@@ -79,15 +77,10 @@ export default function DeskClient() {
   );
 
   useEffect(() => {
-    setTheme(readStoredTheme(document.documentElement.dataset.felTheme ?? null));
-    setThemeReady(true);
-  }, []);
-  useEffect(() => {
-    if (!themeReady) return;
     document.documentElement.dataset.felTheme = theme;
     writeStoredTheme(theme);
     document.cookie = `fel-theme=${theme}; Path=/; Max-Age=31536000; SameSite=Lax`;
-  }, [theme, themeReady]);
+  }, [theme]);
   useEffect(() => {
     setClaim((current) =>
       resolveVisibleClaimId(
