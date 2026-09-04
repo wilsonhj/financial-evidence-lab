@@ -441,7 +441,7 @@ describe("fetchBulkAdvisories", () => {
   });
 
   it("preserves a caller abort and does not retry it", async () => {
-    const caller = new AbortController();
+    const caller = new globalThis.AbortController();
     const reason = new Error("stop requested");
     let calls = 0;
     const fetchImpl = async (_url, { signal }) => {
@@ -467,7 +467,7 @@ describe("fetchBulkAdvisories", () => {
   });
 
   it("interrupts response body parsing with the original caller abort", async () => {
-    const caller = new AbortController();
+    const caller = new globalThis.AbortController();
     const reason = new Error("stop reading");
     let calls = 0;
     const fetchImpl = async () => {
@@ -503,7 +503,7 @@ describe("fetchBulkAdvisories", () => {
   ])(
     "interrupts %s backoff with the original caller abort after request cleanup",
     async (_label, fetchImpl) => {
-      const caller = new AbortController();
+      const caller = new globalThis.AbortController();
       const reason = new Error("cancel backoff");
       const cleared = [];
       const activeListeners = new Set();

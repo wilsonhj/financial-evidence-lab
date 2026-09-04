@@ -173,8 +173,8 @@ export async function fetchBulkAdvisories(
     maxRetryDelayMs = MAX_RETRY_DELAY_MS,
     requestTimeoutMs = REQUEST_TIMEOUT_MS,
     signal,
-    setTimeoutImpl = setTimeout,
-    clearTimeoutImpl = clearTimeout,
+    setTimeoutImpl = globalThis.setTimeout,
+    clearTimeoutImpl = globalThis.clearTimeout,
   } = {},
 ) {
   const boundedAttempts = boundedInteger(attempts, ADVISORY_ATTEMPTS, ADVISORY_ATTEMPTS);
@@ -194,7 +194,7 @@ export async function fetchBulkAdvisories(
   for (let i = 1; i <= boundedAttempts; i++) {
     if (signal?.aborted) throw signal.reason;
 
-    const controller = new AbortController();
+    const controller = new globalThis.AbortController();
     let timedOut = false;
     let rejectAttempt;
     const abortPromise = new Promise((_, reject) => {
