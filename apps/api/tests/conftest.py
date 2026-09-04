@@ -14,6 +14,18 @@ from fastapi.testclient import TestClient
 
 TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL")
 
+# CI sets FEL_REQUIRE_DB=1. Without it a dropped or renamed TEST_DATABASE_URL
+# turns every DB-gated test into a silent skip and the check still reports
+# green (#202). Raising at import time fails collection, so the operator sees
+# the cause instead of a suspiciously short pass count.
+if os.environ.get("FEL_REQUIRE_DB") == "1" and TEST_DATABASE_URL is None:
+    raise RuntimeError(
+        "FEL_REQUIRE_DB=1 but TEST_DATABASE_URL is unset, so every DB-gated "
+        "test in this package would have skipped silently. Point "
+        "TEST_DATABASE_URL at a migrated Postgres, or unset FEL_REQUIRE_DB to "
+        "allow skipping."
+    )
+
 requires_db = pytest.mark.skipif(
     TEST_DATABASE_URL is None, reason="TEST_DATABASE_URL not configured"
 )

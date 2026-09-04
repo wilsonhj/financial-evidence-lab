@@ -82,6 +82,9 @@ jobs:
           --health-retries 10
     env:
       TEST_DATABASE_URL: postgresql://fel:fel-ci-only@localhost:5432/fel_test
+      # Turns a lost or renamed TEST_DATABASE_URL into a collection error
+      # instead of ~218 silent skips and a green check. See #202.
+      FEL_REQUIRE_DB: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -146,9 +149,21 @@ jobs:
       # *.sql glob never applies them as migrations).
       - name: Run migration regression harnesses
         run: |
+          # The count is computed on the runner from the checkout and passed in,
+          # so the container must run exactly the harnesses this commit ships.
+          # Without it `shopt -s nullglob` turns a bad path, a failed `docker cp`
+          # or a renamed suffix into "OK: 0 migration harness(es) run" and a
+          # green check. See #199.
+          expected=$(ls db/migrations/tests/*.test.sql | wc -l | tr -d ' ')
+          if [ "$expected" -eq 0 ]; then
+            echo "FAIL: no migration harnesses found in the checkout" >&2
+            exit 1
+          fi
+          echo "Expecting ${expected} migration harness(es) from the checkout."
           docker exec \
             -e PGHOST=localhost -e PGPORT=5432 -e PGUSER=fel \
             -e PGPASSWORD=fel-ci-only -e PGDATABASE=fel_ci \
+            -e EXPECTED_HARNESSES="$expected" \
             ${{ job.services.postgres.id }} bash -ec '
               shopt -s nullglob
               ran=0
@@ -157,5 +172,9 @@ jobs:
                 psql --set ON_ERROR_STOP=1 --file "$f"
                 ran=$((ran+1))
               done
+              if [ "${ran}" -ne "${EXPECTED_HARNESSES}" ]; then
+                echo "FAIL: ran ${ran} migration harness(es), expected ${EXPECTED_HARNESSES}" >&2
+                exit 1
+              fi
               echo "OK: ${ran} migration harness(es) run"
             '
