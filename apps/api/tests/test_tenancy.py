@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import uuid
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.auth import make_mock_token
@@ -143,3 +144,38 @@ def test_forged_role_claim_is_overridden_by_stored_role(
         },
     )
     assert create_denied.status_code == 403
+
+
+def test_pooled_connection_does_not_leak_claims_across_tenants(
+    client: TestClient,
+    org_fixture: tuple[str, str],
+    db_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A size-1 pool must recycle connections without carrying SET LOCAL claims."""
+    import psycopg
+
+    from app.db import close_pools
+
+    monkeypatch.setenv("FEL_DB_POOL_MIN", "1")
+    monkeypatch.setenv("FEL_DB_POOL_MAX", "1")
+    close_pools()
+
+    owner_ws = _create(client, org_fixture)
+    other_org, other_user = str(uuid.uuid4()), str(uuid.uuid4())
+    with psycopg.connect(db_url) as conn:
+        conn.execute(
+            "INSERT INTO organizations (id, name) VALUES (%s, %s)", (other_org, other_org[:8])
+        )
+        conn.execute(
+            "INSERT INTO memberships (org_id, user_id, role) VALUES (%s, %s, 'owner')",
+            (other_org, other_user),
+        )
+    other_ws = _create(client, (other_org, other_user))
+
+    for _ in range(3):
+        mine = client.get("/v1/workspaces", headers=_headers(*org_fixture))
+        theirs = client.get("/v1/workspaces", headers=_headers(other_org, other_user))
+        assert mine.status_code == 200 and theirs.status_code == 200
+        assert [row["id"] for row in mine.json()] == [owner_ws]
+        assert [row["id"] for row in theirs.json()] == [other_ws]

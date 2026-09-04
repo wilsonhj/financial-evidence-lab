@@ -33,9 +33,12 @@ from fastapi import APIRouter, Depends, Query
 from pydantic import AwareDatetime
 
 from app.auth import TenantContext
+from app.config import DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT
 from app.db import tenant_connection
 from app.dependencies import get_tenant_context
-from app.errors import api_error
+from app.errors import api_error, list_too_large
+from app.listing import ListTooLarge, newest_page
+from app.serializers import document_body
 
 router = APIRouter(prefix="/v1", tags=["corpus"])
 
@@ -56,7 +59,8 @@ _LIST_DOCUMENTS_SQL = """
         SELECT 1 FROM document_versions dv
         WHERE dv.document_id = documents.id AND dv.status = 'parsed'
     )
-    ORDER BY published_at, accession
+    ORDER BY published_at DESC, accession DESC, id::text COLLATE "C" DESC
+    LIMIT %s
 """
 
 _LIST_DOCUMENTS_AS_OF_SQL = """
@@ -68,7 +72,8 @@ _LIST_DOCUMENTS_AS_OF_SQL = """
         SELECT 1 FROM document_versions dv
         WHERE dv.document_id = documents.id AND dv.status = 'parsed'
     )
-    ORDER BY published_at, accession
+    ORDER BY published_at DESC, accession DESC, id::text COLLATE "C" DESC
+    LIMIT %s
 """
 
 _GET_DOCUMENT_SQL = """
@@ -83,41 +88,38 @@ _GET_DOCUMENT_SQL = """
 """
 
 
-def _document_body(row: dict[str, Any]) -> dict[str, Any]:
-    """Contract DocumentMeta; optional temporal fields omitted when unset."""
-    body: dict[str, Any] = {
-        "id": str(row["id"]),
-        "entity_id": str(row["entity_id"]),
-        "accession": row["accession"],
-        "source_url": row["source_url"],
-        "content_hash": row["content_hash"],
-        "published_at": row["published_at"].isoformat(),
-        "ingested_at": row["ingested_at"].isoformat(),
-    }
-    if row["form"] is not None:
-        body["form"] = row["form"]
-    for key in ("filed_at", "valid_from", "valid_to"):
-        if row[key] is not None:
-            body[key] = row[key].isoformat()
-    for key in ("period_start", "period_end"):
-        if row[key] is not None:
-            body[key] = row[key].isoformat()
-    return body
-
-
 @router.get("/entities/{entity_id}/documents")
 def list_entity_documents(
     entity_id: uuid.UUID,
     ctx: Annotated[TenantContext, Depends(get_tenant_context)],
     as_of: Annotated[AwareDatetime | None, Query()] = None,
+    limit: Annotated[int | None, Query(ge=1, le=MAX_LIST_LIMIT)] = None,
 ) -> list[dict[str, Any]]:
-    """List an entity's documents, point-in-time filtered by ``as_of``."""
+    """List an entity's documents, point-in-time filtered by ``as_of``.
+
+    Newest-first, bounded by ``limit`` (#191). An omitted limit uses the
+    default cap and fails closed (413) when more documents exist, so a
+    prolific filer cannot silently lose the latest 10-K. An explicit limit
+    returns that many newest rows.
+    """
+    effective = DEFAULT_LIST_LIMIT if limit is None else limit
     with tenant_connection(ctx) as conn:
         if as_of is not None:
-            rows = conn.execute(_LIST_DOCUMENTS_AS_OF_SQL, (entity_id, as_of)).fetchall()
+            rows = conn.execute(
+                _LIST_DOCUMENTS_AS_OF_SQL, (entity_id, as_of, effective + 1)
+            ).fetchall()
         else:
-            rows = conn.execute(_LIST_DOCUMENTS_SQL, (entity_id,)).fetchall()
-    return [_document_body(row) for row in rows]
+            rows = conn.execute(_LIST_DOCUMENTS_SQL, (entity_id, effective + 1)).fetchall()
+    try:
+        page = newest_page(
+            rows,
+            requested_limit=limit,
+            default_limit=DEFAULT_LIST_LIMIT,
+            resource="documents",
+        )
+    except ListTooLarge as exc:
+        raise list_too_large(exc.resource, exc.limit) from exc
+    return [document_body(row) for row in page]
 
 
 @router.get("/documents/{document_id}")
@@ -130,7 +132,7 @@ def get_document(
         row = conn.execute(_GET_DOCUMENT_SQL, (document_id,)).fetchone()
     if row is None:
         raise api_error(404, "NOT_FOUND", "Document not found.")
-    return _document_body(row)
+    return document_body(row)
 
 
 @router.get("/source-spans/{source_span_id}")

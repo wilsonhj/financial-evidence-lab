@@ -7,14 +7,16 @@ import json
 import uuid
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Header, Request, Response
+from fastapi import APIRouter, Depends, Header, Query, Request, Response
 from psycopg import sql
 from pydantic import AwareDatetime, BaseModel, Field
 
 from app.auth import TenantContext
+from app.config import DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT
 from app.db import tenant_connection
 from app.dependencies import get_tenant_context
-from app.errors import api_error
+from app.errors import api_error, list_too_large
+from app.listing import ListTooLarge, newest_page
 from app.observability import record_audit_event
 
 router = APIRouter(prefix="/v1/workspaces", tags=["workspaces"])
@@ -114,10 +116,26 @@ def create_workspace(
 @router.get("")
 def list_workspaces(
     ctx: Annotated[TenantContext, Depends(get_tenant_context)],
+    limit: Annotated[int | None, Query(ge=1, le=MAX_LIST_LIMIT)] = None,
 ) -> list[dict[str, Any]]:
+    """List the caller's workspaces, newest-first, bounded by ``limit`` (#191)."""
+    effective = DEFAULT_LIST_LIMIT if limit is None else limit
     with tenant_connection(ctx) as conn:
-        rows = conn.execute("SELECT * FROM workspaces ORDER BY created_at").fetchall()
-    return [_row_to_body(r) for r in rows]
+        rows = conn.execute(
+            'SELECT * FROM workspaces ORDER BY created_at DESC, id::text COLLATE "C" DESC'
+            " LIMIT %s",
+            (effective + 1,),
+        ).fetchall()
+    try:
+        page = newest_page(
+            rows,
+            requested_limit=limit,
+            default_limit=DEFAULT_LIST_LIMIT,
+            resource="workspaces",
+        )
+    except ListTooLarge as exc:
+        raise list_too_large(exc.resource, exc.limit) from exc
+    return [_row_to_body(r) for r in page]
 
 
 @router.get("/{workspace_id}")

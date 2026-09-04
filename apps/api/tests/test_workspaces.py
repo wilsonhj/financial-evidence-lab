@@ -5,6 +5,7 @@ from __future__ import annotations
 import uuid
 
 import psycopg
+import pytest
 from fastapi.testclient import TestClient
 
 from app.auth import make_mock_token
@@ -113,3 +114,65 @@ def test_malformed_as_of_gets_contract_envelope(
         },
     )
     assert naive.status_code == 422
+
+
+def test_workspace_listing_is_bounded(
+    client: TestClient, org_fixture: tuple[str, str], db_url: str
+) -> None:
+    """#191: the listing takes an optional, validated `limit` and is never
+    unbounded — a tenant with thousands of workspaces cannot ask for them all
+    in one scan."""
+    for index in range(3):
+        created = client.post(
+            "/v1/workspaces",
+            headers={**_headers(org_fixture), "Idempotency-Key": f"lim-{uuid.uuid4()}"},
+            json={
+                "name": f"workspace {index}",
+                "entity_id": str(uuid.uuid4()),
+                "base_currency": "USD",
+                "fiscal_calendar": "FY-JAN31",
+                "as_of": "2026-06-30T23:59:59Z",
+            },
+        )
+        assert created.status_code == 201, created.text
+
+    assert len(client.get("/v1/workspaces", headers=_headers(org_fixture)).json()) == 3
+
+    bounded = client.get("/v1/workspaces", params={"limit": 2}, headers=_headers(org_fixture))
+    assert bounded.status_code == 200
+    assert len(bounded.json()) == 2
+    # Newest-first: the last two created workspaces, not the first two.
+    names = [row["name"] for row in bounded.json()]
+    assert names == ["workspace 2", "workspace 1"]
+
+    for out_of_range in (0, 201):
+        rejected = client.get(
+            "/v1/workspaces", params={"limit": out_of_range}, headers=_headers(org_fixture)
+        )
+        assert rejected.status_code == 422, out_of_range
+        assert rejected.json()["error"]["code"] == "VALIDATION_ERROR"
+
+
+def test_omitted_workspace_limit_fails_closed(
+    client: TestClient,
+    org_fixture: tuple[str, str],
+    db_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("app.workspaces.DEFAULT_LIST_LIMIT", 2)
+    for index in range(3):
+        created = client.post(
+            "/v1/workspaces",
+            headers={**_headers(org_fixture), "Idempotency-Key": f"ovf-{uuid.uuid4()}"},
+            json={
+                "name": f"overflow {index}",
+                "entity_id": str(uuid.uuid4()),
+                "base_currency": "USD",
+                "fiscal_calendar": "FY-JAN31",
+                "as_of": "2026-06-30T23:59:59Z",
+            },
+        )
+        assert created.status_code == 201, created.text
+    response = client.get("/v1/workspaces", headers=_headers(org_fixture))
+    assert response.status_code == 413, response.text
+    assert response.json()["error"]["code"] == "LIST_TOO_LARGE"

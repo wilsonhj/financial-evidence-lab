@@ -8,6 +8,8 @@ are delivered by their milestone packages against the frozen contracts.
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator, Mapping
+from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import FastAPI, Request
@@ -17,7 +19,13 @@ from pydantic import BaseModel
 
 from app import __version__
 from app.corpus import router as corpus_router
-from app.observability import RequestContextMiddleware, configure_logging
+from app.db import close_pools, open_pool
+from app.observability import (
+    RequestContextMiddleware,
+    configure_error_reporting,
+    configure_logging,
+    report_exception,
+)
 from app.reader import router as reader_router
 from app.retrieval import router as retrieval_router
 from app.workspaces import router as workspaces_router
@@ -31,8 +39,19 @@ class HealthResponse(BaseModel):
     version: str
 
 
+@asynccontextmanager
+async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    """Own the database connection pool for the process's lifetime (#191)."""
+    open_pool()
+    try:
+        yield
+    finally:
+        close_pools()
+
+
 configure_logging()
-app = FastAPI(title="Financial Evidence Lab API", version=__version__)
+configure_error_reporting()
+app = FastAPI(title="Financial Evidence Lab API", version=__version__, lifespan=lifespan)
 app.add_middleware(RequestContextMiddleware)
 app.include_router(workspaces_router)
 app.include_router(corpus_router)
@@ -40,7 +59,14 @@ app.include_router(reader_router)
 app.include_router(retrieval_router)
 
 
-def _envelope(request: Request, status: int, code: str, message: str, details: Any) -> JSONResponse:
+def _envelope(
+    request: Request,
+    status: int,
+    code: str,
+    message: str,
+    details: Any,
+    headers: Mapping[str, str] | None = None,
+) -> JSONResponse:
     return JSONResponse(
         status_code=status,
         content={
@@ -51,6 +77,7 @@ def _envelope(request: Request, status: int, code: str, message: str, details: A
                 "request_id": getattr(request.state, "request_id", "unknown"),
             }
         },
+        headers=headers,
     )
 
 
@@ -63,12 +90,14 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> JSONRe
             str(exc.detail["code"]),
             str(exc.detail.get("message", "")),
             exc.detail.get("details"),
+            exc.headers,
         )
-    return _envelope(request, exc.status_code, "HTTP_ERROR", str(exc.detail), None)
+    return _envelope(request, exc.status_code, "HTTP_ERROR", str(exc.detail), None, exc.headers)
 
 
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    report_exception(exc)
     return _envelope(request, 500, "INTERNAL", "Unexpected server error.", None)
 
 

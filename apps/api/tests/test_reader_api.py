@@ -543,3 +543,73 @@ def test_latest_version_total_order_uses_c_collation_tiebreakers(
     assert response.status_code == 200, response.text
     assert response.json()["document"]["document_version_id"] == selected
     assert response.json()["document"]["document_version_id"] != lower
+
+
+def test_reader_refuses_a_version_beyond_the_span_cap(
+    client: TestClient,
+    org_fixture: tuple[str, str],
+    db_url: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """#191: the composite reader is bounded, and it fails loudly.
+
+    ReaderResponse is a closed object in the frozen contract, so a `truncated`
+    flag is not available; a silently short evidence set would let a citation
+    look absent when it is merely unreturned. The endpoint therefore returns
+    413 READER_TOO_LARGE instead.
+    """
+    monkeypatch.setenv("FEL_STORAGE_DIR", str(tmp_path))
+    ids = _seed_reader(db_url, tmp_path)
+    cutoff = ids["published"] + timedelta(days=1)  # type: ignore[operator]
+    params = {"as_of": cutoff.isoformat()}
+
+    # The same request succeeds under the default cap.
+    ok = client.get(
+        f"/v1/documents/{ids['target_id']}/reader",
+        headers=_headers(org_fixture),
+        params=params,
+    )
+    assert ok.status_code == 200, ok.text
+    assert len(ok.json()["document"]["spans"]) >= 1
+
+    monkeypatch.setenv("FEL_READER_MAX_SPANS", "0")
+    too_large = client.get(
+        f"/v1/documents/{ids['target_id']}/reader",
+        headers=_headers(org_fixture),
+        params=params,
+    )
+    assert too_large.status_code == 413, too_large.text
+    error = too_large.json()["error"]
+    assert error["code"] == "READER_TOO_LARGE"
+    assert error["details"] == {"resource": "spans", "limit": 0}
+
+    monkeypatch.setenv("FEL_READER_MAX_SPANS", "5000")
+    monkeypatch.setenv("FEL_READER_MAX_FACTS", "0")
+    facts_too_large = client.get(
+        f"/v1/documents/{ids['target_id']}/reader",
+        headers=_headers(org_fixture),
+        params=params,
+    )
+    assert facts_too_large.status_code == 413, facts_too_large.text
+    assert facts_too_large.json()["error"]["details"]["resource"] == "facts"
+
+    monkeypatch.setenv("FEL_READER_MAX_FACTS", "5000")
+    monkeypatch.setenv("FEL_READER_MAX_SECTIONS", "0")
+    sections_too_large = client.get(
+        f"/v1/documents/{ids['target_id']}/reader",
+        headers=_headers(org_fixture),
+        params=params,
+    )
+    assert sections_too_large.status_code == 413, sections_too_large.text
+    assert sections_too_large.json()["error"]["details"]["resource"] == "sections"
+
+    monkeypatch.setenv("FEL_READER_MAX_SECTIONS", "5000")
+    monkeypatch.setenv("FEL_READER_MAX_SIBLINGS", "0")
+    siblings_too_large = client.get(
+        f"/v1/documents/{ids['target_id']}/reader",
+        headers=_headers(org_fixture),
+        params=params,
+    )
+    assert siblings_too_large.status_code == 413, siblings_too_large.text
+    assert siblings_too_large.json()["error"]["details"]["resource"] == "siblings"
