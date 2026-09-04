@@ -38,7 +38,28 @@ The integration lead owns these paths:
 - `docs/handoff/workstreams.yaml`
 - `docs/handoff/STATUS.md`
 
-Changes to a shared path require an ADR, the `contract-change` label, and integration-lead review.
+Every change to a shared path requires the `contract-change` label and
+integration-lead review. Whether it also requires an accepted ADR depends on
+the class of change, per the integration-lead ruling on #141 (2026-08-29,
+addended 2026-09-03):
+
+| Class | Required | ADR? |
+|---|---|---|
+| Contracts, migrations, `specs/**`, `docs/decisions/**` | `contract-change` + accepted ADR + lead review | Yes |
+| The canonical task ledger — checkbox state and per-task annotations in `specs/001-financial-evidence-lab/tasks.md` | `contract-change` + lead review | No, unless a dispatch key / dependency / credential policy changes |
+| Handoff ledger (`workstreams.yaml`, `STATUS.md`) | `contract-change` + lead review | No, unless a dispatch key / dependency / credential policy changes |
+| Advisory / lockfile / workspace pin | `contract-change` label + authorization record on the PR | No full ADR. These pin transitive versions rather than changing a shared contract. |
+
+The task-ledger row is deliberately narrow. It covers `[ ]`/`[x]` state and the
+sentence appended to a task line recording why it was or was not checked.
+**Changing a task's text, its ID or its ordering, adding or removing a task, and
+adding, retitling or deleting a spec document all stay in row 1 and need the
+ADR.** It is not a general `specs/**` carve-out.
+
+An "authorization record" is a statement on the PR, by the integration lead,
+naming what is being authorized and why. The label is required in every row so
+that a single CI check can enforce the whole table; that check is still unbuilt
+(#141).
 
 ## Completion protocol
 

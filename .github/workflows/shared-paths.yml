@@ -1,0 +1,75 @@
+# Enforces the shared-path table in AGENTS.md ("Shared paths"), which records
+# the integration-lead ruling on #141. Every row of that table requires the
+# `contract-change` label, so one check can enforce all four: if a PR touches a
+# shared path without the label, fail.
+#
+# This deliberately does NOT try to decide whether an ADR was also required.
+# That depends on the class of change and on an ADR's acceptance state, which
+# is a judgement for the integration lead, not a glob match. The label is the
+# mechanical part, and the label is what #140 and #128 were missing.
+#
+# Lives in its own workflow rather than in ci.yml so that a shared-path PR and
+# a CI PR do not conflict in the same file.
+name: Shared paths
+
+on:
+  pull_request:
+    # `labeled`/`unlabeled` are required: without them, adding the missing
+    # label does not re-run the check and the PR stays red.
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+jobs:
+  contract-change-label:
+    name: Shared-path changes carry contract-change
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Need the base commit to diff against.
+          fetch-depth: 0
+
+      - name: Check the label against the changed paths
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          HAS_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'contract-change') }}
+        run: |
+          set -euo pipefail
+
+          # Kept in sync with AGENTS.md "Shared paths" by hand. A path is shared
+          # if it matches any of these prefixes or is one of the named files.
+          shared_prefix='^(\.github/|\.specify/|specs/|packages/contracts/|db/migrations/|docs/decisions/)'
+          shared_exact='^(docs/handoff/workstreams\.yaml|docs/handoff/STATUS\.md|AGENTS\.md|package\.json|package-lock\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml|pyproject\.toml|Makefile)$'
+
+          git fetch --no-tags --depth=1 origin "$BASE_SHA" 2>/dev/null || true
+          changed=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")
+
+          if [ -z "$changed" ]; then
+            echo "No changed files; nothing to check."
+            exit 0
+          fi
+
+          touched=$(printf '%s\n' "$changed" | grep -E "$shared_prefix|$shared_exact" || true)
+
+          if [ -z "$touched" ]; then
+            echo "OK: this PR touches no shared path."
+            exit 0
+          fi
+
+          echo "This PR touches these shared paths:"
+          printf '  %s\n' $touched
+
+          if [ "$HAS_LABEL" = "true" ]; then
+            echo
+            echo "OK: the contract-change label is present."
+            exit 0
+          fi
+
+          echo
+          echo "FAIL: shared paths changed without the 'contract-change' label." >&2
+          echo "Every row of the shared-path table in AGENTS.md requires it." >&2
+          echo "Add the label, and check whether your change also needs an accepted ADR." >&2
+          exit 1
