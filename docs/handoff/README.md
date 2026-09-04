@@ -22,9 +22,9 @@ This directory is the restart point for all implementation agents. Fable must be
   #162 (#155, the orphaned normalize modules — now wired in), and #174 (#171,
   segment-sum over-suppression).
 - `EVALS-REPORT-RENDER` (#151) merged as PR #164 @ `a23514e`; its entry read
-  `ready` ever since that 2026-08-11 merge — this reconciliation is what
-  flips it — so an agent reading the queue in that window would have
-  re-taken finished work. `M4-MODEL-CALC` (#63) now reads
+  `ready` from that 2026-08-11 merge until PR #172 merged at `ebe77af`
+  (2026-08-31) and flipped it, so an agent reading the queue anywhere in
+  that window could have re-taken finished work. `M4-MODEL-CALC` (#63) now reads
   `status: ready`. Open PRs are #172 (this ledger), #173 (004-mvp-completion),
   and #175 (ADR-0011 ratification). Re-run `gh pr list --state open`. Do not
   infer dispatchability from a stale `ready` — confirm the issue is open on
@@ -60,6 +60,28 @@ Read `STATUS.md` for live state and `workstreams.yaml` for the authoritative dep
 4. Spec Kit artifacts under `specs/001-financial-evidence-lab/`
 
 Only the integration lead changes bundle status to `merged`, checks tasks, changes dependencies, or updates shared contracts.
+
+## Reviewing ledger changes
+
+`workstreams.yaml` and this file are reconciliation ledgers: a PR that edits
+them changes the very state their prose describes. Review that prose against
+the state that will exist **after** the merge, not against the branch's diff
+base. Branch-to-trunk review cannot catch self-falsifying prose by
+construction — on the branch, "this entry still reads `ready` on trunk" and
+"this reconciliation is what flips it" are both accurate, and both become
+false the instant the PR lands (#179).
+
+Ledger prose must therefore not contain:
+
+- a present-tense claim about trunk that the merge itself falsifies
+  ("still reads `ready` on trunk", "is not applied at any commit since");
+- a forward reference to its own PR ("this reconciliation is what flips it",
+  "the fix ships here");
+- a commit pin for a state that the merge supersedes.
+
+Write the history in the past tense with an end bound instead: "read `ready`
+from the 2026-08-11 merge until `ebe77af` (2026-08-31)". That sentence stays
+true on the branch, at the merge, and forever after.
 
 ## Dispatch checklist
 
