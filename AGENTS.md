@@ -11,7 +11,7 @@ This repository is designed for parallel implementation by Codex, Claude Code, a
 5. `docs/handoff/README.md`
 6. `docs/handoff/workstreams.yaml`
 
-The feature directory `specs/001-financial-evidence-lab/` holds the sole canonical `spec.md`, `plan.md`, and `tasks.md`. Root `SPEC.md`, `PLAN.md`, and `TASKS.md` are pointer stubs only — never edit or cite them as sources. The locked MVP stack lives in `docs/decisions/ADR-0002-mvp-stack.md`.
+The feature directory `specs/001-financial-evidence-lab/` holds the **sole canonical task ledger** (`tasks.md`) plus the parent `spec.md` and `plan.md`. There is exactly one ledger — never restate the `T####` list or its completion state anywhere else. Milestone and completion directories (`specs/002-*` onward) may hold subordinate `spec.md`, `plan.md`, and milestone-scoped `tasks.md` whose IDs map onto the canonical `T####` IDs; each names its parent, and the parent governs on conflict. Root `SPEC.md`, `PLAN.md`, and `TASKS.md` are pointer stubs only — never edit or cite them as sources. The locked MVP stack lives in `docs/decisions/ADR-0002-mvp-stack.md`.
 
 ## Working rules
 
