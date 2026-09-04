@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useReducer } from "react";
 import Link from "next/link";
 
 import type {
@@ -14,7 +14,8 @@ import { amendmentStatusFor, linkAmendments } from "../lib/amendments";
 import { formatPeriodRange } from "../lib/document-display";
 import { duplicateGroupIndex, groupDuplicateFacts } from "../lib/facts";
 import { buildOutline } from "../lib/outline";
-import { addNote, emptyNotesState, removeNote, type NoteAnchor } from "../lib/notes";
+import type { NoteAnchor } from "../lib/notes";
+import { initReaderState, readerReducer } from "../lib/reader-state";
 import { DocumentPane } from "./DocumentPane";
 import { FactPanel } from "./FactPanel";
 import { NotesPanel } from "./NotesPanel";
@@ -102,21 +103,42 @@ export function EvidenceReader({
     ? (spansById.get(deepLinkedSpanId)?.span.section_id ?? null)
     : null;
 
-  const [activeSectionId, setActiveSectionId] = useState<string | null>(
-    deepLinkedSectionId ?? ownSections[0]?.id ?? null,
+  const initialActiveSectionId = deepLinkedSectionId ?? ownSections[0]?.id ?? null;
+
+  // Single reducer for selection, outline focus, and the notes overlay, keyed
+  // by documentId (see lib/reader-state.ts). Without a key={documentId}
+  // remount at the page level, this component instance can stay mounted
+  // across a client-side navigation to a different filing; when that happens
+  // state.documentId no longer matches the documentId prop, so a "reset"
+  // action is dispatched during render (an established React pattern for
+  // adjusting state from a prop change) to derive fresh state for the new
+  // document before anything paints.
+  const [state, dispatch] = useReducer(
+    readerReducer,
+    undefined,
+    (): ReturnType<typeof initReaderState> =>
+      initReaderState(documentId, initialActiveSectionId, deepLinkedSpanId),
   );
-  const [selectedSpanId, setSelectedSpanId] = useState<string | null>(deepLinkedSpanId);
-  const [notes, setNotes] = useState(emptyNotesState);
+  if (state.documentId !== documentId) {
+    dispatch({
+      type: "reset",
+      documentId,
+      activeSectionId: initialActiveSectionId,
+      selectedSpanId: deepLinkedSpanId,
+    });
+  }
+  const { activeSectionId, selectedSpanId, notes } = state;
 
   useEffect(() => {
     if (deepLinkedSectionId) {
       globalThis.document?.getElementById(`section-${deepLinkedSectionId}`)?.scrollIntoView();
     }
-    // Mount-only: the deep link is an initial position, not a live control.
-  }, []);
+    // Re-run when the document (and therefore its deep link) changes, not
+    // just on mount, now that the reader can stay mounted across navigation.
+  }, [documentId, deepLinkedSectionId]);
 
   const handleSelectSection = (sectionId: string) => {
-    setActiveSectionId(sectionId);
+    dispatch({ type: "select-section", sectionId });
     globalThis.document?.getElementById(`section-${sectionId}`)?.scrollIntoView();
   };
 
@@ -182,12 +204,12 @@ export function EvidenceReader({
 
       <div className="reader-layout">
         <OutlineNav model={outline} activeId={activeSectionId} onSelect={handleSelectSection} />
-        <main aria-label="Document reader">
+        <main id="main-content" tabIndex={-1} aria-label="Document reader">
           <DocumentPane
             sections={ownSections}
             spans={spans}
             selectedSpanId={selectedSpanId}
-            onSelectSpan={setSelectedSpanId}
+            onSelectSpan={(spanId) => dispatch({ type: "select-span", spanId })}
           />
         </main>
         <aside className="evidence-panel" aria-label="Evidence details">
@@ -206,8 +228,8 @@ export function EvidenceReader({
             notes={notes}
             anchor={noteAnchor}
             anchorLabel={noteAnchor ? describeAnchor(noteAnchor) : "nothing selected"}
-            onAdd={(anchor, body) => setNotes((state) => addNote(state, anchor, body))}
-            onRemove={(noteId) => setNotes((state) => removeNote(state, noteId))}
+            onAdd={(anchor, body) => dispatch({ type: "add-note", anchor, body })}
+            onRemove={(noteId) => dispatch({ type: "remove-note", noteId })}
             describeAnchor={describeAnchor}
           />
         </aside>

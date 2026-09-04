@@ -23,7 +23,7 @@ export default async function ObservatoryPage({
   }
 
   return (
-    <main className="page-main">
+    <main id="main-content" tabIndex={-1} className="page-main">
       <h1>Search Observatory</h1>
       <p>
         Inspect a hybrid retrieval run: the query plan, per-lane candidates with raw and fused
