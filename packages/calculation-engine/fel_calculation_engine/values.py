@@ -72,8 +72,18 @@ def require_decimal(value: object, field: str) -> Decimal:
 
 
 def canonical_decimal(value: Decimal) -> str:
-    """One string per numeric value: ``1.50``, ``1.5`` and ``15E-1`` all encode as ``1.5``."""
-    text = format(value.normalize(), "f")
+    """One string per numeric value: ``1.50``, ``1.5`` and ``15E-1`` all encode as ``1.5``.
+
+    ``normalize`` is pinned to ``CALC_CONTEXT``. A bare ``value.normalize()`` uses the
+    *ambient* decimal context, whose default precision is 28 — four digits short of the
+    34 this engine computes at — so it silently rounded the engine's own output before
+    hashing it, and two distinct results could share a content address. Content
+    addressing is the provenance mechanism, so a non-injective encoder is a
+    correctness defect rather than a formatting one.
+
+    Collapsing *value-equal* forms stays intentional; only the precision loss is gone.
+    """
+    text = format(value.normalize(context=CALC_CONTEXT), "f")
     return "0" if text in ("-0", "0") else text
 
 

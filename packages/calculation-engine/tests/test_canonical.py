@@ -11,6 +11,7 @@ import pytest
 from fel_calculation_engine.canonical import CanonicalizationError, canonical_json, content_hash
 from fel_calculation_engine.periods import PeriodKind
 from fel_calculation_engine.units import Unit, UnitKind, currency
+from fel_calculation_engine.values import CALC_CONTEXT, canonical_decimal, require_decimal
 
 
 def test_canonical_json_sorts_keys_and_has_no_whitespace() -> None:
@@ -93,3 +94,41 @@ def test_delimiter_forgery_cannot_collide() -> None:
     assert content_hash({"x": "a", "y": "b"}) != content_hash({"x": "a,y=b", "y": ""})
     assert content_hash(["ab", "c"]) != content_hash(["a", "bc"])
     assert content_hash({"k": ["a", "b"]}) != content_hash({"k": ["a;b"]})
+
+
+def test_canonical_decimal_is_injective_at_full_engine_precision() -> None:
+    """Two distinct engine outputs must not share a content address.
+
+    ``canonical_decimal`` used a bare ``value.normalize()``, which runs in the
+    *ambient* decimal context. Its default precision is 28, four digits short of
+    the 34 this engine computes at, so the encoder silently rounded results
+    before they were hashed: ``divide(1, 3)`` and that value plus ``1E-34`` are
+    unequal, both pass ``require_decimal``, and both encoded to the same
+    28-digit string. Content addressing is how provenance is established, so a
+    non-injective encoder is a correctness defect, not a formatting one.
+
+    Revert the ``context=CALC_CONTEXT`` argument and this test fails.
+    """
+    a = CALC_CONTEXT.divide(Decimal(1), Decimal(3))
+    b = CALC_CONTEXT.add(a, Decimal("1E-34"))
+
+    assert a != b
+    assert len(a.as_tuple().digits) == CALC_CONTEXT.prec
+    require_decimal(a, "a")
+    require_decimal(b, "b")
+
+    assert canonical_decimal(a) != canonical_decimal(
+        b
+    ), "two distinct engine-produced values share one canonical encoding"
+    # The full precision survives rather than being rounded away.
+    assert canonical_decimal(a).endswith("3333")
+    assert canonical_decimal(b).endswith("3334")
+
+
+def test_canonical_decimal_still_collapses_value_equal_forms() -> None:
+    """The intended collapsing is untouched: equal values keep one encoding."""
+    for left, right in (("1.5", "1.50"), ("0", "-0"), ("1E+2", "100"), ("0.100", "0.1")):
+        first, second = Decimal(left), Decimal(right)
+        assert first == second
+        assert canonical_decimal(first) == canonical_decimal(second)
+    assert "E" not in canonical_decimal(Decimal("1E+30"))
