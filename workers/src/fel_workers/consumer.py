@@ -205,7 +205,7 @@ def _park_terminal_run_job(
     *,
     run_id: str,
     status: str,
-    detail: str | None = None,
+    detail_code: str | None = None,
 ) -> bool:
     """Terminal runs are final (#146): park the job, never requeue it.
 
@@ -249,19 +249,54 @@ def _park_terminal_run_job(
         return False
 
     reason = (
-        f"extraction run {run_id} is already {status}: terminal runs are final (#146);"
+        f"extraction run {_safe_extraction_run_id(run_id)} is already {status}: "
+        "terminal runs are final (#146);"
         " job parked to match the run, not retried"
     )
-    if detail:
-        reason = f"{reason}; last attempt: {detail}"
+    if detail_code:
+        reason = (
+            f"{reason}; last_attempt_code={_safe_extraction_code(detail_code)}; "
+            "extraction detail withheld"
+        )
     write = queue.cancel if status == "cancelled" else queue.dead_letter
     if not write(conn, job, reason):
         log.warning("lease lost during job %s; terminal write not recorded", job.id)
     return False
 
 
-def _result_message(error: dict[str, Any] | None, fallback: str) -> str:
-    return str((error or {}).get("message") or (error or {}).get("code") or fallback)
+def _safe_extraction_code(value: object) -> str:
+    """Return only a stable extraction code, never provider/document text."""
+    if (
+        isinstance(value, str)
+        and 0 < len(value) <= 64
+        and value[0] in "abcdefghijklmnopqrstuvwxyz"
+        and all(char in "abcdefghijklmnopqrstuvwxyz0123456789_" for char in value)
+    ):
+        return value
+    return "extraction_error"
+
+
+def _safe_extraction_run_id(value: object) -> str:
+    """Keep UUID-shaped operator context without accepting arbitrary payload text."""
+    if (
+        isinstance(value, str)
+        and len(value) <= 64
+        and value
+        and all(char in "0123456789abcdefABCDEF-" for char in value)
+    ):
+        return value
+    return "unknown"
+
+
+def _extraction_job_reason(
+    *, run_id: object, status: str, error: dict[str, Any] | None = None, code: object = None
+) -> str:
+    """Build the bounded queue reason without copying extraction error detail."""
+    safe_code = _safe_extraction_code(code if code is not None else (error or {}).get("code"))
+    return (
+        f"extraction run {_safe_extraction_run_id(run_id)} {status}; code={safe_code}; "
+        "extraction detail withheld"
+    )
 
 
 def run_worker(
@@ -451,10 +486,21 @@ def run_worker(
                     )
                     verdict = (
                         "dead_letter",
-                        _result_message(result.error, "extraction_run failed"),
+                        _extraction_job_reason(
+                            run_id=result.request.run_id,
+                            status="failed",
+                            error=result.error,
+                        ),
                     )
                 elif result.status == "cancelled":
-                    verdict = ("cancel", _result_message(result.error, "extraction_run cancelled"))
+                    verdict = (
+                        "cancel",
+                        _extraction_job_reason(
+                            run_id=result.request.run_id,
+                            status="cancelled",
+                            error=result.error,
+                        ),
+                    )
                 log.info("extraction_run %s -> %s", result.request.run_id, result.status)
             else:
                 outcome = handle_sec_filing_fetch(conn, storage, sec, job.payload)
@@ -479,15 +525,33 @@ def run_worker(
                 log.warning("lease lost during job %s; failure not recorded", job.id)
                 continue
             log.exception("job %s failed", job.id)
-            if job.kind == JOB_KIND_EXTRACTION_RUN and not extraction_memory_stores:
-                # An untyped escape: the workflow's catch-all may have landed
-                # the row failed before re-raising, and that row is final.
-                now_terminal = _terminal_run_status(conn, job)
-                if now_terminal is not None:
-                    _park_terminal_run_job(
-                        conn, job, run_id=now_terminal[0], status=now_terminal[1], detail=str(exc)
-                    )
-                    continue
+            if job.kind == JOB_KIND_EXTRACTION_RUN:
+                if not extraction_memory_stores:
+                    # An untyped escape: the workflow's catch-all may have
+                    # landed the row failed before re-raising, and that row is
+                    # final.
+                    now_terminal = _terminal_run_status(conn, job)
+                    if now_terminal is not None:
+                        _park_terminal_run_job(
+                            conn,
+                            job,
+                            run_id=now_terminal[0],
+                            status=now_terminal[1],
+                            detail_code=_safe_extraction_code(
+                                getattr(exc, "code", "internal_error")
+                            ),
+                        )
+                        continue
+                queue.fail(
+                    conn,
+                    job,
+                    _extraction_job_reason(
+                        run_id=run_id_from_payload(job.payload),
+                        status="failed",
+                        code=getattr(exc, "code", "internal_error"),
+                    ),
+                )
+                continue
             queue.fail(conn, job, str(exc))
             continue
         heartbeat.stop()
