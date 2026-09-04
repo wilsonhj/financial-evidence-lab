@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from decimal import Decimal
 
 import pytest
@@ -246,3 +247,88 @@ def test_verify_claims_dangling_raises() -> None:
     )
     with pytest.raises(CitationIntegrityError):
         verify_claims([claim], [item], MockCitationVerifier())
+
+
+# --- #133: the per-edge numeric check, proven with a non-identity generator ---
+class NonIdentityClaimGenerator:
+    """Test double for a claim generator that asserts its OWN number.
+
+    ``fel_retrieval.generation._decompose`` is mock-first identity: every claim
+    copies ``numeric`` from the item it cites, so the per-edge numeric check in
+    ``verify_claims`` passes tautologically (PR #122 finding F7). This double
+    never reads ``ContextItem.numeric``: it emits one claim that cites every
+    context item and asserts the number it was constructed with, so an edge
+    whose evidence disagrees can actually come back ``contradictory``.
+    """
+
+    def __init__(self, asserted: NumericTuple, text: str = "revenue was reported") -> None:
+        self._asserted = asserted
+        self._text = text
+
+    def generate(self, context: Sequence[ContextItem]) -> tuple[GeneratedClaim, ...]:
+        citations = tuple(
+            ClaimCitation(item_id=item.item_id, source_span_id=item.source_span_id)
+            for item in context
+        )
+        return (
+            GeneratedClaim(
+                ord=0,
+                text=self._text,
+                status="unsupported",
+                citations=citations,
+                numeric=self._asserted,
+            ),
+        )
+
+
+def _edge_statuses(claim: GeneratedClaim) -> dict[str, str]:
+    return {c.item_id: c.status for c in claim.citations}
+
+
+def test_non_identity_generator_asserts_its_own_number() -> None:
+    """The double really is non-identity: the claim carries the asserted tuple,
+    which equals neither cited item's own numeric."""
+    a = _item("a", "revenue was reported", numeric=_num("100"))
+    b = _item("b", "revenue was reported", span="span-2", numeric=_num("250"))
+
+    (claim,) = NonIdentityClaimGenerator(_num("999")).generate([a, b])
+
+    assert claim.numeric == _num("999")
+    assert claim.numeric not in {a.numeric, b.numeric}
+    assert [c.item_id for c in claim.citations] == ["a", "b"]
+
+
+@pytest.mark.parametrize(
+    ("asserted", "expected_edges"),
+    [
+        ("100", {"a": "entailed", "b": "contradictory"}),
+        ("250", {"a": "contradictory", "b": "entailed"}),
+        ("999", {"a": "contradictory", "b": "contradictory"}),
+    ],
+)
+def test_each_numeric_edge_is_checked_against_its_own_evidence(
+    asserted: str, expected_edges: dict[str, str]
+) -> None:
+    """Two citations, each carrying its own non-None numeric (#133).
+
+    The claim asserts one number independently of either item. Every edge must
+    compare that number with the evidence *it* cites: whichever fact matches is
+    ``entailed`` and the other ``contradictory`` regardless of citation order,
+    and a number matching neither contradicts both. Either revert of the
+    per-edge check in ``verify_claims`` turns this red: copying each item's own
+    numeric onto its edge (the identity tautology -- every edge passes, the claim
+    reads ``supported``) or applying the first citation's evidence number to
+    every edge (the second row's statuses swap).
+    """
+    a = _item("a", "revenue was reported", numeric=_num("100"))
+    b = _item("b", "revenue was reported", span="span-2", numeric=_num("250"))
+    claims = NonIdentityClaimGenerator(_num(asserted)).generate([a, b])
+
+    (verified,) = verify_claims(claims, [a, b], MockCitationVerifier())
+
+    assert _edge_statuses(verified) == expected_edges
+    assert verified.status == "contradicted"
+    # Each edge records the comparison it actually made against its own evidence.
+    checks = {c.item_id: c.numeric_checks for c in verified.citations}
+    assert checks["a"]["value"] is (asserted == "100")
+    assert checks["b"]["value"] is (asserted == "250")
