@@ -300,6 +300,17 @@ re-verified for this ADR.**
   after which removing the key becomes a real breaking change for a real
   consumer instead of a no-op diff. Add this work to #61's `depends_on`.
   ADR-0009 flags the same trigger from the other side (`ADR-0009:166-168`).
+
+  > **Erratum — 2026-08-31, integration lead; recorded on merge of PR #187.** The bullet above reads as a
+  > package-level sequencing requirement on #61; the `Blocks:` header at the top
+  > of this ADR scopes the block to #61's SSE surface. **The header governs.**
+  > The migration-`0006` work blocks the SSE surface until its implementing PR
+  > lands; it is **not** added to #61's `depends_on`, #61 stays dispatchable
+  > non-SSE, and the critical path stays 6 deep. This ADR is **Accepted**, so
+  > this is an erratum recorded beside the bullet — not an amendment to it, and
+  > the bullet's wording is left as published. See
+  > `specs/004-mvp-completion/spec.md` §4.4.
+
 - **A new `workstreams.yaml` entry is required.** `M3-CONTRACT` (#101) is the
   only entry spanning both `db/migrations/**` and `packages/contracts/**` and it
   is `status: merged`; the precedent for a new retroactive entry is

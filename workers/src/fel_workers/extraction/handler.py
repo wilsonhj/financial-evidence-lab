@@ -37,6 +37,7 @@ __all__ = [
     "JOB_KIND_EXTRACTION_RUN",
     "handle_extraction_run",
     "request_from_payload",
+    "run_id_from_payload",
 ]
 
 
@@ -308,6 +309,21 @@ def _bind_evidence_to_spans(
 def _payload_data(payload: dict[str, Any]) -> dict[str, Any]:
     """The pin-carrying dict: a nested ``request`` block, else the payload itself."""
     return dict(payload["request"]) if isinstance(payload.get("request"), dict) else dict(payload)
+
+
+def run_id_from_payload(payload: dict[str, Any]) -> str | None:
+    """The run the payload names, as a canonical UUID string, or ``None``.
+
+    The consumer needs the run's identity BEFORE dispatch — to refuse a job
+    whose run is already terminal (#146) — without the full validation
+    :func:`request_from_payload` performs: a malformed payload must still reach
+    the handler and fail there, with its own message.
+    """
+    data = _payload_data(payload)
+    try:
+        return str(UUID(str(data.get("run_id") or data.get("id") or "")))
+    except ValueError:
+        return None
 
 
 def request_from_payload(payload: dict[str, Any]) -> ExtractionRunRequest:

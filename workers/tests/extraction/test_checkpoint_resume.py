@@ -16,15 +16,28 @@ from fel_workers.extraction.types import WorkflowState
 from fel_workers.extraction.workflow import WorkflowDeps, run_extraction_workflow
 
 
+class _ProcessDeath(BaseException):
+    """SIGKILL/OOM: no handler runs, so the run row stays ``running``.
+
+    The workflow's catch-all lands a handled crash as run ``failed``, and
+    terminal runs are final (#146) — the consumer dead-letters that job, and
+    both persist stores refuse to reopen the row. Resume therefore only exists
+    for a death that bypassed every handler, which is what this models.
+    """
+
+
 class CountingLLM:
     provider = "mock"
     model = "mock-structured-v1"
 
-    def __init__(self) -> None:
+    def __init__(self, *, die_after: int | None = None) -> None:
         self.calls = 0
+        self.die_after = die_after
         self._inner = MockStructuredLLMProvider()
 
     def generate_structured(self, request):  # type: ignore[no-untyped-def]
+        if self.die_after is not None and self.calls >= self.die_after:
+            raise _ProcessDeath("simulated process death")
         self.calls += 1
         return self._inner.generate_structured(request)
 
@@ -37,7 +50,9 @@ def test_crash_after_stage_resumes(
     checkpoint = MemoryCheckpointStore()
     events = MemoryEventStore()
     persist = MemoryPersistStore()
-    llm = CountingLLM()
+    # Die on the second model call: validate_request, assemble_evidence and
+    # classify are committed, the process is gone, the row is still running.
+    llm = CountingLLM(die_after=1)
 
     deps = WorkflowDeps(
         structured_llm=llm,  # type: ignore[arg-type]
@@ -45,14 +60,16 @@ def test_crash_after_stage_resumes(
         events=events,
         persist=persist,
         evidence_loader=lambda _r: list(evidence),
-        crash_after_stages=2,
     )
     state = WorkflowState(request=request, evidence=list(evidence))
-    with pytest.raises(RuntimeError, match="injected crash"):
+    with pytest.raises(_ProcessDeath):
         run_extraction_workflow(state, deps)
     calls_before = llm.calls
-    assert calls_before >= 0
+    assert calls_before == 1
+    # No handler ran: no terminal status was written, so the run is resumable.
+    assert persist.run_status.get(request.run_id) is None
 
+    llm.die_after = None
     deps2 = WorkflowDeps(
         structured_llm=llm,  # type: ignore[arg-type]
         checkpoint=checkpoint,

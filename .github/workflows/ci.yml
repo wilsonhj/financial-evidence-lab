@@ -96,11 +96,11 @@ jobs:
           for f in db/migrations/*.sql; do
             PGPASSWORD=fel-ci-only psql --set ON_ERROR_STOP=1 -h localhost -U fel -d fel_test -f "$f"
           done
-      - run: black --check apps workers evals packages/providers packages/retrieval packages/retrieval-evals packages/ontology
-      - run: ruff check apps workers evals packages/providers packages/retrieval packages/retrieval-evals packages/ontology
-      - run: mypy apps/api/app workers/src evals/graders packages/providers/fel_providers packages/retrieval/fel_retrieval packages/retrieval-evals/fel_retrieval_evals packages/ontology/fel_ontology
+      - run: black --check apps workers evals packages/providers packages/retrieval packages/retrieval-evals packages/ontology packages/calculation-engine
+      - run: ruff check apps workers evals packages/providers packages/retrieval packages/retrieval-evals packages/ontology packages/calculation-engine
+      - run: mypy apps/api/app workers/src evals/graders packages/providers/fel_providers packages/retrieval/fel_retrieval packages/retrieval-evals/fel_retrieval_evals packages/ontology/fel_ontology packages/calculation-engine/fel_calculation_engine
       - run: pytest
-      - run: bandit -q -r apps workers evals packages/providers packages/retrieval packages/retrieval-evals packages/ontology -c pyproject.toml
+      - run: bandit -q -r apps workers evals packages/providers packages/retrieval packages/retrieval-evals packages/ontology packages/calculation-engine -c pyproject.toml
       - run: pip-audit -r requirements-dev.txt
 
   database:

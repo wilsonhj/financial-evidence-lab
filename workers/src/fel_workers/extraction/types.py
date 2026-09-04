@@ -136,6 +136,17 @@ class StageRecord:
     cost_usd: Decimal = Decimal("0")
     error: dict[str, Any] | None = None
     output: Any = None
+    # Content hash of the durable carrier ``output`` was hydrated FROM — today
+    # the ``step_completed`` event's ``stage_output`` subtree (its sibling key
+    # ``stage_output_hash``, taken over the serialized, redacted bytes the row
+    # holds); after #157, whatever column becomes the carrier. ``_is_recoverable``
+    # re-hashes ``output`` against it before a resume trusts the checkpoint.
+    # Deliberately None on every in-process record: there ``output`` is the live
+    # object, which ``output_hash`` (hashed before serialization) already
+    # describes, and a same-process resume would false-positive. Only
+    # ``PostgresCheckpointStore.load_succeeded`` sets it, and only when the row
+    # carries the field — rows written before it existed resume unchecked.
+    durable_output_hash: str | None = None
 
 
 @dataclass
