@@ -12,7 +12,7 @@ from typing import Any
 import psycopg
 
 from fel_workers.extraction.checkpoint import MemoryCheckpointStore
-from fel_workers.extraction.errors import StepFailed
+from fel_workers.extraction.errors import ExtractionError, StepFailed
 from fel_workers.extraction.events import (
     ExtractionEvent,
     MemoryEventStore,
@@ -26,8 +26,10 @@ __all__ = [
     "PostgresCheckpointStore",
     "PostgresEventStore",
     "PostgresPersistStore",
+    "RunAlreadyTerminal",
     "RunPins",
     "SpanPin",
+    "TERMINAL_RUN_STATUSES",
     "UsageSnapshot",
     "assert_workspace_ownership",
 ]
@@ -114,6 +116,27 @@ def _ensure_needs_review(draft: ProposalDraft) -> None:
         raise ValueError("M3 proposals must enter needs_review; no auto-approve")
 
 
+TERMINAL_RUN_STATUSES = frozenset({"succeeded", "failed", "cancelled"})
+"""Run statuses frozen 0004's ``fel_guard_extraction_run`` refuses to mutate."""
+
+
+class RunAlreadyTerminal(ExtractionError):
+    """A write was refused because the run is already terminal (#146).
+
+    Python twin of 0004's ``terminal extraction run cannot be mutated``, raised
+    by BOTH persist stores before any write, so the consumer can dead-letter the
+    job instead of retrying it against a row that can never reopen — and so the
+    defect cannot hide behind a more permissive in-memory double again.
+    """
+
+    code = "run_terminal"
+
+    def __init__(self, *, run_id: str, status: str) -> None:
+        super().__init__(f"extraction run {run_id} is already {status}: terminal runs are final")
+        self.run_id = run_id
+        self.status = status
+
+
 @dataclass
 class MemoryPersistStore:
     """Idempotent in-memory proposal/conflict store for tests and mock E2E."""
@@ -196,6 +219,16 @@ class MemoryPersistStore:
         )
         return persisted, groups
 
+    def _assert_run_open(self, run_id: str) -> None:
+        """The 0004 terminal guard, so unit tests reject what Postgres rejects."""
+        status = self.run_status.get(run_id)
+        if status is not None and status in TERMINAL_RUN_STATUSES:
+            raise RunAlreadyTerminal(run_id=run_id, status=status)
+
+    def load_run_status(self, *, run_id: str, org_id: str) -> str | None:
+        del org_id
+        return self.run_status.get(run_id)
+
     def set_run_status(
         self,
         *,
@@ -205,6 +238,7 @@ class MemoryPersistStore:
         error: dict[str, Any] | None = None,
     ) -> None:
         del org_id, error
+        self._assert_run_open(run_id)
         self.run_status[run_id] = status
 
     def record_usage(self, *, run_id: str, org_id: str, usage: UsageSnapshot) -> None:
@@ -217,6 +251,7 @@ class MemoryPersistStore:
 
     def mark_running(self, *, run_id: str, org_id: str) -> None:
         del org_id
+        self._assert_run_open(run_id)
         self.run_status[run_id] = "running"
 
 
@@ -226,7 +261,24 @@ class PostgresPersistStore:
 
     conn: psycopg.Connection[Any]
 
+    def load_run_status(self, *, run_id: str, org_id: str) -> str | None:
+        """The run row's current status, or ``None`` when there is no such row."""
+        row = self.conn.execute(
+            "SELECT status FROM extraction_runs WHERE id = %s AND org_id = %s",
+            (run_id, org_id),
+        ).fetchone()
+        return None if row is None else str(row[0])
+
     def mark_running(self, *, run_id: str, org_id: str) -> None:
+        """Promote ``queued`` to ``running`` (a no-op on a run already ``running``).
+
+        A terminal row is refused with :class:`RunAlreadyTerminal` BEFORE the
+        UPDATE is issued, so the caller gets a typed error it can dead-letter on
+        rather than 0004's ``terminal extraction run cannot be mutated`` (#146).
+        """
+        status = self.load_run_status(run_id=run_id, org_id=org_id)
+        if status is not None and status in TERMINAL_RUN_STATUSES:
+            raise RunAlreadyTerminal(run_id=run_id, status=status)
         self.conn.execute(
             """
             UPDATE extraction_runs
@@ -244,6 +296,15 @@ class PostgresPersistStore:
         status: str,
         error: dict[str, Any] | None = None,
     ) -> None:
+        """Write a new run status, or raise :class:`RunAlreadyTerminal`.
+
+        Same pre-check as :meth:`mark_running`: a terminal row is refused with
+        the typed error BEFORE the UPDATE, so the consumer never sees 0004's
+        ``terminal extraction run cannot be mutated`` (#146).
+        """
+        current = self.load_run_status(run_id=run_id, org_id=org_id)
+        if current is not None and current in TERMINAL_RUN_STATUSES:
+            raise RunAlreadyTerminal(run_id=run_id, status=current)
         finished = status in {"succeeded", "failed", "cancelled"}
         self.conn.execute(
             """

@@ -17,22 +17,34 @@ from fel_workers.extraction.checkpoint import MemoryCheckpointStore
 from fel_workers.extraction.errors import BudgetExceeded
 from fel_workers.extraction.events import MemoryEventStore
 from fel_workers.extraction.handler import _evidence_from_payload, request_from_payload
-from fel_workers.extraction.persist import MemoryPersistStore, UsageSnapshot
+from fel_workers.extraction.persist import MemoryPersistStore, RunAlreadyTerminal, UsageSnapshot
 from fel_workers.extraction.types import WorkflowState
 from fel_workers.extraction.workflow import WorkflowDeps, run_extraction_workflow
 
 from .conftest import sample_payload
 
 
+class _ProcessDeath(BaseException):
+    """SIGKILL/OOM: no handler runs, so the run row stays ``running``.
+
+    That is the only shape of crash a requeue can resume. A handled failure
+    lands the row ``failed`` — terminal — and terminal runs are final (#146):
+    the consumer dead-letters the job instead of re-dispatching it.
+    """
+
+
 class CountingLLM:
     provider = "mock"
     model = "mock-structured-v1"
 
-    def __init__(self) -> None:
+    def __init__(self, *, die_after: int | None = None) -> None:
         self.calls = 0
+        self.die_after = die_after
         self._inner = MockStructuredLLMProvider()
 
     def generate_structured(self, request: Any) -> Any:
+        if self.die_after is not None and self.calls >= self.die_after:
+            raise _ProcessDeath("simulated process death")
         self.calls += 1
         return self._inner.generate_structured(request)
 
@@ -124,14 +136,20 @@ def test_usage_lands_before_the_terminal_status_write(max_calls: int) -> None:
 
 
 def test_requeued_attempt_does_not_reset_the_budget() -> None:
-    """Attempt two resumes from the spent budget instead of starting at zero."""
+    """Attempt two resumes from the spent budget instead of starting at zero.
+
+    The first attempt dies the way a resumable run dies: process death after
+    real spend, run row still ``running``. With ``max_calls=2`` and one call
+    already flushed, the resumed attempt gets exactly one more call before the
+    cap trips; a reset budget would have let it make a third.
+    """
     payload = sample_payload(modes=["kpi"])
     request = request_from_payload({**payload, "max_calls": 2})
     evidence = _evidence_from_payload(payload)
     persist = MemoryPersistStore()
     events = MemoryEventStore()
     checkpoint = MemoryCheckpointStore()
-    llm = CountingLLM()
+    llm = CountingLLM(die_after=1)
 
     def attempt() -> WorkflowState:
         return run_extraction_workflow(
@@ -145,11 +163,55 @@ def test_requeued_attempt_does_not_reset_the_budget() -> None:
             ),
         )
 
-    first = attempt()
-    assert first.status == "failed"
-    calls_after_first = llm.calls
+    with pytest.raises(_ProcessDeath):
+        attempt()
+    assert llm.calls == 1
+    # No handler ran, so no terminal status was written (mark_running is the
+    # queue handler's; a direct workflow call never writes a non-terminal one).
+    assert persist.run_status.get(request.run_id) is None, "process death must stay resumable"
+    carried = persist.load_usage(run_id=request.run_id, org_id=request.org_id)
+    assert carried.calls_used == 1, "spend was not flushed before the process died"
 
+    llm.die_after = None
     second = attempt()
     assert second.status == "failed"
     assert (second.error or {})["code"] == "budget_exceeded"
-    assert llm.calls == calls_after_first, "requeue re-spent the exhausted call budget"
+    assert llm.calls == 2, "requeue re-spent the exhausted call budget"
+
+
+def test_second_attempt_of_a_failed_run_is_refused_not_re_spent() -> None:
+    """Terminal runs are final (#146): the store refuses, and nothing is spent.
+
+    Before the memory store grew 0004's terminal guard, this second attempt
+    quietly ran to ``failed`` again — a path Postgres never allowed, which is
+    exactly how #146 hid from every unit-level test.
+    """
+    payload = sample_payload(modes=["kpi"])
+    request = request_from_payload({**payload, "max_calls": 2})
+    evidence = _evidence_from_payload(payload)
+    persist = MemoryPersistStore()
+    checkpoint = MemoryCheckpointStore()
+    llm = CountingLLM()
+
+    def attempt() -> WorkflowState:
+        return run_extraction_workflow(
+            WorkflowState(request=request, evidence=list(evidence)),
+            WorkflowDeps(
+                structured_llm=llm,  # type: ignore[arg-type]
+                checkpoint=checkpoint,
+                events=MemoryEventStore(),
+                persist=persist,
+                evidence_loader=lambda _r: list(evidence),
+            ),
+        )
+
+    first = attempt()
+    assert first.status == "failed"
+    assert persist.run_status[request.run_id] == "failed"
+    calls_after_first = llm.calls
+
+    with pytest.raises(RunAlreadyTerminal) as refused:
+        attempt()
+    assert refused.value.status == "failed"
+    assert llm.calls == calls_after_first, "a refused attempt still spent model calls"
+    assert persist.run_status[request.run_id] == "failed"
