@@ -27,7 +27,6 @@ import statistics
 from time import perf_counter
 
 import pytest
-
 from _fixtures import CUTOFF
 
 from fel_calculation_engine.engine import evaluate
