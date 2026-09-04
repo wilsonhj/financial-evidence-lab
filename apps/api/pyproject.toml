@@ -13,12 +13,6 @@ dependencies = [
   "psycopg[binary,pool]>=3.2",
 ]
 
-[project.optional-dependencies]
-# Test-only. PyYAML parses the frozen contract in tests/test_openapi_parity.py.
-dev = [
-  "pyyaml>=6.0",
-]
-
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
