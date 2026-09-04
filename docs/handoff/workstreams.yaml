@@ -439,8 +439,8 @@ packages:
     tasks: [T0401, T0402, T0403, T0409, T0410]
     depends_on: [M3-EXTRACTION-CORE]
     team: modeling
-    branch: agent/m4-model-calc # not yet created
-    status: ready # #174 is on main @ a4bb356; packages/calculation-engine/** overlap nothing in flight; credentials mock-only; dispatchable now. Adding a key, not flipping one — previously inherited defaults.status: blocked.
+    branch: agent/m4-model-calc
+    status: merged # PR #212 merged to main @ 9e23c7f (2026-09-04 UTC); issue #63 closed. packages/calculation-engine/** is on trunk: 33 files covering nodes, units, periods, values, the edge/cycle graph, the Decimal engine, scenarios, snapshots, property tests and the 5,000-node benchmark. History (#179, same defect class): this entry read `ready` from that merge until the present reconciliation, so it was advertising finished work as dispatchable. Found by sweeping every `ready` entry against its issue's state on GitHub; it was the only one stale.
     allowed_paths: [packages/calculation-engine/**]
   - id: M4-FACT-SCENARIOS # gated on confidence controls so approved extractions cannot seed model nodes before monetary auto-approve rules exist
     issue: 64
