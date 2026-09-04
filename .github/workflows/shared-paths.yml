@@ -52,7 +52,19 @@ jobs:
             exit 0
           fi
 
-          touched=$(printf '%s\n' "$changed" | grep -E "$shared_prefix|$shared_exact" || true)
+          # `|| true` would swallow grep's exit 2 (a bad pattern) as well as its
+          # exit 1 (no match), leaving `touched` empty and passing the check
+          # without having matched anything — the exact defect #199/#202 are
+          # about. Tolerate 1, refuse anything higher.
+          set +e
+          touched=$(printf '%s\n' "$changed" | grep -E "$shared_prefix|$shared_exact")
+          grep_rc=$?
+          set -e
+          if [ "$grep_rc" -gt 1 ]; then
+            echo "FAIL: the shared-path matcher exited $grep_rc, so it never" >&2
+            echo "decided anything. Refusing to report success." >&2
+            exit 1
+          fi
 
           if [ -z "$touched" ]; then
             echo "OK: this PR touches no shared path."
@@ -60,7 +72,7 @@ jobs:
           fi
 
           echo "This PR touches these shared paths:"
-          printf '  %s\n' $touched
+          printf '%s\n' "$touched" | sed 's/^/  /'
 
           if [ "$HAS_LABEL" = "true" ]; then
             echo

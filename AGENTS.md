@@ -31,7 +31,9 @@ The integration lead owns these paths:
 - `.github/`
 - `.specify/`
 - `specs/`
-- root package/lock/config files
+- root package/lock/config files: `package.json`, `package-lock.json`,
+  `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `pyproject.toml`, `Makefile`
+- `AGENTS.md` (this file)
 - `packages/contracts/`
 - `db/migrations/`
 - `docs/decisions/`
