@@ -212,7 +212,10 @@ def test_null_job_org_is_refused_on_the_durable_path(extraction_db_url: str) -> 
     assert completed == 0, "an untenanted extraction_run was completed as successful"
     assert job is not None
     assert job[0] == "failed", job
-    assert "org_id" in str(job[1]), job[1]
+    message = job[1]["error"]["message"]
+    assert "code=job_org_id_missing" in message, job[1]
+    assert request.run_id in message, job[1]
+    assert request.org_id not in message, job[1]
     assert durable["run_status"] == "queued", "the run was persisted without a tenant bind"
     assert durable["proposals"] == 0, "proposals were persisted without a tenant bind"
 
