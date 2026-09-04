@@ -76,7 +76,7 @@ defaults:
 
 # Queue restructure (architecture audit, 2026-07): 41 packages consolidated to 19
 # milestone-scoped packages (18 pending once the completed M0-SCAFFOLD merges).
-# The file has since grown to 32 entries as contract waves and unallocated
+# The file has since grown to 34 entries as contract waves and unallocated
 # packages were registered; the 19/18 figures are historical, not current.
 # Issues #57-#62 refreshed and contract waves #100/#101 added 2026-07-16. Each package's `issue:` field points at its
 # GitHub issue (#9 and #51-#151, not a contiguous range); legacy issues #10-#49 are closed. Deferred post-MVP and
@@ -186,11 +186,11 @@ packages:
     allowed_paths: [apps/web/**, packages/ui/**]
   - id: M1-CORPUS-QA
     issue: 56
-    tasks: [T0111, T0112]
+    tasks: [T0111] # was [T0111, T0112]; T0112 moved to RELEASE-LIVE-CUTOVER (#177) in this same PR (#185)
     depends_on: [M1-INGESTION]
     team: trust
     branch: agent/m1-corpus-qa
-    status: merged # PR #86 squashed to main @ 1a96228 (2026-07-14); T0112 live artifact tracked on reopened #56
+    status: merged # PR #86 squashed to main @ 1a96228 (2026-07-14). T0112 was tracked here on reopened #56 until this commit moved it to RELEASE-LIVE-CUTOVER (#177), which owns the live ingest; #56 stays open as the issue record. See the tasks: key above.
     allowed_paths: [evals/**, workers/tests/**]
   - id: M1-COMPANY-FACTS # FR-ING-001 companyfacts follow-up (issue #83; found by PR #80 review)
     issue: 83
@@ -346,6 +346,57 @@ packages:
       - workers/src/fel_workers/consumer.py
       - workers/src/fel_workers/__main__.py
       - workers/tests/**
+  - id: EXTRACTION-STEPS-OUTPUT # migration 0006: extraction_run_steps.output (issue #157)
+    # Required by ADR-0011 (Accepted 2026-08-30 on PR #175), whose Consequences
+    # state outright: "A new `workstreams.yaml` entry is required." The precedent
+    # for a new retroactive migration entry is DB-GUARD-HARDENING (#125, created
+    # for the 0005 record). Entries spanning both db/migrations/** and
+    # packages/contracts/** are M2-CONTRACT (#100) and M3-CONTRACT (#101), both
+    # merged, and THIS entry, which is blocked — a count that includes itself,
+    # because an earlier draft of this comment said the two contract packages
+    # were "the only" such entries and was false in the very entry carrying it.
+    # Implements the
+    # durable checkpoint column so a completed stage's result stops riding on the
+    # step_completed event payload's stage_output key — the coupling that leaves
+    # extraction_run_events carrying verbatim filing text while six published
+    # contract and spec locations state it carries metadata only.
+    issue: 157
+    # Deliberately empty: no Spec Kit task covers this fix. It is the follow-up
+    # ADR-0009 named in its own "Alternatives rejected"; ADR-0009 is now
+    # Superseded by ADR-0011 and its proposed amendment is withdrawn unexecuted.
+    tasks: []
+    depends_on: [M3-EXTRACTION-CORE] # M3-CONTRACT (frozen 0004 + OpenAPI v0.4.0) inherited via M3-EXTRACTION-CORE
+    team: contracts
+    branch: agent/extraction-steps-output # not yet created
+    status: blocked # NOT dispatchable. The integration lead must first sequence it against #62 (see allowed_paths), and must land it before #61's SSE surface per ADR-0011's first revisit trigger, which the spec records as mandatory rather than advisory. #157 already carries both the contract-change and agent-task labels; db/migrations/**, packages/contracts/**, specs/** and docs/decisions/** are all shared paths, so dispatch needs explicit integration-lead authorization.
+    allowed_paths:
+      # CONTENTION: the last two paths below are a SUBSET of M3-CONFIDENCE-GATE
+      # (#62)'s claim set (#62 also claims evals/**), so these two packages can
+      # NEVER run concurrently —
+      # ADR-0011 says so itself: "That path overlap needs the integration lead to
+      # sequence it against #62." workers/tests/** is additionally claimed by #66
+      # and #67, and is contained in the workers/** claimed by #108 — containment
+      # that exact-string overlap comparison does not catch. Spec 004 §6.1/§6.2
+      # sequence this entry before wave 1, which clears all four at once.
+      #
+      # SCOPE OF THE BLOCK ON #61 — RULED by the integration lead: this work
+      # blocks ONLY #61's SSE surface, not all of #61. ADR-0011's header governs
+      # ("Blocks: #61 SSE until the *implementing* PR for migration 0006 lands.
+      # Non-SSE #61 work still waits on unimplemented #146 Option 1"), so NO
+      # depends_on edge is added from #61 to this entry. The lead deliberately
+      # chose that reading over the "Add this work to #61's depends_on" clause in
+      # ADR-0011's Consequences, which read literally would make this entry a
+      # package-level predecessor of #61, deepen the critical path from 6 to 7
+      # and leave #63 alone in wave 1. Spec 004 §4.4 discloses the tension rather
+      # than resolving it; this is the resolution. Recorded here so a later
+      # reader does not silently re-open it.
+      - db/migrations/**
+      - db/migrations/tests/**
+      - packages/contracts/**
+      - specs/003-agentic-extraction/**
+      - docs/decisions/**
+      - workers/src/fel_workers/extraction/**
+      - workers/tests/**
   - id: M3-REVIEW
     issue: 61
     tasks: [T0308, T0309]
@@ -357,9 +408,35 @@ packages:
   - id: M3-CONFIDENCE-GATE # confidence scoring + extraction quality gate
     issue: 62
     tasks: [T0306, T0307, T0310]
-    depends_on: [M3-REVIEW] # M3-EXTRACTION-CORE inherited via M3-REVIEW
+    depends_on: [M3-REVIEW, RELEASE-LIVE-CUTOVER] # M3-EXTRACTION-CORE inherited via M3-REVIEW; live-cutover edge added 2026-09-03 per spec 004 §6.2 / A-14 (see ORDERING below)
     team: trust
     branch: agent/m3-confidence-gate
+    # This package CANNOT complete mock-only, so it must not inherit
+    # defaults.credentials. M3-304 (specs/003-agentic-extraction/tasks.md:36)
+    # requires a "live OpenAI structured-output smoke with approved secret", and
+    # #62's own issue body closes "Request `FEL_OPENAI_API_KEY` only for
+    # credentialed smoke". Until this key was added the file asserted #62 was
+    # mock-only, which is false. Adding it changes no status and dispatches
+    # nothing; it records a precondition that already existed.
+    #
+    # TWO CONSEQUENCES, one ruled here and one still open:
+    # (1) ORDERING — RULED 2026-09-03 by the integration lead. specs/004 §6.2, as
+    #     reconciled by PR #187, places RELEASE-LIVE-CUTOVER (which owns
+    #     provisioning) at wave 2 and #62 at wave 3, conditioned on "#61 merged
+    #     and RELEASE-LIVE-CUTOVER merged" (finding A-14). This entry's depends_on
+    #     now carries that edge so the constraint lives in the graph rather than
+    #     in prose. It is cycle-free (the cutover depends only on merged
+    #     packages), and the two packages contend on evals/** and workers/tests/**
+    #     anyway, so the edge fixes an order that path contention already forced.
+    #     The alternative that was weighed — provisioning FEL_OPENAI_API_KEY as a
+    #     wave-0 lead action with no edge — was declined because it would leave
+    #     #62 dispatchable before the credential existed.
+    # (2) PROVIDER — OPEN. M3-304 names OpenAI; #132 directs claude-opus-4-8;
+    #     ADR-0002 (Accepted) pins OpenAI; constitution principle V requires an
+    #     approved ADR plus benchmark evidence, and neither exists (finding A-1;
+    #     ADR-0012, Proposed on PR #186). So A-1 gates #62 at wave 3, behind the
+    #     cutover, not at wave 6 as spec 004 first recorded.
+    credentials: hosted-required # override defaults.credentials mock-only; M3-304 only
     allowed_paths:
       - workers/src/fel_workers/extraction/**
       - workers/tests/**
@@ -411,11 +488,50 @@ packages:
       - workers/src/fel_workers/forecasting/**
       - workers/tests/**
       - evals/**
+  - id: RELEASE-LIVE-CUTOVER # mock -> live cutover: provisioning + live evaluation
+    # Registered per specs/004-mvp-completion/spec.md §5.1 (clarify-analyse.md
+    # Q-2). Owns the surface no package owned: defaults.credentials is mock-only
+    # and READER-PROD-SMOKE (#108) was the only override, so the dependency graph
+    # terminated at M5-AUDIT-RELEASE (#68) — which owns T0214b's dual-adjudicated
+    # 300-question benchmark over at least 20 real US-listed issuers, and T0513's
+    # signed release artifact — while inheriting mock-only. A mock-only package
+    # cannot produce that benchmark. #68 now carries the edge into this entry.
+    issue: 177
+    # T0112 MOVED HERE from M1-CORPUS-QA (#56) in this same PR (#185), where the
+    # entry now reads [T0111]. Leaving it in both would have made T0112 the only
+    # double-owned task in the file and left §4.2's reconciliation ambiguous
+    # about who closes it. The rest of this package's scope carries no Spec Kit
+    # task and is tracked by issue: #132 (live 65-question M2 exit gate), #81
+    # (stress cohort), #137 (cutover hygiene).
+    tasks: [T0112]
+    depends_on: [M2-CLAIMS-VERIFICATION, M3-EXTRACTION-CORE]
+    team: trust
+    branch: agent/release-live-cutover # not yet created
+    status: blocked # NOT dispatchable, and NOT a dependency block — both depends_on edges are already merged. Held instead by preconditions outside the repository, which depends_on has no vocabulary for: (1) credentials are not provisioned — all five CREDENTIALS.md groups read "Not requested"; (2) the embeddings-provider ADR does not exist — ADR-0002 (Accepted) pins OpenAI generation and text-embedding-3, #132 records that Anthropic ships no embeddings endpoint so index build and query embedding cannot use Claude under the replace-OpenAI directive, and constitution principle V requires benchmark evidence plus an approved ADR for any provider substitution (finding A-1); (3) Alpha Vantage budget authorization — a provisioning item, NOT a tier decision, since ADR-0002 already ruled the paid tier required and CREDENTIALS.md's "or an ADR revisiting the market-data adapter choice" is an escape hatch ADR-0002 closed (finding A-6); (4) adjudicator staffing and budget for §19.5's two qualified reviewers. Flipping this key is a dispatch decision reserved to the integration lead.
+    credentials: hosted-required # override defaults.credentials mock-only; names only until lead provisions
+    allowed_paths:
+      # CONTENTION: cannot run concurrently with #62, #66, #67, #68 or #108.
+      # evals/** is claimed by #62, #67, #68 and #108; workers/tests/** by #62,
+      # #66 and #67, and by #108 through containment — #108 claims the enclosing
+      # workers/** rather than the literal glob, which exact-string comparison
+      # does not catch. Spec 004 §6.2 (as reconciled by PR #187) gives this
+      # package wave 2, serialized ahead of #108, with #62 at wave 3 and #68 at
+      # wave 7.
+      - evals/** # live benchmark harness + evidence capture
+      - workers/tests/**
+      - docs/handoff/CREDENTIALS.md # record provisioned groups; not a shared path
   - id: M5-AUDIT-RELEASE # audit/export + release evals incl. frozen 300-question benchmark
     issue: 68
     # Fact/scenario dependency is inherited via M5-BACKTEST -> M5-FORECASTING ->
     # M4-FACT-SCENARIOS; the former lineage-UI edge was removed by the audit.
     tasks: [T0509, T0510, T0511, T0512, T0513, T0214b]
+    # RELEASE-LIVE-CUTOVER is inherited via M5-BACKTEST -> M5-FORECASTING ->
+    # M4-FACT-SCENARIOS -> M3-CONFIDENCE-GATE, which gained the edge in this
+    # same commit. A direct edge was added here first, under spec 004 §5.1
+    # (#68 owns T0214b/T0513 but inherited defaults.credentials mock-only) and
+    # was not redundant then, because #62 carried no such edge; adding #62's
+    # made it so. Dropped per this file's own rule at the top: "Dependency
+    # edges are minimal: transitively implied dependencies are not repeated."
     depends_on: [M5-BACKTEST]
     team: trust
     branch: agent/m5-audit-release
