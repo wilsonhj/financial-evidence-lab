@@ -850,6 +850,16 @@ def _sum_breaks(draft: Any) -> list[str]:
     return [b for b in draft.validation_summary["blockers"] if "segments_do_not_sum" in b]
 
 
+# A blocker that impugns the row's MAGNITUDE, in the normalizer's own wording
+# (normalize/payload.py). Only such a code makes ``validate_proposals`` withhold
+# the row from identity checks: ``pipeline.py`` gates on membership outside
+# ``NON_MAGNITUDE_NORMALIZER_BLOCKERS``, and ``dimensions_non_string`` -- the
+# code the two tests below used until #178 -- has been allowlisted there since
+# #162, so those tests withheld nothing and passed identically with the
+# suppression deleted.
+GATING_BLOCKER = "sign contradicts value: declared negative, value is positive"
+
+
 def test_a_withheld_segment_does_not_fabricate_a_sum_break_for_its_clean_siblings() -> None:
     """The mirror image of the PR #145 review M1 case above.
 
@@ -867,7 +877,7 @@ def test_a_withheld_segment_does_not_fabricate_a_sum_break_for_its_clean_sibling
     emea = kpi("arr", "50", period=DURATION, dimensions={"segment": "emea"})
     apac = kpi("arr", "30", period=DURATION, dimensions={"segment": "apac"})
     amer = kpi("arr", "20", period=DURATION, dimensions={"segment": "amer"})
-    amer[NORMALIZER_BLOCKERS_KEY] = ["dimensions_non_string"]
+    amer[NORMALIZER_BLOCKERS_KEY] = [GATING_BLOCKER]
 
     result = validate_proposals(
         run_id="00000000-0000-4000-8000-0000000000a7",
@@ -875,6 +885,10 @@ def test_a_withheld_segment_does_not_fabricate_a_sum_break_for_its_clean_sibling
     )
 
     assert len(result.proposals) == 4
+    # The row really was withheld: its blocker gates (is not allowlisted) and
+    # travelled onto the draft. Without both, the assertion below is vacuous.
+    assert GATING_BLOCKER not in NON_MAGNITUDE_NORMALIZER_BLOCKERS
+    assert GATING_BLOCKER in result.proposals[3].validation_summary["blockers"]
     for draft in result.proposals:
         assert _sum_breaks(draft) == []
 
@@ -894,7 +908,7 @@ def test_suppressing_one_slice_does_not_silence_a_real_break_in_another() -> Non
         kpi("arr", "30", period=DURATION, dimensions={"segment": "apac"}),
         kpi("arr", "20", period=DURATION, dimensions={"segment": "amer"}),
     ]
-    withheld_slice[3][NORMALIZER_BLOCKERS_KEY] = ["dimensions_non_string"]
+    withheld_slice[3][NORMALIZER_BLOCKERS_KEY] = [GATING_BLOCKER]
     broken_slice = [
         kpi("revenue", "100", period=DURATION),
         kpi("revenue", "50", period=DURATION, dimensions={"segment": "emea"}),
@@ -907,8 +921,33 @@ def test_suppressing_one_slice_does_not_silence_a_real_break_in_another() -> Non
     )
 
     arr_rows, revenue_rows = result.proposals[:4], result.proposals[4:]
+    assert GATING_BLOCKER in arr_rows[3].validation_summary["blockers"]
     assert [_sum_breaks(draft) for draft in arr_rows] == [[], [], [], []]
     assert all(_sum_breaks(draft) for draft in revenue_rows)
+
+
+def test_a_withheld_single_dimension_segment_suppresses_its_slice() -> None:
+    """The lower bound of the suppression, pinned directly (#178).
+
+    The two pipeline tests above prove the mechanism end to end but can only
+    observe it through ``validate_proposals``. This one calls
+    ``identity_errors`` with ``excluded_indices`` the way the two upper-bound
+    tests below do, so the assertion is on the suppression itself: with the
+    ``20`` addend withheld the survivors sum to 80 against a reported 100, and
+    the only reason no ``segments_do_not_sum`` fires is that the slice is
+    suppressed. Replace ``suppressed = {...}`` in ``_check_segment_sums`` with
+    ``suppressed = set()`` and this convicts three individually correct rows.
+    """
+    payloads = [
+        kpi("arr", "100"),
+        kpi("arr", "50", dimensions={"segment": "emea"}),
+        kpi("arr", "30", dimensions={"segment": "apac"}),
+        kpi("arr", "20", dimensions={"segment": "amer"}),
+    ]
+    # Balanced while every addend is present.
+    assert identity_errors(payloads) == {}
+    # Still silent once one addend is withheld: a missing addend is not a break.
+    assert identity_errors(payloads, excluded_indices=frozenset({3})) == {}
 
 
 def test_a_withheld_multi_dimension_row_does_not_silence_a_real_break() -> None:
