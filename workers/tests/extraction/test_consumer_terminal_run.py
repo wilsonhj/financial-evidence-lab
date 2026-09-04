@@ -132,7 +132,7 @@ def _telemetry(caplog: pytest.LogCaptureFixture, event: str) -> list[str]:
 
 
 @pytest.mark.parametrize("terminal", TERMINAL)
-def test_terminal_run_is_dead_lettered_before_dispatch(
+def test_terminal_run_job_is_parked_to_match_the_run_before_dispatch(
     monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture, terminal: str
 ) -> None:
     """Acceptance 1 + 5: dropped before the handler, redacted reason and telemetry."""
@@ -141,19 +141,30 @@ def test_terminal_run_is_dead_lettered_before_dispatch(
     with caplog.at_level(logging.INFO, logger=TELEMETRY):
         completed = h.run()
 
-    assert completed == 0
+    # A `succeeded` run's job is completed, so it counts; the other two do not.
+    assert completed == (1 if terminal == "succeeded" else 0)
     # The handler must never be entered. Without this the test cannot tell
     # "dropped before dispatch" from "dispatched, and _never_called's
     # AssertionError was swallowed at the job boundary, after which the
     # post-failure re-read dead-lettered anyway" — which is what it does when
     # the pre-dispatch check is removed. Found by review of #211.
     assert h.handler_kwargs == [], "the handler was entered before the drop"
-    assert h.only_write == "dead_letter"
-    reason = h.writes["dead_letter"][0]
-    assert payload["run_id"] in reason and terminal in reason
-    assert "Example SaaS" not in reason, "issuer text leaked into the durable job error"
-    assert "terminal extraction run cannot be mutated" not in reason
-    events = _telemetry(caplog, "terminal_run_job_dead_lettered")
+    # #204: the job's terminal state must MATCH the run's. Dead-lettering all
+    # three would leave a `succeeded` run with a `failed` job — reachable when a
+    # worker writes the run terminal, loses its lease before `queue.complete`,
+    # and the reaper redelivers.
+    expected_write = {"succeeded": "complete", "cancelled": "cancel", "failed": "dead_letter"}
+    assert h.only_write == expected_write[terminal]
+    if terminal == "succeeded":
+        # `complete` is the ordinary success write and carries no reason string;
+        # the run row already holds the outcome.
+        assert h.writes["complete"], h.writes
+    else:
+        reason = h.writes[expected_write[terminal]][0]
+        assert payload["run_id"] in reason and terminal in reason
+        assert "Example SaaS" not in reason, "issuer text leaked into the durable job error"
+        assert "terminal extraction run cannot be mutated" not in reason
+    events = _telemetry(caplog, "terminal_run_job_parked")
     assert len(events) == 1, caplog.text
     for field in (
         payload["run_id"],
@@ -165,8 +176,12 @@ def test_terminal_run_is_dead_lettered_before_dispatch(
     assert "Example SaaS" not in events[0] and "evidence" not in events[0]
 
 
-def test_run_turning_terminal_under_us_is_dead_lettered(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The store's typed refusal (race after the pre-dispatch read) is not a retry."""
+def test_run_turning_terminal_under_us_is_parked_to_match(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The store's typed refusal (race after the pre-dispatch read) is not a retry.
+
+    And the write still matches the run's status rather than defaulting to a
+    dead-letter, which is the same #204 agreement rule as the pre-dispatch path.
+    """
     payload = sample_payload()
 
     def refuse(*_a: Any, **_k: Any) -> Any:
@@ -174,8 +189,10 @@ def test_run_turning_terminal_under_us_is_dead_lettered(monkeypatch: pytest.Monk
 
     h = _Harness(monkeypatch, payload, handler=refuse, run_statuses=iter(["running"]))
     assert h.run() == 0
-    assert h.only_write == "dead_letter"
-    assert "cancelled" in h.writes["dead_letter"][0]
+    # The refusal carries status="cancelled", so the job is cancelled to match
+    # the run rather than dead-lettered as failed (#204).
+    assert h.only_write == "cancel"
+    assert "cancelled" in h.writes["cancel"][0]
 
 
 def test_untyped_escape_after_the_run_went_terminal_is_dead_lettered(

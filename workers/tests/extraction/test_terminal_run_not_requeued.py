@@ -60,7 +60,7 @@ def _run_snapshot(conn: psycopg.Connection, run_id: str) -> tuple[Any, ...]:
 
 @requires_db
 @pytest.mark.parametrize("terminal", TERMINAL)
-def test_job_for_a_terminal_run_is_dead_lettered_not_retried(
+def test_job_for_a_terminal_run_is_parked_to_match_the_run_not_retried(
     extraction_db_url: str,
     terminal: str,
     monkeypatch: pytest.MonkeyPatch,
@@ -98,23 +98,34 @@ def test_job_for_a_terminal_run_is_dead_lettered_not_retried(
         ).fetchone()
         after = _run_snapshot(conn, request.run_id)
 
-    assert completed == 0
+    # #204: the job's terminal state must MATCH the run's, so the expected job
+    # row differs per terminal status. Parking every one as `failed` would leave
+    # a fully successful run with a permanently failed job — reachable when a
+    # worker writes the run terminal, loses its lease before `queue.complete`,
+    # and the reaper redelivers the job.
+    expected_job_status = {"succeeded": "succeeded", "failed": "failed", "cancelled": "cancelled"}
+    assert completed == (1 if terminal == "succeeded" else 0)
     assert job is not None
     status, attempts, finished_at, error = job
-    assert status == "failed", f"job was not dead-lettered: {job}"
+    assert status == expected_job_status[terminal], f"job state does not match the run: {job}"
     assert attempts == 1, "the job re-entered the retry loop"
     assert finished_at is not None
-    assert error["error"]["code"] == "JOB_DEAD_LETTERED"
-    message = error["error"]["message"]
-    assert request.run_id in message and terminal in message
-    assert "terminal extraction run cannot be mutated" not in message, "0004 was tripped"
-    assert request.issuer_label not in message, "issuer text leaked into jobs.error"
+    if terminal == "succeeded":
+        # `complete` is the ordinary success write and records no error.
+        assert error is None, f"a completed job carries no error: {error}"
+    else:
+        expected_code = {"failed": "JOB_DEAD_LETTERED", "cancelled": "JOB_CANCELLED"}[terminal]
+        assert error["error"]["code"] == expected_code
+        message = error["error"]["message"]
+        assert request.run_id in message and terminal in message
+        assert "terminal extraction run cannot be mutated" not in message, "0004 was tripped"
+        assert request.issuer_label not in message, "issuer text leaked into jobs.error"
     assert after == before, "the terminal run row (or its children) was touched"
     assert mark_running_calls == [], "mark_running was called on a terminal run"
     events = [
         r.getMessage()
         for r in caplog.records
-        if r.name == TELEMETRY and "terminal_run_job_dead_lettered" in r.getMessage()
+        if r.name == TELEMETRY and "terminal_run_job_parked" in r.getMessage()
     ]
     assert len(events) == 1, caplog.text
     assert request.run_id in events[0] and job_id in events[0] and terminal in events[0]
