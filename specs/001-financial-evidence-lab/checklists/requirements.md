@@ -27,4 +27,4 @@
 
 ## Notes
 
-As of specification v1.2 (2026-07-12), this feature directory holds the sole canonical `spec.md`, `plan.md`, and `tasks.md`. Root `SPEC.md`, `PLAN.md`, and `TASKS.md` are pointer stubs; nothing is mirrored. The locked MVP stack is recorded in `docs/decisions/ADR-0002-mvp-stack.md`.
+As of specification v1.2 (2026-07-12), this feature directory holds the parent `spec.md` and `plan.md` and, as of constitution v1.2.0 (2026-08-31), the **sole canonical task ledger** `tasks.md`. Milestone and completion directories may hold subordinate spec/plan artifacts mapping onto the canonical `T####` IDs. Root `SPEC.md`, `PLAN.md`, and `TASKS.md` are pointer stubs; nothing is mirrored. The locked MVP stack is recorded in `docs/decisions/ADR-0002-mvp-stack.md`.
