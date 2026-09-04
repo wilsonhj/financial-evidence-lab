@@ -119,3 +119,47 @@ def test_job_for_a_terminal_run_is_dead_lettered_not_retried(
     assert len(events) == 1, caplog.text
     assert request.run_id in events[0] and job_id in events[0] and terminal in events[0]
     assert request.issuer_label not in events[0]
+
+
+@requires_db
+@pytest.mark.parametrize("terminal", TERMINAL)
+def test_0004_still_refuses_a_raw_update_to_a_terminal_run(
+    extraction_db_url: str, terminal: str
+) -> None:
+    """The trigger this whole fix front-runs is still there, and still fires.
+
+    Every other assertion in this suite is *negative* — that
+    ``terminal extraction run cannot be mutated`` never reaches a durable
+    job error, because the Python guard refuses first. That is only
+    meaningful while the trigger it defers to actually exists: if 0004 were
+    dropped, those tests would keep passing and the last line of defence
+    would be gone silently. This is the positive characterisation, taken at
+    the database rather than through any store, so it fails if the migration
+    changes rather than if the guard does.
+
+    A test asserting this existed before PR #214 rewrote it to cover the
+    store's typed refusal; the store-level assertion is the right one for
+    that layer, but it replaced the only proof the trigger fires. Restored
+    here alongside it rather than instead of it.
+    """
+    with psycopg.connect(extraction_db_url, autocommit=True) as conn:
+        request = _seeded_run(conn)
+        # 0004 also enforces the transition graph, so the row cannot jump from
+        # `queued` straight to a terminal state — drive it the legal way first.
+        conn.execute(
+            "UPDATE extraction_runs SET status = 'running', started_at = now() WHERE id = %s",
+            (request.run_id,),
+        )
+        conn.execute(
+            "UPDATE extraction_runs SET status = %s, finished_at = now() WHERE id = %s",
+            (terminal, request.run_id),
+        )
+        with pytest.raises(psycopg.errors.RaiseException, match="terminal extraction run"):
+            conn.execute(
+                "UPDATE extraction_runs SET status = 'running' WHERE id = %s",
+                (request.run_id,),
+            )
+        still = conn.execute(
+            "SELECT status FROM extraction_runs WHERE id = %s", (request.run_id,)
+        ).fetchone()
+        assert still is not None and still[0] == terminal, "the terminal row was mutated"

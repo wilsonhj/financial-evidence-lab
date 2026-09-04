@@ -142,6 +142,12 @@ def test_terminal_run_is_dead_lettered_before_dispatch(
         completed = h.run()
 
     assert completed == 0
+    # The handler must never be entered. Without this the test cannot tell
+    # "dropped before dispatch" from "dispatched, and _never_called's
+    # AssertionError was swallowed at the job boundary, after which the
+    # post-failure re-read dead-lettered anyway" — which is what it does when
+    # the pre-dispatch check is removed. Found by review of #211.
+    assert h.handler_kwargs == [], "the handler was entered before the drop"
     assert h.only_write == "dead_letter"
     reason = h.writes["dead_letter"][0]
     assert payload["run_id"] in reason and terminal in reason
