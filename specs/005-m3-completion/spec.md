@@ -42,7 +42,7 @@ Every count, status and identifier was produced by a command run against `origin
 
 ## 3. Verified state
 
-- Trunk at the 2026-08-31 measurement: `ebe77af`, five of five checks passing. Trunk has since moved to `b8dc8a6` (#175, #173, #183) and its JS/TS audit gate is red on a `fast-uri` advisory batch unrelated to this document; every count below was re-verified against `b8dc8a6` on 2026-09-03 and none changed.
+- Trunk at the 2026-08-31 measurement: `ebe77af`, five of five checks passing. Trunk has moved since — through `b8dc8a6` (#175, #173, #183) and on — so re-resolve it with §2's `git log -1 origin/main` rather than reading a SHA here. Every count below was re-verified against `b8dc8a6` on 2026-09-03 and none changed. A `fast-uri` advisory batch reddened the JS/TS audit gate on 2026-09-03 and was fixed the same day by PR #207; it never touched this document's subject.
 - Packages: **32 registered — 23 `merged`, 1 `ready`, 8 not started.** Two more await registration (§4.3).
 - M3 core (`M3-EXTRACTION-CORE`, #60) merged @ `61058e4`. `T0301`–`T0305` are delivered but still read `[ ]` in the canonical ledger — one of the 17 drifted checkboxes.
 - **M3 remaining: 5 canonical tasks, 10 milestone tasks, 2 packages.**
@@ -109,7 +109,7 @@ Against that:
 
 1. `docs/handoff/CREDENTIALS.md` lists five credential groups. **All five read "Not requested."**
 2. `workstreams.yaml:73` sets `defaults.credentials: mock-only`. `M3-CONFIDENCE-GATE` (#62) has **no `credentials:` key**, so it inherits mock-only.
-3. Only `READER-PROD-SMOKE` (#108) overrides it.
+3. On trunk, only `READER-PROD-SMOKE` (#108) overrides it — but PR #185, which §4.3 and §8 item 2 require merging before any of this, adds two more `credentials: hosted-required` overrides, one of them on #62 itself. That is §5.2's first remedy, so the gap this section describes closes with that merge rather than persisting; what survives it is the provisioning, which no PR can supply.
 
 **This is the same structural defect `specs/004-mvp-completion/` §5 identifies for `M5-AUDIT-RELEASE`, and it bites two milestones earlier than that document says.** 004 frames mock-only as blocking the *release*; it blocks the *next milestone*.
 
