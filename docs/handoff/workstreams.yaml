@@ -403,7 +403,7 @@ packages:
     depends_on: [M3-EXTRACTION-CORE]
     team: experience
     branch: agent/m3-review # not yet created
-    status: blocked # NOT a dependency block any more: depends_on [M3-EXTRACTION-CORE] is SATISFIED — #60 merged via PR #145 @ 61058e4 (2026-07-30). Held instead by: ADR-0011 is being ratified on PR #175 (Accepted on that PR); SSE still waits until migration 0006 lands via #157. #146 was ruled Option 1 (terminal runs final) on 2026-08-29 but is not yet implemented — still a producer gate. Deliberately left `blocked` by this reconciliation: flipping this key is a dispatch decision reserved to the integration lead, not a documentation fix. Note the key is explicit, so dispatching means flipping it rather than adding one.
+    status: blocked # NOT a dependency block any more: depends_on [M3-EXTRACTION-CORE] is SATISFIED — #60 merged via PR #145 @ 61058e4 (2026-07-30). Held instead by: ADR-0011 was ratified by PR #175 @ f158e05; SSE still waits until migration 0006 lands via #157. #146 was ruled Option 1 (terminal runs final) on 2026-08-29 but is not yet implemented — still a producer gate. Deliberately left `blocked` by this reconciliation: flipping this key is a dispatch decision reserved to the integration lead, not a documentation fix. Note the key is explicit, so dispatching means flipping it rather than adding one.
     allowed_paths: [apps/web/**, apps/api/**]
   - id: M3-CONFIDENCE-GATE # confidence scoring + extraction quality gate
     issue: 62

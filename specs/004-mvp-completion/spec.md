@@ -1,6 +1,6 @@
 # MVP Completion — Release Specification
 
-**Status:** Clarified; awaiting integration-lead ratification
+**Status:** Ratified — merged as PR #173 @ `fdcb3d2` (2026-08-31) under the constitution-gate waiver the integration lead recorded on that PR
 **Version:** 1.0.0
 **Date:** 2026-08-25
 **Parent specification:** `specs/001-financial-evidence-lab/spec.md` v1.2
@@ -20,13 +20,13 @@ Answer one question with evidence: **what remains before Financial Evidence Lab 
 
 ### 1.2 Standing relative to the canonical feature directory
 
-This directory is **subordinate** to `specs/001-financial-evidence-lab/`, which the constitution names as holding the sole canonical `spec.md`, `plan.md`, and `tasks.md`.
+This directory is **subordinate** to `specs/001-financial-evidence-lab/`, which constitution 1.2.0 names as holding the sole canonical task ledger (`tasks.md`) together with the parent `spec.md` and `plan.md`; every artifact here names that parent and yields to it on conflict.
 
 - It defines **no new requirements**. Every gate cited here is quoted from parent §19.5, §19.6 or §26.
-- It ships **no `tasks.md`**. The 29 outstanding units of work already carry canonical IDs (`T0112`, `T0214b`, `T0306`–`T0513`) in the parent ledger. A fourth copy of those rows would drift exactly as §4.2 documents — that risk is the single most load-bearing finding in this spec, and duplicating the ledger to describe it would be self-defeating.
+- It ships **no `tasks.md`**. The 29 outstanding units of work already carry canonical IDs (`T0112`, `T0214b`, `T0306`–`T0513`, less the deferred `T0506`) in the parent ledger. A fourth copy of those rows would drift exactly as §4.2 documents — that risk is the single most load-bearing finding in this spec, and duplicating the ledger to describe it would be self-defeating.
 - It does not follow `.specify/templates/spec-template.md`. That template marks "User Scenarios & Testing", "Requirements" and "Success Criteria" as mandatory; this document has none of them, because it specifies no product behaviour — it inventories work already specified elsewhere and sequences it. The omission is deliberate and declared here rather than left for a reader to discover.
 - The constitution's "sole canonical" clause is **already strained by existing practice, not first by this directory**: `002-observable-hybrid-retrieval/` and `003-agentic-extraction/` have each shipped their own `spec.md` and `tasks.md` since July 2026, and the clause speaks of "*the* active Spec Kit feature directory" in the singular where four now exist. See **C-1**.
-- Its `plan.md` is a **release-sequencing plan**, not a competing implementation plan. Where it and `001/plan.md` disagree, `001/plan.md` governs. See `clarify-analyse.md` finding **C-1** for the constitutional disposition this requires from the integration lead.
+- Its `plan.md` is a **release-sequencing plan**, not a competing implementation plan. Where it and `001/plan.md` disagree, `001/plan.md` governs. Constitution 1.2.0 (PR #183 @ `b8dc8a6`) permits it as a subordinate artifact; `clarify-analyse.md` finding **C-1** records the ruling and the options weighed.
 
 ### 1.3 What this document does not do
 
@@ -56,9 +56,9 @@ Statements of *judgement* are not covered by that claim and are marked where the
 
 ## 3. Verified state, 2026-08-31
 
-- Trunk: `main` @ `ebe77af` (PR #172, the handoff reconciliation). Its parent `a4bb356` (PR #174, closing #171) remains the **measurement baseline** for every structural count below, and #172 is docs-only. All five GitHub Actions checks pass.
-- Open PRs: **2** — #173 (this specification) and #175 (ADR-0011); both `MERGEABLE` / `CLEAN` with five of five checks passing.
-- Open issues: **31**.
+- Trunk at the 2026-08-31 measurement: `main` @ `ebe77af` (PR #172, the handoff reconciliation). Its parent `a4bb356` (PR #174, closing #171) remains the **measurement baseline** for every structural count below, and #172 is docs-only. All five GitHub Actions checks passed at that tip; trunk has moved since (next bullet).
+- Open PRs: both have since **merged** — #175 (ADR-0011) @ `f158e05` and #173 (this specification) @ `fdcb3d2`, both on 2026-08-31, carrying trunk past the `ebe77af` tip recorded above. The open count has moved on and will keep moving; re-run §2's `gh pr list --state open` rather than reading a number here.
+- Open issues: **31** at the 2026-08-31 measurement. The count moves with every filing — the 2026-09-01 architecture review alone added a dozen — so re-run §2's `gh issue list --state open --limit 100 --json number --jq length` rather than reading a number here.
 
 **Resolved since this document was first drafted** (2026-08-25 → 2026-08-31), each an item §8 listed as owed:
 
@@ -150,11 +150,15 @@ Five milestone epics (#4–#8) and two reader trackers (#87, #96) close by rollu
 
 `RELEASE-LIVE-CUTOVER` (§5.1) is **not** the only package this spec must count. **ADR-0011 (Accepted 2026-08-30 on PR #175) requires a second new `workstreams.yaml` entry** for the migration-`0006` work tracked by #157. Its Consequences say so outright: *"A new `workstreams.yaml` entry is required."* Until this spec counted it, #157 appeared in §4.3 as backlog only — owned by no package, placed in no wave. That was the gap.
 
-**Paths, and what they contend with.** Per ADR-0011 the entry needs `db/migrations/**`, `db/migrations/tests/**`, `packages/contracts/**`, `specs/003-agentic-extraction/**` and `docs/decisions/**`, plus the `workers/src/fel_workers/extraction/**` and `workers/tests/**` paths currently held by `M3-EXTRACTION-CORE`. **Those last two are exactly the paths `M3-CONFIDENCE-GATE` (#62) claims**, so the two cannot run concurrently — ADR-0011 states this itself: *"That path overlap needs the integration lead to sequence it against #62."* `workers/tests/**` is additionally claimed by #66 and #67, and contained in the `workers/**` claimed by #108. Placing this entry before wave 1 avoids all four, since the earliest of them (#62) is wave 2.
+**Paths, and what they contend with.** Per ADR-0011 the entry needs `db/migrations/**`, `db/migrations/tests/**`, `packages/contracts/**`, `specs/003-agentic-extraction/**` and `docs/decisions/**`, plus the `workers/src/fel_workers/extraction/**` and `workers/tests/**` paths currently held by `M3-EXTRACTION-CORE`. **Those last two are both held by `M3-CONFIDENCE-GATE` (#62)**, which claims `evals/**` besides, so the two cannot run concurrently — ADR-0011 states this itself: *"That path overlap needs the integration lead to sequence it against #62."* `workers/tests/**` is additionally claimed by #66 and #67, and contained in the `workers/**` claimed by #108. Placing this entry before wave 1 avoids all four, since the earliest of them (#108) is wave 2 — where `RELEASE-LIVE-CUTOVER`, which claims `workers/tests/**` too, now also sits.
 
 **Scope of the block on #61 — SSE only.** ADR-0011's header is explicit: *"Blocks: #61 SSE until the **implementing** PR for migration 0006 lands. Non-SSE #61 work still waits on unimplemented #146 Option 1 (terminal runs final), which is a separate ruling."* Its first revisit trigger — *"#61 becomes ready to ship before the implementing PR lands"* — is **mandatory, not advisory**, but its remedy is to withhold the SSE surface rather than to hold all of #61. §6.2 therefore keeps #61 in wave 1 with its dispatch scoped **non-SSE**, which is the constraint §7 already records for that package.
 
-> **A tension inside ADR-0011, disclosed rather than resolved.** Its Consequences also say *"Add this work to #61's `depends_on`"*, which read literally makes this entry a package-level predecessor of #61 — deepening the critical path from **6 to 7** and removing #61 from wave 1 entirely. This spec takes the narrower reading because it is the one ADR-0011's own header states, and because the depth figures throughout this document are measured against the registered graph, which carries no such edge today. **If the integration lead adds the `depends_on` edge instead, the critical path becomes 7, wave 1 holds #63 alone, and §4.1's Depth column shifts by one from `M3-REVIEW` downward.** That is a ruling for the lead, not an inference this spec should make.
+> **A tension inside ADR-0011 — ruled 2026-08-31.** Its Consequences state the broad reading as a bolded bullet heading, not as a passing sentence: *"- **#61 (M3-REVIEW) must be sequenced after this.**"* (`ADR-0011:291`), closing with *"Add this work to #61's `depends_on`"* (`:301`). Read that way, this entry is a package-level predecessor of #61 rather than of its SSE surface alone.
+>
+> **The integration lead ruled on 2026-08-31 that ADR-0011's `Blocks:` header governs**: the migration-`0006` work blocks #61's **SSE surface only**, not the package. The critical path stays **6**, #61 stays in wave 1 with a non-SSE dispatch, and no `depends_on` edge is added. Because ADR-0011 is Accepted, the ruling is recorded there as an **erratum** beside the Consequences bullet rather than as an amendment to it.
+>
+> **Rejected alternative — add the `depends_on` edge.** The critical path would become 7 and wave 1 would hold #63 alone. **Seven of §4.1's nine Depth values would rise by one, not all nine:** `M4-MODEL-CALC` (#63, `depends_on: [M3-EXTRACTION-CORE]`, merged) and `READER-PROD-SMOKE` (#108, `depends_on: [READER-CROSS-STACK, M2-CONTRACT]`, both merged) do not descend from `M3-REVIEW` and stay at depth 1. Recorded accurately because it is now the rejected branch of a ruling, and a later reader re-opening it needs the true impact.
 
 ---
 
@@ -174,7 +178,9 @@ Verified:
 
 A mock-only package cannot produce a dual-adjudicated benchmark over real issuers, nor evaluate ten numeric gates against it. **The dependency graph terminates at a package whose inherited credential setting does not provide what its acceptance criteria require.** (`credentials:` is a provisioning descriptor, not a prohibition — `workstreams.yaml`'s own comment on #108 reads "names only until lead provisions". Nothing in the file forbids anything; the gap is that nothing supplies it either.)
 
-This is a class of defect the schema cannot express: `depends_on` orders packages against each other, but there is no vocabulary for "this package depends on something outside the repository existing." The graph therefore reports itself complete and internally consistent while pointing at an unreachable terminal node.
+**And it does not first bite at the terminus.** Item 2 says every package but #108 inherits mock-only; the consequence for `M3-CONFIDENCE-GATE` (#62) — second on the critical path — was never drawn. #62 owns `M3-304`, whose canonical text in `specs/003-agentic-extraction/tasks.md` is *"Run live OpenAI structured-output smoke with approved secret, provider-failure suite, `make ci`, independent review, and publish immutable eval report"*, and #62's own issue body repeats the live smoke and the immutable report and adds *"Request `FEL_OPENAI_API_KEY` only for credentialed smoke."* **#62 cannot reach its own definition of done mock-only either.** The gap bites from #62 onward, four packages ahead of #68 — which is why §6.2 now sequences `RELEASE-LIVE-CUTOVER` ahead of #62 rather than at wave 6. See finding **A-14**.
+
+This is a class of defect the schema cannot express: `depends_on` orders packages against each other, but there is no vocabulary for "this package depends on something outside the repository existing." The graph therefore reports itself complete and internally consistent while both ends of the critical path — #62 at depth 2 and #68 at depth 6 — sit behind a precondition it cannot name.
 
 ### 5.1 Resolution — register `RELEASE-LIVE-CUTOVER`
 
@@ -245,16 +251,18 @@ Downstream contention is heavy: #62/#67/#68 all claim `evals/**`; #65/#66 both c
 
 | Wave | Dispatch | Precondition |
 |---|---|---|
-| **0** | ~~fix #171~~ ✅ merged @ `a4bb356`; ~~rule #146~~ ✅ Option 1; ~~rule ADR-0009/#157~~ ✅ ADR-0011 accepted; ~~re-scope #134~~ ✅ closed; ~~merge #172~~ ✅ merged @ `ebe77af`, which also dispatched #63. **Remaining:** merge #173, #175; reconcile `tasks.md`; register `RELEASE-LIVE-CUTOVER`; **register and land ADR-0011's migration-`0006` entry for #157** (§4.4); land the ADR for **A-1**; resolve #141 and #143; implement the #146 ruling | None — integration-lead actions across several PRs. **The wave-1 gate (#171) has cleared** |
+| **0** | ~~fix #171~~ ✅ merged @ `a4bb356`; ~~rule #146~~ ✅ Option 1; ~~rule ADR-0009/#157~~ ✅ ADR-0011 accepted; ~~re-scope #134~~ ✅ closed; ~~merge #172~~ ✅ merged @ `ebe77af`, which also dispatched #63; ~~merge #175~~ ✅ merged @ `f158e05`; ~~merge #173~~ ✅ merged @ `fdcb3d2`. **Remaining:** reconcile `tasks.md`; register `RELEASE-LIVE-CUTOVER`; **register and land ADR-0011's migration-`0006` entry for #157** (§4.4); land the ADR for **A-1**; resolve #141 and #143; implement the #146 ruling | None — integration-lead actions across several PRs. **The wave-1 gate (#171) has cleared** |
 | **1** | #61 ∥ #63 | Both rulings are made. #61 needs #146's Option 1 *implemented*, and its dispatch is **non-SSE only** until #157's migration `0006` lands (§4.4); #63 needs nothing and already reads `status: ready` |
-| **2** | #62 | #61 merged |
-| **3** | #64 | #62 and #63 merged |
-| **4** | #65, #66 — **contended** on `apps/web/**` and `packages/ui/**`; serialize | #64 merged |
-| **5** | #67 | #66 merged |
-| **6** | `RELEASE-LIVE-CUTOVER`, **then** #108 — contended, serialize | Credentials provisioned; `evals/**` free |
+| **2** | `RELEASE-LIVE-CUTOVER`, **then** #108 — contended, serialize | Credentials provisioned (§5.2 — an integration-lead action, item 5 of §8); `evals/**` and `workers/tests/**` free once the migration-`0006` entry has landed |
+| **3** | #62 | #61 merged **and `RELEASE-LIVE-CUTOVER` merged** — #62 owns `M3-304`, whose live OpenAI structured-output smoke needs an approved `FEL_OPENAI_API_KEY` (§5, **A-14**); `evals/**` and `workers/tests/**` free |
+| **4** | #64 | #62 and #63 merged |
+| **5** | #65, #66 — **contended** on `apps/web/**` and `packages/ui/**`; serialize | #64 merged |
+| **6** | #67 | #66 merged |
 | **7** | #68 | #67 and `RELEASE-LIVE-CUTOVER` merged |
 
-Within wave 6, `RELEASE-LIVE-CUTOVER` and #108 must serialize: the former claims `evals/**` and `workers/tests/**`, the latter claims `evals/**` and `workers/**`, which contains `workers/tests/**`. Waves 6 and 7 are separate because `RELEASE-LIVE-CUTOVER` and #68 both claim `evals/**`.
+Within wave 2, `RELEASE-LIVE-CUTOVER` and #108 must serialize: the former claims `evals/**` and `workers/tests/**`, the latter claims `evals/**` and `workers/**`, which contains `workers/tests/**`. Waves 2 and 3 are separate for the same reason, since #62 claims both globs; waves 6 and 7 are separate because #67 and #68 both claim `evals/**`.
+
+**`RELEASE-LIVE-CUTOVER` sits at wave 2, not wave 6, because of A-14.** Parking it at wave 6 followed from scoping the mock-only gap to the terminal package; #62's `M3-304` makes it a credential precondition four waves earlier. The move costs nothing — #62 and #108 both contend with it on `evals/**` and `workers/tests/**`, so neither could ever have run alongside it. It adds no `depends_on` edge, so §4.1's Depth column and the 6-deep critical path are unchanged; when the lead registers the package, #62 should gain `RELEASE-LIVE-CUTOVER` in its `depends_on` so the constraint lives in the graph rather than only in this table.
 
 ### 6.3 The #62 → #61 edge — ruled real, kept
 
@@ -270,13 +278,13 @@ Every package inherits `defaults.required_evidence: [tests, telemetry-if-applica
 
 - **#61 `M3-REVIEW`** — accept/edit/reject/merge/rerun workflows (`FR-EXT-003`); versioned approved records with correction history. Must not expose the SSE surface until #157 is **implemented** — migration `0006`, per ADR-0011. The fork itself is ruled (§8 item 2), so what remains is the work, not the decision.
 - **#63 `M4-MODEL-CALC`** — node types; dependency edges, cycle detection, versioned graph snapshots (`FR-MOD-001`); server-side decimal engine with typed units (`FR-MOD-002`); property tests for decimal arithmetic, units, periods, cycles and scenario immutability; **5,000-node p95 recalculation target** (`T0410`).
-- **#62 `M3-CONFIDENCE-GATE`** (criteria below from #62's issue body, not the parent spec) — deterministic `isotonic-v1` calibration recording dataset/ontology/workflow/prompt/model/version hashes, breakpoints, counts, ECE and Brier; 0.85 record / 0.80 field thresholds; exhaustive no-auto-approval tests for monetary facts, guidance and assumptions; insufficient data yields confidence 0 and high priority; owner-only, bounded, versioned, audited threshold changes. Contradiction detection stays M2-owned — reference its report, add no detector.
+- **#62 `M3-CONFIDENCE-GATE`** (criteria below from #62's issue body, not the parent spec) — deterministic `isotonic-v1` calibration recording dataset/ontology/workflow/prompt/model/version hashes, breakpoints, counts, ECE and Brier; 0.85 record / 0.80 field thresholds; exhaustive no-auto-approval tests for monetary facts, guidance and assumptions; insufficient data yields confidence 0 and high priority; owner-only, bounded, versioned, audited threshold changes. Contradiction detection stays M2-owned — reference its report, add no detector. **Also from that issue body, and previously omitted here:** a provider-failure suite and a **live OpenAI structured-output smoke**, `make ci`, independent review, and a **published immutable evaluation report** — the criteria `M3-304` carries. The issue asks for `FEL_OPENAI_API_KEY` for that smoke, so this package is **not** completable mock-only; §6.2 therefore gates it on `RELEASE-LIVE-CUTOVER` (§5, **A-14**).
 - **#64 `M4-FACT-SCENARIOS`** — approved extractions to source-backed model nodes (`FR-EXT-004`); sparse bull/base/bear layers (`FR-MOD-003`).
 - **#65 `M4-MODEL-UI`** — interactive driver graph; price-volume-mix bridges, waterfalls, heatmaps, tornado charts; formula, dependency, assumption, citation, diff and restore views (`MOD-002`, `MOD-004`).
 - **#66 `M5-FORECASTING`** — common fit/predict/backtest interface and immutable forecast-run contract (`FR-FOR-001`, `FR-FOR-002`); last-value and seasonal-naive quarterly baselines; analyst driver forecasts for revenue, ARR where disclosed, and gross profit.
 - **#67 `M5-BACKTEST`** — rolling-origin backtests over one-to-eight-quarter horizons; 50%, 80% and 95% intervals with calibration metrics; advanced models stay non-default unless they beat the seasonal-naive median-MAE gate, which parent §19.6 scopes to **the supported one-to-four-quarter horizon** — a narrower window than the backtests themselves span.
-- **`RELEASE-LIVE-CUTOVER`** — credentials provisioned and recorded in `CREDENTIALS.md`; embeddings provider selected by benchmark; `T0112` twenty benchmark issuers ingested with corpus-quality metrics; #132 live 65-question M2 exit gate passed; #81 stress cohort restored; #137 hygiene items closed.
-- **#68 `M5-AUDIT-RELEASE`** — complete source-to-export audit traversal; Markdown/PDF briefs, CSV/XLSX tables, JSON evidence bundles and workspace manifests; accessibility, security, load, restore, provider-failure and browser suites; the frozen benchmark (`T0214b`); verification of every §19.6 gate and §26 item (`T0512`); the immutable release artifact and signed evaluation report (`T0513`). **`FOR-004`** — exports distinguish reported, modeled and user-supplied values — is unowned by any task and belongs here (**A-11**).
+- **`RELEASE-LIVE-CUTOVER`** — credentials provisioned and recorded in `CREDENTIALS.md` — including the `FEL_OPENAI_API_KEY` #62's `M3-304` smoke needs (**A-14**); embeddings provider selected by benchmark; `T0112` twenty benchmark issuers ingested with corpus-quality metrics; #132 live 65-question M2 exit gate passed; #81 stress cohort restored; #137 hygiene items closed.
+- **#68 `M5-AUDIT-RELEASE`** — complete source-to-export audit traversal; Markdown/PDF briefs, CSV/XLSX tables, JSON evidence bundles and workspace manifests; accessibility, security, load, restore, provider-failure and browser suites; the frozen benchmark (`T0214b`); verification of every §19.6 gate and §26 item (`T0512`); the immutable release artifact and signed evaluation report (`T0513`). **`FOR-004`** — exports distinguish reported, modeled and user-supplied values — is cited by no task and covered by no task's prose, and belongs here (**A-11**).
 
 ---
 
@@ -291,7 +299,7 @@ Four decisions were resolved in `clarify-analyse.md` (Q-1 through Q-4). These re
 5. **Register `RELEASE-LIVE-CUTOVER`** and file its issue (§5.1), then answer its four questions (§5.2). **Separately, register ADR-0011's migration-`0006` entry for #157** and sequence it before wave 1 (§4.4) — these are two distinct registrations, not one.
 6. **Reconcile `tasks.md`** — 17 checkboxes, with the `T0215` caveat in §4.2. While there, **cite `FOR-004` on `T0510`**: of the 53 parent-spec requirement IDs, **fourteen are referenced by no task**, but `FOR-004` is the only one that is *also* uncovered by any task's prose — and it carries constitution principle II's provenance guarantee into exports (finding **A-11**).
 7. ~~**Re-scope or close #134**~~ — **closed** 2026-08-29; its work had merged as PR #131 @ `bc6a2a3`.
-8. **Ratify this spec**, or return it with scope changes.
+8. ~~**Ratify this spec**~~ — **done.** The integration lead recorded a constitution-gate waiver for all three failed checks as a comment on PR #173 on 2026-08-29 and merged the PR @ `fdcb3d2` on 2026-08-31.
 
 ---
 
@@ -299,7 +307,7 @@ Four decisions were resolved in `clarify-analyse.md` (Q-1 through Q-4). These re
 
 | Risk | Evidence | Mitigation |
 |---|---|---|
-| Release gates unevaluable in mock mode | §5; `CREDENTIALS.md` all-"Not requested"; `workstreams.yaml:73` | Register `RELEASE-LIVE-CUTOVER` now, not at wave 6 |
+| Release gates unevaluable in mock mode | §5; `CREDENTIALS.md` all-"Not requested"; `workstreams.yaml:73` | Register `RELEASE-LIVE-CUTOVER` now and sequence it at wave 2 — it is a precondition of #62, not only of #68 (**A-14**) |
 | Canonical ledger under-reports by 17 tasks | §4.2, measured | Reconcile now — #172 has merged, so nothing blocks it; confirm `T0215` against `packages/retrieval/ACCEPTANCE.md` |
 | Stale `status:` re-dispatches finished work | `EVALS-REPORT-RENDER` read `ready` for the twenty days from PR #164's merge on 2026-08-11 until PR #172 corrected it on 2026-08-31 | Confirm the issue is open on GitHub before trusting `ready` |
 | Green CI is not a correctness claim | #171 was live on `5b4b77c` with all five checks passing, because no test covered it. **Fixed by PR #174**, which added the missing coverage | The principle stands even though this instance is closed: read gate-green as "nothing we check is broken". A live example remains — the whole 1009-test Python suite passes with the `_check_segment_sums` suppression mechanism deleted outright, so its lower bound is still untested |
@@ -323,6 +331,6 @@ Four decisions were resolved in `clarify-analyse.md` (Q-1 through Q-4). These re
 | Packages with every dependency merged | **3** — #61, #63, #108 |
 | Of those, dispatchable with no ruling and no credential | **1** — #63, which contends with nothing and was dispatched by #172 (`status: ready`) |
 | Safe parallel pairs among the 3 dispatchable | 2 of 3 (#61∥#63, #63∥#108; #61 vs #108 contends) |
-| Open issues | 31 — 14 release-blocking, 5 epics, 2 rollup trackers, **10 package issues (the 9 outstanding packages + #56)**. Not the same 10 as the row above: neither package awaiting registration has an issue yet, and #56 is not an outstanding package. Was 33; #171 and #134 closed 2026-08-29 |
+| Open issues | 31 at the 2026-08-31 measurement — 14 release-blocking, 5 epics, 2 rollup trackers, **10 package issues (the 9 outstanding packages + #56)**. Not the same 10 as the row above: #56 is not an outstanding package, and `RELEASE-LIVE-CUTOVER`'s issue #177 was filed after this measurement (#157, the migration-`0006` issue, predates it). Was 33; #171 and #134 closed 2026-08-29. Re-run the §2 command for the live count |
 | Release gates to satisfy | 10 numeric + 11 definition-of-done items |
 | Ledger drift to correct | 17 checkboxes |

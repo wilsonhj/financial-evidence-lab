@@ -50,13 +50,13 @@ The technical approach is not new construction but **sequencing under two constr
 
 **Feature-specific check** (added because the five template items are the five Core Principles, and the clause this feature actually strains lives in Development and Review Workflow rather than in any principle):
 
-- [ ] **Development and Review Workflow: `specs/001-financial-evidence-lab/` holds the sole canonical `spec.md`, `plan.md` and `tasks.md`.** — **FAILS.** This file is the repository's second `plan.md`. See finding **C-1**, which also records that `002/` and `003/` have each shipped their own `spec.md` and `tasks.md` since July, so a literal reading of "sole canonical" has not held for two months.
+- [x] **Development and Review Workflow: `specs/001-financial-evidence-lab/` holds the sole canonical task ledger; milestone and completion directories may hold subordinate `spec.md`/`plan.md`.** — **Satisfied since constitution 1.2.0 (PR #183 @ `b8dc8a6`, 2026-09-03).** It **FAILED** at authoring under 1.1.0, whose clause read "sole canonical `spec.md`, `plan.md` and `tasks.md`": this file is the repository's second `plan.md`. Finding **C-1** records the ruling (option (b), 2026-08-31) and that `002/` and `003/` had each shipped their own `spec.md` and `tasks.md` since July, so a literal reading had not held for two months.
 
 ### Gate result
 
-**FAILS — three of six.** The constitution's Governance section is unqualified: *"Unjustified complexity or a failed mandatory gate blocks merge."* It draws no distinction between implementation and planning artifacts, and this plan does not claim one.
+**FAILS — two of six** (three of six at authoring on 2026-08-31; the sixth check cleared with constitution 1.2.0 on 2026-09-03). The constitution's Governance section is unqualified: *"Unjustified complexity or a failed mandatory gate blocks merge."* It draws no distinction between implementation and planning artifacts, and this plan does not claim one.
 
-Therefore: **this PR cannot be merged on its own authority.** Merging it requires an explicit integration-lead waiver recorded on the pull request, or prior remediation of the three failures. All three are pre-existing repository conditions that this plan surfaces and assigns owners to rather than introduces — but that is an argument for granting the waiver, not a reason the gate does not apply.
+Therefore: **this specification could not merge on its own authority.** PR #173 merged on 2026-08-31 under an explicit integration-lead waiver recorded on that pull request, covering the three failures as they then stood. The two that remain (A-4 credentials, A-1 provider) are pre-existing repository conditions that this plan surfaces and assigns owners to rather than introduces — an argument for the waiver that was granted, not a reason the gate does not apply.
 
 ## Project Structure
 
