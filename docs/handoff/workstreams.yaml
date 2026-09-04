@@ -350,9 +350,12 @@ packages:
     # Required by ADR-0011 (Accepted 2026-08-30 on PR #175), whose Consequences
     # state outright: "A new `workstreams.yaml` entry is required." The precedent
     # for a new retroactive migration entry is DB-GUARD-HARDENING (#125, created
-    # for the 0005 record); M2-CONTRACT (#100) and M3-CONTRACT (#101) are the only
-    # entries spanning both db/migrations/** and packages/contracts/**, and both
-    # are merged. Implements the
+    # for the 0005 record). Entries spanning both db/migrations/** and
+    # packages/contracts/** are M2-CONTRACT (#100) and M3-CONTRACT (#101), both
+    # merged, and THIS entry, which is blocked — a count that includes itself,
+    # because an earlier draft of this comment said the two contract packages
+    # were "the only" such entries and was false in the very entry carrying it.
+    # Implements the
     # durable checkpoint column so a completed stage's result stops riding on the
     # step_completed event payload's stage_output key — the coupling that leaves
     # extraction_run_events carrying verbatim filing text while six published
