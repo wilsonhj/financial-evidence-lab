@@ -11,8 +11,23 @@ install: install-js install-py ## Install all dev dependencies
 install-js: ## Install the JS/TS workspace
 	pnpm install
 
-install-py: ## Create .venv and install the Python toolchain
-	python3 -m venv .venv
+install-py: ## Create .venv and install the Python toolchain (interpreter from .python-version)
+	@pin=$$(tr -d '[:space:]' < .python-version); \
+	if command -v python$$pin >/dev/null 2>&1; then \
+		py=python$$pin; \
+	elif command -v python3 >/dev/null 2>&1 && \
+	     [ "$$(python3 -c 'import sys; print("%d.%d" % sys.version_info[:2])')" = "$$pin" ]; then \
+		py=python3; \
+	else \
+		found=$$(command -v python3 >/dev/null 2>&1 && python3 -c 'import sys; print("%d.%d" % sys.version_info[:2])' || echo none); \
+		echo "make install-py: .python-version pins Python $$pin, but python$$pin is not on PATH" >&2; \
+		echo "  and python3 is $$found. CI builds against $$pin (.github/workflows/ci.yml uses" >&2; \
+		echo "  python-version-file: .python-version), so a venv on another interpreter would" >&2; \
+		echo "  not be testing what CI tests. Install Python $$pin and retry." >&2; \
+		exit 1; \
+	fi; \
+	echo "Creating .venv with $$py ($$($$py -V 2>&1))"; \
+	$$py -m venv .venv
 	$(PY)/pip install --upgrade pip
 	$(PY)/pip install -r requirements-dev.txt
 
