@@ -7,6 +7,7 @@ import hashlib
 import os
 import pathlib
 import threading
+import time
 import uuid
 from datetime import UTC, datetime
 
@@ -409,14 +410,32 @@ def test_publish_race_surfaces_domain_error_not_db_error(
         thread.start()
         # Wait until the publisher is actually blocked on the index before
         # committing the competitor, so the ordering is deterministic.
-        for _ in range(500):
+        #
+        # The predicate is scoped to THIS database and excludes this observing
+        # backend. An earlier version counted every `wait_event_type = 'Lock'`
+        # row in `pg_stat_activity`, which is server-wide: a lock wait in any
+        # other database on the same server satisfied it, so the loop broke
+        # before our publisher had actually blocked, the competitor was
+        # committed too early, and the race could resolve the other way. That
+        # is the concurrency the suite actually runs under — the retrieval and
+        # extraction suites use sibling databases on this very server — and it
+        # is why this failed under load and passed in isolation (#205).
+        #
+        # Note the failure mode is an EARLY break, not a slow one, so raising
+        # the bound alone would not have fixed it. The bound is raised anyway,
+        # to 30s, because a loaded machine can legitimately be slow to block.
+        deadline = time.monotonic() + 30.0
+        while time.monotonic() < deadline:
             waiting = corpus_conn.execute(
-                "SELECT count(*) FROM pg_stat_activity"
-                " WHERE wait_event_type = 'Lock' AND state = 'active'"
+                "SELECT count(*) FROM pg_locks l"
+                " JOIN pg_stat_activity a ON a.pid = l.pid"
+                " WHERE NOT l.granted"
+                "   AND a.datname = current_database()"
+                "   AND a.pid <> pg_backend_pid()"
             ).fetchone()
             if waiting is not None and int(waiting[0]) > 0:
                 break
-            thread.join(timeout=0.01)
+            thread.join(timeout=0.02)
             if not thread.is_alive():
                 break
         blocker.commit()

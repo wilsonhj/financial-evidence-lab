@@ -123,7 +123,9 @@ hand.
 
 **Estimated total ≈ 640 changed lines, of which ~150 are generated golden
 bytes**; hand-written, review-bearing code is ~490. This is at/near the
-"roughly 600 changed lines" preference in `docs/handoff/README.md:35`.
+"roughly 600 changed lines" preference in `docs/handoff/README.md` ("Prefer PRs
+below roughly 600 changed lines and split work that cannot be reviewed
+independently", under **Dispatch checklist**).
 **Size lever if the lead wants a hard sub-600 diff:** drop the committed golden
 SVG (−110) and prove SVG determinism with the render-twice byte-equality
 assertion plus structural assertions instead. Take the lever or leave it, but
@@ -389,7 +391,7 @@ no API, no database, no migration, no queue, no provider.
 OpenAPI / DB contracts (v0.4.0, migrations `0001`–`0005`) are **not** inputs and
 must not be touched: this package has no API or database surface.
 
-### Path-overlap serialization (`docs/handoff/README.md:26-35`)
+### Path-overlap serialization (`docs/handoff/README.md`, **Dispatch checklist**: "no active package overlaps its allowed paths")
 
 `evals/**` is **not** a shared path, but it is claimed by several packages, and
 overlap is "resolved by time, not ownership" (`workstreams.yaml:87-90`). Other
@@ -679,7 +681,9 @@ unset. `docs/handoff/CREDENTIALS.md` needs no new row.
 9. **No Spec Kit bookkeeping.** Do not add `T0113` (or any ID) to
    `specs/001-financial-evidence-lab/tasks.md`, do not check a box, do not edit
    `workstreams.yaml` or `STATUS.md` (`AGENTS.md:24`,
-   `docs/handoff/README.md:22`).
+   `docs/handoff/README.md`, **Source of truth**: "Only the integration lead
+   changes bundle status to `merged`, checks tasks, changes dependencies, or
+   updates shared contracts").
 10. **No refactor of `evals/harness/**` or `evals/graders/**`.** Read them,
     import `harness.corpus_qa` only inside the test module's drift guard, change
     nothing.
