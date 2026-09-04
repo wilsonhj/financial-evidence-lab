@@ -125,7 +125,9 @@ def seeded_entity(corpus_conn: psycopg.Connection) -> dict[str, str]:
     return ids
 
 
-# (as_of query value, expected document keys in publication order)
+# (as_of query value, expected document keys newest-first — the corpus
+# list API orders by published_at DESC so a default LIMIT cannot drop the
+# latest filings. Membership is the cutoff invariant; order is API contract.)
 AS_OF_MATRIX: list[tuple[str | None, list[str]]] = [
     # Pre-publication: cutoff strictly before the first publication.
     ("2026-05-05T16:29:59.999999+00:00", []),
@@ -138,17 +140,17 @@ AS_OF_MATRIX: list[tuple[str | None, list[str]]] = [
     # One microsecond before the second publication instant (06:30Z).
     ("2026-06-20T06:29:59.999999+00:00", ["d1"]),
     # The second boundary, in UTC and in its original +05:30 spelling.
-    ("2026-06-20T06:30:00+00:00", ["d1", "d2"]),
-    ("2026-06-20T12:00:00+05:30", ["d1", "d2"]),
+    ("2026-06-20T06:30:00+00:00", ["d2", "d1"]),
+    ("2026-06-20T12:00:00+05:30", ["d2", "d1"]),
     # Between P2 and P3 (P3 is a midnight-exact publication).
-    ("2026-06-30T23:59:59.999999+00:00", ["d1", "d2"]),
-    ("2026-07-01T00:00:00+00:00", ["d1", "d2", "d3"]),
+    ("2026-06-30T23:59:59.999999+00:00", ["d2", "d1"]),
+    ("2026-07-01T00:00:00+00:00", ["d3", "d2", "d1"]),
     # Same instant as P3 spelled with a +05:45 (Nepal) offset.
-    ("2026-07-01T05:45:00+05:45", ["d1", "d2", "d3"]),
+    ("2026-07-01T05:45:00+05:45", ["d3", "d2", "d1"]),
     # Far future: everything published is visible.
-    ("2027-01-01T00:00:00+00:00", ["d1", "d2", "d3"]),
-    # No cutoff: everything, ordered by publication time.
-    (None, ["d1", "d2", "d3"]),
+    ("2027-01-01T00:00:00+00:00", ["d3", "d2", "d1"]),
+    # No cutoff: everything, newest publication first.
+    (None, ["d3", "d2", "d1"]),
 ]
 
 
