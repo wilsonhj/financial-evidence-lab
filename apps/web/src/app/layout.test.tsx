@@ -1,11 +1,25 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+// `RootLayout` is an async Server Component: it reads the persisted Desk theme
+// out of a cookie before rendering. These tests invoke it directly rather than
+// through Next's request pipeline, so they have to supply a cookie store and
+// await the returned element. Passing the un-awaited promise to
+// `renderToStaticMarkup` makes React report "a component suspended while
+// responding to synchronous input", which is a test-harness artefact rather
+// than anything wrong with the layout.
+vi.mock("next/headers", () => ({
+  cookies: async () => ({ get: () => undefined }),
+}));
 
 import RootLayout from "./layout";
 
+const renderLayout = async () =>
+  renderToStaticMarkup(await RootLayout({ children: <p>page content</p> }));
+
 describe("RootLayout skip link", () => {
-  it("renders a 'Skip to main content' link as the first focusable element in the body", () => {
-    const markup = renderToStaticMarkup(RootLayout({ children: <p>page content</p> }));
+  it("renders a 'Skip to main content' link as the first focusable element in the body", async () => {
+    const markup = await renderLayout();
     const skipLinkIndex = markup.indexOf('class="skip-link"');
     const headerIndex = markup.indexOf('class="site-header"');
     expect(skipLinkIndex).toBeGreaterThan(-1);
@@ -15,14 +29,14 @@ describe("RootLayout skip link", () => {
     expect(skipLinkIndex).toBeLessThan(headerIndex);
   });
 
-  it("targets the main-content landmark", () => {
-    const markup = renderToStaticMarkup(RootLayout({ children: <p>page content</p> }));
+  it("targets the main-content landmark", async () => {
+    const markup = await renderLayout();
     expect(markup).toContain('href="#main-content"');
     expect(markup).toContain("Skip to main content");
   });
 
-  it("is visually hidden until focused (not permanently visible chrome)", () => {
-    const markup = renderToStaticMarkup(RootLayout({ children: <p>page content</p> }));
+  it("is visually hidden until focused (not permanently visible chrome)", async () => {
+    const markup = await renderLayout();
     // Hidden by default via the shared .skip-link rule, revealed on :focus —
     // asserted at the CSS layer below, not by inspecting inline styles here.
     expect(markup).toContain('class="skip-link"');
