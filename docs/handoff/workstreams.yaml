@@ -190,7 +190,7 @@ packages:
     depends_on: [M1-INGESTION]
     team: trust
     branch: agent/m1-corpus-qa
-    status: merged # PR #86 squashed to main @ 1a96228 (2026-07-14); T0112 live artifact tracked on reopened #56
+    status: merged # PR #86 squashed to main @ 1a96228 (2026-07-14). T0112 was tracked here on reopened #56 until this commit moved it to RELEASE-LIVE-CUTOVER (#177), which owns the live ingest; #56 stays open as the issue record. See the tasks: key above.
     allowed_paths: [evals/**, workers/tests/**]
   - id: M1-COMPANY-FACTS # FR-ING-001 companyfacts follow-up (issue #83; found by PR #80 review)
     issue: 83
@@ -522,7 +522,14 @@ packages:
     # Fact/scenario dependency is inherited via M5-BACKTEST -> M5-FORECASTING ->
     # M4-FACT-SCENARIOS; the former lineage-UI edge was removed by the audit.
     tasks: [T0509, T0510, T0511, T0512, T0513, T0214b]
-    depends_on: [M5-BACKTEST, RELEASE-LIVE-CUTOVER] # live-cutover edge added per spec 004 §5.1: #68 owns T0214b/T0513 but inherited defaults.credentials mock-only
+    # RELEASE-LIVE-CUTOVER is inherited via M5-BACKTEST -> M5-FORECASTING ->
+    # M4-FACT-SCENARIOS -> M3-CONFIDENCE-GATE, which gained the edge in this
+    # same commit. A direct edge was added here first, under spec 004 §5.1
+    # (#68 owns T0214b/T0513 but inherited defaults.credentials mock-only) and
+    # was not redundant then, because #62 carried no such edge; adding #62's
+    # made it so. Dropped per this file's own rule at the top: "Dependency
+    # edges are minimal: transitively implied dependencies are not repeated."
+    depends_on: [M5-BACKTEST]
     team: trust
     branch: agent/m5-audit-release
     allowed_paths:
