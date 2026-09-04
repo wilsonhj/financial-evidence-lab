@@ -202,12 +202,16 @@ def test_untyped_escape_after_the_run_went_terminal_is_dead_lettered(
     payload = sample_payload()
 
     def explode(*_a: Any, **_k: Any) -> Any:
-        raise RuntimeError("injected crash")
+        raise RuntimeError("injected crash quoting 'ARR was $4.2M'")
 
     h = _Harness(monkeypatch, payload, handler=explode, run_statuses=iter(["running", "failed"]))
     assert h.run() == 0
     assert h.only_write == "dead_letter"
-    assert "injected crash" in h.writes["dead_letter"][0]
+    reason = h.writes["dead_letter"][0]
+    assert "code=internal_error" in reason
+    assert "extraction detail withheld" in reason
+    assert "injected crash" not in reason
+    assert "ARR was $4.2M" not in reason
 
 
 def test_untyped_escape_with_a_resumable_run_still_requeues(
@@ -218,11 +222,15 @@ def test_untyped_escape_with_a_resumable_run_still_requeues(
     payload = sample_payload()
 
     def explode(*_a: Any, **_k: Any) -> Any:
-        raise RuntimeError("connection reset")
+        raise RuntimeError("connection reset after parsing 'ARR was $4.2M'")
 
     h = _Harness(monkeypatch, payload, handler=explode, run_statuses=iter(["running", "running"]))
     assert h.run() == 0
     assert h.only_write == "fail"
+    reason = h.writes["fail"][0]
+    assert "code=internal_error" in reason
+    assert "extraction detail withheld" in reason
+    assert "ARR was $4.2M" not in reason
 
 
 def test_status_read_failure_is_not_a_reason_to_drop(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -244,7 +252,10 @@ def test_status_read_failure_is_not_a_reason_to_drop(monkeypatch: pytest.MonkeyP
 def test_failed_result_is_dead_lettered_not_requeued(monkeypatch: pytest.MonkeyPatch) -> None:
     """A workflow that returned ``failed`` has already written the run terminal."""
     payload = sample_payload()
-    error = {"code": "budget_exceeded", "message": "max_calls 10 reached"}
+    error = {
+        "code": "budget_exceeded",
+        "message": "provider quoted 'ARR was $4.2M' from the document",
+    }
     h = _Harness(
         monkeypatch,
         payload,
@@ -253,7 +264,11 @@ def test_failed_result_is_dead_lettered_not_requeued(monkeypatch: pytest.MonkeyP
     )
     assert h.run() == 0
     assert h.only_write == "dead_letter"
-    assert "max_calls 10 reached" in h.writes["dead_letter"][0]
+    reason = h.writes["dead_letter"][0]
+    assert "code=budget_exceeded" in reason
+    assert "extraction detail withheld" in reason
+    assert "ARR was $4.2M" not in reason
+    assert "provider quoted" not in reason
 
 
 def test_cancelled_result_is_recorded_cancelled_not_succeeded(

@@ -21,9 +21,10 @@ from typing import Any
 import psycopg
 import pytest
 
-from fel_workers import queue
+from fel_workers import consumer, queue
 from fel_workers.extraction.handler import JOB_KIND_EXTRACTION_RUN
 from fel_workers.extraction.persist import PostgresPersistStore
+from fel_workers.extraction.types import WorkflowState
 
 from .test_dispatch_durability import _drive, _payload, _seeded_run
 from .test_postgres_crash_resume import _ORG, ensure_extraction_database
@@ -130,6 +131,111 @@ def test_job_for_a_terminal_run_is_parked_to_match_the_run_not_retried(
     assert len(events) == 1, caplog.text
     assert request.run_id in events[0] and job_id in events[0] and terminal in events[0]
     assert request.issuer_label not in events[0]
+
+
+@requires_db
+@pytest.mark.parametrize(
+    ("run_status", "error_code", "job_status", "job_code"),
+    [
+        ("failed", "budget_exceeded", "failed", "JOB_DEAD_LETTERED"),
+        ("cancelled", "cancelled", "cancelled", "JOB_CANCELLED"),
+    ],
+)
+def test_result_error_detail_never_reaches_the_durable_queue_write(
+    extraction_db_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+    run_status: str,
+    error_code: str,
+    job_status: str,
+    job_code: str,
+) -> None:
+    """Drive consumer -> queue -> Postgres, not a mocked terminal-write seam."""
+    raw_detail = "provider echoed 'ARR was $4.2M in the signed customer document'"
+
+    with psycopg.connect(extraction_db_url, autocommit=True) as conn:
+        conn.execute("SELECT set_config('app.org_id', %s, false)", (_ORG,))
+        request = _seeded_run(conn)
+        job_id = queue.enqueue(
+            conn,
+            kind=JOB_KIND_EXTRACTION_RUN,
+            payload=_payload(request),
+            queue="extraction",
+            org_id=_ORG,
+        )
+
+        def terminal_result(
+            handler_conn: psycopg.Connection, *_args: Any, **_kwargs: Any
+        ) -> WorkflowState:
+            store = PostgresPersistStore(handler_conn)
+            store.mark_running(run_id=request.run_id, org_id=_ORG)
+            store.set_run_status(
+                run_id=request.run_id,
+                org_id=_ORG,
+                status=run_status,
+                error={"code": error_code, "message": raw_detail},
+            )
+            state = WorkflowState(request=request, evidence=[])
+            state.status = run_status  # type: ignore[assignment]
+            state.error = {"code": error_code, "message": raw_detail}
+            return state
+
+        monkeypatch.setattr(consumer, "handle_extraction_run", terminal_result)
+        assert _drive(conn) == 0
+        row = conn.execute("SELECT status, error FROM jobs WHERE id = %s", (job_id,)).fetchone()
+
+    assert row is not None
+    assert row[0] == job_status
+    durable_error = row[1]["error"]
+    assert durable_error["code"] == job_code
+    message = durable_error["message"]
+    assert f"code={error_code}" in message
+    assert "extraction detail withheld" in message
+    assert raw_detail not in message
+    assert "ARR was $4.2M" not in message
+
+
+@requires_db
+def test_terminal_race_exception_detail_never_reaches_durable_jobs_error(
+    extraction_db_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    raw_detail = "parser crashed on quoted filing text 'Net retention was 123%'"
+
+    with psycopg.connect(extraction_db_url, autocommit=True) as conn:
+        conn.execute("SELECT set_config('app.org_id', %s, false)", (_ORG,))
+        request = _seeded_run(conn)
+        job_id = queue.enqueue(
+            conn,
+            kind=JOB_KIND_EXTRACTION_RUN,
+            payload=_payload(request),
+            queue="extraction",
+            org_id=_ORG,
+        )
+
+        def terminal_race(
+            handler_conn: psycopg.Connection, *_args: Any, **_kwargs: Any
+        ) -> WorkflowState:
+            store = PostgresPersistStore(handler_conn)
+            store.mark_running(run_id=request.run_id, org_id=_ORG)
+            store.set_run_status(
+                run_id=request.run_id,
+                org_id=_ORG,
+                status="failed",
+                error={"code": "internal_error", "message": raw_detail},
+            )
+            raise RuntimeError(raw_detail)
+
+        monkeypatch.setattr(consumer, "handle_extraction_run", terminal_race)
+        assert _drive(conn) == 0
+        row = conn.execute("SELECT status, error FROM jobs WHERE id = %s", (job_id,)).fetchone()
+
+    assert row is not None and row[0] == "failed"
+    durable_error = row[1]["error"]
+    assert durable_error["code"] == "JOB_DEAD_LETTERED"
+    message = durable_error["message"]
+    assert "last_attempt_code=internal_error" in message
+    assert "extraction detail withheld" in message
+    assert raw_detail not in message
+    assert "Net retention was 123%" not in message
 
 
 @requires_db

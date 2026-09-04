@@ -122,6 +122,7 @@ def test_cutoff_is_enforced_fail_closed_on_every_leaf() -> None:
 
 
 def test_forecast_outputs_pin_dataset_cutoff_and_must_not_look_ahead() -> None:
+    dataset_cutoff = AS_OF + timedelta(days=30)
     forecast = ForecastModelOutputNode(
         node_id="fc",
         label="fc",
@@ -130,13 +131,14 @@ def test_forecast_outputs_pin_dataset_cutoff_and_must_not_look_ahead() -> None:
         value=Decimal("5"),
         as_of=AS_OF,
         forecast_run_id="run-1",
-        dataset_cutoff=AS_OF + timedelta(days=30),
+        dataset_cutoff=dataset_cutoff,
         dataset_version="ds-1",
     )
     snapshot = GraphSnapshot.build("m", [forecast])
     with pytest.raises(CutoffViolationError):
         evaluate(snapshot, cutoff=AS_OF)
-    run = evaluate(snapshot, cutoff=AS_OF + timedelta(days=30))
+    run = evaluate(snapshot, cutoff=dataset_cutoff)
+    assert run.result("fc").available_at == dataset_cutoff
     assert run.result("fc").provenance is Provenance.FORECAST
     assert run.result("fc").lineage == Lineage(Provenance.FORECAST, forecast_run_id="run-1")
 
