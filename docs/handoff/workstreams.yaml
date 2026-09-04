@@ -46,13 +46,7 @@ shared_paths:
 shared_path_exceptions:
   - adr: docs/decisions/ADR-0003-root-config-edits.md
     applies_to:
-      [
-        package.json,
-        pnpm-lock.yaml,
-        pnpm-workspace.yaml,
-        tsconfig.json,
-        tsconfig.base.json,
-      ]
+      [package.json, pnpm-lock.yaml, pnpm-workspace.yaml, tsconfig.json, tsconfig.base.json]
     rule: mechanical-consequence-of-in-scope-change-only
   - adr: docs/decisions/ADR-0008-python-package-scaffold-edits.md
     # infra/railway/worker.json added by ADR-0008 Amendment 1 (2026-07-29):
@@ -60,13 +54,7 @@ shared_path_exceptions:
     # install list ONLY, and only when the worker imports it. The deploy block
     # (startCommand, restartPolicy, health checks, env wiring), api.json, and
     # everything else under infra/** stay outside the exception (#84 owns them).
-    applies_to:
-      [
-        pyproject.toml,
-        Makefile,
-        .github/workflows/ci.yml,
-        infra/railway/worker.json,
-      ]
+    applies_to: [pyproject.toml, Makefile, .github/workflows/ci.yml, infra/railway/worker.json]
     rule: new-first-party-package-scaffold-registration-only
 defaults:
   status: blocked
@@ -399,6 +387,9 @@ packages:
       - workers/tests/**
   - id: M3-REVIEW
     issue: 61
+    # The Earnings Update Desk fixture preview is explicitly absorbed by this
+    # workstream and issue. It is preparatory M3-REVIEW implementation, not a
+    # separate package or competing owner; existing sequencing and holds remain.
     tasks: [T0308, T0309]
     depends_on: [M3-EXTRACTION-CORE]
     team: experience
