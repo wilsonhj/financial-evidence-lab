@@ -57,6 +57,7 @@ from fel_workers.ingestion.discovery import (
     run_discovery_job,
 )
 from fel_workers.ingestion.pipeline import IngestionOutcome, ingest_filing
+from fel_workers.storage import apply_worker_db_role
 
 __all__ = [
     "DEFAULT_QUEUE",
@@ -137,7 +138,9 @@ def _connection_factory_like(
     password = conn.info.password or None
 
     def factory() -> psycopg.Connection[Any]:
-        return psycopg.connect(dsn, password=password, autocommit=True)
+        conn = psycopg.connect(dsn, password=password, autocommit=True)
+        apply_worker_db_role(conn)  # no-op unless FEL_WORKER_DB_ROLE is set (#190)
+        return conn
 
     return factory
 
