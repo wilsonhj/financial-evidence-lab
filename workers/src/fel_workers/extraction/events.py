@@ -1,27 +1,30 @@
-"""Redacted extraction run events (never prompts / secrets).
+"""Redacted extraction run events (never prompts, secrets, or source text).
 
-Source text is redacted too, with one deliberate and bounded exception: a
-``step_completed`` event's ``stage_output`` is the durable checkpoint payload
-(frozen migration 0004 has no ``steps.output`` column), so it carries the pinned
-span text and the stage payloads verbatim — see ``redact_event_payload``.
-Everywhere else, in every other event type, and in **every** log line, prompts,
-messages, source text and secrets are stripped.
+The event stream is metadata-only: IDs, counts, hashes, states and redacted
+errors. There is no exemption and no carve-out, which is the whole point —
+``specs/003-agentic-extraction/data-model.md``, the frozen
+``extraction-event.schema.json`` and the shipped generated client all publish
+that guarantee, and this module is where it is enforced.
 
-Two entry points, deliberately not one:
+It was not always true. Until ADR-0011 a ``step_completed`` event's
+``stage_output`` key carried the pinned span text and the stage payloads
+verbatim, because frozen migration 0004 had no ``steps.output`` column and the
+event payload was the only durable carrier a resume could read back. Migration
+0006 adds that column, so the checkpoint no longer rides on the event and the
+positional exemption ``redact_event_payload`` used to grant is deleted rather
+than narrowed (ADR-0011 decision item 5).
+
+Two entry points remain, deliberately not one:
 
 * :func:`redact_event_payload` — the event sink (``MemoryEventStore.append`` and
-  ``PostgresEventStore.append``). Takes ``event_type``, and grants the
-  ``stage_output`` exemption only to ``step_completed``.
-* :func:`redact_log_payload` — the log sink (``telemetry.emit``). Has no
-  exemption of any kind and cannot be given one.
+  ``PostgresEventStore.append``).
+* :func:`redact_log_payload` — the log sink (``telemetry.emit``).
 
-They are separate functions because the exemption's whole justification is that
-``extraction_run_events`` is an org-scoped, RLS-protected durable record that a
-resume reads back and re-hashes. A log line is none of those things: process
-stdout is not RLS'd and nothing rehydrates from it, so filing text there would
-be a real leak rather than a bounded false-guarantee. When both sinks shared one
-function, telemetry was one accidental ``stage_output`` field away from
-inheriting an exemption written for a database row (ADR-0009).
+They now do the same thing. They are kept separate because their justifications
+are different — an event row is org-scoped and RLS-protected, a log line is
+neither — so a future exemption argued for one sink cannot silently be inherited
+by the other. That is exactly how the ``stage_output`` carve-out nearly reached
+``telemetry`` when both sinks shared one function (ADR-0009).
 """
 
 from __future__ import annotations
@@ -70,73 +73,34 @@ _REDACT_KEYS = frozenset(
 def redact_event_payload(payload: dict[str, Any], *, event_type: str) -> dict[str, Any]:
     """Redact an event payload bound for ``extraction_run_events``.
 
-    Drops known sensitive keys and truncates unexpected long strings, with one
-    exception: on a ``step_completed`` event, the ``stage_output`` subtree passes
-    through **untouched**. Migration 0004 has no ``steps.output`` column, so that
-    subtree IS the durable stage output, and every string in it is either
-    restored verbatim on resume or hashed. Altering any of them — by truncation
-    or by substitution — corrupts a resumed run silently. Precisely, inside
-    ``stage_output``:
+    Drops known sensitive keys and truncates unexpected long strings, over the
+    WHOLE payload — every key, at every depth. ``event_type`` is retained in the
+    signature (and unused) because it is what a future rule would have to be
+    written against, and because every call site already passes it; it must not
+    become a lever for re-introducing an exemption.
 
-    * ``workflow._restore_output`` rebuilds ``EvidenceBlock.text`` (checked
-      against ``text_hash``), ``state.classification``, ``state.candidates``,
-      ``state.raw_proposals`` and ``state.normalized`` — the last two being whole
-      extraction payloads, prose fields included.
-    * ``validate/pipeline._build_draft`` then hashes those payloads: ``hash_json``
-      over every field (``raw_payload_hash``, and ``proposal_id_for`` on top of
-      it) and ``sha256_hex(definition)`` (``definition_hash``).
-    * ``hashing.stage_input_hash`` hashes the same payloads again as the
-      ``normalize`` / ``validate`` stage inputs, so an altered string breaks
-      checkpoint identity as well as the proposal ids.
-
-    The exemption is **positional, and total**. Two earlier attempts scoped it by
-    field name and both leaked: first only ``text`` was exempt, so ``definition``
-    and ``description`` prose stayed truncated; then truncation was suppressed
-    wholesale but *substitution* was not, so a ``qualifiers``/``dimensions`` key
-    an issuer happened to name ``token`` — or a payload field named ``raw`` —
-    still became ``"[redacted]"`` and still broke ``raw_payload_hash`` (PR #145
-    review M4). ``dimensions`` and ``qualifiers`` hold issuer-supplied keys with
-    arbitrary names, which is exactly why no per-key rule can work here: the
-    check has to be *where the data sits*, not *what it is called*.
-
-    Nothing under ``stage_output`` needs a key-based rule anyway.
-    ``serialize_stage_output`` serializes one stage's return value — evidence
-    blocks, classification, candidates, and normalized payloads. Provider
-    credentials and prompts are never part of a stage's return; they live on the
-    provider call, and ``model_step`` (which does carry per-attempt request
-    hashes) is a *sibling* of ``stage_output``, not inside it, so it is still
-    redacted normally.
-
-    Other event types get no exemption even if they somehow carry a
-    ``stage_output`` key: the argument above is specifically about the one
-    payload a resume reads back. The exemption is also applied only at the top
-    level of that payload, which is the only place ``workflow`` writes the key —
-    a nested ``stage_output`` deeper in some future payload is not the durable
-    checkpoint and gets no pass.
+    A stage's result is no longer here to protect. It lives in
+    ``extraction_run_steps.output`` (migration 0006), written in the same
+    transaction as its ``output_hash`` and re-hashed on resume, so nothing in
+    this payload is restored verbatim or hashed any more: ``step_completed``
+    carries the step name, the input/output hashes and counts, and that is all
+    (``workflow._run_stage``). Truncating or masking a string here can therefore
+    no longer corrupt a resumed run, which is precisely what the old exemption
+    existed to prevent.
     """
-    if event_type != "step_completed":
-        return _redact(payload)
-    exempt = payload.get("stage_output")
-    if not isinstance(exempt, (dict, list)):
-        return _redact(payload)
-    # Redact everything except the checkpoint subtree, then reattach it verbatim.
-    # Splitting it out rather than special-casing inside `_redact` is what makes
-    # the guarantee structural: no rule added to `_redact` later can reach it.
-    rest = _redact({k: v for k, v in payload.items() if k != "stage_output"})
-    return {**rest, "stage_output": exempt}
+    del event_type  # single mode: see the docstring, and ADR-0011 item 5.
+    return _redact(payload)
 
 
 def redact_log_payload(payload: dict[str, Any]) -> dict[str, Any]:
     """Redact a payload bound for a log line — no exemptions, ever.
 
-    Separate from :func:`redact_event_payload` on purpose. The ``stage_output``
-    exemption is justified by properties a log line does not have: an
-    org-scoped RLS'd table that a resume reads back and re-hashes. Process
-    stdout is not tenant-scoped and nothing rehydrates from it, so the same
-    filing text there is a genuine leak rather than a bounded false guarantee
-    (``spec.md:180``, ``OPERATOR.md:16``). Keeping the exemption structurally
-    unreachable from this path is cheaper than remembering not to pass a
-    checkpoint payload to a logger (ADR-0009).
+    Kept separate from :func:`redact_event_payload` even though the two are now
+    identical. Process stdout is not tenant-scoped and nothing rehydrates from
+    it, so an argument that ever justifies relaxing the event sink cannot
+    justify relaxing this one (``spec.md:180``, ``OPERATOR.md:16``). Keeping the
+    two paths distinct is cheaper than remembering not to pass a payload with
+    source text to a logger (ADR-0009, ADR-0011).
     """
     return _redact(payload)
 
@@ -144,8 +108,8 @@ def redact_log_payload(payload: dict[str, Any]) -> dict[str, Any]:
 def _redact(payload: dict[str, Any]) -> dict[str, Any]:
     """Unconditional redaction: sensitive keys masked, long strings truncated.
 
-    Has no notion of an exemption, by design — the checkpoint carve-out is
-    applied by ``redact_event_payload`` *around* this function, never inside it.
+    Has no notion of an exemption, by design, and both public helpers are now
+    thin wrappers over it.
     """
     cleaned: dict[str, Any] = {}
     for key, value in payload.items():

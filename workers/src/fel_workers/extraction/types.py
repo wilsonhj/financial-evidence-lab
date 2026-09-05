@@ -146,7 +146,6 @@ class StageRecord:
     # describes, and a same-process resume would false-positive. Only
     # ``PostgresCheckpointStore.load_succeeded`` sets it, and only when the row
     # carries the field — rows written before it existed resume unchecked.
-    durable_output_hash: str | None = None
 
 
 @dataclass
