@@ -63,6 +63,18 @@ describe("Reader accessibility: landmarks", () => {
   });
 });
 
+// WCAG 2.2 SC 4.1.3 (Status Messages), audited in ACCESSIBILITY.md: adding
+// or removing an analyst note is a client-side state change with no page
+// navigation and no focus move, so NotesPanel carries a visually-hidden
+// role="status" live region announcing the outcome.
+describe("Reader accessibility: status messages", () => {
+  it("carries a visually-hidden role=status live region for note add/remove outcomes", async () => {
+    const markup = renderReader(await readyData(DOC_10Q_ID));
+    expect(markup).toContain('role="status"');
+    expect(markup).toContain('aria-live="polite"');
+  });
+});
+
 describe("Reader accessibility: the integrity alert", () => {
   it("surfaces a citation-integrity failure as an alert-role region, not a silently dropped citation", async () => {
     const data = await readyData(DOC_10Q_ID);
