@@ -14,9 +14,10 @@ import uuid
 import psycopg
 import pytest
 
-from fel_providers.mocks import MockStorageProvider
-from fel_workers import queue
+from fel_providers.mocks import MockStorageProvider, MockStructuredLLMProvider
+from fel_workers import consumer, queue
 from fel_workers.consumer import entity_id_for_cik, handle_sec_filing_fetch, run_worker
+from fel_workers.extraction.handler import JOB_KIND_EXTRACTION_RUN
 from fel_workers.ingestion.discovery import (
     JOB_KIND_SEC_DISCOVERY,
     JOB_KIND_SEC_FILING_FETCH,
@@ -125,9 +126,16 @@ def test_unknown_job_kind_fails_the_job(corpus_conn: psycopg.Connection) -> None
 
 def test_handler_exception_requeues_until_attempts_exhausted(
     corpus_conn: psycopg.Connection,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A crashing handler is a queue.fail, not a worker crash: the job is
-    retried up to max_attempts, then parked as failed with the error."""
+    retried up to max_attempts, then parked as failed with the error.
+
+    Retry backoff (#189) is switched off for this one test: it is about the
+    attempts budget, and with the real 5s base the second attempt would fall
+    outside the loop's iterations rather than being skipped on purpose.
+    """
+    monkeypatch.setattr(queue, "RETRY_BACKOFF_BASE_SECONDS", 0.0)
     queue.enqueue(
         corpus_conn,
         kind=JOB_KIND_SEC_FILING_FETCH,
@@ -295,3 +303,129 @@ def test_lease_lost_mid_job_result_is_discarded(corpus_conn: psycopg.Connection)
     assert row is not None
     assert row[0] == "running", "the new owner's claim must remain untouched"
     assert row[1] is None, "no terminal error may be written by the fenced-out worker"
+
+
+# --- Terminal-outcome and cancellation wiring (#189) ----------------------
+
+
+class PermanentlyFailingSecClient(FixtureSecClient):
+    """Handler whose failure can never be fixed by trying again."""
+
+    def fetch_document(self, url: str) -> bytes:
+        raise queue.PermanentFailure("run 42 is already terminal; retries cannot reopen it")
+
+
+def test_permanent_failure_dead_letters_on_the_first_attempt(
+    corpus_conn: psycopg.Connection,
+) -> None:
+    """PermanentFailure is not a retryable failure: the job is parked at once
+    with its attempts budget unspent, instead of being re-run four more times
+    to fail identically (#146 Option 1, #189)."""
+    queue.enqueue(
+        corpus_conn,
+        kind=JOB_KIND_SEC_FILING_FETCH,
+        payload=_FETCH_PAYLOAD,
+        queue="ingestion",
+        max_attempts=5,
+    )
+    completed = run_worker(
+        corpus_conn,
+        MockStorageProvider(),
+        PermanentlyFailingSecClient(),
+        queue_name="ingestion",
+        max_iterations=5,
+    )
+    assert completed == 0
+    row = corpus_conn.execute("SELECT status, attempts, error, lease FROM jobs").fetchone()
+    assert row is not None
+    assert row[0] == "failed"
+    assert row[1] == 1, "a permanent failure must not consume further attempts"
+    # Trunk's code, not the review branch's `JOB_PERMANENT_FAILURE`: both
+    # sides named the same event independently, and `JOB_DEAD_LETTERED`
+    # is the one already shipped in #211, asserted in four other places,
+    # and paired with `JOB_CANCELLED` in the terminal-write mapping.
+    assert row[2]["error"]["code"] == "JOB_DEAD_LETTERED"
+    assert "already terminal" in row[2]["error"]["message"]
+    assert row[3] is None
+    # And it stays parked: nothing is left for a later loop to pick up.
+    assert queue.claim_one(corpus_conn, queue="ingestion") is None
+
+
+def test_reaper_in_the_run_loop_dead_letters_an_exhausted_stale_claim(
+    corpus_conn: psycopg.Connection,
+) -> None:
+    """The loop's own reaper must not resurrect a poison job: with attempts
+    exhausted, the abandoned claim becomes failed rather than queued."""
+    db_url = os.environ["TEST_DATABASE_URL"]
+    queue.enqueue(
+        corpus_conn, kind=JOB_KIND_SEC_FILING_FETCH, payload=_FETCH_PAYLOAD, max_attempts=1
+    )
+    with psycopg.connect(db_url, autocommit=True) as crashed_conn:
+        crashed_claim = queue.claim_one(crashed_conn)
+    assert crashed_claim is not None
+    corpus_conn.execute(
+        "UPDATE jobs SET heartbeat_at = now() - interval '10 minutes' WHERE id = %s",
+        (crashed_claim.id,),
+    )
+    completed = run_worker(
+        corpus_conn,
+        MockStorageProvider(),
+        FixtureSecClient(),
+        queue_name="default",
+        max_iterations=3,
+        heartbeat_interval_seconds=0.1,
+    )
+    assert completed == 0, "an exhausted stale job must not be re-run"
+    row = corpus_conn.execute("SELECT status, error FROM jobs").fetchone()
+    assert row is not None
+    assert row[0] == "failed"
+    assert row[1]["error"]["code"] == "REAPED_EXHAUSTED"
+
+
+def test_extraction_dispatch_passes_a_working_cancel_check(
+    corpus_conn: psycopg.Connection,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The consumer must hand the extraction handler a cancel_check bound to
+    THIS job, so an operator setting cancel_requested_at mid-run is observed
+    at the handler's next stage boundary. The handler is stubbed on purpose:
+    this test owns the dispatch wiring, not the extraction workflow."""
+    seen: dict[str, object] = {}
+
+    class _Result:
+        status = "succeeded"
+        error: dict[str, object] | None = None
+
+    def fake_handle_extraction_run(
+        conn: psycopg.Connection,
+        provider: object,
+        payload: dict[str, object],
+        **kwargs: object,
+    ) -> _Result:
+        cancel_check = kwargs["cancel_check"]
+        assert callable(cancel_check)
+        seen["before"] = cancel_check()
+        # An operator requests cancellation while the handler is mid-run.
+        with psycopg.connect(os.environ["TEST_DATABASE_URL"], autocommit=True) as operator:
+            operator.execute(
+                "UPDATE jobs SET cancel_requested_at = now() WHERE kind = %s",
+                (JOB_KIND_EXTRACTION_RUN,),
+            )
+        seen["after"] = cancel_check()
+        return _Result()
+
+    monkeypatch.setattr(consumer, "handle_extraction_run", fake_handle_extraction_run)
+    queue.enqueue(
+        corpus_conn, kind=JOB_KIND_EXTRACTION_RUN, payload={"run_id": "r-1"}, queue="ingestion"
+    )
+
+    run_worker(
+        corpus_conn,
+        MockStorageProvider(),
+        FixtureSecClient(),
+        queue_name="ingestion",
+        max_iterations=2,
+        structured_llm=MockStructuredLLMProvider(),
+    )
+
+    assert seen == {"before": False, "after": True}
