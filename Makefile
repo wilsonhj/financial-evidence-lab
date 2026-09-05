@@ -1,7 +1,7 @@
 .DEFAULT_GOAL := help
 PY := .venv/bin
 
-.PHONY: help install install-js install-py format format-check lint typecheck test test-js test-py security ci
+.PHONY: help install install-js install-py format format-check lint typecheck test test-js test-py eval-retrieval-gate security ci
 
 help: ## List available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -66,6 +66,10 @@ test-js: ## Run JS/TS unit tests
 
 test-py: ## Run Python unit tests
 	$(PY)/pytest
+
+eval-retrieval-gate: ## Grade the benchmark seed through the retrieval pipeline (needs TEST_DATABASE_URL)
+	PYTHONPATH=evals:packages/providers:packages/retrieval:packages/retrieval-evals \
+		$(PY)/python -m harness.retrieval_gate --out evals/reports/retrieval-gate/latest.json
 
 security: ## Run static + dependency security scans
 	$(PY)/bandit -q -r apps workers evals packages/providers packages/retrieval packages/retrieval-evals packages/ontology packages/calculation-engine -c pyproject.toml
