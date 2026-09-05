@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from decimal import Decimal
 from typing import Any, cast
 
 from fel_ontology import build_comparability_key
@@ -16,6 +15,7 @@ from fel_workers.extraction.types import (
     ConflictDraft,
     ExtractionMode,
     ProposalDraft,
+    ReviewPriority,
 )
 from fel_workers.extraction.validate.accounting import identity_errors
 from fel_workers.extraction.validate.checks import (
@@ -109,7 +109,46 @@ def validate_proposals(
 
     _mark_duplicates(drafts, cleaned_payloads)
     _mark_identity_violations(drafts, cleaned_payloads, normalizer_rejected_indices)
-    return ValidationResult(proposals=drafts, conflicts=detect_conflicts(drafts))
+    conflicts = detect_conflicts(drafts)
+    _apply_review_priority(drafts, conflicts)
+    return ValidationResult(proposals=drafts, conflicts=conflicts)
+
+
+def _review_priority_for(*, blockers: list[str], in_conflict: bool) -> ReviewPriority:
+    """``high`` when the validator found something, ``normal`` otherwise.
+
+    The rule is deliberately coarse and deliberately deterministic: the same
+    proposal must sort the same way on a resume that rebuilds it from the
+    checkpoint as it did on the run that produced it, so nothing here may consult
+    a clock, a model or a random source.
+
+    ``high`` for every proposal was the previous behaviour and made the column
+    carry no information at all — a queue in which everything is urgent is a
+    queue with no ordering (issue #194). A blocker means the pipeline itself
+    could not accept the row; conflict membership means two proposals contradict
+    each other and a human has to adjudicate. Anything else is an ordinary
+    proposal awaiting review, which is what ``normal`` is for.
+
+    This is a REVIEW-ORDERING signal, not a quality score, and it is not a
+    substitute for ``record_confidence`` (still NULL until #62 lands a
+    calibrator).
+    """
+    return "high" if blockers or in_conflict else "normal"
+
+
+def _apply_review_priority(drafts: list[ProposalDraft], conflicts: list[ConflictDraft]) -> None:
+    """Settle every draft's priority after the cross-payload passes.
+
+    Must run last. Duplicates, accounting-identity breaks and conflict grouping
+    are all properties of a SET of proposals, so a per-payload decision taken in
+    ``_build_draft`` would miss exactly the findings that most need a reviewer.
+    """
+    in_conflict = {pid for group in conflicts for pid in group.member_proposal_ids}
+    for draft in drafts:
+        blockers = [str(b) for b in (draft.validation_summary.get("blockers") or [])]
+        draft.review_priority = _review_priority_for(
+            blockers=blockers, in_conflict=draft.id in in_conflict
+        )
 
 
 def _dedupe(blockers: list[str]) -> list[str]:
@@ -196,14 +235,18 @@ def _build_draft(
         raw_payload_hash=raw_hash,
         definition_hash=definition_hash,
         comparability_key=comparability,
-        record_confidence=Decimal("0"),
+        # No calibrator exists yet (#62), so there is no score. NULL says that;
+        # Decimal("0") said "scored, and certain it is wrong" (#194).
+        record_confidence=None,
         field_confidences={},
         validation_summary={
             "ok": not blockers,
             "blockers": blockers,
             "duplicate": False,
         },
-        review_priority="high",
+        # Provisional: `_apply_review_priority` settles it once the cross-payload
+        # passes (duplicates, accounting identities, conflicts) have run.
+        review_priority=_review_priority_for(blockers=blockers, in_conflict=False),
         evidence=_evidence_rows(clean, evidence_by_span=evidence_by_span),
         id=proposal_id_for(
             run_id=run_id, kind=str(kind), metric_id=metric_id, raw_payload_hash=raw_hash
