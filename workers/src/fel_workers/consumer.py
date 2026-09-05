@@ -502,9 +502,9 @@ def run_worker(
                     # tests); otherwise poll jobs.cancel_requested_at, which
                     # is what #204 said this seam was waiting for and what
                     # migration 0007 finally provides.
-                    cancel_check=job_cancel_check
-                    if job_cancel_check is not None
-                    else _cancel_check,
+                    cancel_check=(
+                        job_cancel_check if job_cancel_check is not None else _cancel_check
+                    ),
                     use_memory_stores=extraction_memory_stores,
                     job_org_id=job.org_id,
                 )
@@ -545,6 +545,13 @@ def run_worker(
                     outcome.status,
                     outcome.reason_code or "ok",
                 )
+        except queue.PermanentFailure as exc:
+            # The handler says this job can never succeed, so the remaining
+            # attempts would only repeat the failure. Ordered before the
+            # generic handler below because PermanentFailure IS an Exception.
+            log.warning("job %s permanently failed; dead-lettering", job.id)
+            queue.dead_letter(conn, job, str(exc))
+            continue
         except RunAlreadyTerminal as exc:
             # The store refused the run between the pre-dispatch read and
             # mark_running: same verdict as the pre-dispatch drop, never a retry.

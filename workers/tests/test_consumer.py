@@ -340,7 +340,11 @@ def test_permanent_failure_dead_letters_on_the_first_attempt(
     assert row is not None
     assert row[0] == "failed"
     assert row[1] == 1, "a permanent failure must not consume further attempts"
-    assert row[2]["error"]["code"] == "JOB_PERMANENT_FAILURE"
+    # Trunk's code, not the review branch's `JOB_PERMANENT_FAILURE`: both
+    # sides named the same event independently, and `JOB_DEAD_LETTERED`
+    # is the one already shipped in #211, asserted in four other places,
+    # and paired with `JOB_CANCELLED` in the terminal-write mapping.
+    assert row[2]["error"]["code"] == "JOB_DEAD_LETTERED"
     assert "already terminal" in row[2]["error"]["message"]
     assert row[3] is None
     # And it stays parked: nothing is left for a later loop to pick up.

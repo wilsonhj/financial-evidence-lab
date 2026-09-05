@@ -283,6 +283,18 @@ def _terminal_write(
     return bool(cur.rowcount)
 
 
+class PermanentFailure(RuntimeError):
+    """A handler raised this to say the job can never succeed.
+
+    The consumer dead-letters immediately instead of requeueing for another
+    attempt. The canonical case is an extraction job whose run row is already
+    terminal: 0004 forbids reopening it, so every retry would fail identically
+    (#146). Distinct from :class:`RunAlreadyTerminal`, which the persist store
+    raises for that specific case and which the consumer parks by run status;
+    this is the generic seam any handler can use.
+    """
+
+
 def dead_letter(conn: psycopg.Connection, job: ClaimedJob, message: str) -> bool:
     """Park the job ``failed`` NOW, regardless of attempts left (#146).
 

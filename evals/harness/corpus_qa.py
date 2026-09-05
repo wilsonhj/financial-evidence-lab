@@ -1152,6 +1152,50 @@ class RunResult:
     failure_reasons: tuple[str, ...]
 
 
+def _drain_queue(
+    conn: psycopg.Connection,
+    storage: object,
+    sec: object,
+    *,
+    max_iterations: int,
+) -> int:
+    """Run the real consumer to quiescence, pulling scheduled retries forward.
+
+    Since #189 a failed attempt is rescheduled rather than requeued for an
+    immediate re-claim: ``queue.fail`` pushes ``available_at`` forward by an
+    exponential backoff and ``claim_one`` filters on it. That is right in
+    production and wrong for a harness, which drives a cohort to quiescence in
+    one tight loop: ``run_worker`` returns as soon as nothing is claimable, so
+    jobs that still have attempts left sit backed off and never reach a
+    terminal status, and the run reports zero failures where it should report
+    three.
+
+    Rather than sleep out a backoff that reaches fifteen minutes, or disable it
+    and stop exercising the production path, this pulls the schedule forward —
+    the same trick the publish-race test uses for lock waits. Every retry the
+    consumer would eventually take is still taken, in the same order, through
+    the same code; only the waiting is skipped.
+
+    The loop ends when a pass claims nothing and no backed-off job remains, so
+    it cannot spin on a permanently-parked queue.
+    """
+    completed = 0
+    for _ in range(max_iterations):
+        completed += run_worker(
+            conn, storage, sec, queue_name=DEFAULT_QUEUE, max_iterations=max_iterations
+        )
+        pulled = conn.execute(
+            """
+            UPDATE jobs SET available_at = now()
+             WHERE queue = %s AND status = 'queued' AND available_at > now()
+            """,
+            (DEFAULT_QUEUE,),
+        ).rowcount
+        if not pulled:
+            break
+    return completed
+
+
 def run_corpus_qa(
     *,
     mode: str,
@@ -1253,9 +1297,7 @@ def run_corpus_qa(
             discovery_job_ids = enqueue_discovery(
                 conn, issuers, run_id=run_id, forms=effective_forms
             )
-            jobs_completed = run_worker(
-                conn, storage, sec, queue_name=DEFAULT_QUEUE, max_iterations=max_iterations
-            )
+            jobs_completed = _drain_queue(conn, storage, sec, max_iterations=max_iterations)
             jobs = collect_job_outcomes(
                 conn,
                 discovery_job_ids=discovery_job_ids,
