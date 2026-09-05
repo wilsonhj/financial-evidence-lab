@@ -41,18 +41,25 @@ import json
 import time
 import uuid
 from collections.abc import Callable, Iterator, Mapping
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Annotated, Any
 
 import psycopg
-from fastapi import APIRouter, Depends, Header, Query, Response
+from fastapi import APIRouter, Depends, Header, Response
 from fastapi.responses import StreamingResponse
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
 from app.auth import TenantContext
-from app.config import DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT, settings
-from app.costs import enforce_ceilings, record_usage, token_cost_usd
+from app.config import settings
+from app.costs import (
+    enforce_ceilings,
+    lock_query_budget,
+    record_usage,
+    reserve_query_cost,
+    token_cost_usd,
+)
 from app.db import tenant_connection
 from app.dependencies import get_tenant_context
 from app.errors import api_error
@@ -289,7 +296,7 @@ class _RunWriter:
             (json.dumps(budget_usage), json.dumps(timings_ms), cost_usd, self._run_id),
         )
 
-    def fail(self, error: dict[str, str]) -> None:
+    def fail(self, error: dict[str, str], *, cost_usd: Decimal = Decimal("0")) -> None:
         # Append the terminal ``run_failed`` event, then move the run to the
         # terminal ``failed`` status. ``fel_guard_retrieval_run`` allows a
         # transition to ``failed`` from any open status once ``run_failed`` is the
@@ -297,8 +304,8 @@ class _RunWriter:
         self.emit("run_failed", {"error": error})
         self._conn.execute(
             "UPDATE retrieval_runs SET status = 'failed', finished_at = now(),"
-            " error = %s::jsonb WHERE id = %s",
-            (json.dumps(error), self._run_id),
+            " error = %s::jsonb, cost_usd = %s WHERE id = %s",
+            (json.dumps(error), cost_usd, self._run_id),
         )
 
 
@@ -343,6 +350,13 @@ def _lane_call(lane: str, lane_query: LaneQuery, timings: dict[str, int]) -> Lan
     return _call
 
 
+@dataclass
+class _RunUsage:
+    """Keep reported spend available even if subsequent persistence fails."""
+
+    cost_usd: Decimal = Decimal("0")
+
+
 def _execute_pipeline(
     conn: psycopg.Connection[Any],
     *,
@@ -352,6 +366,7 @@ def _execute_pipeline(
     mode: str,
     embedding_provider: str,
     embedding_model: str,
+    usage: _RunUsage,
 ) -> tuple[dict[str, int], Decimal]:
     """Run lanes -> fusion once and persist the full ordered trace.
 
@@ -453,6 +468,12 @@ def _execute_pipeline(
         _resolve_generation_provider(GENERATION_PROVIDER, GENERATION_MODEL)
     )
     generation = generator.generate(plan["variants"][0], context, as_of=plan["effective_as_of"])
+    # Capture reported usage before verification or database writes can fail.
+    usage.cost_usd = token_cost_usd(
+        settings(),
+        input_tokens=generation.input_tokens,
+        output_tokens=generation.output_tokens,
+    )
     for claim in generation.claims:
         writer.emit(
             "claim_generated",
@@ -494,11 +515,7 @@ def _execute_pipeline(
         "verifying": verifying_ms,
         "total": planning_ms + retrieving_ms + fusing_ms + generating_ms + verifying_ms,
     }
-    cost_usd = token_cost_usd(
-        settings(),
-        input_tokens=generation.input_tokens,
-        output_tokens=generation.output_tokens,
-    )
+    cost_usd = usage.cost_usd
     # Missing supporting evidence yields abstention; a contradicted claim is
     # preserved and displayed (the run still succeeds).
     if should_abstain(claims):
@@ -809,6 +826,7 @@ def _insert_run(
             PLANNER_VERSION,
         ),
     )
+    reserve_query_cost(conn, ctx, run_id, settings().research_query_cost_usd)
     return run_id
 
 
@@ -848,12 +866,13 @@ def _run_pipeline_or_fail(
     partial trace) and is then recorded as a terminal ``failed`` run in a fresh
     transaction, so a failure is always durably observable.
 
-    A completed run's actual provider usage is metered into ``usage_events``
-    (#191) in its own transaction, so metering cannot roll back the trace and a
-    metering fault cannot lose the run. A run that failed before generation is
-    deliberately not metered: no provider tokens were reported for it, and the
-    ceiling check already ran before any billable work started.
+    The terminal trace and usage event commit together. If either write fails,
+    both roll back and the fresh failure transaction records any provider spend
+    already reported. If the database cannot persist that either, the queued
+    run and its admission reservation remain, so the budget fails closed.
     """
+    usage = _RunUsage()
+
     try:
         with tenant_connection(ctx) as conn:
             conn.execute("SELECT set_config('statement_timeout', %s, true)", (_STATEMENT_TIMEOUT,))
@@ -865,20 +884,30 @@ def _run_pipeline_or_fail(
                 mode=mode,
                 embedding_provider=embedding_provider,
                 embedding_model=embedding_model,
+                usage=usage,
             )
+            record_usage(conn, ctx, usage_kind, cost_usd)
     except Exception as exc:
-        _record_run_failure(ctx, run_id=run_id, exc=exc)
-        return
-    with tenant_connection(ctx) as conn:
-        record_usage(conn, ctx, usage_kind, cost_usd)
+        _record_run_failure(
+            ctx, run_id=run_id, exc=exc, usage_kind=usage_kind, cost_usd=usage.cost_usd
+        )
 
 
-def _record_run_failure(ctx: TenantContext, *, run_id: str, exc: Exception) -> None:
+def _record_run_failure(
+    ctx: TenantContext,
+    *,
+    run_id: str,
+    exc: Exception,
+    usage_kind: str,
+    cost_usd: Decimal,
+) -> None:
     """Append ``run_failed`` and move the run to ``failed`` in a fresh transaction."""
     error = _failure_envelope(exc)
     with tenant_connection(ctx) as conn:
         conn.execute("SELECT set_config('statement_timeout', %s, true)", (_STATEMENT_TIMEOUT,))
-        _RunWriter(conn, run_id=run_id, org_id=ctx.org_id).fail(error)
+        _RunWriter(conn, run_id=run_id, org_id=ctx.org_id).fail(error, cost_usd=cost_usd)
+        if cost_usd > 0:
+            record_usage(conn, ctx, usage_kind, cost_usd)
 
 
 # --- Cost controls ----------------------------------------------------------
@@ -910,6 +939,7 @@ def create_query(
     response: Response,
 ) -> dict[str, Any]:
     with tenant_connection(ctx) as conn:
+        lock_query_budget(conn, ctx)
         replay = _idempotent_replay(conn, ctx, "createQuery", idempotency_key)
         if replay is not None:
             # A replay bills nothing and is not a new billable run, so it is
@@ -993,6 +1023,7 @@ def create_query_rerun(
     response: Response,
 ) -> dict[str, Any]:
     with tenant_connection(ctx) as conn:
+        lock_query_budget(conn, ctx)
         replay = _idempotent_replay(conn, ctx, "createQueryRerun", idempotency_key)
         if replay is not None:
             return replay
@@ -1054,13 +1085,8 @@ def create_query_rerun(
 def get_query(
     query_id: uuid.UUID,
     ctx: Annotated[TenantContext, Depends(get_tenant_context)],
-    limit: Annotated[int, Query(ge=1, le=MAX_LIST_LIMIT)] = DEFAULT_LIST_LIMIT,
 ) -> dict[str, Any]:
-    """Return the immutable query snapshot with its run history.
-
-    ``limit`` bounds the embedded run list (#191): a heavily rerun query
-    otherwise grows this response without limit.
-    """
+    """Return the complete immutable query snapshot and run history."""
     with tenant_connection(ctx, snapshot_read=True) as conn:
         query = conn.execute(
             "SELECT id, parent_query_id, question, plan, created_at FROM queries WHERE id = %s",
@@ -1070,8 +1096,8 @@ def get_query(
             raise api_error(404, "NOT_FOUND", "Query not found.")
         runs = conn.execute(
             "SELECT id, parent_run_id, status, mode, started_at FROM retrieval_runs"
-            " WHERE query_id = %s ORDER BY started_at, id::text LIMIT %s",
-            (str(query_id), limit),
+            " WHERE query_id = %s ORDER BY started_at, id::text",
+            (str(query_id),),
         ).fetchall()
     return {
         "query_id": str(query["id"]),

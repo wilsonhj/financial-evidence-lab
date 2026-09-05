@@ -12,6 +12,7 @@ the status must not invite it.
 
 from __future__ import annotations
 
+import json
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
@@ -48,29 +49,74 @@ def record_usage(
     conn: psycopg.Connection[Any], ctx: TenantContext, kind: str, cost_usd: Decimal
 ) -> None:
     conn.execute(
-        "INSERT INTO usage_events (org_id, user_id, kind, cost_usd) VALUES (%s, %s, %s, %s)",
+        "INSERT INTO usage_events (org_id, user_id, kind, cost_usd, created_at)"
+        " VALUES (%s, %s, %s, %s, statement_timestamp())",
         (ctx.org_id, ctx.user_id, kind, cost_usd),
     )
 
 
-def spend_snapshot(conn: psycopg.Connection[Any], ctx: TenantContext) -> tuple[Decimal, Decimal]:
-    """(user spend today, org spend this month).
+def lock_query_budget(conn: psycopg.Connection[Any], ctx: TenantContext) -> None:
+    """Serialize admission only, across API processes, until reservation commit.
 
-    Row-factory agnostic by construction: the cursor pins ``tuple_row`` rather
-    than inheriting the connection's factory, so this works on both a bare
-    ``psycopg.connect()`` and the API's ``dict_row`` pooled connections.
+    The following spend SELECT gets a fresh READ COMMITTED snapshot after this
+    statement finishes waiting. Never hold this lock during provider calls.
+    The namespace separates cost admission from other advisory-lock users;
+    hash collisions only serialize unrelated organizations.
+    """
+    conn.execute("SELECT pg_advisory_xact_lock(191, hashtext(%s::uuid::text))", (ctx.org_id,))
+
+
+def reserve_query_cost(
+    conn: psycopg.Connection[Any], ctx: TenantContext, run_id: str, cost_usd: Decimal
+) -> None:
+    """Record an immutable admission reservation alongside the queued run.
+
+    The existing audit envelope records the actual caller (including a rerun
+    by another workspace member) and the configured amount at admission. No
+    schema or public run payload changes are needed. Run terminalization and
+    metering atomically replace the pending reservation with actual usage.
+    """
+    conn.execute(
+        "INSERT INTO audit_events (org_id, actor_user_id, action, object_type, object_id, payload)"
+        " VALUES (%s, %s, 'research_query.reserve', 'retrieval_run', %s, %s::jsonb)",
+        (ctx.org_id, ctx.user_id, run_id, json.dumps({"cost_usd": str(cost_usd)})),
+    )
+
+
+def spend_snapshot(conn: psycopg.Connection[Any], ctx: TenantContext) -> tuple[Decimal, Decimal]:
+    """User/day and org/month spend, including durable in-flight reservations.
+
+    Read actual and reserved spend in ONE statement: concurrent completion
+    must never be missed between two snapshots, or counted twice. Pending
+    reservations have no date filter, so a midnight/month rollover cannot
+    make unfinished work free. The cursor pins tuple_row for pooled callers.
     """
     with conn.cursor(row_factory=tuple_row) as cur:
         cur.execute(
             """
-            SELECT
-              COALESCE(SUM(cost_usd) FILTER (
-                WHERE user_id = %s AND created_at >= date_trunc('day', now())), 0),
-              COALESCE(SUM(cost_usd) FILTER (
-                WHERE created_at >= date_trunc('month', now())), 0)
-            FROM usage_events WHERE org_id = %s
+            WITH actual AS (
+                SELECT
+                    COALESCE(SUM(cost_usd) FILTER (
+                        WHERE user_id = %(user_id)s
+                        AND created_at >= date_trunc('day', statement_timestamp())), 0) AS user_day,
+                    COALESCE(SUM(cost_usd) FILTER (
+                        WHERE created_at >= date_trunc('month', statement_timestamp())
+                    ), 0) AS org_month
+                FROM usage_events WHERE org_id = %(org_id)s
+            ), pending AS (
+                SELECT
+                    COALESCE(SUM((a.payload->>'cost_usd')::numeric) FILTER (
+                        WHERE a.actor_user_id = %(user_id)s), 0) AS user_day,
+                    COALESCE(SUM((a.payload->>'cost_usd')::numeric), 0) AS org_month
+                FROM audit_events a
+                JOIN retrieval_runs r ON r.id::text = a.object_id AND r.org_id = a.org_id
+                WHERE a.org_id = %(org_id)s AND a.action = 'research_query.reserve'
+                  AND a.object_type = 'retrieval_run' AND r.finished_at IS NULL
+            )
+            SELECT actual.user_day + pending.user_day, actual.org_month + pending.org_month
+            FROM actual CROSS JOIN pending
             """,
-            (ctx.user_id, ctx.org_id),
+            {"user_id": ctx.user_id, "org_id": ctx.org_id},
         )
         row = cur.fetchone()
     if row is None:

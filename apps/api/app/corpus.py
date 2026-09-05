@@ -33,7 +33,6 @@ from fastapi import APIRouter, Depends, Query
 from pydantic import AwareDatetime
 
 from app.auth import TenantContext
-from app.config import DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT
 from app.db import tenant_connection
 from app.dependencies import get_tenant_context
 from app.errors import api_error
@@ -59,7 +58,6 @@ _LIST_DOCUMENTS_SQL = """
         WHERE dv.document_id = documents.id AND dv.status = 'parsed'
     )
     ORDER BY published_at, accession
-    LIMIT %s
 """
 
 _LIST_DOCUMENTS_AS_OF_SQL = """
@@ -72,7 +70,6 @@ _LIST_DOCUMENTS_AS_OF_SQL = """
         WHERE dv.document_id = documents.id AND dv.status = 'parsed'
     )
     ORDER BY published_at, accession
-    LIMIT %s
 """
 
 _GET_DOCUMENT_SQL = """
@@ -92,18 +89,13 @@ def list_entity_documents(
     entity_id: uuid.UUID,
     ctx: Annotated[TenantContext, Depends(get_tenant_context)],
     as_of: Annotated[AwareDatetime | None, Query()] = None,
-    limit: Annotated[int, Query(ge=1, le=MAX_LIST_LIMIT)] = DEFAULT_LIST_LIMIT,
 ) -> list[dict[str, Any]]:
-    """List an entity's documents, point-in-time filtered by ``as_of``.
-
-    Bounded by ``limit`` (#191): a prolific filer has thousands of documents,
-    and an unbounded listing is both a slow scan and an unbounded response.
-    """
+    """List an entity's documents, point-in-time filtered by ``as_of``."""
     with tenant_connection(ctx) as conn:
         if as_of is not None:
-            rows = conn.execute(_LIST_DOCUMENTS_AS_OF_SQL, (entity_id, as_of, limit)).fetchall()
+            rows = conn.execute(_LIST_DOCUMENTS_AS_OF_SQL, (entity_id, as_of)).fetchall()
         else:
-            rows = conn.execute(_LIST_DOCUMENTS_SQL, (entity_id, limit)).fetchall()
+            rows = conn.execute(_LIST_DOCUMENTS_SQL, (entity_id,)).fetchall()
     return [document_body(row) for row in rows]
 
 

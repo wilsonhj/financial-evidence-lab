@@ -115,35 +115,16 @@ def test_malformed_as_of_gets_contract_envelope(
     assert naive.status_code == 422
 
 
-def test_workspace_listing_is_bounded(
+def test_workspace_listing_keeps_new_workspaces_after_fifty(
     client: TestClient, org_fixture: tuple[str, str], db_url: str
 ) -> None:
-    """#191: the listing takes an optional, validated `limit` and is never
-    unbounded — a tenant with thousands of workspaces cannot ask for them all
-    in one scan."""
-    for index in range(3):
-        created = client.post(
-            "/v1/workspaces",
-            headers={**_headers(org_fixture), "Idempotency-Key": f"lim-{uuid.uuid4()}"},
-            json={
-                "name": f"workspace {index}",
-                "entity_id": str(uuid.uuid4()),
-                "base_currency": "USD",
-                "fiscal_calendar": "FY-JAN31",
-                "as_of": "2026-06-30T23:59:59Z",
-            },
+    with psycopg.connect(db_url) as conn:
+        conn.execute(
+            "INSERT INTO workspaces (id, org_id, name, entity_id, base_currency,"
+            " fiscal_calendar, as_of) SELECT gen_random_uuid(), %s, 'workspace ' || n,"
+            " gen_random_uuid(), 'USD', 'FY-JAN31', now() FROM generate_series(1, 51) n",
+            (org_fixture[0],),
         )
-        assert created.status_code == 201, created.text
-
-    assert len(client.get("/v1/workspaces", headers=_headers(org_fixture)).json()) == 3
-
-    bounded = client.get("/v1/workspaces", params={"limit": 2}, headers=_headers(org_fixture))
-    assert bounded.status_code == 200
-    assert len(bounded.json()) == 2
-
-    for out_of_range in (0, 201):
-        rejected = client.get(
-            "/v1/workspaces", params={"limit": out_of_range}, headers=_headers(org_fixture)
-        )
-        assert rejected.status_code == 422, out_of_range
-        assert rejected.json()["error"]["code"] == "VALIDATION_ERROR"
+    response = client.get("/v1/workspaces", headers=_headers(org_fixture))
+    assert response.status_code == 200
+    assert len(response.json()) == 51

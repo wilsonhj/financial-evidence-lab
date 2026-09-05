@@ -6,12 +6,6 @@ import os
 from dataclasses import dataclass, field
 from decimal import Decimal
 
-# Bounds for every list endpoint (#191). A list route without a ceiling is an
-# unbounded scan waiting for a large tenant; these are the contract-documented
-# `limit` default and maximum, shared so all three routes agree.
-DEFAULT_LIST_LIMIT = 50
-MAX_LIST_LIMIT = 200
-
 
 @dataclass(frozen=True)
 class Settings:
@@ -55,14 +49,6 @@ class Settings:
     )
     rate_limit_burst: float = field(
         default_factory=lambda: float(os.environ.get("FEL_RATE_LIMIT_BURST", "20"))
-    )
-    # Bounded reader assembly (#191): a single reader response never loads an
-    # unbounded number of spans/facts into memory.
-    reader_max_spans: int = field(
-        default_factory=lambda: int(os.environ.get("FEL_READER_MAX_SPANS", "5000"))
-    )
-    reader_max_facts: int = field(
-        default_factory=lambda: int(os.environ.get("FEL_READER_MAX_FACTS", "5000"))
     )
     # Connection pool sizing (#191).
     db_pool_min: int = field(default_factory=lambda: int(os.environ.get("FEL_DB_POOL_MIN", "1")))
