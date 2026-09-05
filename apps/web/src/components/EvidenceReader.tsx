@@ -16,6 +16,7 @@ import { duplicateGroupIndex, groupDuplicateFacts } from "../lib/facts";
 import { buildOutline } from "../lib/outline";
 import type { NoteAnchor } from "../lib/notes";
 import { initReaderState, readerReducer } from "../lib/reader-state";
+import { recordTiming } from "../lib/telemetry";
 import { DocumentPane } from "./DocumentPane";
 import { FactPanel } from "./FactPanel";
 import { NotesPanel } from "./NotesPanel";
@@ -94,6 +95,23 @@ export function EvidenceReader({
     () => facts.filter((record) => documentIdBySpanId[record.fact.source_span_id] === documentId),
     [facts, documentIdBySpanId, documentId],
   );
+
+  // Only target spans are hash-verified before reaching this component (see
+  // loadReaderData); any span attributed to this document is one of those.
+  const verifiedSpanCount = useMemo(
+    () => spans.filter((span) => documentIdBySpanId[span.id] === documentId).length,
+    [spans, documentIdBySpanId, documentId],
+  );
+
+  useEffect(() => {
+    const ms = typeof performance !== "undefined" ? performance.now() : 0;
+    recordTiming("reader.load", ms, { documentId });
+    if (verifiedSpanCount > 0) {
+      recordTiming("reader.first_verified_span", ms, { documentId, count: verifiedSpanCount });
+    }
+    // Re-run when the document changes (component can stay mounted across
+    // client-side navigation — see the reducer note below).
+  }, [documentId, verifiedSpanCount]);
 
   // Only honour a deep-linked span that belongs to this document; a foreign
   // span id from the URL must never select or scroll cross-document evidence.
