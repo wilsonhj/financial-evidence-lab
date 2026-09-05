@@ -113,7 +113,14 @@ describe("generated client drift (check:generated in-suite)", () => {
     });
     const committed = readFileSync(apiPath, "utf8");
     expect(committed).toBe(expected);
-  });
+    // Regenerating the client from the full spec and running it through
+    // prettier takes ~9s on a warm laptop, comfortably over vitest's 5s
+    // default. It fitted once, and has been failing intermittently on trunk
+    // ever since the spec grew — as "Test timed out in 5000ms", which reads
+    // like drift was detected when nothing was compared at all. The budget is
+    // generous rather than tight because the failure it must not produce is a
+    // false report of contract drift.
+  }, 60_000);
 
   it("generated surface exposes the reader path and the promoted fact type", () => {
     const api = readFileSync(join(here, "src/generated/api.ts"), "utf8");
