@@ -6,6 +6,12 @@ test("claim filtering keeps the visible evidence aligned", async ({ page }) => {
   await page.getByTestId("input-search-claims").fill("guidance");
 
   await expect(page.getByTestId("button-claim-nrr")).toHaveCount(0);
+  await expect(page.getByTestId("evidence-claim-nrr")).toHaveCount(0);
+  await expect(page.getByTestId("evidence-claim-guidance")).toHaveCount(0);
+  await expect(page.getByTestId("evidence-empty")).toBeVisible();
+  await expect(page.getByTestId("button-claim-guidance")).toHaveAttribute("aria-pressed", "false");
+
+  await page.getByTestId("button-claim-guidance").click();
   await expect(page.getByTestId("evidence-claim-guidance")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Revenue guidance narrowed" })).toBeVisible();
 
@@ -114,13 +120,15 @@ test("validated cookie restores OLED appearance and mirrors changes", async ({ c
   ]);
   await page.goto("/desk");
 
-  await expect(page.locator("html")).toHaveAttribute("data-fel-theme", "oled");
+  await expect(page.getByTestId("desk-shell")).toHaveAttribute("data-fel-theme", "oled");
+  await expect(page.locator("html")).not.toHaveAttribute("data-fel-theme");
   await page.reload();
-  await expect(page.locator("html")).toHaveAttribute("data-fel-theme", "oled");
+  await expect(page.getByTestId("desk-shell")).toHaveAttribute("data-fel-theme", "oled");
+  await expect(page.locator("html")).not.toHaveAttribute("data-fel-theme");
 
   await page.getByTestId("button-theme-menu").click();
   await page.getByTestId("button-theme-light").click();
-  await expect(page.locator("html")).toHaveAttribute("data-fel-theme", "light");
+  await expect(page.getByTestId("desk-shell")).toHaveAttribute("data-fel-theme", "light");
   await expect
     .poll(() => page.evaluate(() => window.localStorage.getItem("fel-theme")))
     .toBe("light");
@@ -130,8 +138,59 @@ test("localStorage cannot override the server-selected theme", async ({ page }) 
   await page.addInitScript(() => window.localStorage.setItem("fel-theme", "oled"));
   await page.goto("/desk");
 
-  await expect(page.locator("html")).toHaveAttribute("data-fel-theme", "system");
+  await expect(page.getByTestId("desk-shell")).toHaveAttribute("data-fel-theme", "system");
+  await expect(page.locator("html")).not.toHaveAttribute("data-fel-theme");
   await expect
     .poll(() => page.evaluate(() => window.localStorage.getItem("fel-theme")))
     .toBe("system");
+});
+
+test("filings reader stays on light document tokens under system dark", async ({ page }) => {
+  await page.emulateMedia({ colorScheme: "dark" });
+  await page.goto("/");
+  await expect(page.locator("html")).not.toHaveAttribute("data-fel-theme");
+  const color = await page.locator("body").evaluate((el) => getComputedStyle(el).color);
+  const background = await page.locator("body").evaluate((el) => getComputedStyle(el).backgroundColor);
+  expect(contrastRatio(color, background)).toBeGreaterThanOrEqual(4.5);
+  expect(relativeLuminance(background)).toBeGreaterThan(0.5);
+});
+
+test("changing review inputs after apply clears staged facts; reload drops review state", async ({
+  page,
+}) => {
+  await page.goto("/desk");
+  await page.getByTestId("nav-section-review").click();
+  await page.getByTestId("button-source-filing").click();
+  await page
+    .getByTestId("input-rationale")
+    .fill("Filed 10-Q disclosure is the authoritative modeled metric.");
+  await page.getByTestId("button-save-resolution").click();
+  await page.getByTestId("checkbox-approval-1").check();
+  await page.getByTestId("checkbox-approval-2").check();
+  await page.getByTestId("button-apply-facts").click();
+
+  await page.getByTestId("nav-section-model").click();
+  await expect(page.getByTestId("text-fy27-caption")).toHaveText(
+    "Facts staged in this session · preview figures unchanged",
+  );
+
+  await page.getByTestId("nav-section-review").click();
+  await page.getByTestId("button-source-call").click();
+  await page.getByTestId("nav-section-model").click();
+  await expect(page.getByTestId("text-fy27-caption")).not.toHaveText(
+    "Facts staged in this session · preview figures unchanged",
+  );
+
+  await page.getByTestId("nav-section-review").click();
+  await page.getByTestId("button-source-filing").click();
+  await page
+    .getByTestId("input-rationale")
+    .fill("Filed 10-Q disclosure is the authoritative modeled metric.");
+  await page.getByTestId("button-save-resolution").click();
+  await page.getByTestId("checkbox-approval-1").check();
+  await page.getByTestId("checkbox-approval-2").check();
+  await page.getByTestId("button-apply-facts").click();
+  await page.reload();
+  await page.getByTestId("nav-section-review").click();
+  await expect(page.getByTestId("button-apply-facts")).toBeDisabled();
 });

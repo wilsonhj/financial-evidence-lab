@@ -1,9 +1,7 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import { cookies } from "next/headers";
 import Link from "next/link";
 
-import { resolveDeskTheme } from "./desk/desk-state";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -14,12 +12,9 @@ export const metadata: Metadata = {
   description: "Evidence reader for ingested financial filings.",
 };
 
-export default async function RootLayout({ children }: { children: ReactNode }) {
-  const storedTheme = (await cookies()).get("fel-theme")?.value;
-  const theme = resolveDeskTheme(storedTheme ?? null);
-
+export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" data-fel-theme={theme}>
+    <html lang="en">
       <body>
         <a href="#main-content" className="skip-link">
           Skip to main content

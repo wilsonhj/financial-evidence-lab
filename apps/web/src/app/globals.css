@@ -18,7 +18,8 @@
   --color-on-accent: #f8fbff;
 }
 
-html[data-fel-theme="oled"] {
+.desk-shell[data-fel-theme="oled"],
+body:has(.desk-shell[data-fel-theme="oled"]) {
   --color-bg: #000000;
   --color-surface: #0d1219;
   --color-border: #29384a;
@@ -38,7 +39,8 @@ html[data-fel-theme="oled"] {
   --color-on-accent: #081428;
 }
 @media (prefers-color-scheme: dark) {
-  html[data-fel-theme="system"] {
+  .desk-shell[data-fel-theme="system"],
+  body:has(.desk-shell[data-fel-theme="system"]) {
     --color-bg: #000000;
     --color-surface: #0d1219;
     --color-border: #29384a;
@@ -726,7 +728,7 @@ a {
 .site-header {
   background: var(--color-surface);
 }
-html[data-fel-theme="oled"] .site-header {
+body:has(.desk-shell[data-fel-theme="oled"]) .site-header {
   border-color: var(--color-border);
 }
 @media (prefers-reduced-transparency: reduce) {
