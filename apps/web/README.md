@@ -56,3 +56,31 @@ validates target identity, effective cutoff/corpus scope, selected-version
 consistency, same-entity siblings, and fact/span references before the reader
 can render. Target citations are then hash-verified against canonical-global
 section offsets and fail closed on mismatch.
+
+## Client telemetry (issue #138)
+
+A dedicated, opt-in channel for web-layer client telemetry — reader load
+timing (time to first verified span) and Observatory query/trace fetch
+timing and errors — separate from any backend observability pipeline.
+
+- `NEXT_PUBLIC_FEL_WEB_TELEMETRY=1` enables the browser side
+  (`src/lib/telemetry.ts`): batches `recordTiming`/`recordError` calls and
+  flushes them with `navigator.sendBeacon` (falling back to
+  `fetch(..., { keepalive: true })`) to the same-origin `POST /api/telemetry`.
+  Unset (the default), every call is a no-op — no timers, no network
+  activity. This is the only telemetry variable safe to expose to the
+  browser; it is inlined by Next.js at build time.
+- `FEL_WEB_TELEMETRY=1` enables the server side (`src/app/api/telemetry/route.ts`):
+  the route returns `404` for any request unless set, so the endpoint does
+  not exist at all in fixture mode or in a deployment that has not opted in.
+  When enabled, it validates and redacts every event via
+  `src/lib/telemetry-validation.ts` (allowlisted event names, bounded batch
+  size, numeric bounds, an attribute-key allowlist, and redaction of
+  anything that looks like a bearer token, API key, or email address) before
+  logging one structured JSON line per accepted event and returning `204`.
+  An invalid request body returns `400` and the raw body is never echoed
+  back.
+
+Both flags default unset and are independent: the server route can be
+enabled without the browser ever sending anything, and vice versa (though
+the browser calls will simply get 404s in that case).
