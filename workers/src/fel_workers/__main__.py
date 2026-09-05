@@ -59,6 +59,7 @@ Three further, independent opt-ins, all off when unset:
 from __future__ import annotations
 
 import argparse
+import importlib
 import logging
 import os
 import re
@@ -411,7 +412,12 @@ def init_sentry() -> bool:
     if not dsn:
         return False
     try:
-        import sentry_sdk
+        # Imported through importlib, not a plain `import sentry_sdk`, for the
+        # same reason apps/api/app/observability.py does: the SDK is
+        # deliberately NOT a declared dependency, so a static import makes
+        # mypy fail on every checkout that has not installed an optional
+        # package the code is written to work without.
+        sentry_sdk = importlib.import_module("sentry_sdk")
     except ImportError:
         log.warning(
             "FEL_SENTRY_DSN is set but the sentry-sdk package is not installed;"
