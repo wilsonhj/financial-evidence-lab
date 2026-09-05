@@ -101,5 +101,5 @@ export function resolveVisibleClaimId<ClaimId extends string>(
   visibleClaimIds: ClaimId[],
 ): ClaimId | null {
   if (currentClaimId && visibleClaimIds.includes(currentClaimId)) return currentClaimId;
-  return visibleClaimIds[0] ?? null;
+  return null;
 }
