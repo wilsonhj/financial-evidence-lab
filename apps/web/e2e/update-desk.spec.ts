@@ -150,7 +150,9 @@ test("filings reader stays on light document tokens under system dark", async ({
   await page.goto("/");
   await expect(page.locator("html")).not.toHaveAttribute("data-fel-theme");
   const color = await page.locator("body").evaluate((el) => getComputedStyle(el).color);
-  const background = await page.locator("body").evaluate((el) => getComputedStyle(el).backgroundColor);
+  const background = await page
+    .locator("body")
+    .evaluate((el) => getComputedStyle(el).backgroundColor);
   expect(contrastRatio(color, background)).toBeGreaterThanOrEqual(4.5);
   expect(relativeLuminance(background)).toBeGreaterThan(0.5);
 });
