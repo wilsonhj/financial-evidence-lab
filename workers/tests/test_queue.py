@@ -12,6 +12,8 @@ import pytest
 
 from fel_workers import queue
 
+from .conftest import ensure_organization
+
 TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL")
 pytestmark = pytest.mark.skipif(
     TEST_DATABASE_URL is None, reason="TEST_DATABASE_URL not configured"
@@ -40,7 +42,10 @@ def test_enqueue_idempotent_within_tenant_scope(conn: psycopg.Connection) -> Non
 def test_idempotency_never_collides_across_tenants_or_kinds(conn: psycopg.Connection) -> None:
     import uuid as uuid_mod
 
-    org_a, org_b = str(uuid_mod.uuid4()), str(uuid_mod.uuid4())
+    # jobs.org_id is a real foreign key since 0009, so both tenants must exist
+    # before their jobs can be enqueued.
+    org_a = ensure_organization(str(uuid_mod.uuid4()), name="queue org A")
+    org_b = ensure_organization(str(uuid_mod.uuid4()), name="queue org B")
     a = queue.enqueue(conn, kind="sync", payload={}, idempotency_key="shared-key-01", org_id=org_a)
     b = queue.enqueue(conn, kind="sync", payload={}, idempotency_key="shared-key-01", org_id=org_b)
     assert a != b, "two tenants reusing a client key must get distinct jobs"

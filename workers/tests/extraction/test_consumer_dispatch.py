@@ -13,6 +13,7 @@ from fel_workers import queue
 from fel_workers.consumer import run_worker
 from fel_workers.extraction.handler import JOB_KIND_EXTRACTION_RUN
 
+from ..conftest import ensure_organization
 from .conftest import sample_payload
 
 requires_db = pytest.mark.skipif(
@@ -80,6 +81,8 @@ def test_consumer_dispatches_extraction_run(corpus_conn: Any) -> None:
     `test_dispatch_durability.py` against the isolated extraction sibling.
     """
     payload = sample_payload(modes=["kpi"])
+    # jobs.org_id is a real foreign key since 0009; the tenant must exist.
+    ensure_organization(payload["org_id"], name="dispatch org")
     queue.enqueue(
         corpus_conn,
         kind=JOB_KIND_EXTRACTION_RUN,
