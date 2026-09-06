@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import os
 import uuid
+from collections.abc import Iterator
 from pathlib import Path
 
 import psycopg
@@ -186,7 +187,7 @@ def test_main_without_a_database_url_is_a_usage_error(
 
 
 @pytest.fixture()
-def ledger_db() -> str:
+def ledger_db() -> Iterator[str]:
     """A disposable sibling database, dropped when the test finishes."""
     assert TEST_DATABASE_URL is not None
     name = f"fel_ledger_{uuid.uuid4().hex[:12]}"
