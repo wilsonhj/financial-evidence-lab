@@ -29,7 +29,7 @@ from __future__ import annotations
 import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from decimal import Decimal
+from decimal import ROUND_DOWN, Decimal
 from typing import Protocol
 
 from fel_retrieval.generation import (
@@ -140,6 +140,15 @@ class MockCitationVerifier:
         self, claim_text: str, evidence: ContextItem, *, claim_numeric: NumericTuple | None
     ) -> CitationEdge:
         numeric_checks: dict[str, bool] = {}
+        if claim_numeric is None and evidence.numeric is not None and re.search(r"\d", claim_text):
+            # A model can omit its numeric object. Do not let lexical token
+            # overlap then certify a numeric fact (tokens discard signs).
+            return CitationEdge(
+                status="irrelevant",
+                numeric_checks={},
+                rationale="numeric fact claim has no independently asserted numeric tuple",
+                confidence=Decimal("0"),
+            )
         if claim_numeric is not None:
             if evidence.numeric is None:
                 # Claim asserts a number but the cited evidence has none — fail
@@ -174,7 +183,7 @@ class MockCitationVerifier:
             # Full support (1) requires full lexical coverage AND, when the claim
             # asserts a number, every numeric dimension checking out — both are
             # already true on this branch.
-            confidence=Decimal(str(coverage)).quantize(_CONFIDENCE_QUANTUM),
+            confidence=Decimal(str(coverage)).quantize(_CONFIDENCE_QUANTUM, rounding=ROUND_DOWN),
         )
 
 

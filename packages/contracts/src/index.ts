@@ -19,4 +19,4 @@ export const SCHEMA_IDS = {
   extractionPayload: "https://contracts.fel.dev/schemas/extraction-payload/v1",
 } as const;
 
-export const CONTRACT_VERSION = "0.4.0" as const;
+export const CONTRACT_VERSION = "0.5.0" as const;

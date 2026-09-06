@@ -37,6 +37,7 @@ arithmetic-bearing fields are ``Decimal`` end-to-end (house rule).
 
 from __future__ import annotations
 
+import json
 import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
@@ -97,11 +98,16 @@ CLAIM_JSON_SCHEMA: dict[str, Any] = {
                     "numeric": {
                         "type": ["object", "null"],
                         "additionalProperties": False,
-                        "required": ["value", "unit", "period"],
+                        "required": ["value", "unit", "period", "scale"],
                         "properties": {
-                            "value": {"type": "string", "minLength": 1},
+                            "value": {
+                                "type": "string",
+                                "minLength": 1,
+                                "pattern": r"^-?[0-9]+(?:\.[0-9]+)?$(?![\s\S])",
+                            },
                             "unit": {"type": ["string", "null"]},
                             "period": {"type": ["string", "null"]},
+                            "scale": {"type": "integer"},
                         },
                     },
                 },
@@ -137,6 +143,7 @@ class GenerationContractError(RuntimeError):
     def __init__(self, code: str, message: str) -> None:
         super().__init__(message)
         self.code = code
+        self.usage: GenerationResult | None = None
 
 
 @dataclass(frozen=True)
@@ -246,21 +253,27 @@ def _render_context(context: Sequence[ContextItem]) -> str:
 
     Line shape (whitespace-collapsed so one item is always one line)::
 
-        [<item_id>] (<kind>) [numeric value=.. unit=.. period=.. scale=..] <text>
+        [<item_id>] (<kind>) [numeric {"value": "...", ...}] <text>
 
-    The numeric marker is present only for an item that carries a numeric tuple.
+    Every item has a numeric marker (JSON null when it has no numeric tuple),
+    so arbitrary source text cannot be mistaken for structural metadata.
     A deterministic mock provider parses this block back (see
     ``fel_providers.mocks``), which is why the format is machine-readable as
     well as legible to a live model.
     """
     lines = []
     for item in context:
-        marker = ""
+        fields = "null"
         if item.numeric is not None:
-            marker = (
-                f"[numeric value={item.numeric.value} unit={item.numeric.unit}"
-                f" period={item.numeric.period} scale={item.numeric.scale}] "
+            fields = json.dumps(
+                {
+                    "value": f"{item.numeric.value:f}",
+                    "unit": item.numeric.unit,
+                    "period": item.numeric.period,
+                    "scale": item.numeric.scale,
+                }
             )
+        marker = f"[numeric {fields}] "
         lines.append(f"[{item.item_id}] ({item.kind}) {marker}{_normalize(item.text)}")
     return "\n".join(lines)
 
@@ -275,7 +288,7 @@ def _render_prompt(question: str, context: Sequence[ContextItem], as_of: str) ->
 # jsonschema is not a dependency of this repository and the worker's hand-rolled
 # checker lives in a package this one must not depend on, so the schema subset
 # used by CLAIM_JSON_SCHEMA is enforced here: type (including nullable unions),
-# required, properties, additionalProperties: false, items, minItems, minLength.
+# required, properties, additionalProperties: false, items, minItems, minLength, pattern.
 
 
 def _type_ok(value: object, expected: str) -> bool:
@@ -314,6 +327,9 @@ def _schema_errors(value: object, schema: Mapping[str, Any], *, path: str) -> li
         min_length = schema.get("minLength")
         if isinstance(min_length, int) and len(value) < min_length:
             errors.append(f"{path}: string shorter than minLength {min_length}")
+        pattern = schema.get("pattern")
+        if isinstance(pattern, str) and re.search(pattern, value) is None:
+            errors.append(f"{path}: string does not match required pattern")
 
     if isinstance(value, dict):
         required = schema.get("required")
@@ -326,7 +342,7 @@ def _schema_errors(value: object, schema: Mapping[str, Any], *, path: str) -> li
         if schema.get("additionalProperties") is False:
             for key in value:
                 if key not in properties:
-                    errors.append(f"{path}: unexpected property {key!r}")
+                    errors.append(f"{path}: unexpected property")
         for key, child in value.items():
             child_schema = properties.get(key)
             if isinstance(child_schema, dict):
@@ -355,23 +371,18 @@ def validate_claims_output(parsed: Mapping[str, Any]) -> None:
         )
 
 
-def _numeric_from(
-    raw: Mapping[str, Any], evidence: ContextItem | None, *, path: str
-) -> NumericTuple:
+def _numeric_from(raw: Mapping[str, Any], *, path: str) -> NumericTuple:
     """Build the claim's asserted numeric tuple from provider JSON.
 
-    ``value`` is the model's assertion, parsed as an exact ``Decimal``. ``unit``
-    and ``period`` fall back to the first cited item's own tuple when the model
-    leaves them null, and ``scale`` always comes from the evidence: the base-ten
-    exponent is a normalization artifact of ingestion, not something the contract
-    asks a model to assert, so inventing one here would manufacture a mismatch.
-    A claim whose cited evidence has no numeric tuple keeps neutral defaults and
-    is graded non-supporting by the verifier.
+    Each dimension is the model's assertion, including the base-ten ``scale``.
+    Missing unit/period remain unknown, never copied from the evidence being
+    checked. Verification must compare independent assertions to the evidence.
     """
-    reference = evidence.numeric if evidence is not None else None
     raw_value = raw.get("value")
     try:
         value = Decimal(str(raw_value))
+        if not value.is_finite():
+            raise ValueError("non-finite decimal")
     except (InvalidOperation, ValueError) as exc:
         raise GenerationContractError(
             "CLAIM_NUMERIC_NOT_DECIMAL",
@@ -381,9 +392,9 @@ def _numeric_from(
     period = raw.get("period")
     return NumericTuple(
         value=value,
-        unit=str(unit) if isinstance(unit, str) else (reference.unit if reference else ""),
-        period=str(period) if isinstance(period, str) else (reference.period if reference else ""),
-        scale=reference.scale if reference else 0,
+        unit=unit if isinstance(unit, str) else "",
+        period=period if isinstance(period, str) else "",
+        scale=int(raw["scale"]),
     )
 
 
@@ -437,7 +448,21 @@ class StructuredClaimGenerator:
             claims = _decompose(context)
             abstain_reason = None
         else:
-            claims, abstain_reason = _claims_from(result.parsed, context)
+            try:
+                claims, abstain_reason = _claims_from(result.parsed, context)
+            except GenerationContractError as exc:
+                # Reject the whole output, retaining usage for the caller's
+                # terminal abstention record. Never retain malformed model JSON.
+                exc.usage = GenerationResult(
+                    claims=(),
+                    provider=result.provider,
+                    model=result.model,
+                    input_tokens=result.input_tokens,
+                    output_tokens=result.output_tokens,
+                    refused=False,
+                    abstained=True,
+                )
+                raise
 
         return GenerationResult(
             claims=claims,
@@ -473,7 +498,6 @@ def _claims_from(
     for ord_, raw_claim in enumerate(raw_claims if isinstance(raw_claims, list) else []):
         path = f"$.claims[{ord_}]"
         citations: list[ClaimCitation] = []
-        first_cited: ContextItem | None = None
         for index, raw_citation in enumerate(raw_claim["citations"]):
             item_id = str(raw_citation["item_id"])
             item = accepted.get(item_id)
@@ -483,16 +507,14 @@ def _claims_from(
                 # widen its own evidence set.
                 raise GenerationContractError(
                     "UNKNOWN_CONTEXT_ITEM",
-                    f"{path}.citations[{index}]: item {item_id} is not a selected context item",
+                    f"{path}.citations[{index}]: item is not a selected context item",
                 )
             quote = str(raw_citation["quote"])
-            if _normalize(quote).lower() not in _normalize(item.text).lower():
+            if not _normalize(quote) or _normalize(quote) not in _normalize(item.text):
                 raise GenerationContractError(
                     "QUOTE_NOT_IN_CONTEXT_ITEM",
-                    f"{path}.citations[{index}]: quote is not a span of item {item_id}",
+                    f"{path}.citations[{index}]: quote is not a span of the cited item",
                 )
-            if first_cited is None:
-                first_cited = item
             citations.append(
                 ClaimCitation(
                     item_id=item.item_id,
@@ -501,11 +523,7 @@ def _claims_from(
                 )
             )
         raw_numeric = raw_claim.get("numeric")
-        numeric = (
-            _numeric_from(raw_numeric, first_cited, path=path)
-            if isinstance(raw_numeric, dict)
-            else None
-        )
+        numeric = _numeric_from(raw_numeric, path=path) if isinstance(raw_numeric, dict) else None
         claims.append(
             GeneratedClaim(
                 # Proposed only: verification assigns the status, the citation

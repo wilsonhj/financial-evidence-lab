@@ -278,6 +278,15 @@ def test_partial_coverage_lowers_confidence_below_one() -> None:
     assert verified.status == "partially_supported"
 
 
+def test_almost_complete_coverage_never_rounds_confidence_to_one() -> None:
+    text = " ".join(f"w{i}" for i in range(20001))
+    edge = MockCitationVerifier().verify(
+        text, _item("a", text.rsplit(" ", 1)[0]), claim_numeric=None
+    )
+    assert edge.status == "partial"
+    assert edge.confidence < Decimal("1")
+
+
 def test_numeric_contradiction_zeroes_confidence() -> None:
     item = _item("a", "Revenue was 100", numeric=_num("100"))
     claim = GeneratedClaim(

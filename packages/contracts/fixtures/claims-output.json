@@ -8,7 +8,7 @@
           "quote": "Revenue was $100 million"
         }
       ],
-      "numeric": { "value": "100", "unit": "USD", "period": "FY2026-Q2" }
+      "numeric": { "value": "100", "unit": "USD", "period": "FY2026-Q2", "scale": 6 }
     },
     {
       "text": "Management attributed the increase to pricing.",

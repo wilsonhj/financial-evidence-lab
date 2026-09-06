@@ -47,15 +47,26 @@
             "type": ["object", "null"],
             "description": "The single checkable quantity the claim asserts, or null for a claim that asserts none. Decimal string, never a float.",
             "additionalProperties": false,
-            "required": ["value", "unit", "period"],
+            "required": ["value", "unit", "period", "scale"],
             "properties": {
               "value": {
                 "type": "string",
                 "minLength": 1,
-                "description": "Exact decimal string."
+                "pattern": "^-?[0-9]+(?:\\.[0-9]+)?$(?![\\s\\S])",
+                "description": "Finite exact decimal string without exponent notation."
               },
-              "unit": { "type": ["string", "null"] },
-              "period": { "type": ["string", "null"] }
+              "unit": {
+                "type": ["string", "null"],
+                "description": "Asserted unit; null means unknown and must not inherit the cited evidence's unit."
+              },
+              "period": {
+                "type": ["string", "null"],
+                "description": "Asserted fiscal period; null means unknown and must not inherit the cited evidence's period."
+              },
+              "scale": {
+                "type": "integer",
+                "description": "Independently asserted base-ten exponent: value 100 and scale 6 mean 100 million. Must not inherit the cited evidence's scale."
+              }
             }
           }
         }

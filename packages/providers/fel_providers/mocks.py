@@ -220,23 +220,8 @@ _CLAIMS_SCHEMA_NAME = "claims-output"
 # One rendered context line, as fel_retrieval.generation._render_context writes
 # it: ``[<item_id>] (<kind>) [numeric ...] <text>``.
 _CONTEXT_LINE = re.compile(r"^\[(?P<item_id>[^\]]+)\] \((?P<kind>[^)]*)\) (?P<rest>.*)$")
-_NUMERIC_MARKER = re.compile(r"^\[numeric (?P<fields>[^\]]*)\] (?P<text>.*)$")
-_CONTEXT_HEADER = "Selected context:"
-
-
-def _parse_numeric_marker(fields: str) -> dict[str, str | None]:
-    parsed: dict[str, str] = {}
-    for token in fields.split(" "):
-        key, _, value = token.partition("=")
-        if key:
-            parsed[key] = value
-    # ``scale`` is deliberately dropped: claims-output/v1 does not carry it (the
-    # base-ten exponent is an ingestion normalization, not a model assertion).
-    return {
-        "value": parsed.get("value", "0"),
-        "unit": parsed.get("unit") or None,
-        "period": parsed.get("period") or None,
-    }
+_NUMERIC_PREFIX = "[numeric "
+_CONTEXT_HEADER = "\n\nSelected context:\n"
 
 
 def _claims_envelope_for(request: StructuredGenerationRequest) -> dict[str, object]:
@@ -252,18 +237,24 @@ def _claims_envelope_for(request: StructuredGenerationRequest) -> dict[str, obje
     for message in request.messages:
         content = message.get("content") or ""
         if _CONTEXT_HEADER in content:
-            block = content.split(_CONTEXT_HEADER, 1)[1].splitlines()
+            # The question may itself contain a fake context header. Context
+            # text is collapsed to one line, so only the last delimiter is ours.
+            block = content.rsplit(_CONTEXT_HEADER, 1)[1].splitlines()
     claims: list[dict[str, object]] = []
     for line in block:
         match = _CONTEXT_LINE.match(line.strip())
         if match is None:
             continue
         rest = match.group("rest")
-        numeric: dict[str, str | None] | None = None
-        marker = _NUMERIC_MARKER.match(rest)
-        if marker is not None:
-            numeric = _parse_numeric_marker(marker.group("fields"))
-            rest = marker.group("text")
+        numeric: dict[str, object] | None = None
+        if rest.startswith(_NUMERIC_PREFIX):
+            # Decode JSON rather than splitting dimensions on spaces: units
+            # and periods can contain spaces, brackets, or equals signs.
+            fields, end = json.JSONDecoder().raw_decode(rest[len(_NUMERIC_PREFIX) :])
+            remainder = rest[len(_NUMERIC_PREFIX) + end :]
+            if (fields is None or isinstance(fields, dict)) and remainder.startswith("] "):
+                numeric = fields
+                rest = remainder[2:]
         if not rest:
             continue
         claims.append(
