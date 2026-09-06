@@ -153,11 +153,29 @@ def test_resolve_database_url_precedence() -> None:
     assert migrate.resolve_database_url(None, {}) is None
 
 
+def test_fel_database_url_outranks_a_platform_injected_database_url() -> None:
+    """The repository's own variable wins over a generic, possibly foreign one.
+
+    Every service reads ``FEL_DATABASE_URL`` (``apps/api/app/config.py``, the
+    worker entrypoint, ``infra/railway/README.md``). A platform-injected
+    ``DATABASE_URL`` can point at a different database entirely, and migrating
+    that one instead would be silent and wrong.
+    """
+    env = {
+        "FEL_DATABASE_URL": "postgresql:///fel",
+        "DATABASE_URL": "postgresql:///platform",
+        "TEST_DATABASE_URL": "postgresql:///test",
+    }
+    assert migrate.resolve_database_url(None, env) == "postgresql:///fel"
+    assert migrate.resolve_database_url("postgresql:///explicit", env) == "postgresql:///explicit"
+    assert migrate.resolve_database_url(None, {"FEL_DATABASE_URL": "f"}) == "f"
+
+
 def test_main_without_a_database_url_is_a_usage_error(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.delenv("DATABASE_URL", raising=False)
-    monkeypatch.delenv("TEST_DATABASE_URL", raising=False)
+    for name in migrate.DATABASE_URL_ENV_VARS:
+        monkeypatch.delenv(name, raising=False)
 
     assert migrate.main(["--migrations-dir", str(tmp_path)]) == migrate.EXIT_USAGE
 

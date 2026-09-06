@@ -173,14 +173,23 @@ def format_plan(plan: Plan) -> str:
     return "\n".join(lines)
 
 
+#: Checked in order after an explicit ``--database-url``. ``FEL_DATABASE_URL``
+#: comes first because it is the variable this repository actually sets — the
+#: API reads it in ``apps/api/app/config.py``, the worker requires it, and it is
+#: the only database variable ``infra/railway/README.md`` documents. A generic
+#: ``DATABASE_URL`` is often injected by the platform and may point somewhere
+#: else entirely, so it must not win over the one the services themselves use.
+DATABASE_URL_ENV_VARS = ("FEL_DATABASE_URL", "DATABASE_URL", "TEST_DATABASE_URL")
+
+
 def resolve_database_url(
     explicit: str | None, environ: Mapping[str, str] | None = None
 ) -> str | None:
-    """First of ``--database-url``, ``DATABASE_URL``, ``TEST_DATABASE_URL``."""
+    """First of ``--database-url`` then :data:`DATABASE_URL_ENV_VARS`."""
     if explicit:
         return explicit
     env = os.environ if environ is None else environ
-    for name in ("DATABASE_URL", "TEST_DATABASE_URL"):
+    for name in DATABASE_URL_ENV_VARS:
         value = env.get(name)
         if value:
             return value
@@ -226,7 +235,10 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--database-url",
-        help="Target database. Defaults to $DATABASE_URL, then $TEST_DATABASE_URL.",
+        help=(
+            "Target database. Defaults to $FEL_DATABASE_URL, then $DATABASE_URL, "
+            "then $TEST_DATABASE_URL."
+        ),
     )
     parser.add_argument(
         "--migrations-dir",
@@ -262,7 +274,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     database_url = resolve_database_url(args.database_url)
     if not database_url:
         print(
-            "error: no database URL; pass --database-url or set DATABASE_URL or TEST_DATABASE_URL",
+            "error: no database URL; pass --database-url or set one of "
+            + ", ".join(DATABASE_URL_ENV_VARS),
             file=sys.stderr,
         )
         return EXIT_USAGE
