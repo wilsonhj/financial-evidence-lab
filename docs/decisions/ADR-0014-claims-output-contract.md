@@ -59,6 +59,13 @@ require independent numeric value, unit, period, sign, and scale checks.
   durable quote storage or authorize adding such a column.
 - No live provider adapter or provider substitution is proposed. ADR-0012 stays
   separate and retains its own evidence and acceptance requirements.
+- The schema is the local validation authority, not a guarantee of identical
+  provider schema support. For example, [Anthropic's documented subset](https://platform.claude.com/docs/en/build-with-claude/structured-outputs#pattern-support-regex)
+  excludes string-length constraints and regex lookaheads; [OpenAI documents its
+  own subset](https://developers.openai.com/api/docs/guides/structured-outputs#supported-schemas).
+  A live adapter must validate provider compatibility and, if necessary, adapt
+  the generation schema while retaining full local output validation. This
+  mock-only change does not prove that live-provider boundary.
 
 ## Alternatives rejected
 

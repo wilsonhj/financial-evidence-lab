@@ -6,8 +6,8 @@ items, hands it to the frozen ``StructuredLLMProvider`` protocol
 (``fel_providers``), and then **consumes the provider's JSON**. The schema is
 ``claims-output/v1`` (``packages/contracts/schemas/claims-output.schema.json``),
 mirrored here as :data:`CLAIM_JSON_SCHEMA` so the package stays importable
-without the contracts workspace and so the same object can be sent to a strict
-structured-output provider unchanged.
+without the contracts workspace. Live adapters must check the selected provider's
+supported schema subset before sending it; local validation always stays strict.
 
 Everything about that consumption fails closed:
 
@@ -67,8 +67,8 @@ CLAIM_SCHEMA_VERSION = "v1"
 
 # Mirror of packages/contracts/schemas/claims-output.schema.json (body only —
 # no $id/$schema/x-fel-version/title, which a provider does not need). Optional
-# members are required-and-nullable so this object is accepted verbatim by a
-# strict structured-output provider. A test pins it to the contract file.
+# members are required-and-nullable. Provider-specific schema restrictions still
+# need adapter validation before live cutover. A test pins this to the contract.
 CLAIM_JSON_SCHEMA: dict[str, Any] = {
     "type": "object",
     "additionalProperties": False,

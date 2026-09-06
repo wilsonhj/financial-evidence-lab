@@ -3,7 +3,7 @@
   "$id": "https://contracts.fel.dev/schemas/claims-output/v1",
   "x-fel-version": "1.0.0",
   "title": "Claims output",
-  "description": "Structured reader output: the atomic claims a model asserts from the selected context, each grounded in one or more context items by id and quote. Optional members are modelled as required-and-nullable so this exact schema can be sent to a strict structured-output provider (OpenAI json_schema strict, Anthropic tool input_schema) without transformation. additionalProperties is false everywhere: an unknown member is a contract violation, never a tolerated extra.",
+  "description": "Structured reader output: the atomic claims a model asserts from the selected context, each grounded in one or more context items by id and quote. Optional members are modelled as required-and-nullable. Live adapters must check their provider's supported JSON Schema subset; direct compatibility with every strict-output provider is not guaranteed. Local validation enforces the full contract. additionalProperties is false everywhere: an unknown member is a contract violation, never a tolerated extra.",
   "type": "object",
   "additionalProperties": false,
   "required": ["claims", "abstain"],
