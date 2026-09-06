@@ -5,6 +5,7 @@
     "buildCommand": "pip install -r requirements.txt && pip install ./packages/providers ./packages/ontology ./workers"
   },
   "deploy": {
+    "preDeployCommand": "python scripts/db/migrate.py --check --database-url \"$FEL_DATABASE_URL\"",
     "startCommand": "python -m fel_workers run",
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 3
