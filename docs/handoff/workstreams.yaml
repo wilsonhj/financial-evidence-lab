@@ -64,10 +64,12 @@ defaults:
 
 # Queue restructure (architecture audit, 2026-07): 41 packages consolidated to 19
 # milestone-scoped packages (18 pending once the completed M0-SCAFFOLD merges).
-# The file has since grown to 34 entries as contract waves and unallocated
-# packages were registered; the 19/18 figures are historical, not current.
+# The file has since grown to 51 entries as contract waves, unallocated
+# packages and the 2026-09-01 architecture review (#188) were registered; the
+# 19/18 figures are historical, not current. The 51 is measured at 75fad38 and
+# decays the moment an entry is added — recount rather than quoting it.
 # Issues #57-#62 refreshed and contract waves #100/#101 added 2026-07-16. Each package's `issue:` field points at its
-# GitHub issue (#9 and #51-#151, not a contiguous range); legacy issues #10-#49 are closed. Deferred post-MVP and
+# GitHub issue (#9, and #51-#248, not a contiguous range); legacy issues #10-#49 are closed. Deferred post-MVP and
 # removed from the queue: T0211-T0213 (Embedding Atlas) and T0506 (analogues).
 # T0214 is split: T0214a (50-100-question smoke benchmark, M2) and T0214b (frozen
 # 300-question adjudicated benchmark, M5 release). T0215 keeps the retrieval and
@@ -340,14 +342,12 @@ packages:
     # for a new retroactive migration entry is DB-GUARD-HARDENING (#125, created
     # for the 0005 record). Entries spanning both db/migrations/** and
     # packages/contracts/** are M2-CONTRACT (#100) and M3-CONTRACT (#101), both
-    # merged, and THIS entry, which is blocked — a count that includes itself,
-    # because an earlier draft of this comment said the two contract packages
-    # were "the only" such entries and was false in the very entry carrying it.
-    # Implements the
+    # merged, and THIS entry, which read `blocked` from its creation until PR
+    # #236 merged on 2026-09-05. Implements the
     # durable checkpoint column so a completed stage's result stops riding on the
-    # step_completed event payload's stage_output key — the coupling that leaves
+    # step_completed event payload's stage_output key — the coupling that left
     # extraction_run_events carrying verbatim filing text while six published
-    # contract and spec locations state it carries metadata only.
+    # contract and spec locations stated it carries metadata only.
     issue: 157
     # Deliberately empty: no Spec Kit task covers this fix. It is the follow-up
     # ADR-0009 named in its own "Alternatives rejected"; ADR-0009 is now
@@ -356,7 +356,7 @@ packages:
     depends_on: [M3-EXTRACTION-CORE] # M3-CONTRACT (frozen 0004 + OpenAPI v0.4.0) inherited via M3-EXTRACTION-CORE
     team: contracts
     branch: agent/extraction-steps-output # not yet created
-    status: blocked # NOT dispatchable. The integration lead must first sequence it against #62 (see allowed_paths), and must land it before #61's SSE surface per ADR-0011's first revisit trigger, which the spec records as mandatory rather than advisory. #157 already carries both the contract-change and agent-task labels; db/migrations/**, packages/contracts/**, specs/** and docs/decisions/** are all shared paths, so dispatch needs explicit integration-lead authorization.
+    status: merged # PR #236 @ 22831da (2026-09-05). Migration 0006 adds extraction_run_steps.output, written in the same INSERT as output_hash under CHECK ((output IS NULL) = (output_hash IS NULL)), so the hash and the value it hashes are one row and one write and can never be separately durable. That also makes the event stream's published "metadata only" guarantee true. The merge resolved seven conflicts in safety-critical code against PR #211, which had landed #146/#204's terminal-run guards in the same two files; RunAlreadyTerminal, TERMINAL_RUN_STATUSES, _assert_run_open and load_run_status all survive, checked explicitly rather than assumed. Issue #157 is still OPEN on GitHub — the PR declared no closing issue. This entry read `blocked` from that merge until the present reconciliation, so for a day the queue described a landed migration as work the lead still had to sequence (#179's defect class). ADR-0011's SSE revisit trigger is CLEARED by this merge; see M3-REVIEW below.
     allowed_paths:
       # CONTENTION: the last two paths below are a SUBSET of M3-CONFIDENCE-GATE
       # (#62)'s claim set (#62 also claims evals/**), so these two packages can
@@ -367,8 +367,10 @@ packages:
       # that exact-string overlap comparison does not catch. Spec 004 §6.1/§6.2
       # sequence this entry before wave 1, which clears all four at once.
       #
-      # SCOPE OF THE BLOCK ON #61 — RULED by the integration lead: this work
-      # blocks ONLY #61's SSE surface, not all of #61. ADR-0011's header governs
+      # SCOPE OF THE BLOCK ON #61 — CLEARED 2026-09-05 by PR #236; retained
+      # because it records a ruling a later reader must not re-open.
+      # RULED by the integration lead: this work
+      # blocked ONLY #61's SSE surface, not all of #61. ADR-0011's header governs
       # ("Blocks: #61 SSE until the *implementing* PR for migration 0006 lands.
       # Non-SSE #61 work still waits on unimplemented #146 Option 1"), so NO
       # depends_on edge is added from #61 to this entry. The lead deliberately
@@ -394,7 +396,7 @@ packages:
     depends_on: [M3-EXTRACTION-CORE]
     team: experience
     branch: agent/m3-review # not yet created
-    status: blocked # NOT a dependency block any more: depends_on [M3-EXTRACTION-CORE] is SATISFIED — #60 merged via PR #145 @ 61058e4 (2026-07-30). Held instead by: ADR-0011 was ratified by PR #175 @ f158e05; SSE still waits until migration 0006 lands via #157. #146 was ruled Option 1 (terminal runs final) on 2026-08-29 but is not yet implemented — still a producer gate. Deliberately left `blocked` by this reconciliation: flipping this key is a dispatch decision reserved to the integration lead, not a documentation fix. Note the key is explicit, so dispatching means flipping it rather than adding one.
+    status: blocked # ALL THREE RECORDED HOLDS ARE NOW CLEARED, and none of the three is what holds it today. (1) ADR-0011 ratified by PR #175 @ f158e05 (2026-08-30). (2) The SSE hold — migration 0006 via #157 — CLEARED by PR #236 @ 22831da (2026-09-05); see EXTRACTION-STEPS-OUTPUT above, now `merged`. (3) #146 Option 1 (terminal runs final), ruled 2026-08-29 and recorded here as unimplemented, was IMPLEMENTED by PR #211 @ 988f47a (2026-09-04), which closed #146 and #204: RunAlreadyTerminal, TERMINAL_RUN_STATUSES and _assert_run_open enforce it, and #236 preserved every one of those guards through its seven-conflict merge. WHAT HOLDS IT NOW is path contention alone: allowed_paths apps/api/** is claimed by BOTH open PRs, #232 (cherry/191-api-hardening) and #241 (cherry/193-claims-output), and both rewrite apps/api/app/retrieval.py. Still deliberately left `blocked` by this reconciliation: flipping this key is a dispatch decision reserved to the integration lead, not a documentation fix. The key is explicit, so dispatching means flipping it rather than adding one.
     allowed_paths: [apps/web/**, apps/api/**]
   - id: M3-CONFIDENCE-GATE # confidence scoring + extraction quality gate
     issue: 62
@@ -569,3 +571,212 @@ packages:
     allowed_paths:
       - evals/reporting/**
       - evals/tests/**
+
+  # ARCH-REVIEW 2026-09-01 (#188) — umbrella, NOT a package. #188 is the
+  # lead-architect review of `main` @ `fdcb3d2`; it owns no code and no branch,
+  # and closes when its sub-issues do. Registered as this comment rather than an
+  # entry, matching the parent-tracker treatment of #87 and #96. Its 15 themes
+  # were filed as #189-#203; #219, #221, #230 and #248 were filed later from the
+  # same review and from PR review rounds. Already tracked elsewhere and
+  # deliberately not re-filed by #188: #132, #135, #136, #138, #141, #143, #146,
+  # #157, #177, #180.
+  #
+  # RECOVERY CONTEXT — read before assuming any entry below is unstarted.
+  # PRs #231, #235, #236-#240, #242-#247 recovered ~19,400 lines of finished
+  # work from the abandoned branch `claude/repo-analysis-improvements-m25v4u`,
+  # which no PR was ever opened from. Several sub-issues therefore have a merged
+  # implementation while the ISSUE is still OPEN on GitHub, because the recovery
+  # PRs mostly declared no closing issue. Each entry below states what merged and
+  # what, if anything, remains. Issue-open is NOT evidence that the work is
+  # available to take (#179's defect class, in its other direction).
+  - id: ARCH-QUEUE-DURABILITY # poison-job dead-lettering, retry backoff, reaper index, migration 0007
+    issue: 189
+    tasks: []
+    depends_on: [M3-EXTRACTION-CORE]
+    team: platform
+    branch: cherry/189-jobs-hardening
+    status: merged # PR #237 @ 5d8ccca (2026-09-05); migration 0007 adds jobs.cancel_requested_at, which #211 named as the missing half of cooperative cancel. All three defects in #189 fixed and each verified by execution rather than by reading the diff. Issue #189 is still OPEN on GitHub — the PR declared no closing issue; closing it is the lead's call, not a signal of residual work.
+    allowed_paths:
+      - db/migrations/**
+      - workers/src/fel_workers/**
+      - workers/tests/**
+      - evals/harness/**
+  - id: ARCH-DB-WORKER-ROLE # least-privilege fel_worker role, migration 0008
+    issue: 190
+    tasks: []
+    depends_on: [ARCH-QUEUE-DURABILITY] # serialized: same db/migrations/** and consumer.py surface; 0008 follows 0007
+    team: platform
+    branch: cherry/190-worker-role
+    status: merged # PR #238 @ cf532cb (2026-09-05). Creates fel_worker with per-table grants and RLS policies instead of the blanket bypass migration 0001 had always described but never created. RESIDUAL, deliberate: it is opt-in — unset FEL_WORKER_DB_ROLE leaves the pre-existing behaviour, so workers still connect as the migration owner until a deploy sets it. Enabling it in the deployed environments is a lead action with no package. Issue #190 still OPEN.
+    allowed_paths:
+      - db/migrations/**
+      - workers/src/fel_workers/**
+      - workers/tests/**
+  - id: ARCH-API-HARDENING # cost ceilings wired, per-org rate limiting, bounded lists, pooling, Sentry
+    issue: 191 # also carries the API half of #203
+    tasks: []
+    depends_on: [M2-RETRIEVAL-BACKEND]
+    team: platform
+    branch: cherry/191-api-hardening
+    status: review # PR #232 OPEN (contract-change, agent-task), not a draft. Its author recorded on 2026-09-06 that it must carry its own contract half. Commit 3a8384b (on the branch after merging main @ 75fad38; push pending on credentials) does so: the two 402 COST_LIMIT_EXCEEDED responses on createQuery/createQueryRerun, a RateLimited response with Retry-After referenced as 429 from those two plus createRetrievalFeedback, info.version/CONTRACT_VERSION/package.json to 0.5.0, regenerated client, contracts vitest 32 passed, check:generated clean. It deliberately does NOT declare ListLimit or the 413 READER_TOO_LARGE the author's comment also listed: the branch head 2479eb2 defers list and reader caps back to #191, serves neither, and apps/api/tests/test_list_contract.py asserts the list routes declare no limit parameter, so declaring them would create the contract-path-nothing-serves defect the #246 parity test exists to catch. List bounding stays with #191. SERIALIZE AGAINST #241 — see the CONTRACT CONTENTION note below.
+    allowed_paths:
+      - apps/api/**
+      - packages/contracts/** # the 0.5.0 additions above; shared path, contract-change label already present
+      - requirements.txt
+  - id: ARCH-CLAIMS-OUTPUT # consume provider claims JSON under claims-output/v1 instead of copying context
+    issue: 193
+    tasks: [] # T0207-T0209 are checked and owned by M2-CLAIMS-VERIFICATION; this repairs that delivery rather than re-owning the tasks
+    depends_on: [M2-CLAIMS-VERIFICATION]
+    team: retrieval
+    branch: cherry/193-claims-output
+    status: review # PR #241 OPEN (contract-change, agent-task), not a draft. TWO GATES, both real: (1) it proposes docs/decisions/ADR-0014-claims-output-contract.md, Status Proposed, awaiting integration-lead acceptance — a lead decision this reconciliation cannot make; (2) that filename COLLIDES with docs/decisions/ADR-0014-migration-ledger-and-applier.md, which is already on trunk at 75fad38 via PR #247. Two accepted-numbering ADRs cannot share 0014; the open PR must renumber to the next free number before merge. Neither gate is recorded anywhere else. SERIALIZE AGAINST #232 — see below.
+    allowed_paths:
+      - apps/api/**
+      - packages/contracts/**
+      - packages/providers/**
+      - packages/retrieval/**
+      - docs/decisions/**
+      - docs/handoff/CONTRACTS.md
+  # CONTRACT CONTENTION — #232 and #241 MUST be serialized, on two independent
+  # grounds, and neither PR's description says so:
+  #   1. Both modify apps/api/app/retrieval.py.
+  #   2. Both target OpenAPI 0.5.0. #241 already bumps info.version, package.json
+  #      and CONTRACT_VERSION to 0.5.0 and adds a contracts.test.ts assertion
+  #      pinning all three to that string; #232 must make the same bump for its
+  #      own additions. Whichever merges second inherits a version its own diff
+  #      claims to introduce, and contracts.test.ts asserts only that the three
+  #      values AGREE — nothing asserts that adding surface requires a bump, so
+  #      a second PR landing paths at an unchanged 0.5.0 stays green.
+  # Resume rule 3 forbids two concurrent owners of packages/contracts/** anyway.
+  # The order is the lead's to set; #232 is unblocked by an ADR decision and
+  # #241 is not, which is an argument for #232 first, but it is not a ruling.
+  - id: ARCH-M3-PLUMBING # NULL confidence for unscored proposals, derived review priority
+    issue: 194
+    tasks: []
+    depends_on: [M3-EXTRACTION-CORE]
+    team: extraction
+    branch: cherry/194-confidence-priority
+    status: blocked # PARTIAL, not merged. PR #240 @ c25e27b (2026-09-05) landed two of #194's three complaints: record_confidence is Decimal | None = None instead of a hard-coded 0 (migration 0006 dropped the NOT NULL, which is why this had to follow #236), and review_priority is derived rather than always "high". The THIRD is untouched and its PR says so: the tool allowlist is never invoked. Not dispatchable as written — the residual needs re-scoping against what #240 left, and the true confidence value is #62's calibrator, not this package.
+    allowed_paths:
+      - workers/src/fel_workers/extraction/**
+      - workers/tests/**
+      - docs/runbooks/**
+  - id: ARCH-PROVIDER-ADR # superseding provider ADR + provider-agnostic structured-output adapter
+    issue: 195
+    tasks: []
+    depends_on: [M3-EXTRACTION-CORE]
+    team: contracts
+    branch: agent/arch-provider-adr # not yet created
+    status: blocked # Blocked on a lead DECISION, not on code. ADR-0002 (Accepted) pins OpenAI; #132 directs claude-opus-4-8; ADR-0012 (Proposed via PR #186 @ 491cd67, splitting the decision by role) ratifies nothing. Constitution principle V requires benchmark evidence plus an accepted ADR for any substitution. No live adapter exists for either provider: packages/providers/fel_providers/mocks.py holds the only StructuredLLMProvider, so extraction cannot run anywhere today without FEL_ALLOW_MOCK_LLM. Gates RELEASE-LIVE-CUTOVER (#177) and M3-CONFIDENCE-GATE (#62) in practice; no depends_on edge is added because the decision is the lead's, not a package.
+    allowed_paths:
+      - docs/decisions/**
+      - packages/providers/**
+  - id: ARCH-COMPLEXITY-SPLIT # split apps/api/app/retrieval.py and extraction/workflow.py
+    issue: 196
+    tasks: []
+    depends_on: [ARCH-API-HARDENING, ARCH-CLAIMS-OUTPUT] # both open PRs rewrite retrieval.py; a refactor before they land guarantees conflicts
+    team: platform
+    branch: agent/arch-complexity-split # not yet created
+    status: blocked # No-behaviour-change refactor of the two largest files (retrieval.py 1268 lines, workflow.py 997). CONTENTION is the whole point of the edges above: #232 and #241 both rewrite apps/api/app/retrieval.py, and #236 rewrote extraction/workflow.py. Sequencing this before they merge would force the same conflict resolution twice in safety-critical code.
+    allowed_paths:
+      - apps/api/**
+      - workers/src/fel_workers/extraction/**
+      - workers/tests/**
+  - id: ARCH-SCHEMA-HYGIENE # org_id FKs, dangling active_scenario_id, M4/M5 tables
+    issue: 197
+    tasks: []
+    depends_on: [ARCH-DB-WORKER-ROLE] # serialized on db/migrations/**; 0009 follows 0008
+    team: platform
+    branch: cherry/197-fk-hygiene
+    status: blocked # PARTIAL, not merged. PR #239 @ d64e400 (2026-09-05) landed migration 0009: audit_events, usage_events and jobs each gained an org_id FK to organizations with ON DELETE RESTRICT. RESIDUAL, untouched: the dangling workspaces.active_scenario_id, and the absent M4/M5 roadmap tables. The second residual is arguably M4/M5 package scope rather than hygiene; the lead should split or re-scope before dispatch.
+    allowed_paths:
+      - db/migrations/**
+      - workers/tests/**
+  - id: ARCH-WEB-TEST-PARITY # colocated component tests, reader a11y test, keyed reader reducer
+    issue: 198
+    tasks: []
+    depends_on: [M2-OBSERVATORY-UI]
+    team: experience
+    branch: cherry/198-web-tests
+    status: merged # PR #231 @ 9f4b8a0 (2026-09-04), the first of the recovery cherry-picks. Colocated render tests for every web component, a reader accessibility test, the skip link, and EvidenceReader's useState cluster replaced by a keyed reducer. One integration commit was needed because the branch forked before PR #176 made RootLayout an async Server Component. Issue #198 still OPEN; the PR declared no closing issue.
+    allowed_paths: [apps/web/**]
+  - id: ARCH-RUNTIME-DEPS # runtime/dev requirements split, worker health endpoint
+    issue: 200 # carries the worker half of #203
+    tasks: []
+    depends_on: []
+    team: platform
+    branch: cherry/200-runtime-and-health
+    status: blocked # PARTIAL, not merged. PR #242 @ 796525e (2026-09-05) landed two of #200's four: requirements.txt now holds the five actual runtime dependencies and both Railway buildCommands install from it, and workers/src/fel_workers/health.py plus a worker Sentry init exist. RESIDUAL: unlocked dependency floors, and the unused httpx2. #242 also introduced a defect it did not carry the fix for — a preDeployCommand naming scripts/db/migrate.py, which did not exist until PR #247 @ 75fad38 supplied it; that is fixed, recorded here so the sequence is not rediscovered.
+    allowed_paths:
+      - requirements.txt
+      - requirements-dev.txt
+      - infra/railway/**
+      - workers/src/fel_workers/**
+      - workers/tests/**
+  - id: ARCH-RETRIEVAL-GATE # executable retrieval release gate over the benchmark seed
+    issue: 201
+    tasks: []
+    depends_on: [M2-CLAIMS-VERIFICATION]
+    team: trust
+    branch: cherry/201-retrieval-gate
+    status: merged # PR #243 @ 8c43877 (2026-09-05). evals/harness/retrieval_gate.py grades the 65-question seed through planner, lanes and fusion; ships a report schema, a committed golden and a Makefile target. THE GATE FAILS AND THAT IS THE FINDING, not a defect: recall_at_10 measured 0.4692 against a 0.9000 threshold, because hash-based mock embeddings carry little semantic signal; temporal_validity is 1.0. CI therefore enforces DETERMINISM (the graded section must be byte-identical to the golden), not the threshold. The threshold becomes enforcing only under --provider live, which exits "not provisioned, see #177". Issue #201 still OPEN and carries the author's measured table; whether 0.4692 is acceptable pre-cutover is a lead decision.
+    allowed_paths:
+      - evals/**
+      - Makefile # ADR-0008 dir-list registration only
+  - id: ARCH-DB-GATED-CI # Postgres-gated suites must fail closed in CI
+    issue: 202
+    tasks: []
+    depends_on: []
+    team: platform
+    branch: fix/ci-checks-that-verify-nothing
+    status: merged # PR #227 @ c763bf8 (2026-09-04). CI sets FEL_REQUIRE_DB=1 and both conftests raise at import when the flag is set with no URL, so dropping or mis-scoping TEST_DATABASE_URL can no longer turn 218 tests into silent skips behind a green check. The laptop path (no flag, no URL) still skips deliberately. The same PR fixed #199's migration-harness loop, which printed "OK: 0 migration harness(es) run" and exited 0. Issue #202 still OPEN; no residual identified.
+    allowed_paths:
+      - .github/workflows/** # shared; integration-lead authorization required
+      - apps/api/tests/**
+      - workers/tests/**
+  - id: ARCH-CI-OBSERVABILITY # coverage threshold, required-checks manifest, CODEOWNERS, Sentry, Playwright cache
+    issue: 203
+    tasks: []
+    depends_on: []
+    team: platform
+    branch: agent/arch-ci-observability # not yet created
+    status: blocked # PARTIAL and SPLIT ACROSS THREE PLACES, which is why it must not be dispatched as filed. The worker Sentry init landed with PR #242 @ 796525e. The API Sentry init is inside OPEN PR #232 and is not on trunk. RESIDUAL, owned by nothing today: the coverage threshold, the required-checks manifest, the single-person CODEOWNERS, and the Playwright browser cache. Re-scope against trunk after #232 merges rather than reading the issue body as current.
+    allowed_paths:
+      - .github/** # shared; integration-lead authorization required
+      - apps/api/**
+  - id: M4-FORMULA-AST # spec 8.5 formula AST + explicitly-modelled iterative cycles
+    issue: 219
+    tasks: [] # deliberately empty AND that is the finding: neither capability appears in tasks.md, so adding them is itself a Spec Kit change
+    depends_on: [M4-MODEL-CALC]
+    team: modeling
+    branch: agent/m4-formula-ast # not yet created
+    status: blocked # Filed out of PR #212 rather than fixed in it. spec 8.5 requires a formula AST and explicitly-modelled iterative cycles; #212 shipped neither and tracked neither. Blocked on a lead decision that precedes implementation: whether these belong to M4 at all. If they do, the canonical ledger needs tasks (specs/**, contract-change) and iterative cycles need an accepted ADR covering the convergence contract and its provenance consequences.
+    allowed_paths:
+      - packages/calculation-engine/**
+      - specs/** # shared; a Spec Kit task addition, contract-change
+  - id: ARCH-CHECKPOINT-RERUN # re-establish a selectable event when a stage re-run is not byte-identical
+    issue: 221
+    tasks: []
+    depends_on: [EXTRACTION-STEPS-OUTPUT]
+    team: extraction
+    branch: agent/arch-checkpoint-rerun # not yet created
+    status: blocked # A PREREQUISITE FOR THE LIVE ADAPTER, and unreachable before it: it only bites when a stage re-run is not byte-identical, and every provider on trunk is a deterministic mock, so #208's Postgres scenarios pass for that reason rather than because the path is sound. The fix changes _insert_step_row's ON CONFLICT DO NOTHING to a targeted DO UPDATE on the success-uniqueness index — the atomic commit path — so it wants its own PR, its own review, and a Postgres test with a NON-deterministic stub provider, the shape no current test uses. Sequence with ARCH-PROVIDER-ADR (#195) and before RELEASE-LIVE-CUTOVER (#177).
+    allowed_paths:
+      - workers/src/fel_workers/extraction/**
+      - workers/tests/**
+  - id: TEST-PUBLISH-RACE-WAIT # the publish-race wait loop falls through silently
+    issue: 230
+    tasks: []
+    depends_on: []
+    team: trust
+    branch: agent/test-publish-race-wait # not yet created
+    status: blocked # Filed out of the review of PR #225 @ 443c861, which scoped the lock wait to this database and closed #205's flake. The residual is narrower: on the timeout path the loop emits nothing, so a wait that never detects the block reads as a pass. Small, self-contained, no shared path, no ADR, no migration.
+    allowed_paths: [workers/tests/**]
+  - id: TEST-QUERY-P95-FLAKE # test_create_query_p95_smoke asserts wall-clock latency
+    issue: 248
+    tasks: []
+    depends_on: []
+    team: trust
+    branch: agent/test-query-p95-flake # not yet created
+    status: blocked # Newest issue in the file (opened 2026-09-06). A wall-clock assertion in a functional suite fails under host load, which is a flaky gate rather than a performance signal. Same class as #205 and #230.
+    allowed_paths: [apps/api/tests/**]
