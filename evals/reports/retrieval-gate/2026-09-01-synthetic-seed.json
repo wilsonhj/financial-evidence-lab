@@ -1,0 +1,643 @@
+{
+  "gate": {
+    "passed": false,
+    "reranker": {
+      "note": "baseline Recall@10 below 90%: enable cross-encoder over fused top-100 (ADR-0002)",
+      "trigger_threshold": "0.9000",
+      "triggered": true
+    },
+    "results": [
+      {
+        "name": "recall_at_10",
+        "passed": false,
+        "threshold": "0.9000",
+        "value": "0.4692"
+      },
+      {
+        "name": "temporal_validity",
+        "passed": true,
+        "threshold": "1.0000",
+        "value": "1.0000"
+      }
+    ]
+  },
+  "meta": {
+    "corpus_version_id": "044246d5-3475-5304-b392-c4847afd9348",
+    "database": "postgresql://localhost:5432/fel_test_retrieval",
+    "embedding_model": "mock-embed-retrieval-gate-v1",
+    "generated_at": "2026-09-02T00:11:23.645276+00:00",
+    "index_reused": true,
+    "index_version_id": "902a5bf5-2ade-50eb-a7bd-cdaa80c0eb62",
+    "item_count": 53,
+    "provider": "mock",
+    "questions_path": "evals/datasets/benchmark-seed/questions.jsonl",
+    "questions_sha256": "1691354b4886b4c3fa210f05d97c14914da0aca1fcb82ac2c2d88cece170f13e"
+  },
+  "not_evaluable": {
+    "citation_completeness": {
+      "reason": "requires a generated answer's typed claims and citations; this gate runs planner + lanes + fusion only (no generation stage), so no answer, claim, or citation ever exists to grade -- reported here rather than fabricated or silently passed",
+      "support": 0
+    },
+    "entailment_precision": {
+      "reason": "requires a generated answer's typed claims and citations; this gate runs planner + lanes + fusion only (no generation stage), so no answer, claim, or citation ever exists to grade -- reported here rather than fabricated or silently passed",
+      "support": 0
+    },
+    "numeric_accuracy": {
+      "reason": "requires a generated answer's typed claims and citations; this gate runs planner + lanes + fusion only (no generation stage), so no answer, claim, or citation ever exists to grade -- reported here rather than fabricated or silently passed",
+      "support": 0
+    }
+  },
+  "per_question": [
+    {
+      "answerable": true,
+      "category": "exact_fact_lookup",
+      "gold_count": 1,
+      "id": "BM-0001",
+      "recall_at_10": "0.0000",
+      "retrieved_count": 52,
+      "temporal_ok": true
+    },
+    {
+      "answerable": true,
+      "category": "exact_fact_lookup",
+      "gold_count": 1,
+      "id": "BM-0002",
+      "recall_at_10": "1.0000",
+      "retrieved_count": 52,
+      "temporal_ok": true
+    },
+    {
+      "answerable": true,
+      "category": "exact_fact_lookup",
+      "gold_count": 1,
+      "id": "BM-0003",
+      "recall_at_10": "1.0000",
+      "retrieved_count": 32,
+      "temporal_ok": true
+    },
+    {
+      "answerable": true,
+      "category": "exact_fact_lookup",
+      "gold_count": 1,
+      "id": "BM-0004",
+      "recall_at_10": "0.0000",
+      "retrieved_count": 36,
+      "temporal_ok": true
+    },
+    {
+      "answerable": true,
+      "category": "exact_fact_lookup",
+      "gold_count": 1,
+      "id": "BM-0005",
+      "recall_at_10": "0.0000",
+      "retrieved_count": 48,
+      "temporal_ok": true
+    },
+    {
+      "answerable": true,
+      "category": "exact_fact_lookup",
+      "gold_count": 1,
+      "id": "BM-0006",
+      "recall_at_10": "0.0000",
+      "retrieved_count": 52,
+      "temporal_ok": true
+    },
+    {
+      "answerable": true,
+      "category": "exact_fact_lookup",
+      "gold_count": 1,
+      "id": "BM-0007",
+      "recall_at_10": "1.0000",
+      "retrieved_count": 52,
+      "temporal_ok": true
+    },
+    {
+      "answerable": true,
+      "category": "exact_fact_lookup",
+      "gold_count": 1,
+      "id": "BM-0008",
+      "recall_at_10": "1.0000",
+      "retrieved_count": 40,
+      "temporal_ok": true
+    },
+    {
+      "answerable": true,
+      "category": "exact_fact_lookup",
+      "gold_count": 1,
+      "id": "BM-0009",
+      "recall_at_10": "0.0000",
+      "retrieved_count": 40,
+      "temporal_ok": true
+    },
+    {
+      "answerable": true,
+      "category": "filing_section_retrieval",
+      "gold_count": 1,
+      "id": "BM-0010",
+      "recall_at_10": "0.0000",
+      "retrieved_count": 52,
+      "temporal_ok": true
+    },
+    {
+      "answerable": true,
+      "category": "filing_section_retrieval",
+      "gold_count": 1,
+      "id": "BM-0011",
+      "recall_at_10": "0.0000",
+      "retrieved_count": 52,
+      "temporal_ok": true
+    },
+    {
+      "answerable": true,
+      "category": "filing_section_retrieval",
+      "gold_count": 1,
+      "id": "BM-0012",
+      "recall_at_10": "0.0000",
+      "retrieved_count": 52,
+      "temporal_ok": true
+    },
+    {
+      "answerable": true,
+      "category": "filing_section_retrieval",
+      "gold_count": 1,
+      "id": "BM-0013",
+      "recall_at_10": "0.0000",
+      "retrieved_count": 48,
+      "temporal_ok": true
+    },
+    {
+      "answerable": true,
+      "category": "filing_section_retrieval",
+      "gold_count": 1,
+      "id": "BM-0014",
+      "recall_at_10": "0.0000",
+      "retrieved_count": 32,
+      "temporal_ok": true
+    },
+    {
+      "answerable": true,
+      "category": "filing_section_retrieval",
+      "gold_count": 1,
+      "id": "BM-0015",
+      "recall_at_10": "1.0000",
+      "retrieved_count": 5,
+      "temporal_ok": true
+    },
+    {
+      "answerable": true,
+      "category": "multi_period_comparison",
+      "gold_count": 2,
+      "id": "BM-0016",
+      "recall_at_10": "0.0000",
+      "retrieved_count": 52,
+      "temporal_ok": true
+    },
+    {
+      "answerable": true,
+      "category": "multi_period_comparison",
+      "gold_count": 2,
+      "id": "BM-0017",
+      "recall_at_10": "0.5000",
+      "retrieved_count": 36,
+      "temporal_ok": true
+    },
+    {
+      "answerable": true,
+      "category": "multi_period_comparison",
+      "gold_count": 2,
+      "id": "BM-0018",
+      "recall_at_10": "0.5000",
+      "retrieved_count": 32,
+      "temporal_ok": true
+    },
+    {
+      "answerable": true,
+      "category": "multi_period_comparison",
+      "gold_count": 2,
+      "id": "BM-0019",
+      "recall_at_10": "0.5000",
+      "retrieved_count": 32,
+      "temporal_ok": true
+    },
+    {
+      "answerable": true,
+      "category": "multi_period_comparison",
+      "gold_count": 2,
+      "id": "BM-0020",
+      "recall_at_10": "0.5000",
+      "retrieved_count": 40,
+      "temporal_ok": true
+    },
+    {
+      "answerable": true,
+      "category": "table_reasoning",
+      "gold_count": 2,
+      "id": "BM-0021",
+      "recall_at_10": "0.0000",
+      "retrieved_count": 52,
+      "temporal_ok": true
+    },
+    {
+      "answerable": true,
+      "category": "table_reasoning",
+      "gold_count": 2,
+      "id": "BM-0022",
+      "recall_at_10": "0.0000",
+      "retrieved_count": 52,
+      "temporal_ok": true
+    },
+    {
+      "answerable": true,
+      "category": "table_reasoning",
+      "gold_count": 2,
+      "id": "BM-0023",
+      "recall_at_10": "0.5000",
+      "retrieved_count": 32,
+      "temporal_ok": true
+    },
+    {
+      "answerable": true,
+      "category": "table_reasoning",
+      "gold_count": 1,
+      "id": "BM-0024",
+      "recall_at_10": "0.0000",
+      "retrieved_count": 40,
+      "temporal_ok": true
+    },
+    {
+      "answerable": true,
+      "category": "table_reasoning",
+      "gold_count": 2,
+      "id": "BM-0025",
+      "recall_at_10": "0.5000",
+      "retrieved_count": 52,
+      "temporal_ok": true
+    },
+    {
+      "answerable": true,
+      "category": "table_reasoning",
+      "gold_count": 1,
+      "id": "BM-0026",
+      "recall_at_10": "0.0000",
+      "retrieved_count": 36,
+      "temporal_ok": true
+    },
+    {
+      "answerable": true,
+      "category": "guidance_extraction",
+      "gold_count": 1,
+      "id": "BM-0027",
+      "recall_at_10": "1.0000",
+      "retrieved_count": 52,
+      "temporal_ok": true
+    },
+    {
+      "answerable": true,
+      "category": "guidance_extraction",
+      "gold_count": 1,
+      "id": "BM-0028",
+      "recall_at_10": "1.0000",
+      "retrieved_count": 52,
+      "temporal_ok": true
+    },
+    {
+      "answerable": true,
+      "category": "guidance_extraction",
+      "gold_count": 1,
+      "id": "BM-0029",
+      "recall_at_10": "0.0000",
+      "retrieved_count": 52,
+      "temporal_ok": true
+    },
+    {
+      "answerable": true,
+      "category": "guidance_extraction",
+      "gold_count": 1,
+      "id": "BM-0030",
+      "recall_at_10": "0.0000",
+      "retrieved_count": 52,
+      "temporal_ok": true
+    },
+    {
+      "answerable": true,
+      "category": "guidance_extraction",
+      "gold_count": 1,
+      "id": "BM-0031",
+      "recall_at_10": "1.0000",
+      "retrieved_count": 36,
+      "temporal_ok": true
+    },
+    {
+      "answerable": true,
+      "category": "guidance_extraction",
+      "gold_count": 1,
+      "id": "BM-0032",
+      "recall_at_10": "1.0000",
+      "retrieved_count": 52,
+      "temporal_ok": true
+    },
+    {
+      "answerable": true,
+      "category": "guidance_extraction",
+      "gold_count": 1,
+      "id": "BM-0033",
+      "recall_at_10": "0.0000",
+      "retrieved_count": 52,
+      "temporal_ok": true
+    },
+    {
+      "answerable": true,
+      "category": "guidance_extraction",
+      "gold_count": 1,
+      "id": "BM-0034",
+      "recall_at_10": "0.0000",
+      "retrieved_count": 52,
+      "temporal_ok": true
+    },
+    {
+      "answerable": true,
+      "category": "revenue_driver_extraction",
+      "gold_count": 1,
+      "id": "BM-0035",
+      "recall_at_10": "0.0000",
+      "retrieved_count": 52,
+      "temporal_ok": true
+    },
+    {
+      "answerable": true,
+      "category": "revenue_driver_extraction",
+      "gold_count": 1,
+      "id": "BM-0036",
+      "recall_at_10": "1.0000",
+      "retrieved_count": 36,
+      "temporal_ok": true
+    },
+    {
+      "answerable": true,
+      "category": "revenue_driver_extraction",
+      "gold_count": 1,
+      "id": "BM-0037",
+      "recall_at_10": "1.0000",
+      "retrieved_count": 40,
+      "temporal_ok": true
+    },
+    {
+      "answerable": true,
+      "category": "revenue_driver_extraction",
+      "gold_count": 1,
+      "id": "BM-0038",
+      "recall_at_10": "0.0000",
+      "retrieved_count": 34,
+      "temporal_ok": true
+    },
+    {
+      "answerable": true,
+      "category": "revenue_driver_extraction",
+      "gold_count": 1,
+      "id": "BM-0039",
+      "recall_at_10": "0.0000",
+      "retrieved_count": 52,
+      "temporal_ok": true
+    },
+    {
+      "answerable": true,
+      "category": "revenue_driver_extraction",
+      "gold_count": 1,
+      "id": "BM-0040",
+      "recall_at_10": "0.0000",
+      "retrieved_count": 48,
+      "temporal_ok": true
+    },
+    {
+      "answerable": true,
+      "category": "contradiction_detection",
+      "gold_count": 2,
+      "id": "BM-0041",
+      "recall_at_10": "1.0000",
+      "retrieved_count": 52,
+      "temporal_ok": true
+    },
+    {
+      "answerable": true,
+      "category": "contradiction_detection",
+      "gold_count": 2,
+      "id": "BM-0042",
+      "recall_at_10": "0.0000",
+      "retrieved_count": 52,
+      "temporal_ok": true
+    },
+    {
+      "answerable": true,
+      "category": "contradiction_detection",
+      "gold_count": 1,
+      "id": "BM-0043",
+      "recall_at_10": "0.0000",
+      "retrieved_count": 52,
+      "temporal_ok": true
+    },
+    {
+      "answerable": true,
+      "category": "contradiction_detection",
+      "gold_count": 2,
+      "id": "BM-0044",
+      "recall_at_10": "0.5000",
+      "retrieved_count": 32,
+      "temporal_ok": true
+    },
+    {
+      "answerable": true,
+      "category": "contradiction_detection",
+      "gold_count": 2,
+      "id": "BM-0045",
+      "recall_at_10": "1.0000",
+      "retrieved_count": 36,
+      "temporal_ok": true
+    },
+    {
+      "answerable": true,
+      "category": "temporal_cutoff_trap",
+      "gold_count": 1,
+      "id": "BM-0046",
+      "recall_at_10": "0.0000",
+      "retrieved_count": 25,
+      "temporal_ok": true
+    },
+    {
+      "answerable": true,
+      "category": "temporal_cutoff_trap",
+      "gold_count": 1,
+      "id": "BM-0047",
+      "recall_at_10": "0.0000",
+      "retrieved_count": 20,
+      "temporal_ok": true
+    },
+    {
+      "answerable": true,
+      "category": "temporal_cutoff_trap",
+      "gold_count": 1,
+      "id": "BM-0048",
+      "recall_at_10": "1.0000",
+      "retrieved_count": 6,
+      "temporal_ok": true
+    },
+    {
+      "answerable": true,
+      "category": "temporal_cutoff_trap",
+      "gold_count": 1,
+      "id": "BM-0049",
+      "recall_at_10": "0.0000",
+      "retrieved_count": 13,
+      "temporal_ok": true
+    },
+    {
+      "answerable": true,
+      "category": "temporal_cutoff_trap",
+      "gold_count": 1,
+      "id": "BM-0050",
+      "recall_at_10": "1.0000",
+      "retrieved_count": 17,
+      "temporal_ok": true
+    },
+    {
+      "answerable": true,
+      "category": "restatement_handling",
+      "gold_count": 1,
+      "id": "BM-0051",
+      "recall_at_10": "1.0000",
+      "retrieved_count": 5,
+      "temporal_ok": true
+    },
+    {
+      "answerable": true,
+      "category": "restatement_handling",
+      "gold_count": 2,
+      "id": "BM-0052",
+      "recall_at_10": "1.0000",
+      "retrieved_count": 5,
+      "temporal_ok": true
+    },
+    {
+      "answerable": true,
+      "category": "restatement_handling",
+      "gold_count": 1,
+      "id": "BM-0053",
+      "recall_at_10": "1.0000",
+      "retrieved_count": 5,
+      "temporal_ok": true
+    },
+    {
+      "answerable": true,
+      "category": "restatement_handling",
+      "gold_count": 1,
+      "id": "BM-0054",
+      "recall_at_10": "1.0000",
+      "retrieved_count": 5,
+      "temporal_ok": true
+    },
+    {
+      "answerable": true,
+      "category": "restatement_handling",
+      "gold_count": 1,
+      "id": "BM-0055",
+      "recall_at_10": "1.0000",
+      "retrieved_count": 5,
+      "temporal_ok": true
+    },
+    {
+      "answerable": false,
+      "category": "insufficient_evidence",
+      "gold_count": 0,
+      "id": "BM-0056",
+      "recall_at_10": "1.0000",
+      "retrieved_count": 52,
+      "temporal_ok": true
+    },
+    {
+      "answerable": false,
+      "category": "insufficient_evidence",
+      "gold_count": 0,
+      "id": "BM-0057",
+      "recall_at_10": "1.0000",
+      "retrieved_count": 36,
+      "temporal_ok": true
+    },
+    {
+      "answerable": false,
+      "category": "insufficient_evidence",
+      "gold_count": 0,
+      "id": "BM-0058",
+      "recall_at_10": "1.0000",
+      "retrieved_count": 40,
+      "temporal_ok": true
+    },
+    {
+      "answerable": false,
+      "category": "insufficient_evidence",
+      "gold_count": 0,
+      "id": "BM-0059",
+      "recall_at_10": "1.0000",
+      "retrieved_count": 34,
+      "temporal_ok": true
+    },
+    {
+      "answerable": false,
+      "category": "insufficient_evidence",
+      "gold_count": 0,
+      "id": "BM-0060",
+      "recall_at_10": "1.0000",
+      "retrieved_count": 40,
+      "temporal_ok": true
+    },
+    {
+      "answerable": false,
+      "category": "insufficient_evidence",
+      "gold_count": 0,
+      "id": "BM-0061",
+      "recall_at_10": "1.0000",
+      "retrieved_count": 52,
+      "temporal_ok": true
+    },
+    {
+      "answerable": true,
+      "category": "revenue_driver_extraction",
+      "gold_count": 1,
+      "id": "BM-0062",
+      "recall_at_10": "0.0000",
+      "retrieved_count": 34,
+      "temporal_ok": true
+    },
+    {
+      "answerable": true,
+      "category": "exact_fact_lookup",
+      "gold_count": 1,
+      "id": "BM-0063",
+      "recall_at_10": "0.0000",
+      "retrieved_count": 53,
+      "temporal_ok": true
+    },
+    {
+      "answerable": true,
+      "category": "exact_fact_lookup",
+      "gold_count": 1,
+      "id": "BM-0064",
+      "recall_at_10": "0.0000",
+      "retrieved_count": 48,
+      "temporal_ok": true
+    },
+    {
+      "answerable": true,
+      "category": "exact_fact_lookup",
+      "gold_count": 1,
+      "id": "BM-0065",
+      "recall_at_10": "1.0000",
+      "retrieved_count": 10,
+      "temporal_ok": true
+    }
+  ],
+  "questions": {
+    "evaluated": 65,
+    "excluded": [],
+    "total": 65
+  },
+  "schema_version": "retrieval-gate-report/v1"
+}

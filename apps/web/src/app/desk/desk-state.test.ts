@@ -65,8 +65,8 @@ describe("approved-facts gate", () => {
 });
 
 describe("claim filtering", () => {
-  it("never keeps a selected claim hidden by the current filter", () => {
-    expect(resolveVisibleClaimId("nrr", ["guidance"])).toBe("guidance");
+  it("keeps the current claim only when it is still visible", () => {
+    expect(resolveVisibleClaimId("nrr", ["guidance"])).toBeNull();
     expect(resolveVisibleClaimId("guidance", ["guidance"])).toBe("guidance");
     expect(resolveVisibleClaimId("nrr", [])).toBeNull();
   });

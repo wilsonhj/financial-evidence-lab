@@ -77,7 +77,6 @@ export default function DeskClient({ initialTheme }: { initialTheme: DeskTheme }
   );
 
   useEffect(() => {
-    document.documentElement.dataset.felTheme = theme;
     writeStoredTheme(theme);
     document.cookie = `fel-theme=${theme}; Path=/; Max-Age=31536000; SameSite=Lax`;
   }, [theme]);
@@ -94,7 +93,7 @@ export default function DeskClient({ initialTheme }: { initialTheme: DeskTheme }
     setSection(next);
   };
   return (
-    <main className="desk-shell" data-testid="desk-shell">
+    <main className="desk-shell" data-testid="desk-shell" data-fel-theme={theme}>
       <aside className="desk-sidebar" aria-label="Desk sections">
         <div className="desk-brand">
           <span className="brand-dot" />
@@ -265,7 +264,7 @@ function Research({
   setClaim: (id: ClaimId) => void;
   onReview: () => void;
 }) {
-  const selected = visibleClaims.find((item) => item.id === claim) ?? visibleClaims[0];
+  const selected = visibleClaims.find((item) => item.id === claim);
   return (
     <div className="research-layout">
       <section className="claim-list">

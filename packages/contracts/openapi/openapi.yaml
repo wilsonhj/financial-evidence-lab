@@ -13,6 +13,11 @@ info:
     labels. Modeling and forecasting paths arrive in later minors.
 servers:
   - url: /
+# `x-fel-status: planned` on a path item means the contract is frozen but the
+# FastAPI service does not serve that path yet. apps/api/tests/test_openapi_parity.py
+# asserts the implemented route table equals exactly the set of path items
+# WITHOUT that marker, in both directions — so shipping a path means deleting
+# its marker, and deleting a route without deleting its path fails the build.
 paths:
   /health:
     get:
@@ -111,6 +116,7 @@ paths:
         default:
           $ref: "#/components/responses/Error"
   /v1/entities:
+    x-fel-status: planned
     get:
       operationId: searchEntities
       summary: Search issuers/entities
@@ -133,6 +139,7 @@ paths:
         default:
           $ref: "#/components/responses/Error"
   /v1/entities/{entityId}:
+    x-fel-status: planned
     parameters:
       - $ref: "#/components/parameters/EntityId"
     get:
@@ -278,6 +285,7 @@ paths:
         default:
           $ref: "#/components/responses/Error"
   /v1/ingestion/jobs:
+    x-fel-status: planned
     post:
       operationId: createIngestionJob
       summary: Enqueue an ingestion job (long-running; returns a run ID)
@@ -299,6 +307,7 @@ paths:
         default:
           $ref: "#/components/responses/Error"
   /v1/ingestion/jobs/{jobId}:
+    x-fel-status: planned
     parameters:
       - name: jobId
         in: path
@@ -475,6 +484,7 @@ paths:
         default:
           $ref: "#/components/responses/Error"
   /v1/workspaces/{workspaceId}/extraction-runs:
+    x-fel-status: planned
     post:
       operationId: createExtractionRun
       summary: Create a bounded extraction run
@@ -527,6 +537,7 @@ paths:
         default:
           $ref: "#/components/responses/Error"
   /v1/extraction-runs/{runId}:
+    x-fel-status: planned
     parameters:
       - $ref: "#/components/parameters/RunId"
     get:
@@ -564,6 +575,7 @@ paths:
         default:
           $ref: "#/components/responses/Error"
   /v1/extraction-runs/{runId}/events:
+    x-fel-status: planned
     parameters:
       - $ref: "#/components/parameters/RunId"
     get:
@@ -600,6 +612,7 @@ paths:
         default:
           $ref: "#/components/responses/Error"
   /v1/extraction-runs/{runId}/rerun:
+    x-fel-status: planned
     post:
       operationId: rerunExtraction
       summary: Create a child extraction run from a parent
@@ -630,6 +643,7 @@ paths:
         default:
           $ref: "#/components/responses/Error"
   /v1/workspaces/{workspaceId}/extractions:
+    x-fel-status: planned
     get:
       operationId: listExtractions
       summary: List extraction proposals for a workspace
@@ -660,6 +674,7 @@ paths:
         default:
           $ref: "#/components/responses/Error"
   /v1/extractions/{extractionId}:
+    x-fel-status: planned
     parameters:
       - $ref: "#/components/parameters/ExtractionId"
     get:
@@ -680,6 +695,7 @@ paths:
         default:
           $ref: "#/components/responses/Error"
   /v1/extractions/review:
+    x-fel-status: planned
     post:
       operationId: reviewExtractions
       summary: Apply an atomic review command
@@ -703,6 +719,7 @@ paths:
         default:
           $ref: "#/components/responses/Error"
   /v1/approved-extractions/{recordId}:
+    x-fel-status: planned
     get:
       operationId: getApprovedExtraction
       summary: Read the current approved extraction version
@@ -725,6 +742,7 @@ paths:
         default:
           $ref: "#/components/responses/Error"
   /v1/approved-extractions/{recordId}/versions:
+    x-fel-status: planned
     get:
       operationId: listApprovedExtractionVersions
       summary: List immutable approved extraction versions
@@ -750,6 +768,7 @@ paths:
         default:
           $ref: "#/components/responses/Error"
   /v1/approved-extractions/{recordId}/corrections:
+    x-fel-status: planned
     post:
       operationId: correctApprovedExtraction
       summary: Append an immutable corrected approved version
