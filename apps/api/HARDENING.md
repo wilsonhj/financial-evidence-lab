@@ -1,8 +1,9 @@
 # API hardening and compatibility
 
 PR #232 addresses query admission and accounting (T0008), connection reuse,
-and per-organization rate limiting. It preserves the frozen OpenAPI 0.4.0
-listing and reader behavior. The proposed `limit` parameters, truncation, and
+and per-organization rate limiting. It preserves the frozen listing and reader
+behavior; OpenAPI 0.5.0 declares only the 402 and 429 responses this PR serves.
+The proposed `limit` parameters, truncation, and
 reader overflow responses are deferred with #191 to a coordinated pagination,
 contract, and web-client change. Complete filing/workspace/run discovery remains
 available, including records beyond the former 50-row default and 200-row cap.
