@@ -11,7 +11,7 @@ ADR-0017 records the initial dispatch and scope narrowing.
 | Issue | Branch | Scope | State | Evidence |
 |---|---|---|---|---|
 | #248 | agent/test-query-p95-flake | API query test/performance instructions | merged, PR #256 @ 1e6765c | Independent review; real PostgreSQL module 24 passed, 1 deliberate benchmark skip; opt-in local p95 0.052s; all CI passed |
-| #230 | agent/test-publish-race-wait | Two named ingestion race test files | implementing | Prove timeout warning visible under pytest -q, preserve cleanup |
+| #230 | agent/test-publish-race-wait | Two named ingestion race test files | merged, PR #255 @ 802d0eb | Independent review caught real-clock test flake; deterministic-clock fix reviewed; warning-removal mutation fails; real PostgreSQL 3 passed; all CI passed |
 | #221 | agent/arch-checkpoint-rerun | Extraction source/tests only | PR #257 under independent review | 468 real PostgreSQL extraction tests passed; stale-owner repair race under investigation |
 | #137 | agent/137-cutover-hardening | Retrieval API provenance and retrieval/evaluation model guards | dispatched | Reconcile existing refusal/cost/supports behavior before implementing actual residuals |
 | #219 | agent/m4-formula-ast | Read-only engine architecture investigation | design preparation | Retain both parent requirements; no canonical edits or implementation before concrete ADR and ownership |

@@ -803,7 +803,7 @@ packages:
     depends_on: []
     team: trust
     branch: agent/test-publish-race-wait # not yet created
-    status: active # Owner-authorized parallel execution, ADR-0017; September 9 session.
+    status: merged # PR #255 @ 802d0eb; deterministic warning regression and real PostgreSQL race test.
     allowed_paths:
       - workers/tests/test_ingestion_pipeline.py
       - workers/tests/test_publish_race_wait.py
