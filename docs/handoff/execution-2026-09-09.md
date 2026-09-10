@@ -129,3 +129,16 @@ The integration lead verified the merged #219 leaf implementation and updates
 only the corresponding canonical checkbox/annotation state. The concurrent-user
 performance acceptance and remaining M4 milestone gates are not inferred from
 local engine tests.
+
+#191 residual ruling: ADR-0021 accepts explicit bounded page mode with complete
+legacy success or a declared pagination-required error, preserving array shapes
+and shipping the actual web consumers together. Reader/trace evidence stays
+complete within each declared scope or returns an explicit size error; no
+clipped success or false whole-history conclusion. SSE replays all events in
+bounded batches. Cursor data is strictly typed and scope-bound continuation,
+never authorization; every page reapplies tenancy/cutoff/pin gates. No new
+cursor signing secret is needed for this continuation-only contract. Pin-based
+comparison is distinguished from mutable browsing. API observability source
+and tests remain owned by #203; reuse existing request telemetry. Reserve only
+index migration 0010 under this ADR, retaining only indexes supported by query
+plans. Provider metering remains explicitly tracked under #195.

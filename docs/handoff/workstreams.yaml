@@ -673,6 +673,43 @@ packages:
       - apps/api/**
       - packages/contracts/** # the 0.5.0 additions above; shared path, contract-change label already present
       - requirements.txt
+  - id: ARCH-API-PAGINATION-READER
+    issue: 191
+    tasks: []
+    depends_on: [ARCH-API-HARDENING, CLAIMS-CUTOVER-HARDENING]
+    team: platform
+    branch: agent/191-pagination-reader
+    status: active # ADR-0021 coordinates explicit bounded pages, complete-or-error reader/trace limits and all actual web consumers.
+    allowed_paths:
+      - apps/api/app/pagination.py
+      - apps/api/app/config.py
+      - apps/api/app/corpus.py
+      - apps/api/app/workspaces.py
+      - apps/api/app/reader.py
+      - apps/api/app/retrieval.py
+      - apps/api/tests/test_pagination.py
+      - apps/api/tests/test_corpus_api.py
+      - apps/api/tests/test_workspaces.py
+      - apps/api/tests/test_tenancy.py
+      - apps/api/tests/test_list_contract.py
+      - apps/api/tests/test_reader_api.py
+      - apps/api/tests/test_reader_bounds.py
+      - apps/api/tests/test_retrieval_api.py
+      - apps/api/tests/test_retrieval_read_bounds.py
+      - apps/api/tests/test_openapi_parity.py
+      - apps/api/HARDENING.md
+      - apps/web/src/**
+      - apps/web/e2e/**
+      - packages/contracts/**
+      - docs/handoff/CONTRACTS.md
+      - docs/decisions/ADR-0021-bounded-api-pagination-and-reader.md
+      - db/migrations/0010_api_read_indexes.sql
+      - db/migrations/tests/0010_api_read_indexes.test.sql
+      - evals/harness/reader_cross_stack.py
+      - evals/tests/test_reader_cross_stack.py
+      - evals/datasets/reader-cross-stack/**
+    # Exclude apps/api/tests/test_observability.py: #203 owns it until merge.
+    # No edit to app/observability.py, root locks or worker extraction paths.
   - id: ARCH-CLAIMS-OUTPUT # consume provider claims JSON under claims-output/v1 instead of copying context
     issue: 193
     tasks: [] # T0207-T0209 are checked and owned by M2-CLAIMS-VERIFICATION; this repairs that delivery rather than re-owning the tasks
