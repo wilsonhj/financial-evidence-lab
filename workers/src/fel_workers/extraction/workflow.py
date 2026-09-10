@@ -446,6 +446,14 @@ def _reject_checkpoint(ctx: _ExecCtx, *, record: StageRecord, reason: str, messa
     ``step_failed`` because the vocabulary is frozen — see ``_is_recoverable``.
     """
     req = ctx.state.request
+    reject_loaded = getattr(ctx.deps.checkpoint, "reject_loaded", None)
+    if reject_loaded is not None:
+        reject_loaded(
+            run_id=req.run_id,
+            org_id=req.org_id,
+            workflow_version=req.workflow_version,
+            record=record,
+        )
     emit(
         "stage_checkpoint_rejected",
         run_id=req.run_id,

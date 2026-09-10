@@ -1034,6 +1034,8 @@ def test_checkpoint_repair_rolls_back_when_completion_event_fails(extraction_db_
             events=PostgresEventStore(conn),
             event_payload={"step_name": "classify", "output_hash": original.output_hash},
         )
+        loaded = store.load_succeeded(**args, step_name="classify", input_hash=original.input_hash)
+        store.reject_loaded(**args, record=loaded)
         failing_events = _ExplodingEventStore(conn=conn)
         failing_events.fail_on_step = "classify"
         with pytest.raises(RuntimeError, match="injected event-append failure"):
@@ -1058,6 +1060,8 @@ def test_checkpoint_repair_rolls_back_when_completion_event_fails(extraction_db_
             == 1
         )
 
+        loaded = store.load_succeeded(**args, step_name="classify", input_hash=original.input_hash)
+        store.reject_loaded(**args, record=loaded)
         committed = store.commit_succeeded_atomic(
             **args,
             record=repaired,
@@ -1076,7 +1080,7 @@ def test_checkpoint_repair_rolls_back_when_completion_event_fails(extraction_db_
 
 
 @pytest.mark.skipif(TEST_DATABASE_URL is None, reason="TEST_DATABASE_URL not configured")
-@pytest.mark.parametrize("collision", ["failed", "input_hash", "workflow_version"])
+@pytest.mark.parametrize("collision", ["input_hash", "workflow_version"])
 def test_checkpoint_attempt_collision_cannot_repair_another_identity(
     extraction_db_url: str, collision: str
 ) -> None:
@@ -1113,11 +1117,159 @@ def test_checkpoint_attempt_collision_cannot_repair_another_identity(
             incoming.input_hash = sha256_hex("other identity")
         elif collision == "workflow_version":
             args["workflow_version"] = "other-workflow/v1"
-        store.commit_succeeded(**args, record=incoming)
+        from fel_workers.extraction.errors import StepFailed
+
+        events = PostgresEventStore(conn)
+        with pytest.raises(StepFailed, match="checkpoint conflict"):
+            store.commit_succeeded_atomic(
+                **args, record=incoming, events=events, event_payload={"step_name": "classify"}
+            )
+        assert not events._memory.events
+        assert incoming not in store._memory._succeeded.values()
         assert (
             conn.execute(
                 "SELECT * FROM extraction_run_steps WHERE run_id = %s",
                 (run_id,),
             ).fetchall()
             == before
+        )
+
+
+@pytest.mark.skipif(TEST_DATABASE_URL is None, reason="TEST_DATABASE_URL not configured")
+@pytest.mark.parametrize("initial", ["absent", "loaded_valid", "rejected"])
+def test_checkpoint_collision_preserves_concurrent_owner(
+    extraction_db_url: str, initial: str
+) -> None:
+    """A concurrent winner after the read must survive the stale completion."""
+    from fel_workers.extraction.errors import StepFailed
+    from fel_workers.extraction.types import StageRecord
+
+    request = _request(str(uuid.uuid4()))
+    args = dict(run_id=request.run_id, org_id=_ORG, workflow_version=request.workflow_version)
+    original = StageRecord(
+        step_name="classify",
+        attempt=1,
+        status="succeeded",
+        input_hash=sha256_hex("concurrent checkpoint"),
+        output={"document_type": "original"},
+        output_hash=hash_json({"document_type": "original"}),
+    )
+    winner = replace(
+        original,
+        output={"document_type": "owner"},
+        output_hash=hash_json({"document_type": "owner"}),
+    )
+    loser = replace(
+        original,
+        output={"document_type": "stale"},
+        output_hash=hash_json({"document_type": "stale"}),
+    )
+    with (
+        psycopg.connect(extraction_db_url, autocommit=True) as conn,
+        psycopg.connect(extraction_db_url, autocommit=True) as owner_conn,
+    ):
+        _seed_parents(conn)
+        _seed_run(conn, request)
+        PostgresPersistStore(conn).mark_running(run_id=request.run_id, org_id=_ORG)
+        stale = PostgresCheckpointStore(conn)
+        owner = PostgresCheckpointStore(owner_conn)
+        if initial != "absent":
+            owner.commit_succeeded(**args, record=original)
+        loaded = stale.load_succeeded(**args, step_name="classify", input_hash=original.input_hash)
+        if initial == "rejected":
+            stale.reject_loaded(**args, record=loaded)
+            # Mutating the returned object cannot change the captured DB token.
+            loaded.output = winner.output
+            loaded.output_hash = winner.output_hash
+        if initial == "absent":
+            owner.commit_succeeded(**args, record=winner)
+        else:
+            owner_conn.execute(
+                "UPDATE extraction_run_steps SET output = %s::jsonb, output_hash = %s"
+                " WHERE run_id = %s AND step_name = 'classify'",
+                (json.dumps(winner.output), winner.output_hash, request.run_id),
+            )
+        events = PostgresEventStore(conn)
+        with pytest.raises(StepFailed, match="checkpoint.*changed|checkpoint.*conflict"):
+            stale.commit_succeeded_atomic(
+                **args, record=loser, events=events, event_payload={"step_name": "classify"}
+            )
+        assert not events._memory.events
+        assert (
+            conn.execute(
+                "SELECT count(*) FROM extraction_run_events WHERE run_id = %s", (request.run_id,)
+            ).fetchone()[0]
+            == 0
+        )
+        for reader in (stale, PostgresCheckpointStore(conn)):
+            assert (
+                reader.load_succeeded(
+                    **args, step_name="classify", input_hash=original.input_hash
+                ).output
+                == winner.output
+            )
+
+
+@pytest.mark.skipif(TEST_DATABASE_URL is None, reason="TEST_DATABASE_URL not configured")
+def test_success_after_failed_attempt_is_durable(extraction_db_url: str) -> None:
+    from fel_workers.extraction.types import StageRecord
+
+    request = _request(str(uuid.uuid4()))
+    args = dict(run_id=request.run_id, org_id=_ORG, workflow_version=request.workflow_version)
+    failed = StageRecord(
+        step_name="classify",
+        attempt=1,
+        status="failed",
+        input_hash=sha256_hex("retry"),
+        error={"code": "interrupted"},
+    )
+    success = replace(
+        failed,
+        status="succeeded",
+        error=None,
+        output={"document_type": "10-Q"},
+        output_hash=hash_json({"document_type": "10-Q"}),
+    )
+    with psycopg.connect(extraction_db_url, autocommit=True) as conn:
+        _seed_parents(conn)
+        _seed_run(conn, request)
+        PostgresPersistStore(conn).mark_running(run_id=request.run_id, org_id=_ORG)
+        store = PostgresCheckpointStore(conn)
+        store.commit_failed(**args, record=failed)
+        before = conn.execute(
+            "SELECT * FROM extraction_run_steps WHERE run_id = %s", (request.run_id,)
+        ).fetchone()
+        committed = store.commit_succeeded_atomic(
+            **args,
+            record=success,
+            events=PostgresEventStore(conn),
+            event_payload={"step_name": "classify", "output_hash": success.output_hash},
+        )
+        assert committed.attempt == 2
+        assert (
+            conn.execute(
+                "SELECT payload->>'attempt' FROM extraction_run_events WHERE run_id = %s",
+                (request.run_id,),
+            ).fetchone()[0]
+            == "2"
+        )
+        assert (
+            conn.execute(
+                "SELECT * FROM extraction_run_steps WHERE run_id = %s AND status = 'failed'",
+                (request.run_id,),
+            ).fetchone()
+            == before
+        )
+        for reader in (store, PostgresCheckpointStore(conn)):
+            assert (
+                reader.load_succeeded(**args, step_name="classify", input_hash=success.input_hash)
+                == committed
+            )
+        assert (
+            conn.execute(
+                "SELECT count(*) FROM extraction_run_events"
+                " WHERE run_id = %s AND event_type = 'step_completed'",
+                (request.run_id,),
+            ).fetchone()[0]
+            == 1
         )
