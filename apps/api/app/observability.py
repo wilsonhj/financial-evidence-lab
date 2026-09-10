@@ -51,11 +51,10 @@ def configure_error_reporting() -> None:
 
     * **No DSN, no SDK call.** The default deployment reports nothing off-box,
       so an unconfigured environment cannot leak anything.
-    * **The SDK is an optional dependency**, imported lazily inside the DSN
-      branch. ``sentry-sdk`` is intentionally *not* added to the API's
-      dependencies here — wiring the dependency is a separate, reviewable
-      change. A DSN set without the SDK installed warns loudly rather than
-      failing the boot or silently swallowing the intent.
+    * **Initialization is optional**, with a lazy import inside the DSN
+      branch. The deployed runtime lock includes the SDK; a custom install
+      without it warns loudly rather than failing boot or silently swallowing
+      the intent.
     * Default PII collection, request bodies, and stack-frame locals are
       disabled explicitly, keeping document text and tenant claims out of
       these automatic error-report fields.

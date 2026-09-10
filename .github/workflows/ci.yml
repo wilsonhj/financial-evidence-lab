@@ -39,7 +39,12 @@ jobs:
       - run: pnpm run format:check
       - run: pnpm run lint
       - run: pnpm run typecheck
-      - run: pnpm run test
+      - run: pnpm run test --coverage
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: javascript-coverage
+          path: coverage/
       - run: node scripts/audit-bulk.mjs
 
   web-e2e:
@@ -57,8 +62,26 @@ jobs:
       # config's webServer block runs `next build && next start` and drives the
       # Observatory against fixture data (FEL_EVIDENCE_SOURCE=fixture) — no
       # live backend, no network.
-      - run: pnpm --filter @fel/web exec playwright install --with-deps chromium
+      - name: Identify the installed Playwright version
+        id: playwright
+        run: echo "version=$(pnpm --filter @fel/web exec playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        id: browser-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-${{ runner.arch }}-playwright-${{ steps.playwright.outputs.version }}
+      - name: Install Chromium on a cache miss
+        if: steps.browser-cache.outputs.cache-hit != 'true'
+        run: pnpm --filter @fel/web exec playwright install chromium
+      - name: Install browser OS dependencies on every run
+        run: pnpm --filter @fel/web exec playwright install-deps chromium
       - run: pnpm --filter @fel/web run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-results
+          path: apps/web/test-results/
+          if-no-files-found: ignore
 
   python:
     name: Python — format, lint, typecheck, test, security
@@ -102,7 +125,12 @@ jobs:
       - run: black --check apps workers evals packages/providers packages/retrieval packages/retrieval-evals packages/ontology packages/calculation-engine scripts
       - run: ruff check apps workers evals packages/providers packages/retrieval packages/retrieval-evals packages/ontology packages/calculation-engine scripts
       - run: mypy apps/api/app workers/src evals/graders packages/providers/fel_providers packages/retrieval/fel_retrieval packages/retrieval-evals/fel_retrieval_evals packages/ontology/fel_ontology packages/calculation-engine/fel_calculation_engine scripts/db
-      - run: pytest
+      - run: pytest --cov --cov-report=term-missing --cov-report=json:coverage/python.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: python-coverage
+          path: coverage/python.json
       - run: bandit -q -r apps workers evals packages/providers packages/retrieval packages/retrieval-evals packages/ontology packages/calculation-engine scripts -c pyproject.toml
       - run: pip-audit -r requirements.lock
       - run: pip-audit -r requirements-dev.lock
