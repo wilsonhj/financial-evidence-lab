@@ -33,7 +33,9 @@ from decimal import ROUND_DOWN, Decimal
 from typing import Protocol
 
 from fel_retrieval.generation import (
+    CitationStatus,
     ClaimCitation,
+    ClaimStatus,
     ContextItem,
     GeneratedClaim,
     NumericTuple,
@@ -73,7 +75,7 @@ class CitationEdge:
     constant 1 that no evidence check produced.
     """
 
-    status: str
+    status: CitationStatus
     numeric_checks: dict[str, bool]
     rationale: str
     confidence: Decimal = Decimal("0")
@@ -171,7 +173,7 @@ class MockCitationVerifier:
 
         coverage = _coverage(claim_text, evidence.text)
         if coverage and " ".join(claim_text.split()) == " ".join(evidence.text.split()):
-            status = "entailed"
+            status: CitationStatus = "entailed"
         elif coverage >= _PARTIAL_COVERAGE:
             status = "partial"
         else:
@@ -219,7 +221,7 @@ def assert_citation_integrity(
     return item
 
 
-def classify_claim(edges: Sequence[str]) -> str:
+def classify_claim(edges: Sequence[CitationStatus]) -> ClaimStatus:
     """Fold a claim's citation-edge statuses into a closed claim status (§11.3).
 
     * any ``contradictory`` edge -> ``contradicted`` (conflict is preserved);
