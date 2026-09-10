@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import re
 from decimal import Decimal, InvalidOperation
-from typing import Any
 
 # Magnitude suffix -> decimal exponent. Filing conventions, not SI: 'M' and the
 # accounting doubled 'MM' both mean millions, 'B'/'bn' billions, 'tn' trillions.
@@ -56,22 +55,6 @@ _NUM_RE = re.compile(
 # A grouping/decimal separator touching the matched body means the match only
 # covered part of a malformed number ('1,23' -> '1').
 _ADJACENT_GROUPING = frozenset({",", "."})
-
-
-def preview_normalize(raw_value: str, *, unit: str | None = None) -> dict[str, Any]:
-    """Best-effort preview used by allowlisted tools — never authoritative float."""
-    try:
-        value, scale, sign = parse_numeric(raw_value)
-    except ValueError as exc:
-        return {"ok": False, "error": str(exc)}
-    return {
-        "ok": True,
-        "value": format(value, "f"),
-        "scale": scale,
-        "sign": sign,
-        "unit": unit,
-        "raw_value": raw_value,
-    }
 
 
 def _require_full_consumption(raw_value: str, cleaned: str, match: re.Match[str]) -> None:
@@ -154,4 +137,4 @@ def format_decimal(value: Decimal) -> str:
     return text or "0"
 
 
-__all__ = ["format_decimal", "parse_numeric", "preview_normalize"]
+__all__ = ["format_decimal", "parse_numeric"]
