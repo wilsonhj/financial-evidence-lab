@@ -15,7 +15,7 @@ ADR-0017 records the initial dispatch and scope narrowing.
 | #221 | agent/arch-checkpoint-rerun | Extraction source/tests only | PR #257 under independent review | 468 real PostgreSQL extraction tests passed; stale-owner repair race under investigation |
 | #137 | agent/137-cutover-hardening | Retrieval API provenance and retrieval/evaluation model guards | dispatched | Reconcile existing refusal/cost/supports behavior before implementing actual residuals |
 | #219 | agent/m4-formula-ast | Read-only engine architecture investigation | design preparation | Retain both parent requirements; no canonical edits or implementation before concrete ADR and ownership |
-| #200 | agent/200-locked-runtime | Runtime packaging, locks and health/recovery | queued | Shared configuration serialized; consumer/extraction source excluded pending #221 review |
+| #200 | agent/200-locked-runtime | Runtime packaging, locks and health/recovery | PR #259 implementing | Clean install exposed missing provider package and worker prompt/schema data; corrected; heartbeat recovery next |
 | #188 | agent/188-execution-wave2 | Execution plan and ownership | coordinating | Initial control PR #254 merged @ 2b15032; subsequent paths checked |
 
 Ruling: narrow #230 and #221 test ownership — their original workers/tests/**
@@ -51,3 +51,9 @@ exclude developer tools. Record the owner's implementation authorization on
 its contract-change PR. Railway probes health only during deployment; stalled
 heartbeat restart needs a watchdog/recovery proof that tolerates legitimate
 long-running jobs. No paid rollout is authorized by this scheduling record.
+
+#221 review confirmed the stale-owner overwrite can be fixed entirely in
+extraction checkpoint persistence using compare-and-swap. Consumer source and
+its named test file are therefore assigned to #200 for heartbeat observation;
+they remain disjoint from #221's extraction subtrees. #200 must not alter queue
+claim/fencing semantics when observing successful lease heartbeats.

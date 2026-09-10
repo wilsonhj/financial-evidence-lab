@@ -725,7 +725,7 @@ packages:
     depends_on: []
     team: platform
     branch: agent/200-locked-runtime
-    status: ready # ADR-0017: hashed dependency closure and health/recovery residuals. #242 split runtime/dev; httpx2 already absent; #247 fixed migration-applier prerequisite.
+    status: active # PR #259; hashed runtime closure and health/recovery residuals under ADR-0017.
     allowed_paths:
       - requirements.txt
       - requirements-dev.txt
@@ -741,8 +741,10 @@ packages:
       - scripts/runtime/**
       - .github/workflows/ci.yml
       - workers/src/fel_workers/health.py
+      - workers/src/fel_workers/consumer.py
       - workers/src/fel_workers/__main__.py
       - workers/tests/test_health.py
+      - workers/tests/test_consumer.py
       - workers/tests/test_entrypoint.py
   - id: ARCH-RETRIEVAL-GATE # executable retrieval release gate over the benchmark seed
     issue: 201
