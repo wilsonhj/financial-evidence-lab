@@ -269,3 +269,32 @@ def test_timestamps_are_timezone_aware(
     published = datetime.fromisoformat(doc["published_at"])
     assert published.tzinfo is not None
     assert published.astimezone(UTC) == datetime(2026, 5, 5, 16, 30, tzinfo=UTC)
+
+
+def test_document_listing_keeps_new_filings_after_fifty(
+    client: TestClient, org_fixture: tuple[str, str], db_url: str
+) -> None:
+    ids = _seed_corpus(db_url)
+    with psycopg.connect(db_url) as conn:
+        conn.execute(
+            "WITH added AS (INSERT INTO documents"
+            " (id, entity_id, accession, source_url, content_hash, storage_key, published_at)"
+            " SELECT gen_random_uuid(), %s, 'history-' || gen_random_uuid(),"
+            " 'https://example.invalid/history.htm', %s, 'raw/test',"
+            " '2026-01-01'::timestamptz + n * interval '1 day'"
+            " FROM generate_series(1, 50) n RETURNING id)"
+            " INSERT INTO document_versions (id, document_id, parser_version,"
+            " normalizer_version, canonical_text_key)"
+            " SELECT gen_random_uuid(), id, 'p1', 'n1', 'text/test' FROM added",
+            (ids["entity_id"], TEXT_HASH),
+        )
+    url = f"/v1/entities/{ids['entity_id']}/documents"
+    response = client.get(url, headers=_headers(org_fixture))
+    assert response.status_code == 200, response.text
+    assert len(response.json()) == 52
+    assert response.json()[-1]["id"] == ids["late_doc"]
+    cutoff = client.get(
+        url, params={"as_of": "2026-06-01T00:00:00Z"}, headers=_headers(org_fixture)
+    )
+    assert len(cutoff.json()) == 51
+    assert cutoff.json()[-1]["id"] == ids["early_doc"]

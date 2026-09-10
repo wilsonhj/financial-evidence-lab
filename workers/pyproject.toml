@@ -10,3 +10,11 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+# The frozen extraction-payload schema ships INSIDE the wheel. It is read at
+# runtime by `extraction/validate/schema.py` via importlib.resources; without
+# this the wheel installs without it and every payload validation raises
+# FileNotFoundError on the first real job (issue #192). The authoritative copy
+# stays in packages/contracts/schemas/ — see extraction/contracts/__init__.py.
+[tool.setuptools.package-data]
+"fel_workers.extraction.contracts" = ["*.json"]

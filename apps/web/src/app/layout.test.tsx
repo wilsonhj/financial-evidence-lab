@@ -1,30 +1,9 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { beforeEach, describe, expect, it, vi } from "vitest";
-
-// `RootLayout` is an async Server Component: it reads the persisted Desk theme
-// out of a cookie before rendering. These tests invoke it directly rather than
-// through Next's request pipeline, so they have to supply a cookie store and
-// await the returned element. Passing the un-awaited promise to
-// `renderToStaticMarkup` makes React report "a component suspended while
-// responding to synchronous input", which is a test-harness artefact rather
-// than anything wrong with the layout.
-let storedTheme: string | undefined;
-
-vi.mock("next/headers", () => ({
-  cookies: async () => ({
-    get: (name: string) =>
-      name === "fel-theme" && storedTheme !== undefined ? { value: storedTheme } : undefined,
-  }),
-}));
+import { describe, expect, it } from "vitest";
 
 import RootLayout from "./layout";
 
-const renderLayout = async () =>
-  renderToStaticMarkup(await RootLayout({ children: <p>page content</p> }));
-
-beforeEach(() => {
-  storedTheme = undefined;
-});
+const renderLayout = () => renderToStaticMarkup(RootLayout({ children: <p>page content</p> }));
 
 describe("RootLayout skip link", () => {
   it("renders a 'Skip to main content' link as the first focusable element in the body", async () => {
@@ -62,24 +41,8 @@ describe("RootLayout skip-link stylesheet contract", async () => {
   });
 });
 
-// The skip-link tests above run with no cookie, so on their own they would
-// still pass if theme resolution were broken. These pin the cookie-driven
-// theme that trunk's async layout added in PR #176, so the mock cannot quietly
-// become the only path exercised.
-describe("RootLayout theme from cookie", () => {
-  it("stamps the stored theme on the html element", async () => {
-    // "oled" is a real DeskTheme; "dark" is not, which is what the
-    // unknown-value case below covers.
-    storedTheme = "oled";
-    expect(await renderLayout()).toContain('data-fel-theme="oled"');
-  });
-
-  it("falls back to system when the cookie is absent", async () => {
-    expect(await renderLayout()).toContain('data-fel-theme="system"');
-  });
-
-  it("falls back to system when the cookie holds an unknown value", async () => {
-    storedTheme = "chartreuse";
-    expect(await renderLayout()).toContain('data-fel-theme="system"');
+describe("RootLayout theme boundary", () => {
+  it("leaves the shared document outside the Desk theme", () => {
+    expect(renderLayout()).not.toContain("data-fel-theme");
   });
 });

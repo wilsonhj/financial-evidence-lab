@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from decimal import Decimal
 from types import SimpleNamespace
 from typing import Any
 
@@ -19,6 +20,7 @@ class RecordingWriter:
         self.statuses: list[str] = []
         self.events: list[tuple[str, dict[str, Any]]] = []
         self.usage: dict[str, int] = {}
+        self.cost_usd = Decimal("0")
 
     def set_status(self, status: str) -> None:
         self.statuses.append(status)
@@ -26,9 +28,12 @@ class RecordingWriter:
     def emit(self, event_type: str, payload: dict[str, Any]) -> None:
         self.events.append((event_type, payload))
 
-    def finish_abstained(self, *, budget_usage: dict[str, int], timings_ms: dict[str, int]) -> None:
+    def finish_abstained(
+        self, *, budget_usage: dict[str, int], timings_ms: dict[str, int], cost_usd: Decimal
+    ) -> None:
         self.statuses.append("abstained")
         self.usage = budget_usage
+        self.cost_usd = cost_usd
 
 
 @pytest.mark.parametrize("response_kind", ["schema", "unknown_citation", "abstain", "refusal"])
@@ -83,7 +88,16 @@ def test_generation_rejections_preserve_usage_and_finish_abstained(
     monkeypatch.setattr(
         retrieval, "_persist_claims", lambda *a, **kw: persisted_claims.extend(kw["claims"])
     )
-    retrieval._execute_pipeline(
+    usage = retrieval._RunUsage()
+    monkeypatch.setattr(
+        retrieval,
+        "settings",
+        lambda: SimpleNamespace(
+            cost_per_1k_input_usd=Decimal("0.01"),
+            cost_per_1k_output_usd=Decimal("0.02"),
+        ),
+    )
+    returned_usage, returned_cost = retrieval._execute_pipeline(
         None,  # type: ignore[arg-type]
         run_id="run-1",
         org_id="org-1",
@@ -97,6 +111,7 @@ def test_generation_rejections_preserve_usage_and_finish_abstained(
         mode="execute",
         embedding_provider="mock",
         embedding_model="mock-embed-v1",
+        usage=usage,
     )
 
     assert writer.statuses[-2:] == ["verifying", "abstained"]
@@ -106,6 +121,8 @@ def test_generation_rejections_preserve_usage_and_finish_abstained(
         "input_tokens": 17,
         "output_tokens": 9,
     }
+    assert returned_usage == writer.usage
+    assert returned_cost == usage.cost_usd == writer.cost_usd == Decimal("0.000350")
     expected_payload = {"reason": "generation_contract_invalid"}
     if response_kind == "schema":
         expected_payload["code"] = "CLAIMS_OUTPUT_SCHEMA_INVALID"

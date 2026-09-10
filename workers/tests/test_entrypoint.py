@@ -10,6 +10,7 @@ import contextlib
 import logging
 import os
 import pathlib
+import socket
 from collections.abc import Iterator
 from typing import Any
 
@@ -92,6 +93,21 @@ def test_live_mode_binds_local_dir_storage(
     assert (tmp_path / "blobs" / "raw" / "sha256" / "abc").read_bytes() == b"blob"
 
 
+class _StubConnection:
+    """Stands in for the worker's psycopg connection in wiring-only tests.
+
+    Statements are appended to ``captured['statements']`` so a test can assert
+    what run_main ran on the connection before handing it to the loop.
+    """
+
+    def __init__(self, captured: dict[str, Any]) -> None:
+        self._captured = captured
+        captured.setdefault("statements", [])
+
+    def execute(self, statement: str, *args: Any) -> None:
+        self._captured["statements"].append(statement)
+
+
 def _capture_run_worker_kwargs(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     """Stub out the queue loop and the database so ``run_main`` can be run for
     its WIRING only: returns the kwargs it passed to ``run_worker``."""
@@ -103,7 +119,10 @@ def _capture_run_worker_kwargs(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any
 
     @contextlib.contextmanager
     def _fake_connect(*args: Any, **kwargs: Any) -> Iterator[object]:
-        yield object()
+        # A bare object() is no longer enough: run_main issues the optional
+        # `SET ROLE` (#190) on the connection before the loop starts, so the
+        # stub records statements and the wiring stays observable.
+        yield _StubConnection(captured)
 
     monkeypatch.setattr("fel_workers.consumer.run_worker", _fake_run_worker)
     monkeypatch.setattr(psycopg, "connect", _fake_connect)
@@ -334,3 +353,75 @@ def test_run_mode_drains_and_exits(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("FEL_DATABASE_URL", os.environ["TEST_DATABASE_URL"])
     monkeypatch.delenv("FEL_SEC_LIVE", raising=False)
     assert run_main(["--max-iterations", "1", "--queue", "entrypoint-test"]) == 0
+
+
+def test_run_main_adopts_the_worker_role_when_configured(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """FEL_WORKER_DB_ROLE must be applied to the worker's own connection.
+
+    The rollout switch is worthless if it only reaches the heartbeat
+    connection: every ingestion/extraction write in the process runs on THIS
+    connection, so the SET ROLE has to happen here, before the loop starts.
+    """
+    monkeypatch.setenv("FEL_DATABASE_URL", "postgresql://unused.invalid/never-connected")
+    monkeypatch.delenv("FEL_SEC_LIVE", raising=False)
+    monkeypatch.delenv("FEL_ALLOW_MOCK_LLM", raising=False)
+    monkeypatch.setenv("FEL_WORKER_DB_ROLE", "fel_worker")
+    captured = _capture_run_worker_kwargs(monkeypatch)
+    assert run_main(["--max-iterations", "1"]) == 0
+    assert captured["statements"] == ["SET ROLE fel_worker"]
+
+
+def test_run_main_without_the_role_switch_changes_nothing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("FEL_DATABASE_URL", "postgresql://unused.invalid/never-connected")
+    monkeypatch.delenv("FEL_SEC_LIVE", raising=False)
+    monkeypatch.delenv("FEL_ALLOW_MOCK_LLM", raising=False)
+    monkeypatch.delenv("FEL_WORKER_DB_ROLE", raising=False)
+    captured = _capture_run_worker_kwargs(monkeypatch)
+    assert run_main(["--max-iterations", "1"]) == 0
+    assert captured["statements"] == []
+
+
+def test_run_main_refuses_a_malformed_role_name(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An unusable role must exit 2, not run the loop with owner privileges."""
+    monkeypatch.setenv("FEL_DATABASE_URL", "postgresql://unused.invalid/never-connected")
+    monkeypatch.delenv("FEL_SEC_LIVE", raising=False)
+    monkeypatch.delenv("FEL_ALLOW_MOCK_LLM", raising=False)
+    monkeypatch.setenv("FEL_WORKER_DB_ROLE", "fel_worker; DROP TABLE jobs")
+    captured = _capture_run_worker_kwargs(monkeypatch)
+    assert run_main(["--max-iterations", "1"]) == 2
+    assert captured["statements"] == []
+    assert "structured_llm" not in captured
+
+
+def test_run_main_starts_the_health_endpoint_when_a_port_is_set(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The endpoint is opt-in, and the loop's liveness must reach it without
+    consumer.py knowing anything about it: run_main wraps should_continue."""
+    monkeypatch.setenv("FEL_DATABASE_URL", "postgresql://unused.invalid/never-connected")
+    monkeypatch.delenv("FEL_SEC_LIVE", raising=False)
+    monkeypatch.delenv("FEL_ALLOW_MOCK_LLM", raising=False)
+    monkeypatch.delenv("FEL_WORKER_DB_ROLE", raising=False)
+    # A free high port picked from the OS: 0 is deliberately rejected by
+    # resolve_health_port (a deployment nobody can dial is a misconfiguration).
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        free_port = probe.getsockname()[1]
+    monkeypatch.setenv("FEL_WORKER_HEALTH_PORT", str(free_port))
+    captured = _capture_run_worker_kwargs(monkeypatch)
+    assert run_main(["--max-iterations", "1"]) == 0
+    should_continue = captured["should_continue"]
+    assert should_continue() is True  # touches liveness; must not raise
+
+
+def test_run_main_rejects_a_bad_health_port(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("FEL_DATABASE_URL", "postgresql://unused.invalid/never-connected")
+    monkeypatch.delenv("FEL_SEC_LIVE", raising=False)
+    monkeypatch.delenv("FEL_ALLOW_MOCK_LLM", raising=False)
+    monkeypatch.setenv("FEL_WORKER_HEALTH_PORT", "not-a-port")
+    _capture_run_worker_kwargs(monkeypatch)
+    assert run_main(["--max-iterations", "1"]) == 2

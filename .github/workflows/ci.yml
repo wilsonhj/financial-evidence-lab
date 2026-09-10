@@ -99,11 +99,11 @@ jobs:
           for f in db/migrations/*.sql; do
             PGPASSWORD=fel-ci-only psql --set ON_ERROR_STOP=1 -h localhost -U fel -d fel_test -f "$f"
           done
-      - run: black --check apps workers evals packages/providers packages/retrieval packages/retrieval-evals packages/ontology packages/calculation-engine
-      - run: ruff check apps workers evals packages/providers packages/retrieval packages/retrieval-evals packages/ontology packages/calculation-engine
-      - run: mypy apps/api/app workers/src evals/graders packages/providers/fel_providers packages/retrieval/fel_retrieval packages/retrieval-evals/fel_retrieval_evals packages/ontology/fel_ontology packages/calculation-engine/fel_calculation_engine
+      - run: black --check apps workers evals packages/providers packages/retrieval packages/retrieval-evals packages/ontology packages/calculation-engine scripts
+      - run: ruff check apps workers evals packages/providers packages/retrieval packages/retrieval-evals packages/ontology packages/calculation-engine scripts
+      - run: mypy apps/api/app workers/src evals/graders packages/providers/fel_providers packages/retrieval/fel_retrieval packages/retrieval-evals/fel_retrieval_evals packages/ontology/fel_ontology packages/calculation-engine/fel_calculation_engine scripts/db
       - run: pytest
-      - run: bandit -q -r apps workers evals packages/providers packages/retrieval packages/retrieval-evals packages/ontology packages/calculation-engine -c pyproject.toml
+      - run: bandit -q -r apps workers evals packages/providers packages/retrieval packages/retrieval-evals packages/ontology packages/calculation-engine scripts -c pyproject.toml
       - run: pip-audit -r requirements-dev.txt
 
   database:
@@ -126,18 +126,35 @@ jobs:
           --health-retries 10
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version-file: .python-version
+      # Migrations are applied by scripts/db/migrate.py (ADR-0014), not by a
+      # shell glob, because only the applier writes the schema_migrations
+      # ledger — and smoke.sh below now refuses to run against a database that
+      # has no ledger. Running it here rather than in the container is also
+      # what makes every CI run exercise the real applier against a fresh
+      # database; the service publishes 5432 to the runner. The immediate
+      # --check re-run proves the ledger it just wrote is self-consistent.
+      - name: Apply migrations with the ledger applier
+        env:
+          FEL_DATABASE_URL: postgresql://fel:fel-ci-only@localhost:5432/fel_ci
+        run: |
+          pip install "psycopg[binary]"
+          python scripts/db/migrate.py
+          python scripts/db/migrate.py --check
       # Run the smoke test inside the service container so the client tools
       # (psql/pg_dump/pg_restore) always match the server version exactly —
       # the runner's postgresql-client lags the pgvector/pgvector:0.8.5-pg17
-      # image, and pg_dump refuses to dump a newer server.
-      - name: Apply migrations and run backup-restore smoke test
+      # image, and pg_dump refuses to dump a newer server. db/migrations is
+      # still copied in: the harness step below reads tests/ from /tmp.
+      - name: Back up and restore the migrated database
         run: |
           docker cp infra/scripts/backup_restore_smoke.sh ${{ job.services.postgres.id }}:/tmp/smoke.sh
           docker cp db/migrations ${{ job.services.postgres.id }}:/tmp/migrations
           docker exec \
             -e PGHOST=localhost -e PGPORT=5432 -e PGUSER=fel \
             -e PGPASSWORD=fel-ci-only -e PGDATABASE=fel_ci \
-            -e MIGRATIONS_DIR=/tmp/migrations \
             ${{ job.services.postgres.id }} bash /tmp/smoke.sh
       # Behavioral regression harnesses for migration guards (RLS, grant,
       # immutability, and idempotency rules): run every

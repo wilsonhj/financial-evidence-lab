@@ -20,10 +20,10 @@ from pydantic import AwareDatetime
 
 from app.auth import TenantContext
 from app.config import settings
-from app.corpus import _document_body
 from app.db import tenant_connection
 from app.dependencies import get_tenant_context
 from app.errors import api_error
+from app.serializers import document_body
 
 router = APIRouter(prefix="/v1", tags=["corpus"])
 
@@ -282,7 +282,7 @@ def _build_document_block(
         for row in fact_rows
     ]
     block: dict[str, Any] = {
-        "meta": _document_body(document_row),
+        "meta": document_body(document_row),
         "document_version_id": version_id,
         "spans": spans,
         "facts": facts,

@@ -1,7 +1,7 @@
 .DEFAULT_GOAL := help
 PY := .venv/bin
 
-.PHONY: help install install-js install-py format format-check lint typecheck test test-js test-py security ci
+.PHONY: help install install-js install-py format format-check lint typecheck test test-js test-py db-migrate db-check eval-retrieval-gate security ci
 
 help: ## List available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -45,15 +45,15 @@ install-py: ## Create .venv and install the Python toolchain (interpreter from .
 
 format: ## Auto-format all sources
 	pnpm run format
-	$(PY)/black apps workers evals packages/providers packages/retrieval packages/retrieval-evals packages/ontology packages/calculation-engine
+	$(PY)/black apps workers evals packages/providers packages/retrieval packages/retrieval-evals packages/ontology packages/calculation-engine scripts
 
 format-check: ## Verify formatting without writing
 	pnpm run format:check
-	$(PY)/black --check apps workers evals packages/providers packages/retrieval packages/retrieval-evals packages/ontology packages/calculation-engine
+	$(PY)/black --check apps workers evals packages/providers packages/retrieval packages/retrieval-evals packages/ontology packages/calculation-engine scripts
 
 lint: ## Lint all sources
 	pnpm run lint
-	$(PY)/ruff check apps workers evals packages/providers packages/retrieval packages/retrieval-evals packages/ontology packages/calculation-engine
+	$(PY)/ruff check apps workers evals packages/providers packages/retrieval packages/retrieval-evals packages/ontology packages/calculation-engine scripts
 
 typecheck: ## Run static type checks
 	pnpm run typecheck
@@ -67,8 +67,18 @@ test-js: ## Run JS/TS unit tests
 test-py: ## Run Python unit tests
 	$(PY)/pytest
 
+eval-retrieval-gate: ## Grade the benchmark seed through the retrieval pipeline (needs TEST_DATABASE_URL)
+	PYTHONPATH=evals:packages/providers:packages/retrieval:packages/retrieval-evals \
+		$(PY)/python -m harness.retrieval_gate --out evals/reports/retrieval-gate/latest.json
+
+db-migrate: ## Apply pending migrations to $$DATABASE_URL / $$TEST_DATABASE_URL
+	$(PY)/python scripts/db/migrate.py
+
+db-check: ## Fail if migrations are pending or an applied file changed
+	$(PY)/python scripts/db/migrate.py --check
+
 security: ## Run static + dependency security scans
-	$(PY)/bandit -q -r apps workers evals packages/providers packages/retrieval packages/retrieval-evals packages/ontology packages/calculation-engine -c pyproject.toml
+	$(PY)/bandit -q -r apps workers evals packages/providers packages/retrieval packages/retrieval-evals packages/ontology packages/calculation-engine scripts -c pyproject.toml
 	$(PY)/pip-audit -r requirements-dev.txt
 	node scripts/audit-bulk.mjs
 

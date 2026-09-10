@@ -2,9 +2,10 @@
   "$schema": "https://railway.com/railway.schema.json",
   "build": {
     "builder": "RAILPACK",
-    "buildCommand": "pip install -r requirements-dev.txt && pip install ./packages/providers ./packages/ontology ./workers"
+    "buildCommand": "pip install -r requirements.txt && pip install ./packages/providers ./packages/ontology ./workers"
   },
   "deploy": {
+    "preDeployCommand": "python scripts/db/migrate.py --check --database-url \"$FEL_DATABASE_URL\"",
     "startCommand": "python -m fel_workers run",
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 3

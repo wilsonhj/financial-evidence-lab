@@ -1621,6 +1621,17 @@ export interface components {
         "application/json": components["schemas"]["Error"];
       };
     };
+    /** @description RATE_LIMITED. Per-organization request budget for this route is exhausted. Retry-After gives the whole seconds to wait. */
+    RateLimited: {
+      headers: {
+        /** @description Seconds to wait before retrying. */
+        "Retry-After"?: number;
+        [name: string]: unknown;
+      };
+      content: {
+        "application/json": components["schemas"]["Error"];
+      };
+    };
   };
   parameters: {
     /** @description Client-chosen key; retries with the same key return the original result and never duplicate work. */
@@ -2011,9 +2022,19 @@ export interface operations {
         };
       };
       401: components["responses"]["Error"];
+      /** @description COST_LIMIT_EXCEEDED. A user daily or organization monthly hard cost ceiling would be crossed by this run (spec 18.2). Retrying does not help until the period rolls over or an administrator raises the limit, which is why this is not a 429. */
+      402: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
       403: components["responses"]["Error"];
       409: components["responses"]["Error"];
       422: components["responses"]["Error"];
+      429: components["responses"]["RateLimited"];
       default: components["responses"]["Error"];
     };
   };
@@ -2064,6 +2085,16 @@ export interface operations {
           "application/json": components["schemas"]["QueryAccepted"];
         };
       };
+      /** @description COST_LIMIT_EXCEEDED. A rerun re-executes the pipeline and carries the same hard cost ceiling as a new query. */
+      402: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      429: components["responses"]["RateLimited"];
       default: components["responses"]["Error"];
     };
   };
@@ -2143,6 +2174,7 @@ export interface operations {
         };
         content?: never;
       };
+      429: components["responses"]["RateLimited"];
       default: components["responses"]["Error"];
     };
   };

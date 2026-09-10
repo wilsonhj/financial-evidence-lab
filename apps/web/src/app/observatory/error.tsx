@@ -1,5 +1,9 @@
 "use client";
 
+import { useEffect } from "react";
+
+import { recordError } from "../../lib/telemetry";
+
 /**
  * Error boundary for Observatory routes: query-source failures that are not a
  * typed, public-safe failure state (network faults, unexpected errors) land
@@ -12,6 +16,10 @@ export default function ObservatoryError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  useEffect(() => {
+    recordError("observatory.fetch.error", error);
+  }, [error]);
+
   return (
     <main
       id="main-content"

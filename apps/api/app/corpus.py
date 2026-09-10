@@ -36,6 +36,7 @@ from app.auth import TenantContext
 from app.db import tenant_connection
 from app.dependencies import get_tenant_context
 from app.errors import api_error
+from app.serializers import document_body
 
 router = APIRouter(prefix="/v1", tags=["corpus"])
 
@@ -83,28 +84,6 @@ _GET_DOCUMENT_SQL = """
 """
 
 
-def _document_body(row: dict[str, Any]) -> dict[str, Any]:
-    """Contract DocumentMeta; optional temporal fields omitted when unset."""
-    body: dict[str, Any] = {
-        "id": str(row["id"]),
-        "entity_id": str(row["entity_id"]),
-        "accession": row["accession"],
-        "source_url": row["source_url"],
-        "content_hash": row["content_hash"],
-        "published_at": row["published_at"].isoformat(),
-        "ingested_at": row["ingested_at"].isoformat(),
-    }
-    if row["form"] is not None:
-        body["form"] = row["form"]
-    for key in ("filed_at", "valid_from", "valid_to"):
-        if row[key] is not None:
-            body[key] = row[key].isoformat()
-    for key in ("period_start", "period_end"):
-        if row[key] is not None:
-            body[key] = row[key].isoformat()
-    return body
-
-
 @router.get("/entities/{entity_id}/documents")
 def list_entity_documents(
     entity_id: uuid.UUID,
@@ -117,7 +96,7 @@ def list_entity_documents(
             rows = conn.execute(_LIST_DOCUMENTS_AS_OF_SQL, (entity_id, as_of)).fetchall()
         else:
             rows = conn.execute(_LIST_DOCUMENTS_SQL, (entity_id,)).fetchall()
-    return [_document_body(row) for row in rows]
+    return [document_body(row) for row in rows]
 
 
 @router.get("/documents/{document_id}")
@@ -130,7 +109,7 @@ def get_document(
         row = conn.execute(_GET_DOCUMENT_SQL, (document_id,)).fetchone()
     if row is None:
         raise api_error(404, "NOT_FOUND", "Document not found.")
-    return _document_body(row)
+    return document_body(row)
 
 
 @router.get("/source-spans/{source_span_id}")

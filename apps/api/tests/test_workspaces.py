@@ -113,3 +113,18 @@ def test_malformed_as_of_gets_contract_envelope(
         },
     )
     assert naive.status_code == 422
+
+
+def test_workspace_listing_keeps_new_workspaces_after_fifty(
+    client: TestClient, org_fixture: tuple[str, str], db_url: str
+) -> None:
+    with psycopg.connect(db_url) as conn:
+        conn.execute(
+            "INSERT INTO workspaces (id, org_id, name, entity_id, base_currency,"
+            " fiscal_calendar, as_of) SELECT gen_random_uuid(), %s, 'workspace ' || n,"
+            " gen_random_uuid(), 'USD', 'FY-JAN31', now() FROM generate_series(1, 51) n",
+            (org_fixture[0],),
+        )
+    response = client.get("/v1/workspaces", headers=_headers(org_fixture))
+    assert response.status_code == 200
+    assert len(response.json()) == 51
