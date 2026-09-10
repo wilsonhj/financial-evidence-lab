@@ -868,9 +868,7 @@ def test_create_query_stays_within_retrieval_query_budget(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Each lane executes a fixed number of SQL statements, independent of result count."""
-    _create_with_retrieval_query_budget(
-        client, org, seeded["workspace_id"], monkeypatch
-    )
+    _create_with_retrieval_query_budget(client, org, seeded["workspace_id"], monkeypatch)
 
 
 def test_create_query_budget_detects_injected_n_plus_one(
@@ -890,9 +888,7 @@ def test_create_query_budget_detects_injected_n_plus_one(
 
     monkeypatch.setitem(retrieval._LANE_FUNCS, "lexical", _n_plus_one_lane)
     with pytest.raises(AssertionError, match="retrieval lanes issued .* SQL statements"):
-        _create_with_retrieval_query_budget(
-            client, org, seeded["workspace_id"], monkeypatch
-        )
+        _create_with_retrieval_query_budget(client, org, seeded["workspace_id"], monkeypatch)
 
 
 @pytest.mark.skipif(
