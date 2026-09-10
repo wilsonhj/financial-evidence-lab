@@ -15,7 +15,7 @@ from fel_workers.extraction.budget import RunBudget
 from fel_workers.extraction.errors import ProviderRefused, SchemaInvalid
 from fel_workers.extraction.roles.base import ROLE_SPECS, UNTRUSTED_CLOSE, UNTRUSTED_OPEN
 from fel_workers.extraction.runner import Abstention, run_model_step
-from fel_workers.extraction.types import Role
+from fel_workers.extraction.types import WORKFLOW_VERSION, Role
 
 
 class _InvalidThenValid:
@@ -87,7 +87,7 @@ def test_refusal_is_provider_refused_not_abstention() -> None:
             budget=RunBudget(),
             run_id="00000000-0000-4000-8000-000000000010",
             step_name="extract_kpi",
-            workflow_version="extraction-workflow/v1",
+            workflow_version=WORKFLOW_VERSION,
             provider_ref="mock",
             model_ref="mock-structured-v1",
         )
@@ -104,7 +104,7 @@ def test_one_repair_then_success() -> None:
         budget=RunBudget(),
         run_id="00000000-0000-4000-8000-000000000011",
         step_name="extract_kpi",
-        workflow_version="extraction-workflow/v1",
+        workflow_version=WORKFLOW_VERSION,
         provider_ref="mock",
         model_ref="mock-structured-v1",
     )
@@ -124,7 +124,7 @@ def test_schema_invalid_after_one_repair() -> None:
             budget=RunBudget(),
             run_id="00000000-0000-4000-8000-000000000012",
             step_name="extract_kpi",
-            workflow_version="extraction-workflow/v1",
+            workflow_version=WORKFLOW_VERSION,
             provider_ref="mock",
             model_ref="mock-structured-v1",
         )

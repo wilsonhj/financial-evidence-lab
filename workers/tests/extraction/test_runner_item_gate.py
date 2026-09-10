@@ -20,6 +20,7 @@ from fel_workers.extraction.budget import RunBudget
 from fel_workers.extraction.errors import SchemaInvalid
 from fel_workers.extraction.roles import ROLE_SPECS, Role
 from fel_workers.extraction.runner import run_model_step
+from fel_workers.extraction.types import WORKFLOW_VERSION
 
 from .conftest import FIXTURE_ENTITY, FIXTURE_SPAN
 
@@ -101,7 +102,7 @@ def _step(provider: _ScriptedProvider, role: Role, step_name: str) -> Any:
         budget=RunBudget(),
         run_id="00000000-0000-4000-8000-000000000001",
         step_name=step_name,
-        workflow_version="extraction-workflow/v1",
+        workflow_version=WORKFLOW_VERSION,
         provider_ref="mock",
         model_ref="mock-structured-v1",
     )

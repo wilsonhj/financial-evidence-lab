@@ -18,7 +18,7 @@ from fel_workers.extraction.errors import SchemaInvalid
 from fel_workers.extraction.persist import MemoryPersistStore, PostgresPersistStore
 from fel_workers.extraction.roles import ROLE_SPECS, Role
 from fel_workers.extraction.runner import run_model_step
-from fel_workers.extraction.types import ConflictDraft
+from fel_workers.extraction.types import WORKFLOW_VERSION, ConflictDraft
 from fel_workers.extraction.validate import validate_proposals
 from fel_workers.extraction.validate.duplicates import conflict_key_for
 
@@ -147,7 +147,7 @@ def test_junk_proposals_raise_schema_invalid_not_abstention() -> None:
             budget=RunBudget(),
             run_id="00000000-0000-4000-8000-000000000001",
             step_name="extract_kpi",
-            workflow_version="extraction-workflow/v1",
+            workflow_version=WORKFLOW_VERSION,
             provider_ref="mock",
             model_ref="mock-structured-v1",
         )

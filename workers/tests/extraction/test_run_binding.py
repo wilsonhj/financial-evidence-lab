@@ -37,6 +37,7 @@ from fel_providers.mocks import MockStructuredLLMProvider
 from fel_workers.extraction.errors import ExtractionError
 from fel_workers.extraction.handler import handle_extraction_run
 from fel_workers.extraction.hashing import sha256_hex
+from fel_workers.extraction.types import WORKFLOW_VERSION
 
 from .conftest import FIXTURE_DOC, FIXTURE_SPAN
 from .test_postgres_crash_resume import _CORPUS as _SEEDED_CORPUS
@@ -78,7 +79,7 @@ def _seed_run(conn: psycopg.Connection, run_id: str, **pins: Any) -> dict[str, A
         "as_of": _AS_OF,
         "corpus_version_id": _SEEDED_CORPUS,
         "ontology_version": "saas-metrics/v1",
-        "workflow_version": "extraction-workflow/v1",
+        "workflow_version": WORKFLOW_VERSION,
         "provider": "mock",
         "model": "mock-structured-v1",
         "policy_id": _POLICY,
@@ -130,7 +131,7 @@ def _payload(run_id: str, **overrides: Any) -> dict[str, Any]:
         "as_of": _AS_OF.isoformat(),
         "corpus_version_id": _SEEDED_CORPUS,
         "ontology_version": "saas-metrics/v1",
-        "workflow_version": "extraction-workflow/v1",
+        "workflow_version": WORKFLOW_VERSION,
         "provider": "mock",
         "model": "mock-structured-v1",
         "policy_id": _POLICY,

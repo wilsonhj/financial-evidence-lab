@@ -21,7 +21,12 @@ from fel_workers.extraction.checkpoint import MemoryCheckpointStore
 from fel_workers.extraction.events import MemoryEventStore
 from fel_workers.extraction.hashing import sha256_hex
 from fel_workers.extraction.persist import MemoryPersistStore
-from fel_workers.extraction.types import EvidenceBlock, ExtractionRunRequest, WorkflowState
+from fel_workers.extraction.types import (
+    WORKFLOW_VERSION,
+    EvidenceBlock,
+    ExtractionRunRequest,
+    WorkflowState,
+)
 from fel_workers.extraction.workflow import WorkflowDeps, run_extraction_workflow
 
 from .conftest import FIXTURE_DOC, FIXTURE_ENTITY, FIXTURE_SPAN
@@ -69,7 +74,7 @@ def outcome() -> _Outcome:
         as_of=datetime(2026, 7, 1, tzinfo=UTC),
         corpus_version_id=str(uuid4()),
         ontology_version="saas-metrics/v1",
-        workflow_version="extraction-workflow/v1",
+        workflow_version=WORKFLOW_VERSION,
         provider="mock",
         model="mock-structured-v1",
         policy_id=str(uuid4()),

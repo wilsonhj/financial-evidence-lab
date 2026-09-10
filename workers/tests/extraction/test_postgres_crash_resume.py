@@ -53,7 +53,12 @@ from fel_workers.extraction.persist import (
     PostgresEventStore,
     PostgresPersistStore,
 )
-from fel_workers.extraction.types import EvidenceBlock, ExtractionRunRequest, WorkflowState
+from fel_workers.extraction.types import (
+    WORKFLOW_VERSION,
+    EvidenceBlock,
+    ExtractionRunRequest,
+    WorkflowState,
+)
 from fel_workers.extraction.workflow import WorkflowDeps, run_extraction_workflow
 
 from .conftest import FIXTURE_DOC, FIXTURE_SPAN
@@ -242,7 +247,7 @@ def _request(run_id: str) -> ExtractionRunRequest:
         as_of=datetime(2026, 7, 1, tzinfo=UTC),
         corpus_version_id=_CORPUS,
         ontology_version="saas-metrics/v1",
-        workflow_version="extraction-workflow/v1",
+        workflow_version=WORKFLOW_VERSION,
         provider="mock",
         model="mock-structured-v1",
         policy_id=_POLICY,
@@ -1508,3 +1513,195 @@ def test_superseded_checkpoint_stops_workflow_without_terminal_write(
             ).fetchone()[0]
             == 0
         )
+
+
+@pytest.mark.parametrize("death_stage", ["normalize", "validate"])
+def test_v2_unit_policy_survives_durable_crash_resume(extraction_db_url, monkeypatch, death_stage):
+    from fel_workers.extraction import workflow
+
+    from .test_accounting_identities import kpi
+
+    raw = [
+        kpi("revenue", "1000", unit="USD"),
+        kpi("revenue", "900", unit="usd"),
+        kpi("rpo", "500"),
+        kpi("crpo", "900", unit="usd"),
+        kpi("arr", "100", unit="usd", currency=None),
+    ]
+    for p in raw:
+        p["entity_id"] = _ENTITY
+        p["evidence"] = []
+    original_dispatch = workflow._dispatch_stage
+
+    def dispatch(ctx, step_name):
+        if step_name == "normalize":
+            ctx.state.raw_proposals = raw
+        return original_dispatch(ctx, step_name)
+
+    monkeypatch.setattr(workflow, "_dispatch_stage", dispatch)
+    request = _request(str(uuid.uuid4()))
+    original_commit = workflow._commit_stage
+    captured = {}
+
+    def commit(ctx, **kwargs):
+        record = original_commit(ctx, **kwargs)
+        if record.step_name == death_stage:
+            captured["normalized"] = ctx.state.normalized
+            captured["validated"] = ctx.state.validated
+            raise _ProcessDeath()
+        return record
+
+    with psycopg.connect(extraction_db_url, autocommit=True) as conn:
+        _seed_parents(conn)
+        _seed_run(conn, request)
+        PostgresPersistStore(conn).mark_running(run_id=request.run_id, org_id=_ORG)
+        monkeypatch.setattr(workflow, "_commit_stage", commit)
+        with pytest.raises(_ProcessDeath):
+            run_extraction_workflow(
+                WorkflowState(request=request), _postgres_deps(conn, _CountingLLM())
+            )
+    monkeypatch.setattr(workflow, "_commit_stage", original_commit)
+    with psycopg.connect(extraction_db_url, autocommit=True) as conn:
+        second = _CountingLLM()
+        final = run_extraction_workflow(
+            WorkflowState(request=request), _postgres_deps(conn, second)
+        )
+        assert final.status == "waiting_review", final.error
+        assert second.calls == 0
+        assert final.normalized == captured["normalized"]
+        if captured["validated"]:
+            assert final.validated == captured["validated"]
+        assert any(
+            "currency_missing_for_monetary" in p.validation_summary["blockers"]
+            for p in final.validated
+        )
+        assert any(
+            "accounting_identity_violation:crpo_exceeds_rpo" in p.validation_summary["blockers"]
+            for p in final.validated
+        )
+        assert any("value_disagreement" in c.reason_codes for c in final.conflicts)
+        assert all(
+            p.validation_summary["unit_policy_version"] == "unit-comparison/v1"
+            for p in final.validated
+        )
+
+
+def test_legacy_succeeded_checkpoints_cannot_bypass_version_gate(extraction_db_url, monkeypatch):
+    from fel_workers.extraction import workflow
+
+    request = replace(_request(str(uuid.uuid4())), workflow_version="extraction-workflow/v1")
+    original_commit = workflow._commit_stage
+
+    def commit(ctx, **kwargs):
+        record = original_commit(ctx, **kwargs)
+        if record.step_name == "persist_proposals":
+            raise _ProcessDeath()
+        return record
+
+    with psycopg.connect(extraction_db_url, autocommit=True) as conn:
+        _seed_parents(conn)
+        _seed_run(conn, request)
+        PostgresPersistStore(conn).mark_running(run_id=request.run_id, org_id=_ORG)
+        with monkeypatch.context() as old:
+            old.setattr(workflow, "WORKFLOW_VERSION", "extraction-workflow/v1")
+            old.setattr(workflow, "_commit_stage", commit)
+            with pytest.raises(_ProcessDeath):
+                run_extraction_workflow(
+                    WorkflowState(request=request), _postgres_deps(conn, _CountingLLM())
+                )
+        rows = conn.execute(
+            "SELECT step_name, output, output_hash FROM extraction_run_steps "
+            "WHERE run_id=%s AND status='succeeded'",
+            (request.run_id,),
+        ).fetchall()
+        assert {"validate_request", "normalize", "validate", "persist_proposals"} <= {
+            r[0] for r in rows
+        }
+        assert all(hash_json(r[1]) == r[2] for r in rows)
+    with psycopg.connect(extraction_db_url, autocommit=True) as conn:
+        llm = _CountingLLM()
+        deps = _postgres_deps(conn, llm)
+
+        def no_recovery(**kwargs):
+            pytest.fail("legacy checkpoints must never be loaded")
+
+        monkeypatch.setattr(deps.checkpoint, "load_succeeded", no_recovery)
+        out = run_extraction_workflow(WorkflowState(request=request), deps)
+        assert out.status == "failed"
+        assert "unsupported workflow version" in out.error["message"]
+        assert llm.calls == 0
+        assert (
+            conn.execute(
+                "SELECT workflow_version FROM extraction_runs WHERE id=%s", (request.run_id,)
+            ).fetchone()[0]
+            == "extraction-workflow/v1"
+        )
+
+
+def test_policy_namespace_preserves_old_adjudication_and_replay_guard(extraction_db_url):
+    from fel_workers.extraction.errors import StepFailed
+    from fel_workers.extraction.types import ConflictDraft
+    from fel_workers.extraction.validate import validate_proposals
+    from fel_workers.extraction.validate.duplicates import comparability_key_for
+
+    from .test_accounting_identities import kpi
+
+    request = _request(str(uuid.uuid4()))
+    payloads = [kpi("revenue", "1000"), kpi("revenue", "900", unit="usd")]
+    for p in payloads:
+        p["entity_id"] = _ENTITY
+        p["dimensions"] = {"test_slice": request.run_id}
+        p["evidence"] = []
+    result = validate_proposals(run_id=request.run_id, payloads=payloads)
+    legacy_identity = comparability_key_for(payloads[0])
+    legacy = ConflictDraft(
+        conflict_key=hash_json(legacy_identity),
+        reason_codes=["value_disagreement"],
+        member_proposal_ids=[p.id for p in result.proposals],
+    )
+    with psycopg.connect(extraction_db_url, autocommit=True) as conn:
+        _seed_parents(conn)
+        _seed_run(conn, request)
+        store = PostgresPersistStore(conn)
+        store.mark_running(run_id=request.run_id, org_id=_ORG)
+        store.persist_proposals(
+            run_id=request.run_id, org_id=_ORG, workspace_id=_WORKSPACE, drafts=result.proposals
+        )
+        store.persist_conflicts(org_id=_ORG, workspace_id=_WORKSPACE, drafts=[legacy])
+        conn.execute(
+            "UPDATE extraction_conflicts SET status='resolved', resolved_by=%s, "
+            "resolved_at=now(), resolution_note='historical adjudication' WHERE id=%s",
+            (_USER, legacy.id),
+        )
+        before = conn.execute(
+            "SELECT to_jsonb(c) FROM extraction_conflicts c WHERE id=%s", (legacy.id,)
+        ).fetchone()
+        members = conn.execute(
+            "SELECT * FROM extraction_conflict_members WHERE conflict_id=%s", (legacy.id,)
+        ).fetchall()
+        store.persist_conflicts(org_id=_ORG, workspace_id=_WORKSPACE, drafts=result.conflicts)
+        new_id = result.conflicts[0].id
+        store.persist_conflicts(org_id=_ORG, workspace_id=_WORKSPACE, drafts=result.conflicts)
+        assert result.conflicts[0].id == new_id != legacy.id
+        assert (
+            conn.execute(
+                "SELECT to_jsonb(c) FROM extraction_conflicts c WHERE id=%s", (legacy.id,)
+            ).fetchone()
+            == before
+        )
+        assert (
+            conn.execute(
+                "SELECT * FROM extraction_conflict_members WHERE conflict_id=%s", (legacy.id,)
+            ).fetchall()
+            == members
+        )
+        assert (
+            conn.execute(
+                "SELECT count(*) FROM extraction_conflict_members WHERE conflict_id=%s", (new_id,)
+            ).fetchone()[0]
+            == 2
+        )
+        conn.execute("UPDATE extraction_conflicts SET status='resolved' WHERE id=%s", (new_id,))
+        with pytest.raises(StepFailed) as exc:
+            store.persist_conflicts(org_id=_ORG, workspace_id=_WORKSPACE, drafts=result.conflicts)
+        assert exc.value.code == "conflict_terminal"
