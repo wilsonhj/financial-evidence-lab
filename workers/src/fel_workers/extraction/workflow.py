@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
+from copy import deepcopy
 from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
@@ -473,7 +474,11 @@ def _reject_checkpoint(ctx: _ExecCtx, *, record: StageRecord, reason: str, messa
 
 
 def _commit_stage(
-    ctx: _ExecCtx, *, record: StageRecord, event_payload: dict[str, Any]
+    ctx: _ExecCtx,
+    *,
+    record: StageRecord,
+    event_payload: dict[str, Any],
+    rejected: StageRecord | None = None,
 ) -> StageRecord:
     """Commit a succeeded stage row and its ``step_completed`` event as one unit.
 
@@ -497,6 +502,7 @@ def _commit_stage(
             record=record,
             events=ctx.deps.events,
             event_payload=event_payload,
+            rejected=rejected,
         )
         return committed
     committed = ctx.deps.checkpoint.commit_succeeded(
@@ -588,6 +594,9 @@ def _run_stage(ctx: _ExecCtx, step_name: str) -> None:
         )
         return
 
+    # Capture what failed verification before provider work. A durable repair
+    # must compare against this value, not whichever row exists at commit time.
+    rejected = deepcopy(existing)
     ctx.deps.events.append(
         org_id=req.org_id,
         run_id=req.run_id,
@@ -641,7 +650,9 @@ def _run_stage(ctx: _ExecCtx, step_name: str) -> None:
             "provider_response_ids": list(audit.response_ids),
         }
     _commit_fence(ctx, step_name)
-    ctx.state.stages[step_name] = _commit_stage(ctx, record=record, event_payload=event_payload)
+    ctx.state.stages[step_name] = _commit_stage(
+        ctx, record=record, event_payload=event_payload, rejected=rejected
+    )
     ctx.newly_committed += 1
     if (
         ctx.deps.crash_after_stages is not None

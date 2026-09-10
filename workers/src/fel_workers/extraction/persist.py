@@ -12,13 +12,13 @@ from typing import Any
 import psycopg
 
 from fel_workers.extraction.checkpoint import MemoryCheckpointStore
-from fel_workers.extraction.errors import ExtractionError, StepFailed
+from fel_workers.extraction.errors import ExtractionError, LeaseLost, StepFailed
 from fel_workers.extraction.events import (
     ExtractionEvent,
     MemoryEventStore,
     redact_event_payload,
 )
-from fel_workers.extraction.hashing import proposal_id_for
+from fel_workers.extraction.hashing import hash_json, proposal_id_for
 from fel_workers.extraction.types import ConflictDraft, ProposalDraft, StageRecord
 
 __all__ = [
@@ -780,9 +780,14 @@ class PostgresCheckpointStore:
         org_id: str,
         workflow_version: str,
         record: StageRecord,
+        rejected: StageRecord | None = None,
     ) -> StageRecord:
         self._insert_step_row(
-            run_id=run_id, org_id=org_id, workflow_version=workflow_version, record=record
+            run_id=run_id,
+            org_id=org_id,
+            workflow_version=workflow_version,
+            record=record,
+            rejected=rejected,
         )
         # A repair replaces a cached success too, but only after the DB write
         # (and, on the atomic path, its event) has committed.
@@ -798,7 +803,16 @@ class PostgresCheckpointStore:
         org_id: str,
         workflow_version: str,
         record: StageRecord,
+        rejected: StageRecord | None = None,
     ) -> None:
+        if rejected is not None and (
+            rejected.status != "succeeded"
+            or rejected.step_name != record.step_name
+            or rejected.input_hash != record.input_hash
+            or (rejected.output is None and rejected.output_hash is None)
+            or (rejected.output is not None and hash_json(rejected.output) == rejected.output_hash)
+        ):
+            raise ValueError("repair requires a rejected checkpoint with the same identity")
         step_id = str(uuid.uuid4())
         inserted = self.conn.execute(
             """
@@ -840,10 +854,12 @@ class PostgresCheckpointStore:
             ),
         ).fetchone()
         if inserted is None and record.status == "succeeded":
-            # A rejected checkpoint may already own the success key. Repair the
-            # value and its audit metadata together; preserve identity (including
-            # the original attempt) and status. Other attempt-key conflicts keep
-            # their existing DO NOTHING behavior and cannot replace a failed row.
+            if rejected is None:
+                self._checkpoint_superseded()
+            assert rejected is not None
+            # Only replace the exact corrupt value this attempt rejected. Both
+            # predicates matter: a deterministic repair keeps the original hash
+            # but changes the damaged output. A competing winner must survive.
             repaired = self.conn.execute(
                 """
                 UPDATE extraction_run_steps
@@ -854,6 +870,8 @@ class PostgresCheckpointStore:
                  WHERE run_id = %s AND org_id = %s AND step_name = %s
                    AND input_hash = %s AND workflow_version = %s
                    AND status = 'succeeded'
+                   AND output IS NOT DISTINCT FROM %s::jsonb
+                   AND output_hash IS NOT DISTINCT FROM %s
                 RETURNING attempt
                 """,
                 (
@@ -869,10 +887,24 @@ class PostgresCheckpointStore:
                     record.step_name,
                     record.input_hash,
                     workflow_version,
+                    json.dumps(rejected.output) if rejected.output is not None else None,
+                    rejected.output_hash,
                 ),
             ).fetchone()
-            if repaired is not None:
-                record.attempt = repaired[0]
+            if repaired is None:
+                self._checkpoint_superseded()
+            assert repaired is not None
+            record.attempt = repaired[0]
+
+    def _checkpoint_superseded(self) -> None:
+        # The in-flight result cannot safely drive downstream stages. Abort via
+        # the workflow's non-terminal fencing path; a fresh attempt reloads the
+        # durable winner. Never cache or emit completion for the losing result.
+        self._memory = MemoryCheckpointStore()
+        raise LeaseLost(
+            "checkpoint changed before commit; reload before continuing",
+            code="checkpoint_superseded",
+        )
 
     def commit_failed(
         self,
@@ -907,6 +939,7 @@ class PostgresCheckpointStore:
         record: StageRecord,
         events: Any,
         event_payload: dict[str, Any],
+        rejected: StageRecord | None = None,
     ) -> StageRecord:
         """Commit the step row and its ``step_completed`` event in ONE transaction.
 
@@ -941,6 +974,7 @@ class PostgresCheckpointStore:
                 org_id=org_id,
                 workflow_version=workflow_version,
                 record=record,
+                rejected=rejected,
             )
             events.append(
                 org_id=org_id,
