@@ -725,7 +725,7 @@ packages:
     depends_on: []
     team: platform
     branch: agent/200-locked-runtime
-    status: queued # ADR-0017: hashed dependency closure and health/recovery residuals. #242 split runtime/dev; httpx2 already absent; #247 fixed migration-applier prerequisite.
+    status: ready # ADR-0017: hashed dependency closure and health/recovery residuals. #242 split runtime/dev; httpx2 already absent; #247 fixed migration-applier prerequisite.
     allowed_paths:
       - requirements.txt
       - requirements-dev.txt
@@ -735,7 +735,9 @@ packages:
       - infra/railway/worker.json
       - apps/api/pyproject.toml
       - workers/pyproject.toml
-      - packages/*/pyproject.toml
+      - packages/providers/pyproject.toml
+      - packages/retrieval/pyproject.toml
+      - packages/ontology/pyproject.toml
       - scripts/runtime/**
       - .github/workflows/ci.yml
       - workers/src/fel_workers/health.py
