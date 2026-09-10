@@ -1626,7 +1626,7 @@ def test_legacy_succeeded_checkpoints_cannot_bypass_version_gate(
             validator_version="validate/v2", unit_policy_version="unit-comparison/v1"
         )
     outputs = {
-        "validate_request": {"valid": True},
+        "validate_request": {"ok": True, "modes": ["guidance"]},
         "normalize": {"normalized": normalized, "normalized_count": 1, "blocked_count": 0},
         "validate": {"normalized": normalized, "proposal_count": 1, "conflict_count": 0},
     }
