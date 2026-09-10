@@ -73,6 +73,8 @@ Tasks are ordered by dependency. A task is complete only when its code, tests, t
 - [ ] `T0408` Implement formula, dependency, assumption, citation, diff, and restore views (`MOD-002`, `004`).
 - [ ] `T0409` Add property tests for decimal arithmetic, units, periods, cycles, and scenario immutability.
 - [ ] `T0410` Pass the 5,000-node p95 recalculation target.
+- [ ] `T0411` Parse user-authored arithmetic formulas into a bounded typed AST, extract dependencies, and evaluate with Decimal/unit/period validation and immutable versioned provenance (§8.5, `FR-MOD-002`; ADR-0018).
+- [ ] `T0412` Evaluate explicitly declared cyclic formula groups with deterministic bounded fixed-point iteration, explicit seeds/tolerances, nonconvergence failure and reproducible lineage (§8.5; ADR-0018).
 
 ## M5 — Forecast Lab and release
 

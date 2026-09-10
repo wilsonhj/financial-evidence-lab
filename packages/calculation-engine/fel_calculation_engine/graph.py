@@ -1,8 +1,8 @@
-"""Dependency edges, structural validation, and cycle detection (T0402, FR-MOD-001).
+"""Dependency edges, structural validation, and explicit cycle execution plans.
 
-Edges are *derived* from :meth:`Node.inputs` so the lineage a node declares and
-the visual graph are the same data. ``ModelGraph.build`` fails closed on
-duplicate ids, dangling references and cycles, and type-checks every derived
+Edges derive from :meth:`Node.inputs` plus explicit group seed prerequisites.
+``ModelGraph.build`` fails closed on duplicate ids, dangling references and
+undeclared cycles, and type-checks every derived
 node against its inputs (unit algebra, period kind, rollup quarters, override
 targets) so a graph that builds is a graph that can be evaluated.
 """
@@ -19,14 +19,18 @@ from fel_calculation_engine.canonical import canonical_json
 from fel_calculation_engine.errors import (
     CycleError,
     GraphError,
+    IterationPolicyError,
     MissingInputError,
     PeriodError,
     ScenarioError,
     UnitError,
 )
+from fel_calculation_engine.formulas import infer_formula_unit
+from fel_calculation_engine.iteration import IterationGroup
 from fel_calculation_engine.nodes import (
     AggregationNode,
     AggregationOp,
+    ExpressionFormulaNode,
     FormulaNode,
     Node,
     NodeKind,
@@ -64,8 +68,22 @@ class ModelGraph:
     #: once per graph so evaluation can content-address results without re-encoding nodes.
     definitions: Mapping[str, str] = field(compare=False, repr=False)
 
+    iteration_groups: tuple[IterationGroup, ...] = ()
+    execution_plan: tuple[str | IterationGroup, ...] = ()
+
+    @property
+    def uses_v2(self) -> bool:
+        return bool(self.iteration_groups) or any(
+            isinstance(node, ExpressionFormulaNode) for node in self.nodes
+        )
+
     @classmethod
-    def build(cls, nodes: Iterable[Node]) -> ModelGraph:
+    def build(
+        cls,
+        nodes: Iterable[Node],
+        *,
+        iteration_groups: Iterable[IterationGroup] = (),
+    ) -> ModelGraph:
         by_id: dict[str, Node] = {}
         for node in nodes:
             if not isinstance(node, Node):
@@ -93,7 +111,26 @@ class ModelGraph:
                 dependents[ref].append(node.node_id)
             dependencies[node.node_id] = tuple(deps)
 
-        order = _topological_order(by_id, dependencies, dependents)
+        groups = tuple(iteration_groups)
+        if any(type(group) is not IterationGroup for group in groups):
+            raise IterationPolicyError("iteration_groups must contain IterationGroup policies")
+        groups = tuple(sorted(groups, key=lambda group: group.group_id))
+        if groups:
+            plan = _iteration_plan(by_id, dependencies, dependents, groups)
+            order = tuple(
+                member
+                for step in plan
+                for member in (step.members if isinstance(step, IterationGroup) else (step,))
+            )
+            for group in groups:
+                for member, seed in group.seeds:
+                    edges.append(Edge(seed, member, "iteration_seed"))
+                    dependencies[member] = tuple(dict.fromkeys((*dependencies[member], seed)))
+                    if member not in dependents[seed]:
+                        dependents[seed].append(member)
+        else:
+            order = _topological_order(by_id, dependencies, dependents)
+            plan = tuple(order)
         _check_types(by_id, order)
         definitions = {
             node.node_id: canonical_json(dataclasses.replace(node, label=""))
@@ -107,6 +144,8 @@ class ModelGraph:
             _dependencies=MappingProxyType(dependencies),
             _dependents=MappingProxyType({k: tuple(v) for k, v in dependents.items()}),
             definitions=MappingProxyType(definitions),
+            iteration_groups=groups,
+            execution_plan=plan,
         )
 
     def node(self, node_id: str) -> Node:
@@ -125,6 +164,122 @@ class ModelGraph:
 
     def __len__(self) -> int:
         return len(self.nodes)
+
+
+def _components(
+    dependencies: Mapping[str, tuple[str, ...]],
+    dependents: Mapping[str, list[str]],
+) -> tuple[tuple[str, ...], ...]:
+    """Iterative Kosaraju traversal, bounded by graph size rather than Python recursion."""
+    visited: set[str] = set()
+    finished: list[str] = []
+    for start in sorted(dependencies):
+        if start in visited:
+            continue
+        visited.add(start)
+        stack = [(start, 0)]
+        while stack:
+            node_id, cursor = stack[-1]
+            deps = dependencies[node_id]
+            if cursor == len(deps):
+                finished.append(node_id)
+                stack.pop()
+            else:
+                stack[-1] = (node_id, cursor + 1)
+                dep = deps[cursor]
+                if dep not in visited:
+                    visited.add(dep)
+                    stack.append((dep, 0))
+    visited.clear()
+    components: list[tuple[str, ...]] = []
+    for start in reversed(finished):
+        if start in visited:
+            continue
+        members: list[str] = []
+        pending = [start]
+        visited.add(start)
+        while pending:
+            node_id = pending.pop()
+            members.append(node_id)
+            for dependent in dependents[node_id]:
+                if dependent not in visited:
+                    visited.add(dependent)
+                    pending.append(dependent)
+        components.append(tuple(sorted(members)))
+    return tuple(components)
+
+
+def _iteration_plan(
+    by_id: Mapping[str, Node],
+    dependencies: Mapping[str, tuple[str, ...]],
+    dependents: Mapping[str, list[str]],
+    groups: tuple[IterationGroup, ...],
+) -> tuple[str | IterationGroup, ...]:
+    components = _components(dependencies, dependents)
+    cyclic = {
+        members
+        for members in components
+        if len(members) > 1 or members[0] in dependencies[members[0]]
+    }
+    declared: dict[tuple[str, ...], IterationGroup] = {}
+    group_ids: set[str] = set()
+    for group in groups:
+        if group.group_id in group_ids or group.members in declared:
+            raise IterationPolicyError("duplicate iteration group", group_id=group.group_id)
+        group_ids.add(group.group_id)
+        if group.members not in cyclic:
+            raise IterationPolicyError(
+                "group must match exactly one cyclic SCC", group_id=group.group_id
+            )
+        member_set = set(group.members)
+        for member, seed in group.seeds:
+            node = by_id[member]
+            if not isinstance(node, FormulaNode | ExpressionFormulaNode):
+                raise IterationPolicyError(
+                    "only arithmetic formula nodes may iterate",
+                    group_id=group.group_id,
+                    node_id=member,
+                )
+            if seed not in by_id:
+                raise MissingInputError("missing iteration seed", missing=seed, node_id=member)
+            if seed in member_set:
+                raise IterationPolicyError(
+                    "iteration seeds must be external", group_id=group.group_id
+                )
+            _require_unit(node, by_id[seed].unit)
+            _require_same_period(node, by_id[seed])
+        declared[group.members] = group
+    missing = cyclic - declared.keys()
+    if missing:
+        raise CycleError(_find_cycle(set(min(missing)), dependencies))
+    component_of = {member: members[0] for members in components for member in members}
+    prerequisites: dict[str, tuple[str, ...]] = {}
+    successors: dict[str, list[str]] = {members[0]: [] for members in components}
+    steps: dict[str, str | IterationGroup] = {}
+    for members in components:
+        key = members[0]
+        parents = {
+            component_of[ref]
+            for member in members
+            for ref in dependencies[member]
+            if component_of[ref] != key
+        }
+        if members in declared:
+            group = declared[members]
+            parents.update(component_of[seed] for _, seed in group.seeds)
+            steps[key] = group
+        else:
+            steps[key] = key
+        prerequisites[key] = tuple(sorted(parents))
+        for parent in parents:
+            successors[parent].append(key)
+    try:
+        order = _topological_order({key: by_id[key] for key in steps}, prerequisites, successors)
+    except CycleError as exc:
+        raise IterationPolicyError(
+            "seed prerequisites create an execution cycle", cycle=exc.cycle
+        ) from exc
+    return tuple(steps[key] for key in order)
 
 
 def _topological_order(
@@ -253,6 +408,10 @@ def _check_types(by_id: Mapping[str, Node], order: tuple[str, ...]) -> None:
         if isinstance(node, OperationalDriverNode | ReportedFinancialOutputNode):
             _require_unit(node, inputs[0].unit)
             _require_same_period(node, inputs[0])
+        elif isinstance(node, ExpressionFormulaNode):
+            for operand in inputs:
+                _require_period_kind(node, operand)
+            _require_unit(node, infer_formula_unit(node.ast, {p.node_id: p.unit for p in inputs}))
         elif isinstance(node, FormulaNode):
             for operand in inputs:
                 _require_period_kind(node, operand)
