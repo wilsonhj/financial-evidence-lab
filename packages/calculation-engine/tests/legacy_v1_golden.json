@@ -1,0 +1,15 @@
+{
+  "snapshot_id": "sha256:509ab241a5cbfc077fa86fd292f61eecbb35902923d3b65e872ed0f3990aa861",
+  "evaluation_id": "sha256:b37407d22aa6764d34c0e1026d28db83723197cf29ac2cbda139bf2b3225f972",
+  "result_payload_hashes": {
+    "growth": "sha256:221117f47dd3434cac2cfe1476e41560631e195bc8ea0d233d5dbec7f2e4efbe",
+    "one": "sha256:445badd5ab1ba90ac995989d069429fdf79acf41694aee9e5091173e75aa61b4",
+    "growth-factor": "sha256:0be7fe5b5a9e9cabf80373de5123a0a90c3f60814e507ee321ff5cbb1c5ec0c7",
+    "price": "sha256:53b9646c3930c43aa58b1d77fecdc5e903c6e9dffc5364c6a91c92eac3dc48c2",
+    "units-fact": "sha256:c554ec12376110011fb8ca2932c8272e102e967e40f0e4260827b62301d48c79",
+    "units": "sha256:dd02d3df467a7141601c221b0ae6d97226b4001acfe9e5b07378a9be19d1cdc6",
+    "revenue": "sha256:6b90ad40b5c2d17cd4415fca05e8a2cdaf997df39af5c69391d483f78a25cd1b",
+    "reported-revenue": "sha256:2291d037208b7c9d8e60b2badc3fabdb116e78d4ab959cc535e2ad682c5b6703",
+    "revenue-next": "sha256:910a171357781a1756391ef2e208a2313539a6c9de938733d1344848f4d07274"
+  }
+}

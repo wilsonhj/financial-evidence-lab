@@ -130,6 +130,8 @@ def test_claims_come_from_provider_json_and_are_grounded() -> None:
     assert claim.citations[0].quote == "Revenue was $100 million"
     assert claim.numeric == NumericTuple(Decimal("100"), "USD", "FY2026-Q2", 0)
     assert (result.input_tokens, result.output_tokens) == (7, 3)
+    assert result.response_id == "stub-1"
+    assert result.estimated_cost_usd == Decimal("0")
 
 
 def test_numeric_unknowns_are_not_copied_from_the_cited_evidence() -> None:
@@ -465,6 +467,21 @@ def test_illegal_citation_status_rejected() -> None:
             status="supported",
             citations=(ClaimCitation(item_id="i", source_span_id="s", status="bogus"),),
         )
+
+
+def test_illegal_citation_status_rejected_at_edge_construction() -> None:
+    with pytest.raises(ValueError, match="illegal citation status"):
+        ClaimCitation(item_id="i", source_span_id="s", status="bogus")
+
+
+def test_derived_claim_requires_calculation_lineage() -> None:
+    with pytest.raises(ValueError, match="derived claim requires calculation lineage"):
+        GeneratedClaim(ord=0, text="x", status="derived", citations=())
+
+
+def test_numeric_tuple_rejects_unknown_scale() -> None:
+    with pytest.raises(ValueError, match="illegal numeric scale"):
+        NumericTuple(Decimal("1"), "USD", "FY2025", 12)
 
 
 def test_numeric_tuple_sign_is_derived() -> None:

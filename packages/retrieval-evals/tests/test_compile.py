@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +17,7 @@ from fel_retrieval_evals.compile import (
     load_seed,
 )
 from fel_retrieval_evals.corpus import JsonCorpus
+from fel_retrieval_evals.models import NumericAnswer
 
 ACC = "0001628280-26-038798"
 FUTURE_ACC = "0001628280-26-999999"
@@ -89,6 +91,16 @@ def test_range_and_scale_normalisation() -> None:
     answer = entry.expected_answer.to_dict()  # type: ignore[union-attr]
     assert answer["low"] == "729" and answer["high"] == "734"
     assert answer["scale_exponent"] == 6
+
+
+def test_numeric_answer_rejects_inverted_range() -> None:
+    with pytest.raises(ValueError, match="range low .* exceeds high"):
+        NumericAnswer(Decimal("2"), Decimal("1"), "USD", 6, "FY2027")
+
+
+def test_numeric_answer_rejects_unknown_scale_exponent() -> None:
+    with pytest.raises(ValueError, match="unknown scale exponent"):
+        NumericAnswer(Decimal("1"), Decimal("2"), "USD", 12, "FY2027")
 
 
 def test_text_and_negative_records_compile() -> None:

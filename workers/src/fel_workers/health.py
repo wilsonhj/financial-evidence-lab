@@ -9,16 +9,16 @@ that turns it into a status code a platform health check can act on.
 
 Design constraints:
 
-* **Zero coupling to the consumer loop.** ``consumer.py`` is not edited and
-  imports nothing from here. The loop's progress is observed by the
-  entrypoint, which owns a :class:`Liveness` object and hands the loop a
-  callback (``should_continue``) that touches it on every iteration. If the
-  loop stops iterating, the timestamp stops moving.
+* **Queue-backed progress.** Idle loop iterations refresh liveness, while a
+  running handler refreshes it only after its job lease heartbeat succeeds.
+  A failed heartbeat cannot make the process look healthy.
 * **Stdlib only.** :mod:`http.server` on a daemon thread; no framework, no
   dependency, nothing to add to a requirements file.
 * **Fail closed on staleness, not on emptiness.** An idle worker still
   iterates (it sleeps and re-polls), so a stale timestamp means the loop
-  itself is wedged or dead, which is exactly the condition worth restarting.
+  itself is wedged or its heartbeat connection has died, which is the
+  condition worth restarting. A daemon watchdog exits nonzero because
+  Railway's HTTP health check only gates deployment startup.
 
 ``GET /health`` returns ``{"status", "last_heartbeat_age_seconds", "queue"}``
 with 200 while the age is within ``max_age_seconds`` and 503 once it is not.
@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import threading
 import time
 from collections.abc import Callable
@@ -42,8 +43,10 @@ __all__ = [
     "DEFAULT_MAX_HEARTBEAT_AGE_SECONDS",
     "HEALTH_PORT_ENV",
     "Liveness",
+    "LivenessWatchdog",
     "serve_health",
     "start_health_server",
+    "start_liveness_watchdog",
 ]
 
 log = logging.getLogger("fel_workers.health")
@@ -66,10 +69,8 @@ _DEFAULT_HOST = "0.0.0.0"  # noqa: S104  # nosec B104
 class Liveness:
     """Thread-safe last-progress timestamp shared by the loop and the server.
 
-    The consumer loop never sees this class; the entrypoint wraps
-    :meth:`touch` in the ``should_continue`` callback it already passes to
-    ``run_worker``, so one existing hook carries both "keep going?" and
-    "you are alive".
+    The entrypoint passes :meth:`touch` to idle-loop and successful lease
+    heartbeat hooks, so both idle and busy workers provide a progress signal.
     """
 
     def __init__(
@@ -110,6 +111,65 @@ class Liveness:
                 "queue": self._queue,
             },
         )
+
+
+class LivenessWatchdog:
+    """Stop a stale worker process so its supervisor can restart it."""
+
+    def __init__(
+        self,
+        liveness: Liveness,
+        *,
+        max_age_seconds: float,
+        check_interval_seconds: float,
+        exit_process: Callable[[int], object],
+    ) -> None:
+        self._liveness = liveness
+        self._max_age_seconds = max_age_seconds
+        self._check_interval_seconds = check_interval_seconds
+        self._exit_process = exit_process
+        self._stop = threading.Event()
+        self.stale = threading.Event()
+        self._thread = threading.Thread(
+            target=self._run, name="worker-liveness-watchdog", daemon=True
+        )
+
+    def start(self) -> None:
+        self._thread.start()
+
+    def stop(self) -> None:
+        self._stop.set()
+        self._thread.join()
+
+    def _run(self) -> None:
+        while not self._stop.wait(self._check_interval_seconds):
+            if self._liveness.age_seconds() <= self._max_age_seconds:
+                continue
+            self.stale.set()
+            log.critical(
+                "worker liveness stalled for %.3fs; exiting for supervisor restart",
+                self._liveness.age_seconds(),
+            )
+            self._exit_process(1)
+            return
+
+
+def start_liveness_watchdog(
+    liveness: Liveness,
+    *,
+    max_age_seconds: float = DEFAULT_MAX_HEARTBEAT_AGE_SECONDS,
+    check_interval_seconds: float = 1.0,
+    exit_process: Callable[[int], object] = os._exit,
+) -> LivenessWatchdog:
+    """Start the continuous restart signal Railway's startup probe lacks."""
+    watchdog = LivenessWatchdog(
+        liveness,
+        max_age_seconds=max_age_seconds,
+        check_interval_seconds=check_interval_seconds,
+        exit_process=exit_process,
+    )
+    watchdog.start()
+    return watchdog
 
 
 def _make_handler(liveness: Liveness, max_age_seconds: float) -> type[BaseHTTPRequestHandler]:

@@ -1,0 +1,3 @@
+# Build tools run only in the temporary wheel-builder environment.
+setuptools>=68
+wheel

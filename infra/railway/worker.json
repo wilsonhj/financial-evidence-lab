@@ -2,11 +2,12 @@
   "$schema": "https://railway.com/railway.schema.json",
   "build": {
     "builder": "RAILPACK",
-    "buildCommand": "pip install -r requirements.txt && pip install ./packages/providers ./packages/ontology ./workers"
+    "buildCommand": "bash scripts/runtime/install.sh"
   },
   "deploy": {
-    "preDeployCommand": "python scripts/db/migrate.py --check --database-url \"$FEL_DATABASE_URL\"",
-    "startCommand": "python -m fel_workers run",
+    "preDeployCommand": "python scripts/db/migrate.py --check --database-url \"${FEL_MIGRATION_DATABASE_URL:-$FEL_DATABASE_URL}\"",
+    "startCommand": "env -u FEL_MIGRATION_DATABASE_URL FEL_WORKER_DB_ROLE=fel_worker python -m fel_workers run",
+    "healthcheckPath": "/health",
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 3
   }

@@ -47,10 +47,10 @@ Three further, independent opt-ins, all off when unset:
   ``fel_worker`` role instead of the connection's login role. Unset keeps the
   previous behaviour exactly; a value that is not a plain SQL identifier
   exits 2.
-- ``FEL_WORKER_HEALTH_PORT`` (#200) — serve ``GET /health`` (see
-  :mod:`fel_workers.health`). The loop's liveness is observed here, by
-  wrapping the ``should_continue`` callback the consumer already takes, so
-  the consumer loop needs no knowledge of the endpoint.
+- ``FEL_WORKER_HEALTH_PORT`` (#200) — override the Railway ``PORT`` used to
+  serve ``GET /health`` (see :mod:`fel_workers.health`). Idle loop progress
+  and successful job lease heartbeats feed a watchdog that exits stale
+  processes for supervisor restart.
 - ``FEL_SENTRY_DSN`` (#203) — initialise Sentry with PII off (see
   :func:`init_sentry`); the SDK is imported lazily and its absence is a
   warning, not a startup failure.
@@ -70,7 +70,12 @@ from typing import TYPE_CHECKING
 
 import psycopg
 
-from fel_workers.health import HEALTH_PORT_ENV, Liveness, start_health_server
+from fel_workers.health import (
+    HEALTH_PORT_ENV,
+    Liveness,
+    start_health_server,
+    start_liveness_watchdog,
+)
 
 if TYPE_CHECKING:
     from fel_providers.interfaces import SecClient, StorageProvider, StructuredLLMProvider
@@ -376,20 +381,25 @@ def validate_live_user_agent() -> str:
 def resolve_health_port() -> int | None:
     """Port for the ``GET /health`` endpoint, or ``None`` when unset.
 
-    Off by default: a worker with no platform health check has no use for an
-    open socket. A non-numeric or out-of-range value raises rather than being
+    ``FEL_WORKER_HEALTH_PORT`` takes precedence over Railway's injected
+    ``PORT``. Outside a platform that supplies either value, no HTTP socket is
+    opened. A non-numeric or out-of-range value raises rather than being
     ignored — an operator who asked for a health check and silently did not
     get one is worse off than one whose deploy fails loudly (exit 2).
     """
     raw = os.environ.get(HEALTH_PORT_ENV)
+    variable = HEALTH_PORT_ENV
+    if raw is None or not raw.strip():
+        raw = os.environ.get("PORT")
+        variable = "PORT"
     if raw is None or not raw.strip():
         return None
     try:
         port = int(raw.strip())
     except ValueError:
-        raise RuntimeError(f"{HEALTH_PORT_ENV} must be an integer port; got {raw!r}.") from None
+        raise RuntimeError(f"{variable} must be an integer port; got {raw!r}.") from None
     if not 1 <= port <= 65535:
-        raise RuntimeError(f"{HEALTH_PORT_ENV} must be in 1..65535; got {port}.")
+        raise RuntimeError(f"{variable} must be in 1..65535; got {port}.")
     return port
 
 
@@ -496,38 +506,42 @@ def run_main(argv: list[str]) -> int:
         log.error("%s", exc)
         return 2
     init_sentry()
-    # Liveness is owned HERE, not by the consumer loop: the loop already takes
-    # a ``should_continue`` callback, so wrapping it is enough to observe every
-    # iteration without touching consumer.py.
+    # Idle progress comes from should_continue; long-running jobs refresh the
+    # same signal only after their database lease heartbeat succeeds.
     liveness = Liveness(queue=args.queue)
     health_server = start_health_server(liveness, port=health_port)[0] if health_port else None
+    watchdog = start_liveness_watchdog(liveness)
 
     def _alive() -> bool:
         liveness.touch()
         return _running
 
-    with psycopg.connect(database_url, autocommit=True) as conn:
-        # Opt-in least-privilege role for the job path (#190); no-op unless
-        # FEL_WORKER_DB_ROLE is set. Applied here, before the first
-        # statement, so every worker write in this process runs under it.
-        try:
-            apply_worker_db_role(conn)
-        except RuntimeError as exc:
-            log.error("%s", exc)
-            return 2
-        completed = run_worker(
-            conn,
-            storage,
-            sec,
-            queue_name=args.queue,
-            max_iterations=args.max_iterations,
-            should_continue=_alive,
-            structured_llm=structured_llm,
-            extraction_memory_stores=memory_stores,
-        )
-    if health_server is not None:
-        health_server.shutdown()
-        health_server.server_close()
+    try:
+        with psycopg.connect(database_url, autocommit=True) as conn:
+            # Opt-in least-privilege role for the job path (#190); no-op unless
+            # FEL_WORKER_DB_ROLE is set. Applied here, before the first
+            # statement, so every worker write in this process runs under it.
+            try:
+                apply_worker_db_role(conn)
+            except RuntimeError as exc:
+                log.error("%s", exc)
+                return 2
+            completed = run_worker(
+                conn,
+                storage,
+                sec,
+                queue_name=args.queue,
+                max_iterations=args.max_iterations,
+                should_continue=_alive,
+                heartbeat_succeeded=liveness.touch,
+                structured_llm=structured_llm,
+                extraction_memory_stores=memory_stores,
+            )
+    finally:
+        watchdog.stop()
+        if health_server is not None:
+            health_server.shutdown()
+            health_server.server_close()
     log.info("worker run mode finished; %d job(s) completed", completed)
     return 0
 
