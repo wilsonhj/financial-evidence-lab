@@ -1,0 +1,55 @@
+# ADR-0017: Bounded parallel backlog execution
+
+Status: Accepted for execution under the owner's September 9 instruction
+
+Date: 2026-09-09
+
+Occasioned by: #188 and the merged backlog plan in PR #251
+
+## Authorization and scope
+
+The repository owner explicitly requested: "create and implement a plan to
+resolve all open issues in this repo in parallel with /agent-teams
+/dispatching-parallel-agents". This record makes that dispatch concrete. It
+implements the requested parallel scheduling within the existing four-agent
+limit; it does not authorize a new product requirement or waive a release gate.
+
+The initial ready work is #248, #230 and #221. Dependencies for all three are
+already merged. Their existing broad test-path claims are narrowed to the
+actual files/subtrees in workstreams.yaml, so ingestion tests and extraction
+checkpoint tests can execute concurrently without sharing a conftest or helper.
+Their registered branches are retained. One coordinator owns only this
+execution record and shared-path scheduling. Every issue retains its own PR.
+
+## Decisions
+
+- Cap concurrency at three implementers plus the coordinator. Serialize merges
+  and overlapping paths, contracts, migrations and root configuration changes.
+- Start #248 in the named API test files; #230 in the named ingestion race test
+  files; #221 in extraction source and extraction test subtrees. Shared test
+  fixture edits require rescheduling or explicit narrowing before implementation.
+- Use real isolated local/CI PostgreSQL for durable-state proofs; localhost
+  synthetic test identities are not deployed credentials. Never point tests at
+  a production database.
+- Preserve #230's warning-on-timeout behavior; #248 keeps a separately invoked
+  performance measurement while default tests check operation/query invariants.
+- #221 repairs the migration-0006 row output/hash checkpoint atomically, not
+  the obsolete event-payload checkpoint design. Existing immutable identity,
+  fencing and terminal-state rules remain binding.
+- Execute subsequent issues from the merged plan when their prerequisite and
+  path checks pass. Record concrete rulings and ownership before each dispatch.
+  No canonical task checkbox is changed by an implementer.
+
+## Limits and verification
+
+This scheduling decision authorizes implementation and the normal reviewed PR
+integration requested in this session. It does not by itself accept a provider
+substitution, change numerical financial semantics, permit destructive data
+operations, authorize an unknown paid-provider budget, or certify a live gate.
+Those requirements must be satisfied explicitly by their owning issues.
+
+Each behavioral fix requires demonstrated regression failure before the fix,
+focused passing tests, independent review and current required CI. The control
+PR validates unique workstream IDs, resolved acyclic dependencies and pairwise
+non-overlap of the dispatched paths. Durable completion evidence lives in
+GitHub and the execution record, separate from the canonical task ledger.
