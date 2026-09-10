@@ -97,7 +97,7 @@ packages:
     tasks: []
     depends_on: []
     team: integration
-    branch: agent/188-execution-wave3
+    branch: agent/188-execution-wave4
     status: active
     allowed_paths:
       - docs/handoff/execution-2026-09-09.md
@@ -655,7 +655,7 @@ packages:
     depends_on: [WORKER-ROLE-NOTE-REVIEW, ARCH-RUNTIME-DEPS]
     team: platform
     branch: agent/190-worker-role-rollout
-    status: active # Select the existing migration-0008 role in the committed Railway command; hosted adoption remains separately verified.
+    status: merged # PR #265 @ 65f7159; independent restricted-login/startup checks and 47 PostgreSQL tests passed; hosted adoption remains #190 acceptance.
     allowed_paths:
       - infra/railway/worker.json
       - infra/railway/README.md
@@ -788,16 +788,30 @@ packages:
       - .github/workflows/** # shared; integration-lead authorization required
       - apps/api/tests/**
       - workers/tests/**
-  - id: ARCH-CI-OBSERVABILITY # coverage threshold, required-checks manifest, CODEOWNERS, Sentry, Playwright cache
+  - id: ARCH-CI-OBSERVABILITY # measured coverage floors, required checks, browser cache and deployable Sentry
     issue: 203
     tasks: []
-    depends_on: []
+    depends_on: [ARCH-API-HARDENING, ARCH-RUNTIME-DEPS, WORKER-ROLE-ROLLOUT]
     team: platform
-    branch: agent/arch-ci-observability # not yet created
-    status: blocked # PARTIAL and SPLIT ACROSS THREE PLACES, which is why it must not be dispatched as filed. The worker Sentry init landed with PR #242 @ 796525e. The API Sentry init is inside OPEN PR #232 and is not on trunk. RESIDUAL, owned by nothing today: the coverage threshold, the required-checks manifest, the single-person CODEOWNERS, and the Playwright browser cache. Re-scope against trunk after #232 merges rather than reading the issue body as current.
+    branch: agent/203-ci-observability
+    status: active # ADR-0017 residual dispatch; accepted existing Sentry behavior, measured coverage baseline and explicit required checks.
     allowed_paths:
-      - .github/** # shared; integration-lead authorization required
-      - apps/api/**
+      - .github/workflows/ci.yml
+      - .github/required-checks.md
+      - package.json
+      - pnpm-lock.yaml
+      - vitest.config.ts
+      - pyproject.toml
+      - .gitignore
+      - requirements.txt
+      - requirements.lock
+      - requirements-dev.lock
+      - apps/web/playwright.config.ts
+      - apps/api/app/observability.py
+      - apps/api/tests/test_observability.py
+      - workers/src/fel_workers/__main__.py
+      - workers/tests/test_health.py
+      - docs/development/quality-gates.md
   - id: M4-FORMULA-AST # spec 8.5 formula AST + explicitly-modelled iterative cycles
     issue: 219
     tasks: [] # T0411/T0412 reserved; assigned with their canonical additions in #219's PR.
