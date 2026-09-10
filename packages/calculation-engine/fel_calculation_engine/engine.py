@@ -109,6 +109,7 @@ class EvaluationResult:
     results: Mapping[str, CalcResult]
     failed_checks: tuple[str, ...]
     iteration_runs: Mapping[str, IterationRun] = field(default_factory=lambda: MappingProxyType({}))
+    schema: str = field(default=EVALUATION_SCHEMA, metadata={"canonical_omit_default": True})
 
     def result(self, node_id: str) -> CalcResult:
         try:
@@ -496,6 +497,7 @@ def evaluate(
         results=MappingProxyType(results),
         failed_checks=tuple(failed),
         iteration_runs=MappingProxyType(iteration_runs),
+        schema="fel-calc-evaluation/v2" if graph.uses_v2 else EVALUATION_SCHEMA,
     )
 
 

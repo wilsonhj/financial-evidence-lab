@@ -401,6 +401,7 @@ __all__ = [
     "CheckOp",
     "ForecastModelOutputNode",
     "FormulaNode",
+    "ExpressionFormulaNode",
     "LeafNode",
     "Node",
     "NodeKind",

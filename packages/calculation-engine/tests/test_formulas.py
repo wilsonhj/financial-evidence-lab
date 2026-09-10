@@ -192,3 +192,12 @@ def test_unrepresentable_exponent_and_unary_overflow_are_typed_context_independe
                 "x": Quantity(Decimal("1e1000000"), RATIO),
             },
         )
+
+
+def test_evaluation_exposes_the_version_used_in_its_identity():
+    legacy = evaluate(GraphSnapshot.build("legacy", revenue_model()), cutoff=CUTOFF)
+    assert getattr(legacy, "schema", None) == "fel-calc-evaluation/v1"
+    run = evaluate(
+        GraphSnapshot.build("m", [assumption("x", "2"), expression("z", "[x]*2")]), cutoff=CUTOFF
+    )
+    assert run.schema == "fel-calc-evaluation/v2"

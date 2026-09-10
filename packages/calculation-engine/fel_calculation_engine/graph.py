@@ -1,8 +1,8 @@
-"""Dependency edges, structural validation, and cycle detection (T0402, FR-MOD-001).
+"""Dependency edges, structural validation, and explicit cycle execution plans.
 
-Edges are *derived* from :meth:`Node.inputs` so the lineage a node declares and
-the visual graph are the same data. ``ModelGraph.build`` fails closed on
-duplicate ids, dangling references and cycles, and type-checks every derived
+Edges derive from :meth:`Node.inputs` plus explicit group seed prerequisites.
+``ModelGraph.build`` fails closed on duplicate ids, dangling references and
+undeclared cycles, and type-checks every derived
 node against its inputs (unit algebra, period kind, rollup quarters, override
 targets) so a graph that builds is a graph that can be evaluated.
 """
