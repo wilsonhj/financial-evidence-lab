@@ -2006,6 +2006,8 @@ export interface operations {
   getDocumentReader: {
     parameters: {
       query?: {
+        /** @description Explicit parsed target version; must belong to target and agree with any corpus pin. Missing, foreign or excluded versions return uniform 404. */
+        document_version_id?: string;
         /** @description False returns target-only evidence with explicit excluded coverage. */
         include_siblings?: boolean;
         /** @description Opt into sibling page mode; default 10 within page mode. */
@@ -2335,6 +2337,7 @@ export interface operations {
       /** @description One event page. */
       200: {
         headers: {
+          "X-FEL-Page-Limit": components["headers"]["PageLimit"];
           [name: string]: unknown;
         };
         content: {

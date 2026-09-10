@@ -266,6 +266,10 @@ paths:
       security:
         - bearerAuth: []
       parameters:
+        - name: document_version_id
+          in: query
+          description: Explicit parsed target version; must belong to target and agree with any corpus pin. Missing, foreign or excluded versions return uniform 404.
+          schema: { type: string, format: uuid }
         - name: include_siblings
           in: query
           schema: { type: boolean, default: true }
@@ -605,6 +609,9 @@ paths:
       responses:
         "200":
           description: One event page.
+          headers:
+            X-FEL-Page-Limit:
+              $ref: "#/components/headers/PageLimit"
           content:
             application/json:
               schema:

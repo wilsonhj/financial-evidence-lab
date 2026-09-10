@@ -9,6 +9,7 @@ an integrity failure; the API never serves unverifiable evidence.
 from __future__ import annotations
 
 import hashlib
+import json
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
@@ -20,9 +21,11 @@ from pydantic import AwareDatetime
 
 from app.auth import TenantContext
 from app.config import settings
+from app.corpus import require_corpus
 from app.db import tenant_connection
 from app.dependencies import get_tenant_context
 from app.errors import api_error
+from app.pagination import Order, decode_cursor, read_page, scope
 from app.serializers import document_body
 
 router = APIRouter(prefix="/v1", tags=["corpus"])
@@ -35,14 +38,38 @@ _TARGET_DOCUMENT_SQL = """
     WHERE id = %s AND published_at <= %s
 """
 
+# Eligibility and one selected version per sibling precede the page LIMIT.
 _SIBLING_DOCUMENTS_SQL = """
-    SELECT id, entity_id, form, accession, source_url, content_hash,
-           published_at, filed_at, period_start, period_end, ingested_at,
-           valid_from, valid_to
-    FROM documents
-    WHERE entity_id = %s AND id <> %s AND published_at <= %s
-    ORDER BY published_at, accession, id::text COLLATE "C"
+    SELECT d.*, selected.id AS selected_id, selected.canonical_text_key
+    FROM documents d CROSS JOIN LATERAL (
+        SELECT dv.id, dv.canonical_text_key FROM document_versions dv
+        WHERE dv.document_id = d.id AND dv.status = 'parsed'
+        ORDER BY dv.created_at DESC, dv.parser_version COLLATE "C" DESC,
+                 dv.normalizer_version COLLATE "C" DESC, dv.id DESC LIMIT 1
+    ) selected
+    WHERE d.entity_id = %s AND d.id <> %s AND d.published_at <= %s
 """
+_PINNED_SIBLINGS_SQL = """
+    SELECT d.*, selected.version_ids, selected.canonical_keys
+    FROM documents d CROSS JOIN LATERAL (
+        SELECT array_agg(v.id) AS version_ids, array_agg(v.canonical_text_key) AS canonical_keys
+        FROM (
+            SELECT dv.id, dv.canonical_text_key FROM corpus_version_documents cvd
+            JOIN document_versions dv ON dv.id = cvd.document_version_id
+            WHERE cvd.corpus_version_id = %s AND dv.document_id = d.id AND dv.status = 'parsed'
+            ORDER BY dv.id LIMIT 2
+        ) v
+    ) selected
+    WHERE d.entity_id = %s AND d.id <> %s AND d.published_at <= %s
+      AND cardinality(selected.version_ids) > 0
+"""
+
+MAX_SECTIONS = 2000
+MAX_SPANS = 10000
+MAX_FACTS = 10000
+MAX_CANONICAL_BYTES = 16 * 1024 * 1024
+MAX_RESPONSE_BYTES = 32 * 1024 * 1024
+MAX_VERIFIED_BYTES = 32 * 1024 * 1024
 
 _LATEST_PARSED_SQL = """
     SELECT id, document_id, parser_version, normalizer_version,
@@ -74,6 +101,7 @@ _SECTIONS_SQL = """
     FROM sections
     WHERE document_version_id = %s
     ORDER BY ord, id::text COLLATE "C"
+    LIMIT 2001
 """
 
 _ALL_SPANS_SQL = """
@@ -82,6 +110,7 @@ _ALL_SPANS_SQL = """
     FROM source_spans
     WHERE document_version_id = %s
     ORDER BY start_char, end_char, id::text COLLATE "C"
+    LIMIT 10001
 """
 
 _REFERENCED_SPANS_SQL = """
@@ -96,6 +125,7 @@ _REFERENCED_SPANS_SQL = """
             AND ff.source_span_id = ss.id
       )
     ORDER BY ss.start_char, ss.end_char, ss.id::text COLLATE "C"
+    LIMIT 10001
 """
 
 _FACTS_SQL = """
@@ -106,6 +136,7 @@ _FACTS_SQL = """
     FROM financial_facts
     WHERE document_version_id = %s
     ORDER BY id::text COLLATE "C"
+    LIMIT 10001
 """
 
 
@@ -122,6 +153,37 @@ def _integrity_error(reason: str) -> Exception:
     )
 
 
+def _too_large(resource: str, kind: str, limit: int) -> Exception:
+    return api_error(
+        413,
+        "READER_TOO_LARGE",
+        "Reader evidence exceeds a resource limit.",
+        (
+            {
+                "resource": resource,
+                "limit_kind": kind,
+                "limit": limit,
+                "metadata_url": f"/v1/documents/{resource}",
+            }
+            if resource != "canonical_object"
+            else {"resource": resource, "limit_kind": kind, "limit": limit}
+        ),
+    )
+
+
+def _bound(count: int, limit: int, resource: str, kind: str) -> None:
+    if count > limit:
+        raise _too_large(resource, kind, limit)
+
+
+def _json_bytes(body: Any, resource: str, budget: int = MAX_RESPONSE_BYTES) -> int:
+    total = 0
+    for chunk in json.JSONEncoder(ensure_ascii=False, separators=(",", ":")).iterencode(body):
+        total += len(chunk.encode("utf-8"))
+        _bound(total, budget, resource, "response_bytes")
+    return total
+
+
 def _read_canonical_text(key: str) -> str:
     """Read one immutable canonical object without allowing path traversal."""
     configured_root = settings().storage_dir
@@ -132,7 +194,10 @@ def _read_canonical_text(key: str) -> str:
     if not candidate.is_relative_to(root):
         raise _integrity_error("invalid_canonical_text_key")
     try:
-        return candidate.read_bytes().decode("utf-8")
+        with candidate.open("rb") as source:
+            raw = source.read(MAX_CANONICAL_BYTES + 1)
+        _bound(len(raw), MAX_CANONICAL_BYTES, "canonical_object", "canonical_bytes")
+        return raw.decode("utf-8")
     except (OSError, UnicodeDecodeError) as exc:
         raise _integrity_error("canonical_text_unavailable") from exc
 
@@ -247,8 +312,18 @@ def _build_document_block(
 ) -> dict[str, Any]:
     version_id = str(version_row["id"])
     entity_id = str(document_row["entity_id"])
-    canonical_text = _read_canonical_text(version_row["canonical_text_key"])
+    resource = str(document_row["id"])
     section_rows = conn.execute(_SECTIONS_SQL, (version_row["id"],)).fetchall()
+    _bound(len(section_rows), MAX_SECTIONS, resource, "sections")
+    canonical_text = _read_canonical_text(version_row["canonical_text_key"])
+    # Character count is a lower bound for UTF-8; reject repeated section
+    # amplification before allocating any section-sized slices.
+    _bound(
+        sum(max(0, r["end_char"] - r["start_char"]) for r in section_rows),
+        MAX_RESPONSE_BYTES,
+        resource,
+        "section_bytes",
+    )
     if any(str(row["document_version_id"]) != version_id for row in section_rows):
         raise _integrity_error("section_crosses_selected_version")
     section_ids = {str(row["id"]) for row in section_rows}
@@ -257,7 +332,13 @@ def _build_document_block(
         for row in section_rows
     ):
         raise _integrity_error("section_parent_missing")
-    section_bodies = [_section_body(row, canonical_text) for row in section_rows]
+    section_bytes = 0
+    section_bodies = []
+    for row in section_rows:
+        section = _section_body(row, canonical_text)
+        section_bytes += len(section["content"].encode("utf-8"))
+        _bound(section_bytes, MAX_RESPONSE_BYTES, resource, "section_bytes")
+        section_bodies.append(section)
     sections_by_id = {section["id"]: section for section in section_bodies}
 
     if include_sections:
@@ -266,6 +347,23 @@ def _build_document_block(
         span_rows = conn.execute(
             _REFERENCED_SPANS_SQL, (version_row["id"], version_row["id"])
         ).fetchall()
+    _bound(len(span_rows), MAX_SPANS, resource, "spans")
+    _bound(
+        sum(max(0, r["end_char"] - r["start_char"]) for r in span_rows),
+        MAX_VERIFIED_BYTES,
+        resource,
+        "verification_bytes",
+    )
+    verified_bytes = 0
+    for row in span_rows:
+        # At most 64 KiB chars are materialized before checking each increment.
+        for offset in range(
+            max(0, row["start_char"]), min(len(canonical_text), row["end_char"]), 65536
+        ):
+            verified_bytes += len(
+                canonical_text[offset : min(offset + 65536, row["end_char"])].encode()
+            )
+            _bound(verified_bytes, MAX_VERIFIED_BYTES, resource, "verification_bytes")
     spans = [
         _span_body(
             row,
@@ -277,6 +375,7 @@ def _build_document_block(
     ]
     span_ids = {span["id"] for span in spans}
     fact_rows = conn.execute(_FACTS_SQL, (version_row["id"],)).fetchall()
+    _bound(len(fact_rows), MAX_FACTS, resource, "facts")
     facts = [
         _fact_body(row, version_id=version_id, entity_id=entity_id, span_ids=span_ids)
         for row in fact_rows
@@ -308,47 +407,112 @@ def get_document_reader(
     ctx: Annotated[TenantContext, Depends(get_tenant_context)],
     as_of: Annotated[AwareDatetime | None, Query()] = None,
     corpus_version_id: Annotated[uuid.UUID | None, Query()] = None,
+    document_version_id: Annotated[uuid.UUID | None, Query()] = None,
+    include_siblings: Annotated[bool, Query()] = True,
+    sibling_limit: Annotated[int | None, Query(ge=1, le=20)] = None,
+    sibling_cursor: Annotated[str | None, Query(max_length=2048)] = None,
+    sibling_order: Annotated[Order | None, Query()] = None,
 ) -> dict[str, Any]:
-    """Return one cutoff-safe, version-consistent evidence-reader snapshot."""
+    """Complete target evidence plus explicitly bounded related evidence."""
+    continuation = decode_cursor(sibling_cursor) if sibling_cursor is not None else None
+    if continuation and (
+        continuation.scope["endpoint"] != "siblings"
+        or continuation.scope["org_id"] != str(ctx.org_id)
+        or continuation.scope["resource_id"] != str(document_id)
+    ):
+        raise api_error(422, "INVALID_CURSOR", "Invalid continuation for this request.")
+    if continuation:
+        # These are untrusted pins, independently checked against visibility below.
+        if document_version_id is None:
+            document_version_id = uuid.UUID(continuation.scope["target_version_id"])
+        if as_of is None:
+            as_of = datetime.fromisoformat(continuation.scope["as_of"])
     effective_as_of = (as_of or datetime.now(UTC)).astimezone(UTC)
     with tenant_connection(ctx, snapshot_read=True) as conn:
-        if corpus_version_id is not None:
-            corpus = conn.execute(
-                "SELECT status FROM corpus_versions WHERE id = %s", (corpus_version_id,)
-            ).fetchone()
-            if corpus is None or corpus["status"] not in {"active", "superseded"}:
-                raise api_error(
-                    404,
-                    "NOT_FOUND",
-                    "Corpus version not found.",
-                    {"resource": "corpus_version"},
-                )
-
+        require_corpus(conn, corpus_version_id)
         target = conn.execute(_TARGET_DOCUMENT_SQL, (document_id, effective_as_of)).fetchone()
         if target is None:
             raise _not_found()
-        target_version = _select_version(conn, document_id, corpus_version_id)
-        if target_version is None:
+        if document_version_id is not None and corpus_version_id is None:
+            target_version = conn.execute(
+                "SELECT id, canonical_text_key FROM document_versions"
+                " WHERE id = %s AND document_id = %s AND status = 'parsed'",
+                (document_version_id, document_id),
+            ).fetchone()
+        else:
+            target_version = _select_version(conn, document_id, corpus_version_id)
+        if target_version is None or (
+            document_version_id is not None
+            and str(target_version["id"]) != str(document_version_id)
+        ):
             raise _not_found()
-
+        request_scope = scope(
+            "siblings",
+            ctx.org_id,
+            document_id,
+            effective_as_of,
+            corpus_version_id,
+            target_version["id"],
+        )
+        if sibling_cursor is not None:
+            decode_cursor(sibling_cursor, request_scope)
         target_block = _build_document_block(conn, target, target_version, include_sections=True)
-        sibling_rows = conn.execute(
-            _SIBLING_DOCUMENTS_SQL,
-            (target["entity_id"], document_id, effective_as_of),
-        ).fetchall()
+        budget = _json_bytes(target_block, str(document_id))
         sibling_blocks: list[dict[str, Any]] = []
-        for sibling in sibling_rows:
-            sibling_version = _select_version(conn, sibling["id"], corpus_version_id)
-            if sibling_version is not None:
-                sibling_blocks.append(
-                    _build_document_block(conn, sibling, sibling_version, include_sections=False)
-                )
+        page = None
+        if include_siblings:
+            params: tuple[Any, ...] = (target["entity_id"], document_id, effective_as_of)
+            query = _SIBLING_DOCUMENTS_SQL
+            if corpus_version_id is not None:
+                query = _PINNED_SIBLINGS_SQL
+                params = (corpus_version_id, *params)
+            sibling_rows, page = read_page(
+                conn,
+                query=query,
+                params=params,
+                keys=("published_at", "accession", "id"),
+                request_scope=request_scope,
+                limit=sibling_limit,
+                token=sibling_cursor,
+                order=sibling_order,
+                default_limit=10,
+                max_limit=20,
+                legacy_limit=20,
+                force_page=sibling_order is not None,
+            )
+            for sibling in sibling_rows:
+                if corpus_version_id is not None:
+                    if len(sibling["version_ids"]) > 1:
+                        raise _integrity_error("multiple_pinned_versions")
+                    version = {
+                        "id": sibling["version_ids"][0],
+                        "canonical_text_key": sibling["canonical_keys"][0],
+                    }
+                else:
+                    version = {
+                        "id": sibling["selected_id"],
+                        "canonical_text_key": sibling["canonical_text_key"],
+                    }
+                block = _build_document_block(conn, sibling, version, include_sections=False)
+                budget += _json_bytes(block, str(sibling["id"]), MAX_RESPONSE_BYTES - budget)
+                sibling_blocks.append(block)
+        else:
+            page = {
+                "limit": sibling_limit or 10,
+                "returned": 0,
+                "complete": False,
+                "next_cursor": None,
+                "previous_cursor": None,
+            }
         _close_fact_links([target_block, *sibling_blocks])
-
-    return {
+    body = {
         "as_of": effective_as_of.isoformat(),
         "corpus_version_id": str(corpus_version_id) if corpus_version_id else None,
         "selection_policy": "corpus_pinned" if corpus_version_id else "latest_parsed",
         "document": target_block,
         "siblings": sibling_blocks,
     }
+    if page is not None:
+        body["sibling_page"] = {"scope": "page" if include_siblings else "excluded", **page}
+    _json_bytes(body, str(document_id))
+    return body

@@ -32,6 +32,8 @@ Ship the API and actual consumers together. Contract 0.7.0 is next after the
 current 0.6.0; schema shapes remain compatible through optional additions and
 explicit page-mode behavior. No normal in-bound legacy success is partial.
 
+An optional document_version_id selects an explicitly pinned parsed version of the otherwise-visible target; it must belong to that document and agree with any published corpus pin. Missing, foreign-document or visibility-excluded versions retain uniform 404 behavior. When omitted, existing selection rules apply. The selected version is bound into every sibling cursor and retained across target-only and related-page requests.
+
 ### Cursor and SQL mechanics
 
 Use a small typed continuation codec in `app/pagination.py`: canonical JSON
