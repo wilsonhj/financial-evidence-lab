@@ -4,53 +4,33 @@ This directory is the restart point for all implementation agents. Fable must be
 
 ## Current state
 
-- Trunk is `a4bb356` (PR #174). This block was last reconciled 2026-08-30. The
-  revision it replaces on trunk was pinned to `ace7b83` by PR #168 @ `64eb571`
-  — `ace7b83` is PR #165's merge commit, not #168's — and was wrong
-  within hours of the merges that followed it, so re-resolve against
-  `origin/main` rather than trusting this line.
-- Specification (v1.2) and architecture (ADR-0002) are approved. Contracts are
-  frozen at OpenAPI `v0.4.0` with migrations through `0005`.
-- `main` is the only implementation base; `integration/m0` is retired. Every
-  push and PR is CI-gated.
-- **The project is Apache-2.0, not MIT.** PR #166 @ `5394c64` relicensed it and
-  added a `NOTICE` file; `LICENSE` is byte-identical to the canonical
-  Apache-2.0 text. Contributions carry the patent grant and the NOTICE
-  obligation.
-- M0, M1 and M2 are complete. The M3 core landed as `M3-EXTRACTION-CORE` (#60,
-  PR #145 @ `61058e4`), with follow-up fixes in #156, #160, #170 (#169),
-  #162 (#155, the orphaned normalize modules — now wired in), and #174 (#171,
-  segment-sum over-suppression).
-- `EVALS-REPORT-RENDER` (#151) merged as PR #164 @ `a23514e`; its entry read
-  `ready` from that 2026-08-11 merge until PR #172 merged at `ebe77af`
-  (2026-08-31) and flipped it, so an agent reading the queue anywhere in
-  that window could have re-taken finished work. `M4-MODEL-CALC` (#63) now reads
-  `status: ready`. Open PRs are #172 (this ledger), #173 (004-mvp-completion),
-  and #175 (ADR-0011 ratification). Re-run `gh pr list --state open`. Do not
-  infer dispatchability from a stale `ready` — confirm the issue is open on
-  GitHub first.
-- `M4-MODEL-CALC` (#63) is `ready`: its only dependency is merged,
-  `packages/calculation-engine/**` overlaps nothing in flight, and credentials
-  stay mock-only — this reconciliation **adds** the key. `M3-REVIEW` (#61)
-  stays `status: blocked` on three holds: ratification of ADR-0011 (PR #175,
-  Accepted on that PR), migration 0006 via #157 before SSE exposure, and
-  unimplemented #146 Option 1 (terminal runs final, ruled 2026-08-29) as a
-  producer gate. `M3-CONFIDENCE-GATE` (#62) is genuinely not unblocked — it
-  `depends_on: [M3-REVIEW]`.
-- Integration lead ruled ADR-0011 over ADR-0009; ratification is PR #175
-  (Accepted on that PR). Do not expose SSE until migration 0006 lands via
-  #157. #146 Option 1 (terminal runs final) was ruled 2026-08-29 but is not
-  yet implemented. ADR-0010 (PR #165) remains **Proposed** and ratifies nothing.
-- Provider credentials are intentionally unavailable. Work stays mock-first;
-  hosted smoke (#108) credentials are not provisioned.
-- Trunk health: `main` @ `a4bb356` is **green** — all five GitHub Actions check
-  runs pass. #171 is closed (fixed by #174). The `audit-bulk` red at `ace7b83`
-  (`js-yaml` GHSA-5p4m-2wfm-xmqj, `nanoid` GHSA-2v37-7h3g-55p8) was fixed by
-  PR #167 @ `7eba341`, so a red branch is now your own doing. Ignore the
-  `cursor`, `claude`, `supabase` and `vercel` check *suites*: they sit
-  permanently `queued` and never resolve, which makes green trunk look pending.
+Resolve the live queue from GitHub, then read [`STATUS.md`](STATUS.md) and
+[`workstreams.yaml`](workstreams.yaml). Those files include dated evidence;
+do not infer current dispatchability from a historical commit or issue list.
+The [September 9 issue audit](../research/2026-09-09-open-issue-audit.md) and
+[resolution plan](../superpowers/plans/2026-09-09-backlog-resolution.md) distinguish
+merged implementations from outstanding acceptance evidence.
 
-Read `STATUS.md` for live state and `workstreams.yaml` for the authoritative dependency graph. External agents doing parallel preparation work start from `EXTERNAL_AGENT_BRIEF.md`.
+- `main` is the implementation base; `integration/m0` is retired. Use one
+  issue/branch/worktree per implementation and required CI before merge.
+- The project is Apache-2.0 with NOTICE obligations. The parent specification
+  remains version 1.2; the accepted stack is defined by ADR-0002.
+- Read `packages/contracts/openapi/openapi.yaml` for the current contract
+  version, and the migration ledger/applier for applied database state. Never
+  infer either from this restart document.
+- M3 core, terminal-run semantics and migration 0006 are merged. M4's Decimal
+  engine package #63 is merged. Review/calibration, model product workflows,
+  forecasting and release acceptance remain separate work.
+- A merged M1/M2 package does not prove the live corpus or retrieval exit gate.
+  #56/#132/#177 and hosted reader #108 own the remaining live evidence. #96 is
+  a tracker for #108's production-path criterion, not a package to redispatch.
+- Provider preparation remains mock-first. Request credentials by name only
+  when the scoped live test is ready. ADR-0012 is Proposed and does not replace
+  the accepted OpenAI baseline. A fixture or abandoned-branch comment cannot
+  authorize a provider substitution or establish deployment readiness.
+- Follow the dispatch checklist below. An explicit blocked entry is not
+  permission to work merely because a historical blocker has cleared; confirm
+  dependencies, path ownership and the current lead registration first.
 
 ## Source of truth
 
