@@ -231,7 +231,8 @@ def test_terminal_failure_is_not_rescheduled(conn: psycopg.Connection) -> None:
     assert row is not None
     assert row[0] == "failed"
     assert row[2] is not None
-    assert row[1] <= datetime.now(UTC)
+    # Both timestamps come from the same database statement: no retry delay.
+    assert row[1] == row[2]
 
 
 # --- Reaping an exhausted claim (#189) ------------------------------------
