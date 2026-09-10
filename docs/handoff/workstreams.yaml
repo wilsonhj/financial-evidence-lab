@@ -92,6 +92,18 @@ defaults:
 # two packages with overlapping paths concurrently: overlap is resolved by
 # time, not ownership.
 packages:
+  - id: BACKLOG-EXECUTION-CONTROL
+    issue: 188
+    tasks: []
+    depends_on: []
+    team: integration
+    branch: agent/188-parallel-execution
+    status: active
+    allowed_paths:
+      - docs/handoff/execution-2026-09-09.md
+      - docs/handoff/workstreams.yaml
+      - docs/decisions/ADR-0017-parallel-backlog-execution.md
+      - docs/superpowers/plans/2026-09-09-backlog-resolution.md
   - id: PLATFORM-NODE24
     issue: 249
     tasks: [] # Runtime maintenance; canonical task completion is unchanged.
@@ -767,23 +779,30 @@ packages:
     depends_on: [EXTRACTION-STEPS-OUTPUT]
     team: extraction
     branch: agent/arch-checkpoint-rerun # not yet created
-    status: blocked # Before live activation, reproduce against the migration-0006 row-output store: load_succeeded reads output/output_hash on the step row, not an event. _insert_step_row still uses ON CONFLICT DO NOTHING. A repair must atomically persist the new output/hash/usage while preserving identity pins, then pass a fresh-store resume test with a non-deterministic provider. Do not assume deterministic corrupt-row repair is safe without testing it. Sequence before #195 live activation and #177; no event-payload checkpoint restoration.
+    status: active # Owner-authorized parallel execution, ADR-0017; September 9 session.
     allowed_paths:
       - workers/src/fel_workers/extraction/**
-      - workers/tests/**
+      - workers/tests/extraction/**
+
   - id: TEST-PUBLISH-RACE-WAIT # the publish-race wait loop falls through silently
     issue: 230
     tasks: []
     depends_on: []
     team: trust
     branch: agent/test-publish-race-wait # not yet created
-    status: blocked # Filed out of the review of PR #225 @ 443c861, which scoped the lock wait to this database and closed #205's flake. The residual is narrower: on the timeout path the loop emits nothing, so a wait that never detects the block reads as a pass. Small, self-contained, no shared path, no ADR, no migration.
-    allowed_paths: [workers/tests/**]
+    status: active # Owner-authorized parallel execution, ADR-0017; September 9 session.
+    allowed_paths:
+      - workers/tests/test_ingestion_pipeline.py
+      - workers/tests/test_publish_race_wait.py
+
   - id: TEST-QUERY-P95-FLAKE # test_create_query_p95_smoke asserts wall-clock latency
     issue: 248
     tasks: []
     depends_on: []
     team: trust
     branch: agent/test-query-p95-flake # not yet created
-    status: blocked # Newest issue in the file (opened 2026-09-06). A wall-clock assertion in a functional suite fails under host load, which is a flaky gate rather than a performance signal. Same class as #205 and #230.
-    allowed_paths: [apps/api/tests/**]
+    status: active # Owner-authorized parallel execution, ADR-0017; September 9 session.
+    allowed_paths:
+      - apps/api/tests/test_retrieval_api.py
+      - apps/api/tests/test_query_performance_contract.py
+      - apps/api/PERFORMANCE.md
