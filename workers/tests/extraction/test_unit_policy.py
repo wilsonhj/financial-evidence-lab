@@ -141,3 +141,56 @@ def test_new_conflict_namespace_and_unchanged_proposal_algorithm():
         .proposals[0]
         .id
     )
+
+
+@pytest.mark.parametrize(
+    "payloads",
+    [
+        [
+            kpi("revenue", "1000"),
+            kpi("cogs", "300", unit="usd"),
+            kpi("gross_profit", "700", unit="Usd"),
+        ],
+        [kpi("rpo", "1000"), kpi("crpo", "500", unit="usd")],
+        [
+            kpi("arr", "1000"),
+            kpi("arr", "400", unit="usd", dimensions={"segment": "a"}),
+            kpi("arr", "600", unit="Usd", dimensions={"segment": "b"}),
+        ],
+    ],
+)
+def test_valid_mixed_case_identities_stay_clean(payloads):
+    assert identity_errors(payloads) == {}
+
+
+@pytest.mark.parametrize("other_unit", ["USD/yr", "usd/Mo", "EUR/mo"])
+def test_rate_denominators_do_not_create_cross_slice_identity_errors(other_unit):
+    assert (
+        identity_errors([kpi("rpo", "100", unit="usd/mo"), kpi("crpo", "900", unit=other_unit)])
+        == {}
+    )
+
+
+def test_fixed_payload_and_conflict_golden_vectors():
+    from fel_workers.extraction.validate.duplicates import conflict_key_for
+
+    payload = {
+        "kind": "guidance",
+        "metric_id": "revenue",
+        "unit": "usd",
+        "value": "1000",
+        "raw_value": "$1,000",
+        "scale": 0,
+        "currency": "USD",
+    }
+    draft = validate_proposals(run_id="fixed-run", payloads=[payload]).proposals[0]
+    assert (
+        draft.raw_payload_hash
+        == "sha256:3fd0951660c05efff12606776d9bce96ae4298c4bcb2ca3c77712d7b344aa36f"
+    )
+    assert draft.id == "08309c7e-edc6-40ed-af68-f97be3f731bc"
+    assert (
+        conflict_key_for(payload)
+        == "sha256:378d5e510187a4dec7a0a39960edca24a7432c239c65226055d00e410ba18603"
+    )
+    assert draft.payload == payload

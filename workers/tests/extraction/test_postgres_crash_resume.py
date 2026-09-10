@@ -1590,6 +1590,18 @@ def test_legacy_succeeded_checkpoints_cannot_bypass_version_gate(extraction_db_u
     from fel_workers.extraction import workflow
 
     request = replace(_request(str(uuid.uuid4())), workflow_version="extraction-workflow/v1")
+    original_inputs = workflow._stage_input_payload
+
+    def legacy_inputs(state, stage):
+        payload = original_inputs(state, stage)
+        if stage in {"normalize", "validate"}:
+            payload = {
+                k: v
+                for k, v in payload.items()
+                if k not in {"unit_policy_version", "normalizer_version", "validator_version"}
+            }
+        return payload
+
     original_commit = workflow._commit_stage
 
     def commit(ctx, **kwargs):
@@ -1605,6 +1617,7 @@ def test_legacy_succeeded_checkpoints_cannot_bypass_version_gate(extraction_db_u
         with monkeypatch.context() as old:
             old.setattr(workflow, "WORKFLOW_VERSION", "extraction-workflow/v1")
             old.setattr(workflow, "_commit_stage", commit)
+            old.setattr(workflow, "_stage_input_payload", legacy_inputs)
             with pytest.raises(_ProcessDeath):
                 run_extraction_workflow(
                     WorkflowState(request=request), _postgres_deps(conn, _CountingLLM())
@@ -1653,17 +1666,32 @@ def test_policy_namespace_preserves_old_adjudication_and_replay_guard(extraction
         p["dimensions"] = {"test_slice": request.run_id}
         p["evidence"] = []
     result = validate_proposals(run_id=request.run_id, payloads=payloads)
+    old_request = replace(_request(str(uuid.uuid4())), workflow_version="extraction-workflow/v1")
+    historical = validate_proposals(
+        run_id=old_request.run_id, payloads=[dict(p, unit="USD") for p in payloads]
+    )
+    for proposal in historical.proposals:
+        proposal.validation_summary.pop("unit_policy_version")
+        proposal.validation_summary["validator_version"] = "validate/v1"
     legacy_identity = comparability_key_for(payloads[0])
     legacy = ConflictDraft(
         conflict_key=hash_json(legacy_identity),
         reason_codes=["value_disagreement"],
-        member_proposal_ids=[p.id for p in result.proposals],
+        member_proposal_ids=[p.id for p in historical.proposals],
     )
     with psycopg.connect(extraction_db_url, autocommit=True) as conn:
         _seed_parents(conn)
         _seed_run(conn, request)
+        _seed_run(conn, old_request)
         store = PostgresPersistStore(conn)
         store.mark_running(run_id=request.run_id, org_id=_ORG)
+        store.mark_running(run_id=old_request.run_id, org_id=_ORG)
+        store.persist_proposals(
+            run_id=old_request.run_id,
+            org_id=_ORG,
+            workspace_id=_WORKSPACE,
+            drafts=historical.proposals,
+        )
         store.persist_proposals(
             run_id=request.run_id, org_id=_ORG, workspace_id=_WORKSPACE, drafts=result.proposals
         )
