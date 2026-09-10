@@ -53,3 +53,24 @@ addopts = "-q --import-mode=importlib"
 
 [tool.bandit]
 exclude_dirs = ["tests", ".venv"]
+
+[tool.coverage.run]
+branch = true
+source = [
+    "apps/api/app",
+    "workers/src/fel_workers",
+    "evals",
+    "packages/providers/fel_providers",
+    "packages/retrieval/fel_retrieval",
+    "packages/retrieval-evals/fel_retrieval_evals",
+    "packages/ontology/fel_ontology",
+    "packages/calculation-engine/fel_calculation_engine",
+    "scripts/db",
+    "scripts/runtime",
+]
+omit = ["*/tests/*"]
+
+[tool.coverage.report]
+fail_under = 88.41
+precision = 2
+show_missing = true

@@ -13,6 +13,8 @@ from fel_workers.extraction.hashing import hash_json, proposal_id_for, sha256_he
 from fel_workers.extraction.types import (
     NON_MAGNITUDE_NORMALIZER_BLOCKERS,
     NORMALIZER_BLOCKERS_KEY,
+    NORMALIZER_VERSION,
+    RANGE_POLICY_VERSION,
     VALIDATOR_VERSION,
     ConflictDraft,
     ExtractionMode,
@@ -243,6 +245,8 @@ def _build_draft(
         field_confidences={},
         validation_summary={
             "unit_policy_version": UNIT_POLICY_VERSION,
+            "range_policy_version": RANGE_POLICY_VERSION,
+            "normalizer_version": NORMALIZER_VERSION,
             "validator_version": VALIDATOR_VERSION,
             "ok": not blockers,
             "blockers": blockers,

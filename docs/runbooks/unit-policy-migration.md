@@ -1,5 +1,10 @@
 # Unit comparison policy deployment
 
+The current producer target is `extraction-workflow/v3`; follow the
+[signed guidance range rollout](guidance-range-policy-migration.md). The v2
+instructions below describe the original unit-policy release and remain relevant
+only to its pinned historical runs. `unit-comparison/v1` is unchanged.
+
 ADR-0019 introduces `unit-comparison/v1`, `validate/v2` and
 `extraction-workflow/v2`. The normalizer stays `normalize/v1`; normalize and
 validate checkpoint inputs explicitly include their component and policy pins.

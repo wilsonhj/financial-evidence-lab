@@ -28,6 +28,8 @@ def check_range(payload: dict[str, Any]) -> list[str]:
         high = Decimal(str(payload["high"]))
     except (InvalidOperation, KeyError, TypeError, ValueError):
         return ["range_bounds_not_decimal"]
+    if not low.is_finite() or not high.is_finite():
+        return ["range_bounds_not_decimal"]
     if low > high:
         return ["range_low_gt_high"]
     return []
@@ -35,7 +37,11 @@ def check_range(payload: dict[str, Any]) -> list[str]:
 
 def range_errors(payload: dict[str, Any]) -> list[str]:
     """Decimal-field and scale plausibility blockers for the live validate path."""
-    errors: list[str] = []
+    messages = {
+        "range_low_gt_high": "guidance range low must be <= high",
+        "range_bounds_not_decimal": "guidance range low/high not decimal",
+    }
+    errors = [messages[code] for code in check_range(payload)]
     for key in ("value", "low", "high"):
         if key not in payload:
             continue

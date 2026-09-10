@@ -15,9 +15,10 @@ StepStatus = Literal["pending", "running", "succeeded", "failed", "skipped", "ca
 ProposalState = Literal["proposed", "needs_review", "accepted", "rejected", "superseded"]
 ReviewPriority = Literal["normal", "high"]
 
-WORKFLOW_VERSION = "extraction-workflow/v2"
-NORMALIZER_VERSION = "normalize/v1"
-VALIDATOR_VERSION = "validate/v2"
+WORKFLOW_VERSION = "extraction-workflow/v3"
+NORMALIZER_VERSION = "normalize/v2"
+VALIDATOR_VERSION = "validate/v3"
+RANGE_POLICY_VERSION = "guidance-range-order/v1"
 
 # Internal normalizer metadata key carrying blockers the normalizer detected
 # without aborting (a declared scale or sign that contradicts the value). The
@@ -218,6 +219,7 @@ __all__ = [
     "NORMALIZER_VERSION",
     "ProposalDraft",
     "ProposalState",
+    "RANGE_POLICY_VERSION",
     "ReviewPriority",
     "Role",
     "RunStatus",

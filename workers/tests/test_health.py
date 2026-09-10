@@ -216,6 +216,8 @@ def test_sentry_init_pins_pii_off_and_reads_the_sample_rate(
     assert fake.kwargs == {
         "dsn": "https://public@sentry.invalid/1",
         "send_default_pii": False,
+        "include_local_variables": False,
+        "max_request_body_size": "never",
         "traces_sample_rate": 0.25,
     }
 
@@ -233,7 +235,7 @@ def test_sentry_traces_default_to_zero(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_missing_sdk_warns_instead_of_failing_the_worker(
     monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """sentry-sdk is not a worker dependency; a DSN without it must not crash
+    """A custom install missing sentry-sdk must not crash when a DSN is set;
     the process — but it must not pass silently either, or an operator
     believes errors are reported when nothing is."""
     monkeypatch.setenv("FEL_SENTRY_DSN", "https://public@sentry.invalid/1")
