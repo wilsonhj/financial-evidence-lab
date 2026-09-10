@@ -107,3 +107,9 @@ DSN means no initialization. No additional CODEOWNER may be invented, and
 hosted telemetry acceptance requires the approved environment. Root config and
 lock changes are narrowly authorized for this issue; no contracts or numerical
 semantics change. These paths do not overlap #153 or #219 implementation.
+
+#266 test-only ruling: #203's real PostgreSQL baseline reproduced the terminal
+failure test's database/host clock comparison (133 ms skew). Assert unchanged
+persisted `available_at` across terminal failure instead. Preserve production
+queue code and existing status/finished-time checks. The single test file is
+disjoint from #153 extraction tests and #203 health tests.
