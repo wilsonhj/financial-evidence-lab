@@ -1,7 +1,9 @@
 # Financial Evidence Lab: open-backlog resolution specification
 
-Date: 2026-09-09 (America/Los_Angeles)  
-Review baseline: `75fad38de5745ed879d3b36227c2ffe006048456`  
+Date: 2026-09-09 (America/Los_Angeles)
+
+Review baseline: `75fad38de5745ed879d3b36227c2ffe006048456`
+
 Tracking umbrella: [#188](https://github.com/wilsonhj/financial-evidence-lab/issues/188)
 
 This is a review specification subordinate to
