@@ -724,14 +724,24 @@ packages:
     tasks: []
     depends_on: []
     team: platform
-    branch: cherry/200-runtime-and-health
-    status: blocked # PARTIAL, not merged. PR #242 @ 796525e (2026-09-05) landed two of #200's four: requirements.txt now holds the five actual runtime dependencies and both Railway buildCommands install from it, and workers/src/fel_workers/health.py plus a worker Sentry init exist. RESIDUAL: unlocked dependency closure and deployed healthcheck/recovery wiring. httpx2 is already absent; worker health.py exists but infra/railway/worker.json does not configure healthcheckPath. #242 also introduced a defect it did not carry the fix for — a preDeployCommand naming scripts/db/migrate.py, which did not exist until PR #247 @ 75fad38 supplied it; that is fixed, recorded here so the sequence is not rediscovered.
+    branch: agent/200-locked-runtime
+    status: queued # ADR-0017: hashed dependency closure and health/recovery residuals. #242 split runtime/dev; httpx2 already absent; #247 fixed migration-applier prerequisite.
     allowed_paths:
       - requirements.txt
       - requirements-dev.txt
-      - infra/railway/**
-      - workers/src/fel_workers/**
-      - workers/tests/**
+      - requirements.lock
+      - requirements-dev.lock
+      - infra/railway/api.json
+      - infra/railway/worker.json
+      - apps/api/pyproject.toml
+      - workers/pyproject.toml
+      - packages/*/pyproject.toml
+      - scripts/runtime/**
+      - .github/workflows/ci.yml
+      - workers/src/fel_workers/health.py
+      - workers/src/fel_workers/__main__.py
+      - workers/tests/test_health.py
+      - workers/tests/test_entrypoint.py
   - id: ARCH-RETRIEVAL-GATE # executable retrieval release gate over the benchmark seed
     issue: 201
     tasks: []
