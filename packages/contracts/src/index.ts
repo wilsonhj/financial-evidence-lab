@@ -5,6 +5,7 @@ export const SCHEMA_IDS = {
   sourceSpan: "https://contracts.fel.dev/schemas/source-span/v1",
   financialFact: "https://contracts.fel.dev/schemas/financial-fact/v1",
   claim: "https://contracts.fel.dev/schemas/claim/v1",
+  claimsOutput: "https://contracts.fel.dev/schemas/claims-output/v1",
   citation: "https://contracts.fel.dev/schemas/citation/v1",
   jobEnvelope: "https://contracts.fel.dev/schemas/job-envelope/v1",
   tenantContext: "https://contracts.fel.dev/schemas/tenant-context/v1",
@@ -18,4 +19,4 @@ export const SCHEMA_IDS = {
   extractionPayload: "https://contracts.fel.dev/schemas/extraction-payload/v1",
 } as const;
 
-export const CONTRACT_VERSION = "0.5.0" as const;
+export const CONTRACT_VERSION = "0.6.0" as const;

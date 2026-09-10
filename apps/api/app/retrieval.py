@@ -85,6 +85,7 @@ from fel_retrieval import (
 from fel_retrieval.generation import (
     ContextItem,
     GeneratedClaim,
+    GenerationContractError,
     NumericTuple,
     StructuredClaimGenerator,
 )
@@ -467,7 +468,17 @@ def _execute_pipeline(
     generator = StructuredClaimGenerator(
         _resolve_generation_provider(GENERATION_PROVIDER, GENERATION_MODEL)
     )
-    generation = generator.generate(plan["variants"][0], context, as_of=plan["effective_as_of"])
+    generation_rejection_code: str | None = None
+    try:
+        generation = generator.generate(plan["variants"][0], context, as_of=plan["effective_as_of"])
+    except GenerationContractError as exc:
+        # The provider already performed the generation: retain its usage and
+        # the selected evidence even though none of its claims can be admitted.
+        # Missing usage denotes a failure outside that completed-call seam.
+        if exc.usage is None:
+            raise
+        generation = exc.usage
+        generation_rejection_code = exc.code
     # Capture reported usage before verification or database writes can fail.
     usage.cost_usd = token_cost_usd(
         settings(),
@@ -519,7 +530,19 @@ def _execute_pipeline(
     # Missing supporting evidence yields abstention; a contradicted claim is
     # preserved and displayed (the run still succeeds).
     if should_abstain(claims):
-        writer.emit("run_abstained", {"reason": "insufficient_evidence"})
+        abstention = {"reason": "insufficient_evidence"}
+        if generation_rejection_code is not None:
+            abstention = {
+                "reason": "generation_contract_invalid",
+                "code": generation_rejection_code,
+            }
+        elif generation.refused:
+            abstention = {"reason": "provider_refused"}
+        elif generation.abstained:
+            # The model's free-form reason may contain source/model text. Only
+            # the typed disposition belongs in the persisted trace event.
+            abstention = {"reason": "model_abstained"}
+        writer.emit("run_abstained", abstention)
         writer.finish_abstained(budget_usage=budget_usage, timings_ms=timings_ms, cost_usd=cost_usd)
     else:
         writer.emit("run_completed", {"status": "succeeded"})

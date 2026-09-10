@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Financial Evidence Lab API
-  version: 0.5.0
+  version: 0.6.0
   description: >-
     Frozen v1 contract surface (ADR-0001). This file seeds the M0 freeze:
     conventions (error envelope, idempotency, optimistic concurrency,
