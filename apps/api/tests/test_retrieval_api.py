@@ -521,7 +521,14 @@ def test_explicit_model_abstention_is_distinct_and_does_not_log_model_reason(
     trace = response.json()
     assert trace["status"] == "abstained"
     assert trace["claims"] == []
-    assert trace["events"][-1]["payload"] == {"reason": "model_abstained"}
+    payload = trace["events"][-1]["payload"]
+    assert payload["reason"] == "model_abstained"
+    assert set(payload["generation"]) == {
+        "provider",
+        "model",
+        "response_id",
+        "estimated_cost_usd",
+    }
     assert trace["budget_usage"]["input_tokens"] == 17
     assert trace["budget_usage"]["output_tokens"] == 9
     assert "MODEL_PRIVATE_REASON" not in response.text
