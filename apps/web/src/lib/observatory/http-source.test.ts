@@ -16,7 +16,7 @@ const BASE_URL = "https://api.example.test/";
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "X-FEL-Page-Limit": "50" },
   });
 }
 
@@ -211,4 +211,31 @@ describe("event stream body", () => {
     const { value } = await reader.read();
     expect(new TextDecoder().decode(value)).toContain("data:");
   });
+});
+
+it("preserves the question and complete plan while paging only run history", async () => {
+  const fetchImpl = vi.fn(
+    async () =>
+      new Response(
+        JSON.stringify({ ...MOCK_QUERY_SNAPSHOT, runs: [MOCK_QUERY_SNAPSHOT.runs[0]] }),
+        { headers: { "X-FEL-Page-Limit": "1", "X-FEL-Next-Cursor": "next" } },
+      ),
+  );
+  const page = await makeSource(fetchImpl as unknown as typeof fetch).getQuery(MOCK_QUERY_ID, {
+    limit: 1,
+  });
+  expect(page.question).toBe(MOCK_QUERY_SNAPSHOT.question);
+  expect(page.plan).toEqual(MOCK_QUERY_SNAPSHOT.plan);
+  expect(page.runPage.nextCursor).toBe("next");
+  expect(page.runs).toEqual(page.runPage.items);
+});
+
+it("rejects event-history frames belonging to another run", async () => {
+  const event = { ...MOCK_TRACE.events[0]!, run_id: "wrong-run" };
+  const source = makeSource(async () =>
+    jsonResponse({ run_id: MOCK_RUN_ID, items: [event], next_cursor: null, previous_cursor: null }),
+  );
+  await expect(source.getEventHistory(MOCK_RUN_ID)).rejects.toBeInstanceOf(
+    ObservatoryContractError,
+  );
 });

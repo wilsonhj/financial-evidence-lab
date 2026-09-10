@@ -8,9 +8,13 @@ import type {
 import type { CitationIntegrityFailure } from "./citation-integrity";
 import { verifySpanIntegrity } from "./citation-integrity";
 import type { EvidenceSource } from "./data";
+import type { ReaderPageOptions } from "./data/evidence-source";
 
 export interface ReaderData {
   document: DocumentMeta;
+  documentVersionId: string;
+  documentVersionIdByDocumentId: Record<string, string>;
+  siblingPage?: ReaderResponse["sibling_page"];
   documents: DocumentMeta[];
   /** Only the target's sections; siblings deliberately omit canonical content. */
   sections: SectionRecord[];
@@ -48,8 +52,9 @@ function toSectionRecord(section: ReaderResponse["document"]["sections"][number]
 export async function loadReaderData(
   source: EvidenceSource,
   documentId: string,
+  options: ReaderPageOptions = { includeSiblings: false },
 ): Promise<ReaderLoadResult> {
-  const response = await source.getReader(documentId);
+  const response = await source.getReader(documentId, options);
   if (!response) return { kind: "not_found" };
 
   const target = response.document;
@@ -75,6 +80,11 @@ export async function loadReaderData(
     kind: "ready",
     data: {
       document: target.meta,
+      documentVersionId: target.document_version_id,
+      documentVersionIdByDocumentId: Object.fromEntries(
+        [target, ...response.siblings].map((block) => [block.meta.id, block.document_version_id]),
+      ),
+      siblingPage: response.sibling_page,
       documents,
       sections,
       spans: [...targetVerification.verified, ...siblingSpans],

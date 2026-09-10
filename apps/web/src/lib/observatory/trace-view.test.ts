@@ -178,7 +178,7 @@ describe("readerHref", () => {
     const map = { "aaaaaaaa-0000-4000-8000-000000001001": "aaaaaaaa-0000-4000-8000-000000000001" };
     const href = readerHref(candidate({}), map);
     expect(href).toBe(
-      "/reader/aaaaaaaa-0000-4000-8000-000000000001?span=cccccccc-0000-4000-8000-000000000001",
+      "/reader/aaaaaaaa-0000-4000-8000-000000000001?span=cccccccc-0000-4000-8000-000000000001&document_version_id=aaaaaaaa-0000-4000-8000-000000001001",
     );
     expect(readerHref(candidate({ document_version_id: "unknown" }), map)).toBeNull();
   });
@@ -188,7 +188,7 @@ describe("readerHref", () => {
     const citationSpan = "cccccccc-0000-4000-8000-0000000000ff";
     const href = readerHref(candidate({}), map, citationSpan);
     expect(href).toBe(
-      "/reader/aaaaaaaa-0000-4000-8000-000000000001?span=cccccccc-0000-4000-8000-0000000000ff",
+      "/reader/aaaaaaaa-0000-4000-8000-000000000001?span=cccccccc-0000-4000-8000-0000000000ff&document_version_id=aaaaaaaa-0000-4000-8000-000000001001",
     );
     // Never the candidate's own (different) span.
     expect(href).not.toContain("cccccccc-0000-4000-8000-000000000001");

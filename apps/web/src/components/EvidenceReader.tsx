@@ -47,6 +47,9 @@ export interface EvidenceReaderProps {
    * link, `?span=`). Ignored unless it belongs to this document.
    */
   initialSpanId?: string | null;
+  historyComplete?: boolean;
+  documentVersionIdByDocumentId?: Record<string, string>;
+  evidenceScope?: { as_of: string; corpus_version_id: string | null };
 }
 
 export function EvidenceReader({
@@ -59,6 +62,9 @@ export function EvidenceReader({
   documentIdBySpanId,
   integrityFailures,
   initialSpanId = null,
+  historyComplete = true,
+  documentVersionIdByDocumentId = {},
+  evidenceScope,
 }: EvidenceReaderProps) {
   const document = documents.find((doc) => doc.id === documentId);
   const ownSections = useMemo(
@@ -175,6 +181,8 @@ export function EvidenceReader({
       ? { kind: "section", id: activeSectionId }
       : null;
 
+  const filingHref = (id: string) =>
+    `/reader/${encodeURIComponent(id)}${evidenceScope ? `?${new URLSearchParams({ as_of: evidenceScope.as_of, ...(documentVersionIdByDocumentId[id] ? { document_version_id: documentVersionIdByDocumentId[id] } : {}), corpus_version_id: evidenceScope.corpus_version_id ?? "" })}` : ""}`;
   if (!document) return null;
 
   return (
@@ -188,21 +196,27 @@ export function EvidenceReader({
         </p>
       </header>
 
-      {amendment.kind === "superseded" && (
+      {!historyComplete && (
+        <aside className="reader-banner" role="status">
+          Related history incomplete. Amendment and duplicate comparisons cover only the loaded
+          filings.
+        </aside>
+      )}
+      {historyComplete && amendment.kind === "superseded" && (
         <aside className="reader-banner superseded" aria-label="Amendment notice">
           <span aria-hidden="true">&#9888;</span> <strong>Superseded.</strong> This filing was
           amended and restated by{" "}
-          <Link href={`/reader/${amendment.byDocumentId}`}>
+          <Link href={filingHref(amendment.byDocumentId)}>
             {documentsById.get(amendment.byDocumentId)?.form ?? "an amendment"} (
             {documentsById.get(amendment.byDocumentId)?.accession})
           </Link>
           . Values here may no longer be authoritative.
         </aside>
       )}
-      {amendment.kind === "amendment" && (
+      {historyComplete && amendment.kind === "amendment" && (
         <aside className="reader-banner" aria-label="Amendment notice">
           <strong>Amendment / restatement.</strong> This filing amends{" "}
-          <Link href={`/reader/${amendment.amendsDocumentId}`}>
+          <Link href={filingHref(amendment.amendsDocumentId)}>
             {documentsById.get(amendment.amendsDocumentId)?.form ?? "the original filing"} (
             {documentsById.get(amendment.amendsDocumentId)?.accession})
           </Link>
@@ -241,6 +255,7 @@ export function EvidenceReader({
             duplicateIndex={duplicateIndex}
             amendmentLinks={amendmentLinks}
             selectedSpanId={selectedSpanId}
+            historyComplete={historyComplete}
           />
           <NotesPanel
             notes={notes}

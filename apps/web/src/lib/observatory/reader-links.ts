@@ -1,23 +1,21 @@
-import type { EvidenceSource } from "../data/evidence-source";
+import type { EvidenceSource, EvidenceScope } from "../data/evidence-source";
+import { EvidenceContractError } from "../data/http-source";
 
-/**
- * Resolves document-version ids (which the trace carries on each candidate) to
- * the DocumentMeta ids the reader route is keyed by, so a candidate can deep
- * link to its exact evidence span. Built from the reader evidence source so it
- * works in both fixture and HTTP modes; versions that cannot be resolved are
- * simply absent and their candidate links are disabled rather than broken.
- */
+/** Resolve only evidence versions present in this trace, scoped to its immutable plan. */
 export async function buildDocumentIdByVersionId(
   source: EvidenceSource,
+  versionIds: readonly string[],
+  scope: EvidenceScope,
 ): Promise<Record<string, string>> {
+  const ids = [...new Set(versionIds)];
   const map: Record<string, string> = {};
-  const documents = await source.listDocuments();
-  for (const document of documents) {
-    const reader = await source.getReader(document.id);
-    if (!reader) continue;
-    map[reader.document.document_version_id] = reader.document.meta.id;
-    for (const sibling of reader.siblings) {
-      map[sibling.document_version_id] = sibling.meta.id;
+  for (let offset = 0; offset < ids.length; offset += 200) {
+    const batch = ids.slice(offset, offset + 200);
+    for (const reference of await source.resolveDocumentVersions(batch, scope)) {
+      if (!batch.includes(reference.document_version_id) || map[reference.document_version_id]) {
+        throw new EvidenceContractError("unexpected or duplicate resolved version");
+      }
+      map[reference.document_version_id] = reference.document_id;
     }
   }
   return map;

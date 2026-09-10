@@ -7,12 +7,19 @@ export type EvidenceFailureStateKind =
   | "invalid_scope"
   | "unavailable"
   | "configuration"
-  | "integrity";
+  | "integrity"
+  | "too_large";
 
 const COPY: Record<
   EvidenceFailureStateKind,
   { heading: string; description: string; retry: boolean }
 > = {
+  too_large: {
+    heading: "Evidence exceeds the read limit",
+    description:
+      "This evidence is too large to open as a complete snapshot. No partial evidence has been shown. Related filings or event-history pages can be opened separately.",
+    retry: false,
+  },
   authentication: {
     heading: "Sign in required",
     description:

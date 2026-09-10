@@ -29,6 +29,7 @@ export interface FactPanelProps {
   duplicateIndex: Map<string, DuplicateFactGroup>;
   amendmentLinks: AmendmentLink[];
   selectedSpanId: string | null;
+  historyComplete?: boolean;
 }
 
 function periodLabel(period: FinancialFactRecord["fact"]["period"]): string {
@@ -82,7 +83,10 @@ function DuplicateComparison({ group, ctx }: { group: DuplicateFactGroup; ctx: F
           </strong>
         ) : (
           <span className="badge badge-ok">
-            <span aria-hidden="true">&#10003;</span> Duplicates consistent
+            <span aria-hidden="true">&#10003;</span>{" "}
+            {ctx.historyComplete === false
+              ? "Loaded duplicates consistent"
+              : "Duplicates consistent"}
           </span>
         )}{" "}
         {restatement && <span className="badge badge-info">Restated by amendment</span>}
@@ -171,6 +175,9 @@ function FactCard({ record, ctx }: { record: FinancialFactRecord; ctx: FactPanel
           {typeof fact.confidence === "number" ? `, confidence ${fact.confidence}` : ""}
         </dd>
       </dl>
+      {ctx.historyComplete === false && (
+        <p>Related history incomplete; additional duplicates or amendments may exist.</p>
+      )}
       {group && <DuplicateComparison group={group} ctx={ctx} />}
     </li>
   );

@@ -1,10 +1,13 @@
 import type { components } from "@fel/contracts";
 
+import type { Page, PageOptions } from "../data/evidence-source";
 import type { RetrievalStreamOpener } from "./sse";
 
 export type CreateQuery = components["schemas"]["CreateQuery"];
 export type QueryAccepted = components["schemas"]["QueryAccepted"];
 export type QuerySnapshot = components["schemas"]["QuerySnapshot"];
+export type QueryPage = QuerySnapshot & { runPage: Page<QuerySnapshot["runs"][number]> };
+export type RetrievalEventPage = components["schemas"]["RetrievalEventPage"];
 export type RetrievalTrace = components["schemas"]["RetrievalTrace"];
 export type EvidenceFeedback = components["schemas"]["EvidenceFeedback"];
 export type QueryPlan = components["schemas"]["QueryPlan"];
@@ -23,7 +26,8 @@ export interface ObservatoryQuerySource {
   /** Create an immutable query + first run. Idempotency-Key dedupes retries. */
   createQuery(input: CreateQuery, idempotencyKey: string): Promise<QueryAccepted>;
   /** Immutable query snapshot with its run history. */
-  getQuery(queryId: string): Promise<QuerySnapshot>;
+  getQuery(queryId: string, options?: PageOptions): Promise<QueryPage>;
+  getEventHistory(runId: string, options?: PageOptions): Promise<RetrievalEventPage>;
   /** Unchanged child run pinned to the original plan (parent-linked rerun). */
   createRerun(queryId: string, idempotencyKey: string): Promise<QueryAccepted>;
   /** Immutable trace snapshot for one run (used for stored replay and compare). */

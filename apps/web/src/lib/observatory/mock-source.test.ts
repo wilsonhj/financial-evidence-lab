@@ -51,3 +51,27 @@ describe("MockObservatorySource", () => {
     expect(text).toContain('"seq":13');
   });
 });
+
+it("keeps terminal evidence after more than 2,000 replayed events and bounded event pages", async () => {
+  const events = Array.from({ length: 2201 }, (_, index) => ({
+    ...MOCK_EVENTS[0]!,
+    seq: index + 1,
+    type: index === 2200 ? ("run_completed" as const) : ("run_started" as const),
+  }));
+  const source = new MockObservatorySource({ events, heartbeatEvery: 200 });
+  const delivered = [];
+  for await (const event of consumeRetrievalRun(source.openEventStream(), {
+    signal: new AbortController().signal,
+  }))
+    delivered.push(event.seq);
+  expect(delivered).toEqual(events.map((event) => event.seq));
+  let page = await source.getEventHistory(MOCK_RUN_ID, { limit: 200 });
+  const stored = [...page.items];
+  while (page.next_cursor) {
+    page = await source.getEventHistory(MOCK_RUN_ID, { cursor: page.next_cursor });
+    expect(page.items.length).toBeLessThanOrEqual(200);
+    stored.push(...page.items);
+  }
+  expect(stored.map((event) => event.seq)).toEqual(delivered);
+  expect(stored.at(-1)?.type).toBe("run_completed");
+});
