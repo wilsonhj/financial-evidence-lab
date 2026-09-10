@@ -29,48 +29,43 @@ from __future__ import annotations
 import uuid
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Response
 from pydantic import AwareDatetime
 
 from app.auth import TenantContext
 from app.db import tenant_connection
 from app.dependencies import get_tenant_context
 from app.errors import api_error
+from app.pagination import Order, page_headers, read_page, scope
 from app.serializers import document_body
 
 router = APIRouter(prefix="/v1", tags=["corpus"])
 
-# Evidence gate repeated verbatim in every document read below: at least
-# one successfully parsed version must exist (quarantined-only documents
-# are not evidence). Kept as literal SQL — no string composition — so the
-# statements stay static and auditable.
-#
-# The EXISTS clause is the WHOLE M1 visibility story (integration-lead
-# ruling): parsed => visible, regardless of corpus_versions/publish state.
-# Publish gating is an M2 concern (corpus-pinned retrieval), not an M1 one.
 _LIST_DOCUMENTS_SQL = """
-    SELECT id, entity_id, form, accession, source_url, content_hash,
-           published_at, filed_at, period_start, period_end, ingested_at,
-           valid_from, valid_to
-    FROM documents
-    WHERE entity_id = %s AND EXISTS (
+    SELECT d.* FROM documents d
+    WHERE d.entity_id = %s
+      AND (%s::timestamptz IS NULL OR d.published_at <= %s)
+      AND EXISTS (
         SELECT 1 FROM document_versions dv
-        WHERE dv.document_id = documents.id AND dv.status = 'parsed'
-    )
-    ORDER BY published_at, accession
+        WHERE dv.document_id = d.id AND dv.status = 'parsed'
+          AND (%s::uuid IS NULL OR EXISTS (
+            SELECT 1 FROM corpus_version_documents cvd
+            WHERE cvd.document_version_id = dv.id AND cvd.corpus_version_id = %s
+          ))
+      )
 """
 
-_LIST_DOCUMENTS_AS_OF_SQL = """
-    SELECT id, entity_id, form, accession, source_url, content_hash,
-           published_at, filed_at, period_start, period_end, ingested_at,
-           valid_from, valid_to
-    FROM documents
-    WHERE entity_id = %s AND published_at <= %s AND EXISTS (
-        SELECT 1 FROM document_versions dv
-        WHERE dv.document_id = documents.id AND dv.status = 'parsed'
-    )
-    ORDER BY published_at, accession
-"""
+
+def require_corpus(conn: Any, corpus_version_id: uuid.UUID | None) -> None:
+    if corpus_version_id is not None:
+        corpus = conn.execute(
+            "SELECT status FROM corpus_versions WHERE id = %s", (corpus_version_id,)
+        ).fetchone()
+        if corpus is None or corpus["status"] not in {"active", "superseded"}:
+            raise api_error(
+                404, "NOT_FOUND", "Corpus version not found.", {"resource": "corpus_version"}
+            )
+
 
 _GET_DOCUMENT_SQL = """
     SELECT id, entity_id, form, accession, source_url, content_hash,
@@ -87,16 +82,55 @@ _GET_DOCUMENT_SQL = """
 @router.get("/entities/{entity_id}/documents")
 def list_entity_documents(
     entity_id: uuid.UUID,
+    response: Response,
     ctx: Annotated[TenantContext, Depends(get_tenant_context)],
     as_of: Annotated[AwareDatetime | None, Query()] = None,
+    corpus_version_id: Annotated[uuid.UUID | None, Query()] = None,
+    limit: Annotated[int | None, Query(ge=1, le=200)] = None,
+    cursor: Annotated[str | None, Query(max_length=2048)] = None,
+    order: Annotated[Order | None, Query()] = None,
 ) -> list[dict[str, Any]]:
-    """List an entity's documents, point-in-time filtered by ``as_of``."""
-    with tenant_connection(ctx) as conn:
-        if as_of is not None:
-            rows = conn.execute(_LIST_DOCUMENTS_AS_OF_SQL, (entity_id, as_of)).fetchall()
-        else:
-            rows = conn.execute(_LIST_DOCUMENTS_SQL, (entity_id,)).fetchall()
+    """Complete legacy listing or explicit cutoff/pin-filtered keyset page."""
+    with tenant_connection(ctx, snapshot_read=True) as conn:
+        require_corpus(conn, corpus_version_id)
+        rows, page = read_page(
+            conn,
+            query=_LIST_DOCUMENTS_SQL,
+            params=(entity_id, as_of, as_of, corpus_version_id, corpus_version_id),
+            keys=("published_at", "accession", "id"),
+            request_scope=scope("documents", ctx.org_id, entity_id, as_of, corpus_version_id),
+            limit=limit,
+            token=cursor,
+            order=order,
+        )
+    page_headers(response, page)
     return [document_body(row) for row in rows]
+
+
+@router.get("/document-versions/resolve")
+def resolve_document_versions(
+    ctx: Annotated[TenantContext, Depends(get_tenant_context)],
+    document_version_id: Annotated[list[uuid.UUID], Query(min_length=1, max_length=200)],
+    as_of: Annotated[AwareDatetime | None, Query()] = None,
+    corpus_version_id: Annotated[uuid.UUID | None, Query()] = None,
+) -> list[dict[str, str]]:
+    """Resolve only requested visible parsed references, never scan the corpus."""
+    with tenant_connection(ctx, snapshot_read=True) as conn:
+        require_corpus(conn, corpus_version_id)
+        rows = conn.execute(
+            """
+            SELECT dv.id AS document_version_id, dv.document_id
+            FROM document_versions dv JOIN documents d ON d.id = dv.document_id
+            WHERE dv.id = ANY(%s) AND dv.status = 'parsed'
+              AND (%s::timestamptz IS NULL OR d.published_at <= %s)
+              AND (%s::uuid IS NULL OR EXISTS (
+                SELECT 1 FROM corpus_version_documents cvd
+                WHERE cvd.document_version_id = dv.id AND cvd.corpus_version_id = %s))
+            ORDER BY dv.id LIMIT 200
+        """,
+            (list(set(document_version_id)), as_of, as_of, corpus_version_id, corpus_version_id),
+        ).fetchall()
+    return [{k: str(row[k]) for k in ("document_version_id", "document_id")} for row in rows]
 
 
 @router.get("/documents/{document_id}")

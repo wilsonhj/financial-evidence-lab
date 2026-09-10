@@ -289,12 +289,41 @@ def test_document_listing_keeps_new_filings_after_fifty(
             (ids["entity_id"], TEXT_HASH),
         )
     url = f"/v1/entities/{ids['entity_id']}/documents"
-    response = client.get(url, headers=_headers(org_fixture))
+    response = client.get(url, headers=_headers(org_fixture), params={"limit": 200})
     assert response.status_code == 200, response.text
     assert len(response.json()) == 52
     assert response.json()[-1]["id"] == ids["late_doc"]
     cutoff = client.get(
-        url, params={"as_of": "2026-06-01T00:00:00Z"}, headers=_headers(org_fixture)
+        url, params={"as_of": "2026-06-01T00:00:00Z", "limit": 200}, headers=_headers(org_fixture)
     )
     assert len(cutoff.json()) == 51
     assert cutoff.json()[-1]["id"] == ids["early_doc"]
+
+
+def test_document_pages_and_version_resolution(client, org_fixture, db_url):
+    ids = _seed_corpus(db_url)
+    url = f"/v1/entities/{ids['entity_id']}/documents"
+    first = client.get(url, headers=_headers(org_fixture), params={"limit": 1})
+    assert len(first.json()) == 1
+    cursor = first.headers["X-FEL-Next-Cursor"]
+    second = client.get(url, headers=_headers(org_fixture), params={"cursor": cursor})
+    assert [r["id"] for r in second.json()] == [ids["late_doc"]]
+    hidden = client.get(
+        "/v1/document-versions/resolve",
+        headers=_headers(org_fixture),
+        params=[
+            ("document_version_id", ids["version_id"]),
+            ("document_version_id", ids["late_version_id"]),
+            ("as_of", "2026-06-01T00:00:00Z"),
+        ],
+    )
+    assert hidden.status_code == 200, hidden.text
+    assert hidden.json() == [
+        {"document_version_id": ids["version_id"], "document_id": ids["early_doc"]}
+    ]
+    wrong = client.get(
+        url,
+        headers=_headers(org_fixture),
+        params={"cursor": cursor, "as_of": "2026-06-01T00:00:00Z"},
+    )
+    assert wrong.status_code == 422
