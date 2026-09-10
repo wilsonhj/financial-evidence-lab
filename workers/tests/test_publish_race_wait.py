@@ -6,6 +6,7 @@ import warnings
 
 import pytest
 
+from . import test_ingestion_pipeline as ingestion_pipeline
 from .test_ingestion_pipeline import _wait_for_publish_lock
 
 
@@ -37,13 +38,19 @@ class _Thread:
         return True
 
 
-def test_publish_lock_wait_warns_when_predicate_never_matches() -> None:
+def test_publish_lock_wait_warns_when_predicate_never_matches(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     connection = _Connection(waiting=0)
+    thread = _Thread()
+    monotonic = iter((0.0, 0.0, 1.0))
+    monkeypatch.setattr(ingestion_pipeline.time, "monotonic", monotonic.__next__)
     with pytest.warns(UserWarning, match=r"pg_locks.*0\.001s"):
-        observed = _wait_for_publish_lock(connection, _Thread(), timeout_seconds=0.001)
+        observed = _wait_for_publish_lock(connection, thread, timeout_seconds=0.001)
 
     assert observed is False
-    assert connection.calls > 0
+    assert connection.calls == 1
+    assert thread.joins == 1
 
 
 def test_publish_lock_wait_is_silent_when_predicate_matches() -> None:
