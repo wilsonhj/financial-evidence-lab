@@ -21,13 +21,15 @@ ADR-0017 records the initial dispatch and scope narrowing.
 | #230 | agent/test-publish-race-wait | Two named ingestion race test files | merged, PR #255 @ 802d0eb | Independent review caught real-clock test flake; deterministic-clock fix reviewed; warning-removal mutation fails; real PostgreSQL 3 passed; all CI passed |
 | #221 | agent/arch-checkpoint-rerun | Extraction source/tests only | merged, PR #257 @ 6c409e8 | Immutable rejected-row CAS preserves concurrent owner; failed-attempt retry durable; independent 479 PostgreSQL tests passed |
 | #137 | agent/137-cutover-hardening | Retrieval API provenance and retrieval/evaluation model guards | merged, PR #261 @ 29c241c | Independent review verified provenance through rollback failure; current CI passed; issue closed |
-| #219 | agent/m4-formula-ast | Calculation engine, ADR-0018 and canonical task additions | design accepted for implementation | Restricted typed formula AST; explicit bounded Jacobi groups, caller-specified seeds/tolerances, immutable group provenance; no parent scope deferral |
+| #219 | agent/m4-formula-ast | Calculation engine, ADR-0018 and canonical task additions | merged, PR #262 @ dff71f0 | Independent 233 tests including local benchmarks; legacy golden hashes and SCC oracle verified; final CI passed |
 | #200 | agent/200-locked-runtime | Runtime packaging, locks and health/recovery | code merged, PR #259 @ 7a69133; hosted acceptance pending | Independent clean install, all packaged assets, 50 focused PostgreSQL tests and current CI passed; watchdog exits and local supervisor relaunch proved |
 | #194 | claude/close-trailing-acceptance-gaps | Remove unreachable extraction tool layer | merged, PR #260 @ c16955c | Independent code review and full PostgreSQL extraction suite passed; worker-role adoption remains #190 |
-| #153 | agent/153-unit-policy | Ontology-owned comparison policy and extraction checks | design accepted for implementation | ADR-0019; preserve payload spelling, version conflict grouping, require fresh version-pinned runs |
+| #153 | agent/153-unit-policy | Ontology-owned comparison policy and extraction checks | merged, PR #264 @ 54cad9a | Independent 657 PostgreSQL-enabled tests, wheel import and SIX vocabulary verified; final CI passed |
 | #190 | agent/190-worker-role-rollout | Committed Railway role selection | code merged, PR #265 @ 65f7159 | Independent 47 PostgreSQL tests and exact restricted-login startup checks passed; hosted verification pending |
 | #203 | agent/203-ci-observability | Coverage floors, required checks, browser cache, deployed Sentry package | dispatched | Measure current source coverage before setting floors; real reviewer staffing and hosted telemetry remain explicit |
-| #188 | agent/188-execution-wave4 | Execution plan and ownership | coordinating | Initial control PR #254 merged @ 2b15032; subsequent paths checked |
+| #266 | agent/266-terminal-schedule-test | Test database-clock invariant | merged, PR #267 @ 41857d2 | Independent 17 PostgreSQL tests, regression mutation and final CI passed |
+| #154 | agent/154-guidance-range-ordering | Signed guidance ordering and universal range validation | dispatched | ADR-0022; preserve invalid positive/mixed/zero inversions; new workflow/conflict namespace |
+| #188 | agent/188-execution-wave5 | Execution plan and ownership | coordinating | Initial control PR #254 merged @ 2b15032; subsequent paths checked |
 
 Ruling: narrow #230 and #221 test ownership — their original workers/tests/**
 globs overlapped, while the required implementation is separable — any shared
@@ -113,3 +115,30 @@ failure test's database/host clock comparison (133 ms skew). Assert `available_a
 `finished_at` on terminal failure instead, proving zero retry delay. Preserve production
 queue code and existing status/finished-time checks. The single test file is
 disjoint from #153 extraction tests and #203 health tests.
+
+#154 ruling: canonicalize only `high < low < 0` after existing numeric parsing
+and scale reconciliation. Apply strict range validation independently of ontology
+membership. Preserve source wording, signed magnitudes, sign blockers and
+point/floor/ceiling semantics. Positive, cross-zero and zero-to-negative inverted
+bounds stay reviewable errors. Advance the workflow/normalizer/validator pins
+and conflict namespace; reject old runs before recovery and never rewrite their
+payloads or adjudication. Accepted ADR-0022 precedes implementation. The scope
+is disjoint from #203's worker entrypoint and health tests.
+
+The integration lead verified the merged #219 leaf implementation and updates
+only the corresponding canonical checkbox/annotation state. The concurrent-user
+performance acceptance and remaining M4 milestone gates are not inferred from
+local engine tests.
+
+#191 residual ruling: ADR-0021 accepts explicit bounded page mode with complete
+legacy success or a declared pagination-required error, preserving array shapes
+and shipping the actual web consumers together. Reader/trace evidence stays
+complete within each declared scope or returns an explicit size error; no
+clipped success or false whole-history conclusion. SSE replays all events in
+bounded batches. Cursor data is strictly typed and scope-bound continuation,
+never authorization; every page reapplies tenancy/cutoff/pin gates. No new
+cursor signing secret is needed for this continuation-only contract. Pin-based
+comparison is distinguished from mutable browsing. API observability source
+and tests remain owned by #203; reuse existing request telemetry. Reserve only
+index migration 0010 under this ADR, retaining only indexes supported by query
+plans. Provider metering remains explicitly tracked under #195.
