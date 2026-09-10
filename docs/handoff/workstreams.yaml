@@ -635,7 +635,7 @@ packages:
     depends_on: [ARCH-QUEUE-DURABILITY] # serialized: same db/migrations/** and consumer.py surface; 0008 follows 0007
     team: platform
     branch: cherry/190-worker-role
-    status: merged # PR #238 @ cf532cb (2026-09-05). Creates fel_worker with per-table grants and RLS policies instead of the blanket bypass migration 0001 had always described but never created. RESIDUAL, deliberate: it is opt-in — unset FEL_WORKER_DB_ROLE leaves the pre-existing behaviour, so workers still connect as the migration owner until a deploy sets it. Enabling it in the deployed environments is a lead action with no package. Issue #190 still OPEN.
+    status: merged # PR #238 @ cf532cb (2026-09-05). Creates fel_worker with per-table grants and RLS policies instead of the blanket bypass migration 0001 had always described but never created. RESIDUAL, deliberate: it is opt-in — unset FEL_WORKER_DB_ROLE leaves the pre-existing behaviour, so workers still connect as the migration owner until a deploy sets it. The WORKER-ROLE-ROLLOUT package owns committed startup selection; hosted verification remains a lead action. Issue #190 still OPEN.
     allowed_paths:
       - db/migrations/**
       - workers/src/fel_workers/**
