@@ -14,3 +14,6 @@ httpx>=0.27.2
 # installs this file and would otherwise raise at first database use
 # while every test passed.
 psycopg[binary,pool]>=3.2
+
+# Installed in deployments; initialization remains conditional on FEL_SENTRY_DSN.
+sentry-sdk[fastapi]>=2.69.1
