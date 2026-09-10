@@ -81,8 +81,10 @@ Worker-role note: `fel_worker` is that service role, created by `0008`
 (#190). The index build path holds `INSERT` on `retrieval_items` /
 `retrieval_embeddings` and `UPDATE ON retrieval_index_versions` for the
 status transitions and the guards' `FOR SHARE` locks (`0008:107-108`).
-Runtime processes connect as `fel_app` or `fel_worker`, never the owner;
-`0008_worker_role.test.sql` proves `fel_worker` cannot `DELETE` or `ALTER`.
+Runtime processes must adopt `fel_app` or `fel_worker` rather than retain the
+owner role. Worker adoption is still opt-in through `FEL_WORKER_DB_ROLE`; the
+existence of this migration does not prove deployed workers use that role.
+`0008_worker_role.test.sql` proves the role cannot `DELETE` or `ALTER` once adopted.
 
 ## 0006 — `extraction_run_steps.output` (ADR-0011)
 
