@@ -92,6 +92,22 @@ defaults:
 # two packages with overlapping paths concurrently: overlap is resolved by
 # time, not ownership.
 packages:
+  - id: PLATFORM-NODE24
+    issue: 249
+    tasks: [] # Runtime maintenance; canonical task completion is unchanged.
+    depends_on: []
+    team: platform
+    branch: agent/node24-runtime
+    status: review
+    # Owner-authorized Node/workspace pin migration; authorization is recorded
+    # on issue #249 and its contract-change PR. No contract/schema changes.
+    allowed_paths:
+      - .node-version
+      - .nvmrc
+      - package.json
+      - README.md
+      - docs/development/local.md
+      - docs/handoff/workstreams.yaml
   # M0 — platform foundations. M0-INFRA-CI gates every other pending M0 package
   # (M0-PLATFORM inherits it through M0-CONTRACTS).
   - id: M0-SCAFFOLD # merged via PR #50 (integration/m0 @ 1ec35dc)

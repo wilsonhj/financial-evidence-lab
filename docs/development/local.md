@@ -13,12 +13,29 @@ behavior.
 
 ## Prerequisites
 
-| Tool       | Version                  | Used for                                 |
-| ---------- | ------------------------ | ---------------------------------------- |
-| Node.js    | 22 (`.node-version`)     | Next.js, contracts, and JS/TS tests      |
-| pnpm       | 10.33 via Corepack       | Monorepo package management              |
-| Python     | 3.11 (`.python-version`) | API, workers, retrieval, and evals       |
-| PostgreSQL | 16+ with pgvector        | Persistent API/worker flows and DB tests |
+| Tool       | Version                   | Used for                                |
+| ---------- | ------------------------- | --------------------------------------- |
+| Node.js    | 24.20.0 (`.node-version`)  | Next.js, contracts, and JS/TS tests       |
+| pnpm       | 10.33 via Corepack        | Monorepo package management              |
+| Python     | 3.11 (`.python-version`)  | API, workers, retrieval, and evals        |
+| PostgreSQL | 16+ with pgvector         | Persistent API/worker flows and DB tests  |
+
+With nvm, run `nvm install` once and `nvm use` in the project shell; `.nvmrc`
+selects the same exact Node patch as `.node-version`. Keep those pins aligned
+when updating Node. The package engine admits only 24.x, and CI reads
+`.node-version`. This does not change the machine's default Node version.
+
+For a Node 22 rollback, return to the previous source revision in a separate
+checkout, select `nvm use 22.23.2`, and reinstall with
+`corepack pnpm install --frozen-lockfile`. Keep pnpm and the dependency lockfile
+unchanged; rebuild native dependencies for the selected runtime. If rolling
+back an adopted migration branch, revert its runtime-pin commit first.
+
+Hosted web releases must verify the actual Node version in Railway's build
+logs. An existing `RAILPACK_NODE_VERSION` variable overrides repository pins;
+align it with the selected runtime before a staging release. Local fixture
+tests do not establish hosted API/auth/storage readiness. Retain the previous
+working web deployment and runtime setting for rollback.
 
 Install repository dependencies:
 
