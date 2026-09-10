@@ -83,6 +83,18 @@ class FormulaError(CalculationEngineError):
     code = "FORMULA_ERROR"
 
 
+class IterationPolicyError(GraphError):
+    """An explicit iteration policy does not describe an executable exact SCC."""
+
+    code = "ITERATION_POLICY_ERROR"
+
+
+class IterationConvergenceError(CalculationEngineError):
+    """The declared cap was exhausted; no authoritative partial result exists."""
+
+    code = "ITERATION_NONCONVERGENCE"
+
+
 class ScenarioError(CalculationEngineError):
     """A scenario override targets a node that cannot be overridden."""
 
@@ -107,6 +119,8 @@ __all__ = [
     "CutoffViolationError",
     "CycleError",
     "FormulaError",
+    "IterationPolicyError",
+    "IterationConvergenceError",
     "GraphError",
     "LineageError",
     "MissingInputError",

@@ -18,9 +18,11 @@ from datetime import datetime
 from decimal import Decimal
 
 from fel_calculation_engine.errors import ScenarioError
+from fel_calculation_engine.formulas import rewrite_formula_references
 from fel_calculation_engine.graph import OVERRIDABLE_KINDS, ModelGraph
 from fel_calculation_engine.nodes import (
     AggregationNode,
+    ExpressionFormulaNode,
     FormulaNode,
     Node,
     NodeKind,
@@ -91,6 +93,8 @@ def _rewire(node: Node, old: str, new: str) -> Node:
 
     if isinstance(node, OperationalDriverNode):
         return dataclasses.replace(node, seed=new)
+    if isinstance(node, ExpressionFormulaNode):
+        return dataclasses.replace(node, ast=rewrite_formula_references(node.ast, {old: new}))
     if isinstance(node, FormulaNode | AggregationNode | ValidationCheckNode):
         return dataclasses.replace(node, operands=swap(node.operands))
     if isinstance(node, ReportedFinancialOutputNode):
@@ -103,6 +107,7 @@ def apply_scenario(
 ) -> GraphSnapshot:
     graph = base.graph
     nodes: dict[str, Node] = {node.node_id: node for node in graph.nodes}
+    seed_rewrites: dict[str, str] = {}
     for target_id, value in scenario.overrides:
         target = graph.node(target_id)
         if target.kind not in OVERRIDABLE_KINDS or target.kind is NodeKind.SCENARIO_OVERRIDE:
@@ -129,12 +134,20 @@ def apply_scenario(
             scenario_id=scenario.scenario_id,
             assumption_id=f"{scenario.scenario_id}:{target_id}",
         )
+        seed_rewrites[effective_id] = override_id
         for dependent_id in graph.dependents(effective_id):
             dependent = nodes[dependent_id]
             if dependent.kind is NodeKind.SCENARIO_OVERRIDE:
                 continue
             nodes[dependent_id] = _rewire(dependent, effective_id, override_id)
-    child = base.derive(nodes.values(), scenario_id=scenario.scenario_id)
+    groups = tuple(
+        dataclasses.replace(
+            group,
+            seeds=tuple((member, seed_rewrites.get(seed, seed)) for member, seed in group.seeds),
+        )
+        for group in base.iteration_groups
+    )
+    child = base.derive(nodes.values(), scenario_id=scenario.scenario_id, iteration_groups=groups)
     emit(
         sink,
         "calc.scenario.applied",

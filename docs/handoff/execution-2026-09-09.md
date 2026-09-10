@@ -25,8 +25,9 @@ ADR-0017 records the initial dispatch and scope narrowing.
 | #200 | agent/200-locked-runtime | Runtime packaging, locks and health/recovery | code merged, PR #259 @ 7a69133; hosted acceptance pending | Independent clean install, all packaged assets, 50 focused PostgreSQL tests and current CI passed; watchdog exits and local supervisor relaunch proved |
 | #194 | claude/close-trailing-acceptance-gaps | Remove unreachable extraction tool layer | merged, PR #260 @ c16955c | Independent code review and full PostgreSQL extraction suite passed; worker-role adoption remains #190 |
 | #153 | agent/153-unit-policy | Ontology-owned comparison policy and extraction checks | design accepted for implementation | ADR-0019; preserve payload spelling, version conflict grouping, require fresh version-pinned runs |
-| #190 | agent/190-worker-role-rollout | Committed Railway role selection | dispatched | Existing migration-0008 role and grant tests; hosted verification remains pending |
-| #188 | agent/188-execution-wave3 | Execution plan and ownership | coordinating | Initial control PR #254 merged @ 2b15032; subsequent paths checked |
+| #190 | agent/190-worker-role-rollout | Committed Railway role selection | code merged, PR #265 @ 65f7159 | Independent 47 PostgreSQL tests and exact restricted-login startup checks passed; hosted verification pending |
+| #203 | agent/203-ci-observability | Coverage floors, required checks, browser cache, deployed Sentry package | dispatched | Measure current source coverage before setting floors; real reviewer staffing and hosted telemetry remain explicit |
+| #188 | agent/188-execution-wave4 | Execution plan and ownership | coordinating | Initial control PR #254 merged @ 2b15032; subsequent paths checked |
 
 Ruling: narrow #230 and #221 test ownership — their original workers/tests/**
 globs overlapped, while the required implementation is separable — any shared
@@ -93,3 +94,22 @@ hosted process has adopted the role; record that acceptance separately.
 The old worker sources cite ADR-0013, but that number belongs to canonical
 ledger reconciliation on main. ADR-0020 records the rollout decision without
 rewriting immutable migration 0008 or misattributing the historical decision.
+
+#203 residual ruling: both Sentry initialization paths are on main. Enable
+measured Python/JS coverage floors at the baseline minus one percentage point,
+including unimported source files; prove a coverage regression fails. Register
+all current required CI check names and inspect existing repository settings
+before any application. Implement the requested version-keyed browser cache
+without skipping OS dependency installation; permit one CI-only retry with
+trace evidence. Install the Sentry SDK in the locked runtime closure and align
+worker automatic data collection with the accepted API privacy settings. No
+DSN means no initialization. No additional CODEOWNER may be invented, and
+hosted telemetry acceptance requires the approved environment. Root config and
+lock changes are narrowly authorized for this issue; no contracts or numerical
+semantics change. These paths do not overlap #153 or #219 implementation.
+
+#266 test-only ruling: #203's real PostgreSQL baseline reproduced the terminal
+failure test's database/host clock comparison (133 ms skew). Assert `available_at` equals the same-statement
+`finished_at` on terminal failure instead, proving zero retry delay. Preserve production
+queue code and existing status/finished-time checks. The single test file is
+disjoint from #153 extraction tests and #203 health tests.
