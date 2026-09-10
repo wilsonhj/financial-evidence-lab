@@ -77,11 +77,12 @@ cannot catch privilege/lock bugs of this class. Shared helper:
 `tests/_helpers.sql` (included via `\ir`; it does not match `*.test.sql`,
 so CI never runs it directly).
 
-Worker-role note: no service role exists yet. The index build path
-(`retrieval_items` / `retrieval_embeddings` inserts and index version
-status transitions) assumes one; when it is introduced it will need
-`UPDATE ON retrieval_index_versions` (for the status transitions and the
-guards' `FOR SHARE` locks) in addition to `INSERT` on the artifact tables.
+Worker-role note: `fel_worker` is that service role, created by `0008`
+(#190). The index build path holds `INSERT` on `retrieval_items` /
+`retrieval_embeddings` and `UPDATE ON retrieval_index_versions` for the
+status transitions and the guards' `FOR SHARE` locks (`0008:107-108`).
+Runtime processes connect as `fel_app` or `fel_worker`, never the owner;
+`0008_worker_role.test.sql` proves `fel_worker` cannot `DELETE` or `ALTER`.
 
 ## 0006 — `extraction_run_steps.output` (ADR-0011)
 

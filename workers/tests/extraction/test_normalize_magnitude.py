@@ -148,15 +148,6 @@ def test_full_consumption_keeps_well_formed_values(raw: str, expected: Decimal) 
     assert value == expected
 
 
-def test_preview_normalize_reports_truncation_instead_of_raising() -> None:
-    """The allowlisted-tool preview must surface the refusal, not a wrong number."""
-    from fel_workers.extraction.normalize.numeric import preview_normalize
-
-    preview = preview_normalize("12,34,567")
-    assert preview["ok"] is False
-    assert "unconsumed numeric remainder" in preview["error"]
-
-
 # ---------------------------------------------------------------------------
 # Blockers 3 and 6 — declared scale / sign were never validated against the value.
 # ---------------------------------------------------------------------------

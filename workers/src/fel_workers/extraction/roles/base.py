@@ -45,7 +45,6 @@ class RoleSpec:
     schema_version: str
     json_schema: dict[str, object]
     instructions: str
-    tools: frozenset[str]
 
     def instructions_hash(self) -> str:
         return "sha256:" + hashlib.sha256(self.instructions.encode()).hexdigest()
@@ -126,7 +125,6 @@ def _spec(
     schema_name: str,
     schema_file: str,
     prompt_file: str,
-    tools: frozenset[str],
     with_qualifier_vocabulary: bool = False,
 ) -> RoleSpec:
     instructions = _read_text(f"prompts/{prompt_file}")
@@ -138,34 +136,28 @@ def _spec(
         schema_version="1.0.0",
         json_schema=_read_json(f"schemas/{schema_file}"),
         instructions=instructions,
-        tools=tools,
     )
 
 
 def load_role_specs() -> dict[Role, RoleSpec]:
-    from fel_workers.extraction.tools import ROLE_TOOL_ALLOWLISTS
-
     return {
         Role.CLASSIFIER: _spec(
             Role.CLASSIFIER,
             schema_name="classifier",
             schema_file="classifier.v1.json",
             prompt_file="classifier.v1.txt",
-            tools=ROLE_TOOL_ALLOWLISTS["classifier"],
         ),
         Role.FACT_CANDIDATES: _spec(
             Role.FACT_CANDIDATES,
             schema_name="candidates",
             schema_file="fact_table_candidates.v1.json",
             prompt_file="fact_table.v1.txt",
-            tools=ROLE_TOOL_ALLOWLISTS["fact_candidates"],
         ),
         Role.KPI: _spec(
             Role.KPI,
             schema_name="kpi",
             schema_file="role_envelope.v1.json",
             prompt_file="kpi.v1.txt",
-            tools=ROLE_TOOL_ALLOWLISTS["kpi"],
             with_qualifier_vocabulary=True,
         ),
         Role.GUIDANCE: _spec(
@@ -173,7 +165,6 @@ def load_role_specs() -> dict[Role, RoleSpec]:
             schema_name="guidance",
             schema_file="role_envelope.v1.json",
             prompt_file="guidance.v1.txt",
-            tools=ROLE_TOOL_ALLOWLISTS["guidance"],
             # Guidance often names an ontology metric ("we expect RPO of ...").
             # When it does, `_comparability` and the required-qualifier loop in
             # `accounting_errors` apply to it exactly as they do to a KPI, so it
@@ -188,7 +179,6 @@ def load_role_specs() -> dict[Role, RoleSpec]:
             schema_name="revenue_driver",
             schema_file="role_envelope.v1.json",
             prompt_file="revenue_driver.v1.txt",
-            tools=ROLE_TOOL_ALLOWLISTS["driver_mapper"],
         ),
     }
 
