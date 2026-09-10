@@ -339,3 +339,133 @@ def test_legacy_formula_members_are_supported():
         iteration_groups=(group,),
     )
     assert evaluate(snap, cutoff=CUTOFF).quantity("a").value > Decimal("19.999")
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"members": ("x", 3)},
+        {"members": None},
+        {"seeds": None},
+        {"seeds": {3: "seed"}},
+        {"absolute_tolerances": []},
+    ],
+)
+def test_policy_factory_invalid_shapes_raise_typed_errors(kwargs):
+    arguments = dict(
+        group_id="fixed",
+        members=("x",),
+        seeds={"x": "seed"},
+        absolute_tolerances={"x": Decimal("0.01")},
+        relative_tolerance=Decimal("0"),
+        max_iterations=10,
+    )
+    arguments.update(kwargs)
+    with pytest.raises(calc.IterationPolicyError):
+        calc.IterationGroup.of(**arguments)
+
+
+def test_failure_after_convergence_still_emits_iteration_failure():
+    # The vector is finite in Decimal128 but exceeds the canonical exponent limit.
+    snap = GraphSnapshot.build(
+        "large",
+        [assumption("seed", "1e250000"), expression("x", "[x]*1e250000")],
+        iteration_groups=(policy(tolerances={"x": Decimal("1e250000")}, relative="1", cap=1),),
+    )
+    sink = calc.RecordingSink()
+    with pytest.raises(calc.CalculationEngineError):
+        evaluate(snap, cutoff=CUTOFF, sink=sink)
+    assert [event["event"] for event in sink.events][-2:] == [
+        "calc.iteration.failed",
+        "calc.evaluate.failed",
+    ]
+
+
+def test_graph_dependency_inspection_includes_seed_execution_prerequisites():
+    snap = self_model()
+    assert snap.graph.dependencies("x") == ("x", "base", "seed")
+    assert "x" in snap.graph.dependents("seed")
+    assert ("seed", "x", "iteration_seed") in [
+        (e.source, e.target, e.role) for e in snap.graph.edges
+    ]
+
+
+def test_two_groups_execute_in_seed_dependency_order_and_keep_local_identities():
+    # Group z's seed depends on group a, despite its node ID sorting first.
+    a = policy(("a",), seeds={"a": "seed"}, group_id="a-group")
+    z = policy(("0-z",), seeds={"0-z": "a"}, group_id="z-group")
+    nodes = [assumption("seed", "10"), expression("a", "[a]/2"), expression("0-z", "[0-z]/2")]
+    snap = GraphSnapshot.build("m", nodes, iteration_groups=(z, a))
+    run = evaluate(snap, cutoff=CUTOFF)
+    assert run.order == ("seed", "a", "0-z")
+    assert {r.node_id for r in run.trace("0-z")} == {"0-z", "a", "seed"}
+    assert len(run.iteration_runs) == 2
+    assert (
+        evaluate(GraphSnapshot.build("m", reversed(nodes), iteration_groups=(a, z)), cutoff=CUTOFF)
+        == run
+    )
+    updated = snap.with_nodes([expression("0-z", "[0-z]/3")])
+    assert evaluate(updated, cutoff=CUTOFF).result("a").result_id == run.result("a").result_id
+
+
+def test_a_seed_also_used_in_the_equation_has_one_lineage_parent():
+    snap = GraphSnapshot.build(
+        "m", [assumption("seed", "1"), expression("x", "[x]*[seed]")], iteration_groups=(policy(),)
+    )
+    run = evaluate(snap, cutoff=CUTOFF)
+    assert run.result("x").input_result_ids == (run.result("seed").result_id,)
+    assert run.result("x").available_at == AS_OF
+
+
+def test_success_and_arithmetic_failure_events_include_algorithm_and_completed_sweeps():
+    sink = calc.RecordingSink()
+    evaluate(self_model(), cutoff=CUTOFF, sink=sink)
+    events = [event for event in sink.events if event["event"].startswith("calc.iteration.")]
+    assert [event["event"] for event in events] == [
+        "calc.iteration.started",
+        "calc.iteration.completed",
+    ]
+    assert all(
+        event["algorithm"] == "jacobi/v1" and event["max_iterations"] == 1000 for event in events
+    )
+    assert events[-1]["iterations"] == 17
+    sink = calc.RecordingSink()
+    with pytest.raises(calc.FormulaError):
+        evaluate(self_model("2/(2-[x])", seed="1"), cutoff=CUTOFF, sink=sink)
+    failed = next(event for event in sink.events if event["event"] == "calc.iteration.failed")
+    assert failed["iterations"] == 1 and failed["error_code"] == "FORMULA_ERROR"
+    assert "values" not in failed and "residuals" not in failed
+
+
+def test_non_arithmetic_nodes_cannot_be_group_members():
+    group = policy(("x", "reported"), seeds={"x": "seed", "reported": "seed"})
+    nodes = [
+        source("seed", "0"),
+        expression("x", "[reported]/2", unit=USD),
+        calc.ReportedFinancialOutputNode(
+            node_id="reported",
+            label="reported",
+            unit=USD,
+            period=Q1,
+            source="x",
+            metric_id="metric",
+        ),
+    ]
+    with pytest.raises(calc.IterationPolicyError):
+        GraphSnapshot.build("m", nodes, iteration_groups=(group,))
+
+
+def test_5000_member_scc_does_not_recurse():
+    members = tuple(f"n{i:04d}" for i in range(5000))
+    nodes = [assumption("seed", "1")]
+    nodes.extend(
+        expression(member, f"[{members[(index+1) % len(members)]}]")
+        for index, member in enumerate(members)
+    )
+    group = policy(members, cap=1)
+    snap = GraphSnapshot.build("large-cycle", nodes, iteration_groups=(group,))
+    run = evaluate(snap, cutoff=CUTOFF)
+    assert len(run.results) == 5001
+    assert next(iter(run.iteration_runs.values())).iterations == 1
+    assert all(run.quantity(member).value == 1 for member in members)
+    assert len(run.trace(members[0])) == 2

@@ -87,7 +87,8 @@ class CalcResult:
     input_result_ids: tuple[str, ...]
     formula_version: str | None = None
     passed: bool | None = None
-    iteration_run_id: str | None = None
+    iteration_run_id: str | None = field(default=None, metadata={"canonical_omit_default": True})
+    schema: str = field(default=RESULT_SCHEMA, metadata={"canonical_omit_default": True})
 
     def __post_init__(self) -> None:
         require_decimal(self.value, "CalcResult.value")
@@ -219,12 +220,13 @@ def _iterate(
     sink: TelemetrySink | None,
 ) -> tuple[dict[str, CalcResult], IterationRun]:
     graph = snapshot.graph
+    member_set = set(group.members)
     external_ids = sorted(
         {
             ref
             for member in group.members
             for _, ref in graph.by_id[member].inputs()
-            if ref not in group.members
+            if ref not in member_set
         }
     )
     parent_ids = sorted(set(external_ids) | {seed for _, seed in group.seeds})
@@ -291,6 +293,65 @@ def _iterate(
                 iterations=completed,
                 residuals=dict(residuals),
             )
+        record = IterationRun(
+            run_id="",
+            policy=group,
+            member_definitions=tuple(
+                (member, graph.definitions[member]) for member in group.members
+            ),
+            dependencies=tuple(
+                (member, tuple(ref for _, ref in graph.by_id[member].inputs()))
+                for member in group.members
+            ),
+            seed_result_ids=tuple(
+                (member, seed, results[seed].result_id) for member, seed in group.seeds
+            ),
+            external_result_ids=tuple(
+                (node_id, results[node_id].result_id) for node_id in external_ids
+            ),
+            cutoff=cutoff,
+            iterations=completed,
+            values=tuple(
+                (member, current[member], graph.by_id[member].period) for member in group.members
+            ),
+            residuals=tuple(sorted(residuals.items())),
+        )
+        record = replace(record, run_id=content_hash(record.payload()))
+        outputs: dict[str, CalcResult] = {}
+        for member in group.members:
+            node = graph.by_id[member]
+            assert isinstance(node, FormulaNode | ExpressionFormulaNode)
+            outputs[member] = CalcResult(
+                result_id=content_hash(
+                    {
+                        "schema": "fel-calc-iterative-result/v1",
+                        "run_id": record.run_id,
+                        "node_id": member,
+                    }
+                ),
+                node_id=member,
+                kind=node.kind,
+                provenance=node.provenance,
+                value=current[member].value,
+                unit=node.unit,
+                period=node.period,
+                available_at=available_at,
+                lineage=lineage,
+                input_result_ids=input_ids,
+                formula_version=node.formula_version,
+                iteration_run_id=record.run_id,
+                schema="fel-calc-result/v2",
+            )
+        emit(
+            sink,
+            "calc.iteration.completed",
+            group_id=group.group_id,
+            run_id=record.run_id,
+            algorithm=ITERATION_ALGORITHM,
+            max_iterations=group.max_iterations,
+            iterations=completed,
+        )
+        return outputs, record
     except DecimalException as exc:
         error = FormulaError(
             "iteration convergence arithmetic failed",
@@ -320,62 +381,6 @@ def _iterate(
             error_code=exc.code,
         )
         raise
-    record = IterationRun(
-        run_id="",
-        policy=group,
-        member_definitions=tuple((member, graph.definitions[member]) for member in group.members),
-        dependencies=tuple(
-            (member, tuple(ref for _, ref in graph.by_id[member].inputs()))
-            for member in group.members
-        ),
-        seed_result_ids=tuple(
-            (member, seed, results[seed].result_id) for member, seed in group.seeds
-        ),
-        external_result_ids=tuple(
-            (node_id, results[node_id].result_id) for node_id in external_ids
-        ),
-        cutoff=cutoff,
-        iterations=completed,
-        values=tuple(
-            (member, current[member], graph.by_id[member].period) for member in group.members
-        ),
-        residuals=tuple(sorted(residuals.items())),
-    )
-    record = replace(record, run_id=content_hash(record.payload()))
-    outputs: dict[str, CalcResult] = {}
-    for member in group.members:
-        node = graph.by_id[member]
-        assert isinstance(node, FormulaNode | ExpressionFormulaNode)
-        outputs[member] = CalcResult(
-            result_id=content_hash(
-                {
-                    "schema": "fel-calc-iterative-result/v1",
-                    "run_id": record.run_id,
-                    "node_id": member,
-                }
-            ),
-            node_id=member,
-            kind=node.kind,
-            provenance=node.provenance,
-            value=current[member].value,
-            unit=node.unit,
-            period=node.period,
-            available_at=available_at,
-            lineage=lineage,
-            input_result_ids=input_ids,
-            formula_version=node.formula_version,
-            iteration_run_id=record.run_id,
-        )
-    emit(
-        sink,
-        "calc.iteration.completed",
-        group_id=group.group_id,
-        run_id=record.run_id,
-        algorithm=ITERATION_ALGORITHM,
-        max_iterations=group.max_iterations,
-        iterations=completed,
-    )
-    return outputs, record
 
 
 def evaluate(
@@ -443,6 +448,11 @@ def evaluate(
                 input_result_ids=input_ids,
                 formula_version=version,
                 passed=passed,
+                schema=(
+                    "fel-calc-result/v2"
+                    if isinstance(node, ExpressionFormulaNode)
+                    else RESULT_SCHEMA
+                ),
             )
             if passed is False:
                 failed.append(node_id)

@@ -133,3 +133,62 @@ def test_expression_identity_whitespace_version_and_legacy_payload():
     old = formula("z", Operator.MUL, ("x", "two"), unit=RATIO)
     snap = GraphSnapshot.build("m", [nodes[0], assumption("two", "2"), old])
     assert evaluate(a, cutoff=CUTOFF).quantity("z") == evaluate(snap, cutoff=CUTOFF).quantity("z")
+
+
+def test_legacy_v1_golden_payloads_and_hashes_are_byte_compatible():
+    """Golden generated from the unchanged 4685697 engine, not this implementation."""
+    import json
+    from pathlib import Path
+
+    golden = json.loads(Path(__file__).with_name("legacy_v1_golden.json").read_text())
+    snap = GraphSnapshot.build("legacy", revenue_model())
+    run = evaluate(snap, cutoff=CUTOFF)
+    assert snap.snapshot_id == golden["snapshot_id"]
+    assert run.evaluation_id == golden["evaluation_id"]
+    assert {key: calc.content_hash(value) for key, value in run.results.items()} == golden[
+        "result_payload_hashes"
+    ]
+
+
+def test_expression_result_payload_declares_v2_schema():
+    snap = GraphSnapshot.build("m", [assumption("x", "2"), expression("z", "[x]*2")])
+    result = evaluate(snap, cutoff=CUTOFF).result("z")
+    assert '"schema":"fel-calc-result/v2"' in calc.canonical_json(result)
+
+
+@pytest.mark.parametrize("value", [Decimal("1e250001"), Decimal("1e-250001"), 1, True, "2"])
+def test_direct_literal_rejects_non_decimal_and_exponent_overflow(value):
+    with pytest.raises(FormulaError):
+        calc.Literal(value)
+
+
+def test_direct_ast_subclasses_are_rejected_and_balanced_node_limit_is_enforced():
+    class ForgedReference(calc.Reference):
+        pass
+
+    with pytest.raises(FormulaError):
+        calc.formula_dependencies(ForgedReference("x"))
+    ast = calc.Reference("x")
+    for _ in range(8):
+        ast = calc.Binary("+", ast, ast)
+    assert calc.evaluate_formula(ast, {"x": Quantity(Decimal("1"), RATIO)}).value == 256
+    with pytest.raises(FormulaError):
+        calc.Unary("+", calc.Unary("+", ast))  # 513 AST occurrences, though few object identities.
+
+
+def test_unrepresentable_exponent_and_unary_overflow_are_typed_context_independently():
+    from decimal import InvalidOperation
+
+    for trap in (True, False):
+        with localcontext() as ambient:
+            ambient.traps[InvalidOperation] = trap
+            with pytest.raises(FormulaError) as exc:
+                calc.parse_formula("[x]+1e" + "9" * 4000)
+            assert isinstance(exc.value.details["offset"], int)
+    with pytest.raises(FormulaError):
+        calc.evaluate_formula(
+            calc.parse_formula("+[x]"),
+            {
+                "x": Quantity(Decimal("1e1000000"), RATIO),
+            },
+        )

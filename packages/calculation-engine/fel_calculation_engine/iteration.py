@@ -77,6 +77,16 @@ class IterationGroup:
         relative_tolerance: Decimal,
         max_iterations: int,
     ) -> IterationGroup:
+        if (
+            not isinstance(members, tuple)
+            or not isinstance(seeds, Mapping)
+            or not isinstance(absolute_tolerances, Mapping)
+        ):
+            raise IterationPolicyError(
+                "members must be a tuple; seeds and tolerances must be mappings"
+            )
+        for member in (*members, *seeds, *absolute_tolerances):
+            require_safe_id(member, "member", IterationPolicyError)
         return cls(
             group_id,
             tuple(sorted(members)),

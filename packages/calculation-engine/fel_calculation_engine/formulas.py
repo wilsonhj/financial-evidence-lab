@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
-from decimal import Decimal
+from decimal import Decimal, DecimalException
 from typing import TypeAlias
 
 from fel_calculation_engine.errors import FormulaError, MissingInputError, ValueTypeError
@@ -138,7 +138,10 @@ class _Parser:
             number = _NUMBER.match(self.text, self.offset)
             if number is None:
                 raise FormulaError("expected reference, literal or parenthesis")
-            left = Literal(Decimal(number.group()))
+            try:
+                left = Literal(Decimal(number.group(), context=CALC_CONTEXT))
+            except DecimalException as exc:
+                raise FormulaError("literal cannot be represented as a finite Decimal") from exc
             self.offset = number.end()
         self.count += 1
         if self.count > MAX_AST_NODES:
@@ -216,7 +219,10 @@ def evaluate_formula(ast: FormulaAST, quantities: Mapping[str, Quantity]) -> Qua
             return left * right
         return left / right
 
-    return compute(ast)
+    try:
+        return compute(ast)
+    except DecimalException as exc:
+        raise FormulaError("formula arithmetic failed", operation=type(exc).__name__) from exc
 
 
 def rewrite_formula_references(ast: FormulaAST, mapping: Mapping[str, str]) -> FormulaAST:

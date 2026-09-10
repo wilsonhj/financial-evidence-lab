@@ -125,6 +125,7 @@ class ModelGraph:
             for group in groups:
                 for member, seed in group.seeds:
                     edges.append(Edge(seed, member, "iteration_seed"))
+                    dependencies[member] = tuple(dict.fromkeys((*dependencies[member], seed)))
                     if member not in dependents[seed]:
                         dependents[seed].append(member)
         else:
@@ -230,6 +231,7 @@ def _iteration_plan(
             raise IterationPolicyError(
                 "group must match exactly one cyclic SCC", group_id=group.group_id
             )
+        member_set = set(group.members)
         for member, seed in group.seeds:
             node = by_id[member]
             if not isinstance(node, FormulaNode | ExpressionFormulaNode):
@@ -240,7 +242,7 @@ def _iteration_plan(
                 )
             if seed not in by_id:
                 raise MissingInputError("missing iteration seed", missing=seed, node_id=member)
-            if seed in group.members:
+            if seed in member_set:
                 raise IterationPolicyError(
                     "iteration seeds must be external", group_id=group.group_id
                 )

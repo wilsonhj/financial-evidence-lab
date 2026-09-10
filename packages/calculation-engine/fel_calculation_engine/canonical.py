@@ -74,7 +74,11 @@ def _encode(value: Any) -> Any:
     if dataclasses.is_dataclass(value) and not isinstance(value, type):
         payload: dict[str, Any] = {"$type": type(value).__name__}
         for field in dataclasses.fields(value):
-            payload[field.name] = _encode(getattr(value, field.name))
+            item = getattr(value, field.name)
+            # Explicit compatibility fields do not change legacy payloads when absent.
+            if field.metadata.get("canonical_omit_default") and item == field.default:
+                continue
+            payload[field.name] = _encode(item)
         return payload
     if isinstance(value, dict):
         encoded: dict[str, Any] = {}
