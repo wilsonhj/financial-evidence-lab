@@ -779,7 +779,7 @@ packages:
       - apps/api/**
   - id: M4-FORMULA-AST # spec 8.5 formula AST + explicitly-modelled iterative cycles
     issue: 219
-    tasks: [] # T0411/T0412 reserved; assigned with their canonical additions in #219's PR.
+    tasks: [T0411, T0412] # Added unchecked with ADR-0018 in PR #262.
     depends_on: [M4-MODEL-CALC]
     team: modeling
     branch: agent/m4-formula-ast # not yet created
