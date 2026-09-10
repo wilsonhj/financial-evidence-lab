@@ -114,7 +114,7 @@ docs/runbooks/               Operator runbooks for deployed services
 
 Supported toolchain:
 
-- Node.js 22 (`.node-version`)
+- Node.js 24.20.0 (`.node-version` for CI, `.nvmrc` for nvm)
 - pnpm 10.33 through Corepack (`packageManager` in `package.json`)
 - Python 3.11 (`.python-version`)
 - PostgreSQL with pgvector for database-backed tests and services
