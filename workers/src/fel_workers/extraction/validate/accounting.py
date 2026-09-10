@@ -4,7 +4,7 @@ Two layers, both reached from ``validate.pipeline.validate_proposals``:
 
 * :func:`accounting_errors` — one payload at a time: the ``svc_gm``
   blended-margin prohibition, percent plausibility, the ``billings`` derivation
-  lineage gate, ``crpo`` timing verification, guidance range ordering, and the
+  lineage gate, ``crpo`` timing verification, and the
   ontology's required qualifiers.
 * :func:`identity_errors` — arithmetic identities across payloads, required by
   spec M3-VAL-001: cRPO never exceeds RPO, single-dimension segments sum to
@@ -38,7 +38,6 @@ from typing import Any
 from fel_ontology.models import MetricDef, OntologyDocument
 from fel_ontology.units import canonical_unit
 from fel_workers.extraction.hashing import canonical_json
-from fel_workers.extraction.validate.range import check_range
 
 # 0.5% of the larger side. Issuers routinely report segments to three
 # significant figures against a total reported to four, which lands a few tenths
@@ -127,15 +126,6 @@ def accounting_errors(payload: dict[str, Any], ontology: OntologyDocument) -> li
     errors.extend(_svc_gm_errors(metric_id, payload))
     errors.extend(_percent_errors(metric, payload))
     errors.extend(_metric_rule_errors(metric_id, payload))
-
-    # Share Decimal low/high ordering with check_range; keep live-path messages.
-    for code in check_range(payload):
-        if code == "range_low_gt_high":
-            errors.append("guidance range low must be <= high")
-        elif code == "range_bounds_not_decimal":
-            errors.append("guidance range low/high not decimal")
-        else:
-            errors.append(code)
 
     quals = payload.get("qualifiers") or {}
     for field in metric.required_qualifiers:

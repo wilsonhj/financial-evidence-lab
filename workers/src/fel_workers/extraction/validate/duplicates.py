@@ -17,6 +17,7 @@ from typing import Any
 
 from fel_ontology.units import UNIT_POLICY_VERSION, canonical_unit
 from fel_workers.extraction.hashing import canonical_json, hash_json
+from fel_workers.extraction.types import RANGE_POLICY_VERSION
 
 # Entries of the identity key that a metric's ontology comparability key already
 # encodes: it names the metric and exactly the qualifiers that decide
@@ -71,7 +72,13 @@ def conflict_key_for(
     if ontology_comparability_key:
         identity = {k: v for k, v in identity.items() if k not in _ONTOLOGY_SUPERSEDES}
         identity["comparability"] = ontology_comparability_key
-    return hash_json({"unit_policy_version": UNIT_POLICY_VERSION, "identity": identity})
+    return hash_json(
+        {
+            "unit_policy_version": UNIT_POLICY_VERSION,
+            "range_policy_version": RANGE_POLICY_VERSION,
+            "identity": identity,
+        }
+    )
 
 
 def canonical_magnitude(value: Any, scale: Any) -> Any:

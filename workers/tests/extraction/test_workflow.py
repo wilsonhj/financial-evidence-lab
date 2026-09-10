@@ -185,12 +185,13 @@ def test_redaction_strips_prompt_dumps() -> None:
     assert cleaned["run_id"] == "ok"
 
 
-def test_legacy_workflow_is_rejected_before_any_checkpoint_recovery() -> None:
+@pytest.mark.parametrize("version", ["extraction-workflow/v1", "extraction-workflow/v2"])
+def test_legacy_workflow_is_rejected_before_any_checkpoint_recovery(version) -> None:
     class NoRecovery(MemoryCheckpointStore):
         def load_succeeded(self, **kwargs):
             pytest.fail("old version reached checkpoint recovery")
 
-    state = WorkflowState(request=replace(_request(), workflow_version="extraction-workflow/v1"))
+    state = WorkflowState(request=replace(_request(), workflow_version=version))
     out = run_extraction_workflow(
         state, WorkflowDeps(structured_llm=MockStructuredLLMProvider(), checkpoint=NoRecovery())
     )
@@ -209,5 +210,32 @@ def test_stage_input_hashes_pin_policy_and_component_versions(monkeypatch) -> No
     }
     monkeypatch.setattr(workflow, "UNIT_POLICY_VERSION", "future-policy")
     assert all(hash_json(workflow._stage_input_payload(state, s)) != before[s] for s in before)
-    assert workflow._stage_input_payload(state, "normalize")["normalizer_version"] == "normalize/v1"
-    assert workflow._stage_input_payload(state, "validate")["validator_version"] == "validate/v2"
+    assert workflow._stage_input_payload(state, "normalize")["normalizer_version"] == "normalize/v2"
+    assert workflow._stage_input_payload(state, "validate")["validator_version"] == "validate/v3"
+
+
+@pytest.mark.parametrize(
+    "pin,stages",
+    [
+        ("RANGE_POLICY_VERSION", ("normalize", "validate")),
+        ("NORMALIZER_VERSION", ("normalize",)),
+        ("VALIDATOR_VERSION", ("validate",)),
+    ],
+)
+def test_range_and_component_pins_change_actual_stage_hashes(monkeypatch, pin, stages):
+    from fel_workers.extraction import workflow
+    from fel_workers.extraction.hashing import stage_input_hash
+
+    state = WorkflowState(request=_request())
+
+    def inputs(stage):
+        return stage_input_hash(
+            workflow_version=state.request.workflow_version,
+            step_name=stage,
+            payload=workflow._stage_input_payload(state, stage),
+            run_id=state.request.run_id,
+        )
+
+    before = {s: inputs(s) for s in stages}
+    monkeypatch.setattr(workflow, pin, "future-policy")
+    assert all(inputs(s) != before[s] for s in stages)

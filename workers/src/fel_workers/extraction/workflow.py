@@ -40,6 +40,7 @@ from fel_workers.extraction.types import (
     MODE_STAGES,
     NORMALIZER_BLOCKERS_KEY,
     NORMALIZER_VERSION,
+    RANGE_POLICY_VERSION,
     STAGE_ORDER,
     VALIDATOR_VERSION,
     WORKFLOW_VERSION,
@@ -685,12 +686,14 @@ def _stage_input_payload(state: WorkflowState, step_name: str) -> Any:
             "raw_proposals": state.raw_proposals,
             "normalizer_version": NORMALIZER_VERSION,
             "unit_policy_version": UNIT_POLICY_VERSION,
+            "range_policy_version": RANGE_POLICY_VERSION,
         }
     if step_name == "validate":
         return {
             "normalized": state.normalized,
             "validator_version": VALIDATOR_VERSION,
             "unit_policy_version": UNIT_POLICY_VERSION,
+            "range_policy_version": RANGE_POLICY_VERSION,
         }
     if step_name == "verify_citations":
         return {"validated_count": len(state.validated)}

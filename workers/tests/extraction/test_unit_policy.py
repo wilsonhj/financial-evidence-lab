@@ -118,6 +118,7 @@ def test_withheld_mixed_case_segment_suppresses_partial_sum():
 def test_new_conflict_namespace_and_unchanged_proposal_algorithm():
     from fel_ontology.units import UNIT_POLICY_VERSION
     from fel_workers.extraction.hashing import hash_json, proposal_id_for
+    from fel_workers.extraction.types import RANGE_POLICY_VERSION
     from fel_workers.extraction.validate.duplicates import conflict_key_for
 
     payload = kpi("revenue", "1000", unit="usd")
@@ -131,7 +132,11 @@ def test_new_conflict_namespace_and_unchanged_proposal_algorithm():
     assert draft.validation_summary["unit_policy_version"] == UNIT_POLICY_VERSION
     identity = comparability_key_for(payload)
     assert conflict_key_for(payload) == hash_json(
-        {"unit_policy_version": UNIT_POLICY_VERSION, "identity": identity}
+        {
+            "unit_policy_version": UNIT_POLICY_VERSION,
+            "range_policy_version": RANGE_POLICY_VERSION,
+            "identity": identity,
+        }
     )
     assert conflict_key_for(payload) != hash_json(identity)
     assert conflict_key_for(payload) == conflict_key_for(dict(payload, unit="USD"))
@@ -191,6 +196,6 @@ def test_fixed_payload_and_conflict_golden_vectors():
     assert draft.id == "08309c7e-edc6-40ed-af68-f97be3f731bc"
     assert (
         conflict_key_for(payload)
-        == "sha256:378d5e510187a4dec7a0a39960edca24a7432c239c65226055d00e410ba18603"
+        == "sha256:f7f42b3304cc1f678172323664101d6051ec7c18d1860838130f9cd13b572661"
     )
     assert draft.payload == payload
