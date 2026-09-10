@@ -42,7 +42,7 @@ import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
-from typing import Any
+from typing import Any, Literal
 
 from fel_providers.interfaces import (
     StructuredGenerationRequest,
@@ -59,6 +59,9 @@ CLAIM_STATUSES: frozenset[str] = frozenset(
 CITATION_STATUSES: frozenset[str] = frozenset(
     {"entailed", "partial", "contradictory", "irrelevant"}
 )
+ClaimStatus = Literal["supported", "partially_supported", "contradicted", "derived", "unsupported"]
+CitationStatus = Literal["entailed", "partial", "contradictory", "irrelevant"]
+NUMERIC_SCALE_EXPONENTS = frozenset({0, 3, 6, 9})
 
 # Structured-generation schema identity: the contract schema the provider is
 # constrained to and the generator validates against.
@@ -160,6 +163,10 @@ class NumericTuple:
     period: str
     scale: int
 
+    def __post_init__(self) -> None:
+        if self.scale not in NUMERIC_SCALE_EXPONENTS:
+            raise ValueError(f"illegal numeric scale: {self.scale!r}")
+
     @property
     def sign(self) -> int:
         if self.value > 0:
@@ -190,13 +197,17 @@ class ClaimCitation:
 
     item_id: str
     source_span_id: str
-    status: str = "irrelevant"
+    status: CitationStatus = "irrelevant"
     numeric_checks: dict[str, bool] = field(default_factory=dict)
     rationale: str | None = None
     verifier: str | None = None
     model: str | None = None
     version: str | None = None
     quote: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.status not in CITATION_STATUSES:
+            raise ValueError(f"illegal citation status: {self.status!r}")
 
 
 @dataclass(frozen=True)
@@ -214,7 +225,7 @@ class GeneratedClaim:
 
     ord: int
     text: str
-    status: str
+    status: ClaimStatus
     citations: tuple[ClaimCitation, ...]
     confidence: Decimal | None = None
     calculation_lineage: dict[str, Any] = field(default_factory=dict)
@@ -223,9 +234,8 @@ class GeneratedClaim:
     def __post_init__(self) -> None:
         if self.status not in CLAIM_STATUSES:
             raise ValueError(f"illegal claim status: {self.status!r}")
-        for citation in self.citations:
-            if citation.status not in CITATION_STATUSES:
-                raise ValueError(f"illegal citation status: {citation.status!r}")
+        if self.status == "derived" and not self.calculation_lineage:
+            raise ValueError("derived claim requires calculation lineage")
 
 
 @dataclass(frozen=True)
@@ -237,6 +247,8 @@ class GenerationResult:
     model: str
     input_tokens: int
     output_tokens: int
+    response_id: str
+    estimated_cost_usd: Decimal
     refused: bool
     refusal: str | None = None
     abstained: bool = False
@@ -440,6 +452,8 @@ class StructuredClaimGenerator:
                 model=result.model,
                 input_tokens=result.input_tokens,
                 output_tokens=result.output_tokens,
+                response_id=result.response_id,
+                estimated_cost_usd=result.estimated_cost_usd,
                 refused=True,
                 refusal=result.refusal,
             )
@@ -459,6 +473,8 @@ class StructuredClaimGenerator:
                     model=result.model,
                     input_tokens=result.input_tokens,
                     output_tokens=result.output_tokens,
+                    response_id=result.response_id,
+                    estimated_cost_usd=result.estimated_cost_usd,
                     refused=False,
                     abstained=True,
                 )
@@ -470,6 +486,8 @@ class StructuredClaimGenerator:
             model=result.model,
             input_tokens=result.input_tokens,
             output_tokens=result.output_tokens,
+            response_id=result.response_id,
+            estimated_cost_usd=result.estimated_cost_usd,
             refused=False,
             abstained=abstain_reason is not None,
             abstain_reason=abstain_reason,

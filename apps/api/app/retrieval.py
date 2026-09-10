@@ -485,6 +485,12 @@ def _execute_pipeline(
         input_tokens=generation.input_tokens,
         output_tokens=generation.output_tokens,
     )
+    generation_audit = {
+        "provider": generation.provider,
+        "model": generation.model,
+        "response_id": generation.response_id,
+        "estimated_cost_usd": str(generation.estimated_cost_usd),
+    }
     for claim in generation.claims:
         writer.emit(
             "claim_generated",
@@ -530,7 +536,7 @@ def _execute_pipeline(
     # Missing supporting evidence yields abstention; a contradicted claim is
     # preserved and displayed (the run still succeeds).
     if should_abstain(claims):
-        abstention = {"reason": "insufficient_evidence"}
+        abstention: dict[str, Any] = {"reason": "insufficient_evidence"}
         if generation_rejection_code is not None:
             abstention = {
                 "reason": "generation_contract_invalid",
@@ -542,10 +548,11 @@ def _execute_pipeline(
             # The model's free-form reason may contain source/model text. Only
             # the typed disposition belongs in the persisted trace event.
             abstention = {"reason": "model_abstained"}
+        abstention["generation"] = generation_audit
         writer.emit("run_abstained", abstention)
         writer.finish_abstained(budget_usage=budget_usage, timings_ms=timings_ms, cost_usd=cost_usd)
     else:
-        writer.emit("run_completed", {"status": "succeeded"})
+        writer.emit("run_completed", {"status": "succeeded", "generation": generation_audit})
         writer.finish_succeeded(budget_usage=budget_usage, timings_ms=timings_ms, cost_usd=cost_usd)
     return budget_usage, cost_usd
 
