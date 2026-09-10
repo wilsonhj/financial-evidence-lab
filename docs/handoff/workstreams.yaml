@@ -412,7 +412,7 @@ packages:
     depends_on: [M3-EXTRACTION-CORE]
     team: experience
     branch: agent/m3-review # not yet created
-    status: blocked # ALL THREE RECORDED HOLDS ARE NOW CLEARED, and none of the three is what holds it today. (1) ADR-0011 ratified by PR #175 @ f158e05 (2026-08-30). (2) The SSE hold — migration 0006 via #157 — CLEARED by PR #236 @ 22831da (2026-09-05); see EXTRACTION-STEPS-OUTPUT above, now `merged`. (3) #146 Option 1 (terminal runs final), ruled 2026-08-29 and recorded here as unimplemented, was IMPLEMENTED by PR #211 @ 988f47a (2026-09-04), which closed #146 and #204: RunAlreadyTerminal, TERMINAL_RUN_STATUSES and _assert_run_open enforce it, and #236 preserved every one of those guards through its seven-conflict merge. WHAT HOLDS IT NOW is path contention alone: allowed_paths apps/api/** is claimed by BOTH open PRs, #232 (cherry/191-api-hardening) and #241 (cherry/193-claims-output), and both rewrite apps/api/app/retrieval.py. Still deliberately left `blocked` by this reconciliation: flipping this key is a dispatch decision reserved to the integration lead, not a documentation fix. The key is explicit, so dispatching means flipping it rather than adding one.
+    status: blocked # Historical producer holds cleared: ADR-0011 accepted, migration 0006 merged via #236, terminal-run semantics via #211. The API contention from #232/#241 also cleared when both merged on September 10 UTC. This explicit blocked dispatch key is retained pending a fresh lead dispatch with the issue's current dependencies and path ownership checked; documentation review does not silently activate implementation.
     allowed_paths: [apps/web/**, apps/api/**]
   - id: M3-CONFIDENCE-GATE # confidence scoring + extraction quality gate
     issue: 62
@@ -634,7 +634,7 @@ packages:
     depends_on: [M2-RETRIEVAL-BACKEND]
     team: platform
     branch: cherry/191-api-hardening
-    status: review # PR #232 OPEN (contract-change, agent-task), not a draft. Its author recorded on 2026-09-06 that it must carry its own contract half. Commit 3a8384b (on the branch after merging main @ 75fad38; pushed and reviewed; historical SHA) does so: the two 402 COST_LIMIT_EXCEEDED responses on createQuery/createQueryRerun, a RateLimited response with Retry-After referenced as 429 from those two plus createRetrievalFeedback, info.version/CONTRACT_VERSION/package.json to 0.5.0, regenerated client, contracts vitest 32 passed, check:generated clean. It deliberately does NOT declare ListLimit or the 413 READER_TOO_LARGE the author's comment also listed: the branch head 2479eb2 defers list and reader caps back to #191, serves neither, and apps/api/tests/test_list_contract.py asserts the list routes declare no limit parameter, so declaring them would create the contract-path-nothing-serves defect the #246 parity test exists to catch. List bounding stays with #191. SERIALIZE AGAINST #241 — see the CONTRACT CONTENTION note below.
+    status: merged # PR #232 @ eb8b7c8 (2026-09-10 UTC), reviewed head 96e9102. Contract 0.5.0 and ADR-0016; concurrent durable admission, atomic terminal metering, UUID-normalized rate buckets, pooled tenant sessions and optional Sentry controls. Final PostgreSQL/JS/audit/browser/migration CI passed. Issue #191 remains open for coordinated pagination/reader and production-provider residuals; #203 retains CI/observability residuals. Do not redispatch this merged recovery branch; register a fresh bounded residual before implementation.
     allowed_paths:
       - apps/api/**
       - packages/contracts/** # the 0.5.0 additions above; shared path, contract-change label already present
@@ -645,7 +645,7 @@ packages:
     depends_on: [M2-CLAIMS-VERIFICATION]
     team: retrieval
     branch: cherry/193-claims-output
-    status: review # PR #241 OPEN (contract-change, agent-task), not a draft. Owner accepted ADR content and renumber to ADR-0015 in the September 7 PR comment. September 9 review fixes transformed-prose full support; final checks and integration remain. Contract 0.6.0 follows #232 at 0.5.0. SERIALIZE AGAINST #232 — see below.
+    status: merged # PR #241 @ 5e1faa6 (2026-09-10 UTC), reviewed head 8f3e7e9; issue #193 closed. Owner's September 7 ADR acceptance is recorded as ADR-0015. Contract 0.6.0 follows #232 at 0.5.0. Full mock support now requires whole-evidence text identity; transformed prose is qualified below confidence 1, with numeric mismatches decisive. Typed abstention preserves provider usage through atomic terminal metering. Final PostgreSQL/JS/audit/browser/migration CI passed; live semantic verification remains #132/#195 work.
     allowed_paths:
       - apps/api/**
       - packages/contracts/**
@@ -653,19 +653,10 @@ packages:
       - packages/retrieval/**
       - docs/decisions/**
       - docs/handoff/CONTRACTS.md
-  # CONTRACT CONTENTION — #232 and #241 MUST be serialized, on two independent
-  # grounds, and neither PR's description says so:
-  #   1. Both modify apps/api/app/retrieval.py.
-  #   2. Both target OpenAPI 0.5.0. #241 already bumps info.version, package.json
-  #      and CONTRACT_VERSION to 0.5.0 and adds a contracts.test.ts assertion
-  #      pinning all three to that string; #232 must make the same bump for its
-  #      own additions. Whichever merges second inherits a version its own diff
-  #      claims to introduce, and contracts.test.ts asserts only that the three
-  #      values AGREE — nothing asserts that adding surface requires a bump, so
-  #      a second PR landing paths at an unchanged 0.5.0 stays green.
-  # Resume rule 3 forbids two concurrent owners of packages/contracts/** anyway.
-  # September 9 integration order: #232 at 0.5.0, then #241 at 0.6.0.
-  # ADR content for #241 was already accepted by the owner on September 7.
+  # CONTRACT INTEGRATION — September 9 review serialized #232 (0.5.0, eb8b7c8)
+  # then #241 (0.6.0, 5e1faa6). Both previously targeted 0.5.0 and changed
+  # retrieval.py. Their integration preserves typed abstention and atomic
+  # metering; matching version strings alone is not evidence of a valid bump.
   - id: ARCH-M3-PLUMBING # NULL confidence for unscored proposals, derived review priority
     issue: 194
     tasks: []

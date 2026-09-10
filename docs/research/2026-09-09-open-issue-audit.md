@@ -215,3 +215,12 @@ Second GitHub inventory: still39 open, but snapshot changed: #249 closed and #25
 ### #252 — current dependency advisory gate — P0 immediate PR prerequisite
 
 New issue owns mandatory audit failures observed in fresh CI run34425748418 on #232 (six named GHSAs in its issue body). The security remediation agent is implementing minimum patched Next16.3.3/Vitest4.1.11 and transitive floors baseline-browser-mapping2.11.0/js-yaml4.3.2/sharp0.35.4, frozen dependency behavior otherwise. These versions are the issue's requested remediation targets, not independently re-researched by this audit. Paths `package.json`, `apps/web/package.json`, `pnpm-workspace.yaml`, `pnpm-lock.yaml`, existing Vitest-constraining manifests; contract-change + owner authorization already recorded. Gate format/lint/typecheck/fullJS tests/web build/audit all pass; regenerate lock deterministically; no suppressions instead of fix. Serialize shared manifests/lock with other PRs, merge onto current integration branch, rerun affected PR checks. Close bounded advisory patch and verified audit before #232/#241 merge; this replaces no milestone work.
+
+## Review-session merge evidence
+
+The audit above is a dated source/issue snapshot. Session integration has since
+merged #250 at `9e59edb` (closes #249), #253 at `3dfe678` (closes #252), and
+#232 at `eb8b7c8` (retains #191/#203 residuals), and #241 at `5e1faa6`
+(closes #193). There were 37 remaining open issues after these merges. Final PR outcomes and remaining
+issue count are recorded in `docs/handoff/STATUS.md`. None of these merges
+certifies a live milestone gate.

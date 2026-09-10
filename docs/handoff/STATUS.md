@@ -13,11 +13,24 @@ its dependency-ordered implementation plan is in
 They are subordinate to the canonical product requirements, not another task ledger.
 
 The owner accepted #241's ADR content and renumbering to ADR-0015 on September 7.
-That supersedes the acceptance hold recorded in the historical inventory below.
-The current review reproduced and fixed #232's UUID-spelling rate-limit bypass
-and #241's transformed-prose full-support defect. Integration order is #232
-(contract 0.5.0), then #241 (contract 0.6.0); each needs fresh CI including
-PostgreSQL after integration. #191 and #203 retain their residual work.
+That superseded the acceptance hold in the historical inventory below. Final
+review integration completed in this order:
+
+| PR | Reviewed head | Merge | Result |
+|---|---|---|---|
+| #250 | `961233c` | `9e59edb` | Node 24.20.0; #249 closed |
+| #253 | `c9e9428` | `3dfe678` | Current advisory fixes; #252 closed |
+| #232 | `96e9102` | `eb8b7c8` | UUID rate-limit bypass and Sentry collection fixed; contract 0.5.0 |
+| #241 | `8f3e7e9` | `5e1faa6` | Conservative mock entailment and preserved abstention cost; contract 0.6.0; #193 closed |
+
+Every listed PR passed its required checks before merge. The final
+[#232 CI](https://github.com/wilsonhj/financial-evidence-lab/actions/runs/34426444226)
+and [#241 CI](https://github.com/wilsonhj/financial-evidence-lab/actions/runs/34426699743)
+include PostgreSQL regressions, JS/security, browser and migration/restore checks.
+#191 and #203 retain their residual work. Following these merges, 37 issues
+remained open; the audit covers all of them plus the three closed in-session.
+PR #251 carries this final documentation reconciliation. Re-query GitHub before
+execution rather than treating the dated count as a live queue.
 
 Issues #141, #157, #189, #198 and #202 were already closed at this review's
 snapshot; the historical statements below that call them open are superseded.

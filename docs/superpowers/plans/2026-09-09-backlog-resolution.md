@@ -100,6 +100,10 @@ abstention while final actual spend and terminal state commit atomically.
 Test transient and persistent metering errors as well as contract failure.
 All existing 402/429 responses survive generated-client regeneration at 0.6.0.
 
+The session completed #250 (`9e59edb`), #253 (`3dfe678`), #232 (`eb8b7c8`)
+and #241 (`5e1faa6`) with final CI passing. #251 publishes this audit and plan.
+The remaining waves describe work still to execute, not completed changes.
+
 ## Wave 1 — stable tests and deterministic correctness
 
 **Issues:** #248, #230, #221, #153, #154, #137, #194.
