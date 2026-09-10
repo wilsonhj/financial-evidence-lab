@@ -358,10 +358,9 @@ def _commit_fence(ctx: _ExecCtx, step_name: str) -> None:
     the run's real owner read back on resume. Since ADR-0011 the output lives on
     the step row, whose success key is the partial unique index
     ``(run_id, step_name, input_hash, workflow_version) WHERE status='succeeded'``
-    and whose INSERT is ``ON CONFLICT DO NOTHING`` — a zombie's write now loses
-    the race instead of winning it. The fence is still worth keeping: it stops
-    the zombie writing at all, and it is the only thing that stops a lease-less
-    worker appending events to a run it no longer owns.
+    and rejected checkpoints can be repaired at that key. The fence stops a
+    lease-less worker replacing the owner's checkpoint or appending events to
+    a run it no longer owns.
 
     Raising here writes nothing and the owner re-runs the stage, which is
     idempotent by construction (keyed on ``input_hash``). The wall-clock cap is
@@ -447,6 +446,14 @@ def _reject_checkpoint(ctx: _ExecCtx, *, record: StageRecord, reason: str, messa
     ``step_failed`` because the vocabulary is frozen — see ``_is_recoverable``.
     """
     req = ctx.state.request
+    reject_loaded = getattr(ctx.deps.checkpoint, "reject_loaded", None)
+    if reject_loaded is not None:
+        reject_loaded(
+            run_id=req.run_id,
+            org_id=req.org_id,
+            workflow_version=req.workflow_version,
+            record=record,
+        )
     emit(
         "stage_checkpoint_rejected",
         run_id=req.run_id,

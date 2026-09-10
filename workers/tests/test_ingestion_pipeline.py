@@ -9,6 +9,7 @@ import pathlib
 import threading
 import time
 import uuid
+import warnings
 from datetime import UTC, datetime
 
 import psycopg
@@ -73,6 +74,35 @@ def _ingest(conn: psycopg.Connection, storage: MockStorageProvider, **overrides)
     }
     params.update(overrides)
     return ingest_filing(conn, storage, **params)
+
+
+def _wait_for_publish_lock(
+    conn: psycopg.Connection,
+    thread: threading.Thread,
+    *,
+    timeout_seconds: float = 30.0,
+) -> bool:
+    deadline = time.monotonic() + timeout_seconds
+    while time.monotonic() < deadline:
+        waiting = conn.execute(
+            "SELECT count(*) FROM pg_locks l"
+            " JOIN pg_stat_activity a ON a.pid = l.pid"
+            " WHERE NOT l.granted"
+            "   AND a.datname = current_database()"
+            "   AND a.pid <> pg_backend_pid()"
+        ).fetchone()
+        if waiting is not None and int(waiting[0]) > 0:
+            return True
+        thread.join(timeout=0.02)
+        if not thread.is_alive():
+            return False
+    warnings.warn(
+        "publish-race: pg_locks predicate never observed the publisher blocking "
+        f"within {timeout_seconds:.3f}s; the database-scoped lock-wait predicate "
+        "may no longer match",
+        stacklevel=2,
+    )
+    return False
 
 
 def test_raw_store_is_content_addressed_and_immutable(corpus_conn: psycopg.Connection) -> None:
@@ -424,20 +454,7 @@ def test_publish_race_surfaces_domain_error_not_db_error(
         # Note the failure mode is an EARLY break, not a slow one, so raising
         # the bound alone would not have fixed it. The bound is raised anyway,
         # to 30s, because a loaded machine can legitimately be slow to block.
-        deadline = time.monotonic() + 30.0
-        while time.monotonic() < deadline:
-            waiting = corpus_conn.execute(
-                "SELECT count(*) FROM pg_locks l"
-                " JOIN pg_stat_activity a ON a.pid = l.pid"
-                " WHERE NOT l.granted"
-                "   AND a.datname = current_database()"
-                "   AND a.pid <> pg_backend_pid()"
-            ).fetchone()
-            if waiting is not None and int(waiting[0]) > 0:
-                break
-            thread.join(timeout=0.02)
-            if not thread.is_alive():
-                break
+        _wait_for_publish_lock(corpus_conn, thread)
         blocker.commit()
         thread.join(timeout=30)
     assert not failures, f"raw database errors escaped the publish path: {failures!r}"

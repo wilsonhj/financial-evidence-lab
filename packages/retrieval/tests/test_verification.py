@@ -91,10 +91,10 @@ def test_cross_version_span_fails_closed() -> None:
 
 
 # --- entailment classification ---------------------------------------------
-def test_verifier_entailed_on_full_coverage() -> None:
+def test_verifier_entailed_on_whole_evidence_identity() -> None:
     v = MockCitationVerifier()
     item = _item("a", "Revenue was 100 million dollars")
-    edge = v.verify("Revenue was 100 million", item, claim_numeric=None)
+    edge = v.verify("  Revenue was 100\n million dollars  ", item, claim_numeric=None)
     assert edge.status == "entailed"
 
 
@@ -247,6 +247,101 @@ def test_verify_claims_dangling_raises() -> None:
     )
     with pytest.raises(CitationIntegrityError):
         verify_claims([claim], [item], MockCitationVerifier())
+
+
+# --- confidence comes from the verifier (#193) -----------------------------
+def test_confidence_is_full_only_on_full_support() -> None:
+    item = _item("a", "Revenue was 100", numeric=_num("100"))
+    claim = GeneratedClaim(
+        ord=0,
+        text="Revenue was 100",
+        status="unsupported",
+        citations=(ClaimCitation(item_id="a", source_span_id="span-1"),),
+        numeric=_num("100"),
+        confidence=None,
+    )
+    [verified] = verify_claims([claim], [item], MockCitationVerifier())
+    assert verified.confidence == Decimal("1")
+
+
+def test_partial_coverage_lowers_confidence_below_one() -> None:
+    item = _item("a", "Revenue was 100 in the quarter")
+    claim = GeneratedClaim(
+        ord=0,
+        text="Revenue was 100 in the unrelated segment",
+        status="unsupported",
+        citations=(ClaimCitation(item_id="a", source_span_id="span-1"),),
+    )
+    [verified] = verify_claims([claim], [item], MockCitationVerifier())
+    assert verified.confidence is not None
+    assert Decimal("0") < verified.confidence < Decimal("1")
+    assert verified.status == "partially_supported"
+
+
+def test_almost_complete_coverage_never_rounds_confidence_to_one() -> None:
+    text = " ".join(f"w{i}" for i in range(20001))
+    edge = MockCitationVerifier().verify(
+        text, _item("a", text.rsplit(" ", 1)[0]), claim_numeric=None
+    )
+    assert edge.status == "partial"
+    assert edge.confidence < Decimal("1")
+
+
+def test_numeric_contradiction_zeroes_confidence() -> None:
+    item = _item("a", "Revenue was 100", numeric=_num("100"))
+    claim = GeneratedClaim(
+        ord=0,
+        text="Revenue was 100",
+        status="unsupported",
+        citations=(ClaimCitation(item_id="a", source_span_id="span-1"),),
+        numeric=_num("250"),
+    )
+    [verified] = verify_claims([claim], [item], MockCitationVerifier())
+    assert verified.status == "contradicted"
+    assert verified.confidence == Decimal("0")
+
+
+def test_generator_supplied_confidence_is_discarded() -> None:
+    """A claim that arrives with confidence 1 does not keep it (#193)."""
+    item = _item("a", "Revenue was 100 in the quarter")
+    claim = GeneratedClaim(
+        ord=0,
+        text="Revenue fell sharply in every region",
+        status="supported",
+        citations=(ClaimCitation(item_id="a", source_span_id="span-1"),),
+        confidence=Decimal("1"),
+    )
+    [verified] = verify_claims([claim], [item], MockCitationVerifier())
+    assert verified.confidence != Decimal("1")
+    assert verified.status == "unsupported"
+
+
+def test_weakest_edge_decides_claim_confidence() -> None:
+    strong = _item("a", "Revenue was 100 in the quarter")
+    weak = _item("b", "Unrelated commentary about hiring", span="span-2")
+    claim = GeneratedClaim(
+        ord=0,
+        text="Revenue was 100 in the quarter",
+        status="unsupported",
+        citations=(
+            ClaimCitation(item_id="a", source_span_id="span-1"),
+            ClaimCitation(item_id="b", source_span_id="span-2"),
+        ),
+    )
+    [verified] = verify_claims([claim], [strong, weak], MockCitationVerifier())
+    assert verified.confidence == Decimal("0")
+
+
+def test_quote_survives_verification() -> None:
+    item = _item("a", "Revenue was 100")
+    claim = GeneratedClaim(
+        ord=0,
+        text="Revenue was 100",
+        status="unsupported",
+        citations=(ClaimCitation(item_id="a", source_span_id="span-1", quote="Revenue was 100"),),
+    )
+    [verified] = verify_claims([claim], [item], MockCitationVerifier())
+    assert verified.citations[0].quote == "Revenue was 100"
 
 
 # --- #133: the per-edge numeric check, proven with a non-identity generator ---

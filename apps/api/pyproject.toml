@@ -8,6 +8,9 @@ dependencies = [
   "fastapi>=0.121.0",
   "uvicorn[standard]>=0.32",
   "pydantic>=2.9.2",
+  # The pool extra is load-bearing, not incidental: app/db.py serves every
+  # request from a psycopg_pool.ConnectionPool (#191).
+  "psycopg[binary,pool]>=3.2",
 ]
 
 [build-system]

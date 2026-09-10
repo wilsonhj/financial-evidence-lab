@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import threading
 import time
 import uuid
 from datetime import UTC, datetime
@@ -386,6 +388,91 @@ def test_question_containing_refuse_still_answers(
     assert trace["events"][-1]["type"] == "run_completed"
 
 
+@pytest.mark.parametrize("invalid_kind", ["schema", "unknown_citation"])
+def test_invalid_generation_abstains_with_usage_and_retrieval_trace(
+    client: TestClient,
+    org: tuple[str, str],
+    seeded: dict[str, str],
+    monkeypatch: pytest.MonkeyPatch,
+    invalid_kind: str,
+) -> None:
+    from dataclasses import replace
+
+    from fel_providers.interfaces import StructuredGenerationRequest, StructuredModelResult
+
+    class InvalidProvider(MockStructuredLLMProvider):
+        def generate_structured(
+            self, request: StructuredGenerationRequest
+        ) -> StructuredModelResult:
+            result = super().generate_structured(request)
+            parsed: dict[str, Any] = {"claims": "invalid", "abstain": None}
+            if invalid_kind == "unknown_citation":
+                parsed = {
+                    "claims": [
+                        {
+                            "text": "MODEL_PRIVATE_TEXT",
+                            "numeric": None,
+                            "citations": [{"item_id": "MODEL_PRIVATE_TEXT", "quote": "x"}],
+                        }
+                    ],
+                    "abstain": None,
+                }
+            return replace(result, parsed=parsed, input_tokens=17, output_tokens=9)
+
+    monkeypatch.setattr(retrieval, "MockStructuredLLMProvider", InvalidProvider)
+    created = _create(client, org, seeded["workspace_id"])
+    response = client.get(f"/v1/retrieval-runs/{created['run_id']}", headers=_headers(*org))
+    trace = response.json()
+    assert trace["status"] == "abstained"
+    assert trace["claims"] == []
+    assert trace["candidates"]
+    assert trace["budget_usage"]["input_tokens"] == 17
+    assert trace["budget_usage"]["output_tokens"] == 9
+    event = trace["events"][-1]
+    assert event["type"] == "run_abstained"
+    assert event["payload"] == {
+        "reason": "generation_contract_invalid",
+        "code": (
+            "CLAIMS_OUTPUT_SCHEMA_INVALID" if invalid_kind == "schema" else "UNKNOWN_CONTEXT_ITEM"
+        ),
+    }
+    assert "MODEL_PRIVATE_TEXT" not in response.text
+    assert not any(e["type"] == "claim_generated" for e in trace["events"])
+
+
+def test_explicit_model_abstention_is_distinct_and_does_not_log_model_reason(
+    client: TestClient,
+    org: tuple[str, str],
+    seeded: dict[str, str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from dataclasses import replace
+
+    from fel_providers.interfaces import StructuredGenerationRequest, StructuredModelResult
+
+    class AbstainingProvider(MockStructuredLLMProvider):
+        def generate_structured(
+            self, request: StructuredGenerationRequest
+        ) -> StructuredModelResult:
+            return replace(
+                super().generate_structured(request),
+                parsed={"claims": [], "abstain": {"reason": "MODEL_PRIVATE_REASON"}},
+                input_tokens=17,
+                output_tokens=9,
+            )
+
+    monkeypatch.setattr(retrieval, "MockStructuredLLMProvider", AbstainingProvider)
+    created = _create(client, org, seeded["workspace_id"])
+    response = client.get(f"/v1/retrieval-runs/{created['run_id']}", headers=_headers(*org))
+    trace = response.json()
+    assert trace["status"] == "abstained"
+    assert trace["claims"] == []
+    assert trace["events"][-1]["payload"] == {"reason": "model_abstained"}
+    assert trace["budget_usage"]["input_tokens"] == 17
+    assert trace["budget_usage"]["output_tokens"] == 9
+    assert "MODEL_PRIVATE_REASON" not in response.text
+
+
 def test_trace_replay_byte_stable(
     client: TestClient, org: tuple[str, str], seeded: dict[str, str]
 ) -> None:
@@ -719,14 +806,108 @@ def test_feedback_non_candidate_item_is_422(
     assert good.status_code == 201, good.text
 
 
-def test_create_query_p95_smoke(
+class _QueryCounter:
+    def __init__(self) -> None:
+        self.count = 0
+        self._lock = threading.Lock()
+
+    def increment(self) -> None:
+        with self._lock:
+            self.count += 1
+
+
+class _CountingConnection:
+    """Count SQL issued by retrieval lanes while preserving the real connection."""
+
+    def __init__(self, conn: Any, counter: _QueryCounter) -> None:
+        self._conn = conn
+        self._counter = counter
+
+    def execute(self, *args: Any, **kwargs: Any) -> Any:
+        self._counter.increment()
+        return self._conn.execute(*args, **kwargs)
+
+    def __enter__(self) -> _CountingConnection:
+        self._conn.__enter__()
+        return self
+
+    def __exit__(self, *args: Any) -> Any:
+        return self._conn.__exit__(*args)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._conn, name)
+
+
+_RETRIEVAL_QUERY_BUDGET = 6
+
+
+def _create_with_retrieval_query_budget(
+    client: TestClient,
+    org: tuple[str, str],
+    workspace_id: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    counter = _QueryCounter()
+    connect = retrieval._corpus_read_connection
+
+    def _counting_connection() -> _CountingConnection:
+        return _CountingConnection(connect(), counter)
+
+    monkeypatch.setattr(retrieval, "_corpus_read_connection", _counting_connection)
+    _create(client, org, workspace_id)
+    assert counter.count <= _RETRIEVAL_QUERY_BUDGET, (
+        f"retrieval lanes issued {counter.count} SQL statements; "
+        f"budget is {_RETRIEVAL_QUERY_BUDGET}"
+    )
+
+
+def test_create_query_stays_within_retrieval_query_budget(
+    client: TestClient,
+    org: tuple[str, str],
+    seeded: dict[str, str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Each lane executes a fixed number of SQL statements, independent of result count."""
+    _create_with_retrieval_query_budget(client, org, seeded["workspace_id"], monkeypatch)
+
+
+def test_create_query_budget_detects_injected_n_plus_one(
+    client: TestClient,
+    org: tuple[str, str],
+    seeded: dict[str, str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The operation budget fails if a lane adds one query for every result."""
+    lexical_lane = retrieval._LANE_FUNCS["lexical"]
+
+    def _n_plus_one_lane(conn: Any, query: Any) -> Any:
+        results = lexical_lane(conn, query)
+        for _ in results:
+            conn.execute("SELECT 1").fetchone()
+        return results
+
+    monkeypatch.setitem(retrieval._LANE_FUNCS, "lexical", _n_plus_one_lane)
+    with pytest.raises(AssertionError, match="retrieval lanes issued .* SQL statements"):
+        _create_with_retrieval_query_budget(client, org, seeded["workspace_id"], monkeypatch)
+
+
+@pytest.mark.skipif(
+    os.environ.get("FEL_RUN_QUERY_BENCHMARK") != "1",
+    reason="set FEL_RUN_QUERY_BENCHMARK=1 on a controlled host",
+)
+def test_create_query_p95_benchmark(
     client: TestClient, org: tuple[str, str], seeded: dict[str, str]
 ) -> None:
-    """Smoke-level p95 gate over the seeded corpus (mock providers).
+    """Opt-in p95 measurement for a declared host profile and latency target."""
+    profile = os.environ.get("FEL_QUERY_BENCHMARK_PROFILE")
+    target = os.environ.get("FEL_QUERY_BENCHMARK_P95_SECONDS")
+    assert profile, "FEL_QUERY_BENCHMARK_PROFILE must describe the controlled host"
+    assert target, "FEL_QUERY_BENCHMARK_P95_SECONDS must declare the target"
+    target_seconds = float(target)
 
-    Not a benchmark: a generous budget that will not flake on CI runners, sized
-    ~4x locally observed latency. Guards against gross regressions only.
-    """
+    for _ in range(2):
+        _create(client, org, seeded["workspace_id"])
+
     n = 20
     durations: list[float] = []
     for _ in range(n):
@@ -741,7 +922,11 @@ def test_create_query_p95_smoke(
 
     durations.sort()
     p95 = durations[-2]  # nearest-rank p95 of 20 samples (ceil(0.95*20) = 19th)
-    assert p95 < 2.0, f"p95 create-query latency {p95:.3f}s exceeded smoke budget"
+    print(f"create-query p95={p95:.3f}s profile={profile!r} samples={n}")
+    assert p95 < target_seconds, (
+        f"p95 create-query latency {p95:.3f}s exceeded declared "
+        f"{target_seconds:.3f}s target on {profile!r}"
+    )
 
 
 def test_rls_cross_org_is_404(
