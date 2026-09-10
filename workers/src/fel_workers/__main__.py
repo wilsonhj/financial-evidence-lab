@@ -447,6 +447,8 @@ def init_sentry() -> bool:
     sentry_sdk.init(
         dsn=dsn,
         send_default_pii=False,
+        include_local_variables=False,
+        max_request_body_size="never",
         traces_sample_rate=traces_sample_rate,
     )
     log.info("sentry initialised (traces_sample_rate=%s)", traces_sample_rate)
