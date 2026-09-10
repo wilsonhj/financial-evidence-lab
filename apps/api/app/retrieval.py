@@ -47,7 +47,7 @@ from decimal import Decimal
 from typing import Annotated, Any
 
 import psycopg
-from fastapi import APIRouter, Depends, Header, Response
+from fastapi import APIRouter, Depends, Header, Query, Response
 from fastapi.responses import StreamingResponse
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
@@ -63,6 +63,7 @@ from app.costs import (
 from app.db import tenant_connection
 from app.dependencies import get_tenant_context
 from app.errors import api_error
+from app.pagination import Order, page_headers, read_page, scope
 from app.ratelimit import rate_limit
 from fel_providers import EmbeddingProvider, MockEmbeddingProvider
 from fel_providers.interfaces import StructuredLLMProvider
@@ -1133,7 +1134,11 @@ def create_query_rerun(
 @router.get("/queries/{query_id}")
 def get_query(
     query_id: uuid.UUID,
+    response: Response,
     ctx: Annotated[TenantContext, Depends(get_tenant_context)],
+    limit: Annotated[int | None, Query(ge=1, le=200)] = None,
+    cursor: Annotated[str | None, Query(max_length=2048)] = None,
+    order: Annotated[Order | None, Query()] = None,
 ) -> dict[str, Any]:
     """Return the complete immutable query snapshot and run history."""
     with tenant_connection(ctx, snapshot_read=True) as conn:
@@ -1143,11 +1148,18 @@ def get_query(
         ).fetchone()
         if query is None:
             raise api_error(404, "NOT_FOUND", "Query not found.")
-        runs = conn.execute(
-            "SELECT id, parent_run_id, status, mode, started_at FROM retrieval_runs"
-            " WHERE query_id = %s ORDER BY started_at, id::text",
-            (str(query_id),),
-        ).fetchall()
+        runs, page = read_page(
+            conn,
+            query="SELECT id, parent_run_id, status, mode, started_at FROM retrieval_runs"
+            " WHERE query_id = %s AND org_id = %s",
+            params=(query_id, ctx.org_id),
+            keys=("started_at", "id"),
+            request_scope=scope("runs", ctx.org_id, query_id),
+            limit=limit,
+            token=cursor,
+            order=order,
+        )
+    page_headers(response, page)
     return {
         "query_id": str(query["id"]),
         "parent_query_id": str(query["parent_query_id"]) if query["parent_query_id"] else None,
@@ -1178,6 +1190,71 @@ def _event_body(row: dict[str, Any], run_id: str) -> dict[str, Any]:
     }
 
 
+MAX_TRACE_BYTES = 16 * 1024 * 1024
+MAX_EVENT_BYTES = 256 * 1024
+EVENT_BATCH_SIZE = 200
+
+
+def _trace_too_large(kind: str, limit: int) -> Exception:
+    return api_error(
+        413,
+        "TRACE_TOO_LARGE",
+        "Retrieval evidence exceeds a resource limit.",
+        {"resource": "retrieval_trace", "limit_kind": kind, "limit": limit},
+    )
+
+
+def _trace_rows(
+    conn: psycopg.Connection[dict[str, Any]],
+    query: str,
+    params: tuple[Any, ...],
+    cap: int,
+    kind: str,
+    budget: list[int],
+) -> list[dict[str, Any]]:
+    """Probe bounded count/serialized size before transferring any large payload."""
+    from psycopg import sql
+
+    bounded = sql.SQL(query) + sql.SQL(" LIMIT %s")
+    probe = conn.execute(
+        sql.SQL(
+            "SELECT count(*) AS n, coalesce(sum(octet_length(to_jsonb(t)::text)),0) AS bytes"
+            " FROM ({}) t"
+        ).format(bounded),
+        (*params, cap + 1),
+    ).fetchone()
+    assert probe is not None
+    if probe["n"] > cap:
+        raise _trace_too_large(kind, cap)
+    budget[0] += int(probe["bytes"])
+    if budget[0] > MAX_TRACE_BYTES:
+        raise _trace_too_large("serialized_bytes", MAX_TRACE_BYTES)
+    return conn.execute(bounded, (*params, cap)).fetchall()
+
+
+def _event_rows(conn: psycopg.Connection[dict[str, Any]], run_id: str, after: int, high_water: int) -> list[dict[str, Any]]:
+    # The SQL CASE prevents oversized JSON payloads crossing the DB boundary.
+    rows = conn.execute(
+        "SELECT seq, event_type, created_at, octet_length(payload::text) AS payload_bytes,"
+        " CASE WHEN octet_length(payload::text) <= %s THEN payload ELSE NULL END AS payload"
+        " FROM retrieval_events WHERE run_id = %s AND seq > %s AND seq <= %s"
+        " ORDER BY seq LIMIT 200",
+        (MAX_EVENT_BYTES, run_id, after, high_water),
+    ).fetchall()
+    for row in rows:
+        if row["payload_bytes"] > MAX_EVENT_BYTES:
+            raise _trace_too_large("event_bytes", MAX_EVENT_BYTES)
+        if len(_event_json(row, run_id).encode()) > MAX_EVENT_BYTES:
+            raise _trace_too_large("event_bytes", MAX_EVENT_BYTES)
+    return rows
+
+
+def _event_json(row: dict[str, Any], run_id: str) -> str:
+    return json.dumps(
+        _event_body(row, run_id), sort_keys=True, separators=(",", ":"), ensure_ascii=True
+    )
+
+
 @router.get("/retrieval-runs/{run_id}")
 def get_retrieval_run(
     run_id: uuid.UUID,
@@ -1197,12 +1274,35 @@ def get_retrieval_run(
         ).fetchone()
         if run is None:
             raise api_error(404, "NOT_FOUND", "Retrieval run not found.")
-        event_rows = conn.execute(
-            "SELECT seq, event_type, payload, created_at FROM retrieval_events"
-            " WHERE run_id = %s ORDER BY seq",
+        budget = [len(json.dumps(run, default=str).encode())]
+        event_probe = conn.execute(
+            "SELECT seq FROM retrieval_events WHERE run_id = %s ORDER BY seq LIMIT 10001",
             (str(run_id),),
         ).fetchall()
-        candidate_rows = conn.execute(
+        if len(event_probe) > 10000:
+            raise _trace_too_large("events", 10000)
+        high_water = event_probe[-1]["seq"] if event_probe else 0
+        event_rows = []
+        after = 0
+        while after < high_water:
+            batch = _event_rows(conn, str(run_id), after, high_water)
+            if not batch:
+                break
+            for row in batch:
+                budget[0] += len(_event_json(row, str(run_id)).encode())
+                if budget[0] > MAX_TRACE_BYTES:
+                    raise _trace_too_large("serialized_bytes", MAX_TRACE_BYTES)
+                event_rows.append(row)
+            after = batch[-1]["seq"]
+        distinct_candidates = conn.execute(
+            "SELECT DISTINCT retrieval_item_id FROM retrieval_candidates"
+            " WHERE run_id = %s LIMIT 2001",
+            (str(run_id),),
+        ).fetchall()
+        if len(distinct_candidates) > 2000:
+            raise _trace_too_large("candidates", 2000)
+        candidate_rows = _trace_rows(
+            conn,
             "SELECT rc.retrieval_item_id, rc.lane, rc.variant_index, rc.lane_rank,"
             " rc.raw_score, rc.normalized_score, rc.rrf_contribution, rc.fused_score,"
             " rc.rerank_score, rc.fused_rank, rc.rerank_rank, rc.accepted,"
@@ -1214,17 +1314,28 @@ def get_retrieval_run(
             " WHERE rc.run_id = %s"
             " ORDER BY rc.fused_rank, rc.retrieval_item_id::text",
             (str(run_id),),
-        ).fetchall()
-        claim_rows = conn.execute(
+            32000,
+            "candidate_contributions",
+            budget,
+        )
+        claim_rows = _trace_rows(
+            conn,
             "SELECT id, ord, text, status FROM claims WHERE run_id = %s ORDER BY ord",
             (str(run_id),),
-        ).fetchall()
-        citation_rows = conn.execute(
+            1000,
+            "claims",
+            budget,
+        )
+        citation_rows = _trace_rows(
+            conn,
             "SELECT claim_id, retrieval_item_id, source_span_id, status, numeric_checks"
             " FROM citations WHERE run_id = %s"
             " ORDER BY claim_id::text, retrieval_item_id::text, source_span_id::text",
             (str(run_id),),
-        ).fetchall()
+            16000,
+            "citations",
+            budget,
+        )
 
     events = [_event_body(row, str(run_id)) for row in event_rows]
     decisions: list[dict[str, Any]] = []
@@ -1259,6 +1370,8 @@ def get_retrieval_run(
         "finished_at": run["finished_at"].isoformat() if run["finished_at"] else None,
     }
     canonical = json.dumps(trace, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+    if len(canonical.encode()) > MAX_TRACE_BYTES:
+        raise _trace_too_large("serialized_bytes", MAX_TRACE_BYTES)
     return Response(content=canonical, media_type="application/json")
 
 
@@ -1339,25 +1452,39 @@ def _group_claims(
     ]
 
 
-def _sse_stream(ctx: TenantContext, run_id: str, last_event_id: int) -> Iterator[str]:
-    """Yield persisted events (seq > last_event_id) as text/event-stream.
-
-    Events are already committed when this generator runs (they were written in
-    the create transaction), so nothing uncommitted is ever emitted. A leading
-    heartbeat comment gives the client immediate liveness.
-    """
+def _sse_stream(
+    ctx: TenantContext,
+    run_id: str,
+    last_event_id: int,
+    initial: tuple[int, list[dict[str, Any]]] | None = None,
+) -> Iterator[str]:
+    """Replay all rows through captured high water, closing DB before every yield."""
+    if initial is None:
+        with tenant_connection(ctx, snapshot_read=True) as conn:
+            high_row = conn.execute(
+                "SELECT coalesce(max(seq),0) AS seq FROM retrieval_events" " WHERE run_id = %s",
+                (run_id,),
+            ).fetchone()
+            assert high_row is not None
+            high = high_row["seq"]
+            rows = _event_rows(conn, run_id, last_event_id, high)
+    else:
+        high, rows = initial
     yield _HEARTBEAT
-    with tenant_connection(ctx, snapshot_read=True) as conn:
-        rows = conn.execute(
-            "SELECT seq, event_type, payload, created_at FROM retrieval_events"
-            " WHERE run_id = %s AND seq > %s ORDER BY seq",
-            (run_id, last_event_id),
-        ).fetchall()
-    for row in rows:
-        body = json.dumps(
-            _event_body(row, run_id), sort_keys=True, separators=(",", ":"), ensure_ascii=True
-        )
-        yield f"id: {int(row['seq'])}\nevent: {row['event_type']}\ndata: {body}\n\n"
+    heartbeat = time.monotonic()
+    after = last_event_id
+    while rows:
+        for row in rows:
+            if time.monotonic() - heartbeat >= 15:
+                yield _HEARTBEAT
+                heartbeat = time.monotonic()
+            body = _event_json(row, run_id)
+            yield f"id: {int(row['seq'])}\nevent: {row['event_type']}\ndata: {body}\n\n"
+            after = row["seq"]
+        if after >= high:
+            break
+        with tenant_connection(ctx, snapshot_read=True) as conn:
+            rows = _event_rows(conn, run_id, after, high)
 
 
 @router.get("/retrieval-runs/{run_id}/events")
@@ -1366,14 +1493,64 @@ def stream_retrieval_run_events(
     ctx: Annotated[TenantContext, Depends(get_tenant_context)],
     last_event_id: Annotated[int | None, Header(alias="Last-Event-ID", ge=0)] = None,
 ) -> StreamingResponse:
-    with tenant_connection(ctx) as conn:
+    with tenant_connection(ctx, snapshot_read=True) as conn:
         run = conn.execute("SELECT id FROM retrieval_runs WHERE id = %s", (str(run_id),)).fetchone()
-    if run is None:
-        raise api_error(404, "NOT_FOUND", "Retrieval run not found.")
+        if run is None:
+            raise api_error(404, "NOT_FOUND", "Retrieval run not found.")
+        high_row = conn.execute(
+            "SELECT coalesce(max(seq),0) AS seq FROM retrieval_events" " WHERE run_id = %s",
+            (run_id,),
+        ).fetchone()
+        assert high_row is not None
+        high = high_row["seq"]
+        first = _event_rows(conn, str(run_id), last_event_id or 0, high)
     return StreamingResponse(
-        _sse_stream(ctx, str(run_id), last_event_id or 0),
+        _sse_stream(ctx, str(run_id), last_event_id or 0, (high, first)),
         media_type="text/event-stream",
     )
+
+
+@router.get("/retrieval-runs/{run_id}/event-history")
+def get_retrieval_event_history(
+    run_id: uuid.UUID,
+    response: Response,
+    ctx: Annotated[TenantContext, Depends(get_tenant_context)],
+    limit: Annotated[int | None, Query(ge=1, le=200)] = None,
+    cursor: Annotated[str | None, Query(max_length=2048)] = None,
+    order: Annotated[Order | None, Query()] = None,
+) -> dict[str, Any]:
+    with tenant_connection(ctx, snapshot_read=True) as conn:
+        run = conn.execute("SELECT id FROM retrieval_runs WHERE id = %s", (run_id,)).fetchone()
+        if run is None:
+            raise api_error(404, "NOT_FOUND", "Retrieval run not found.")
+        rows, page = read_page(
+            conn,
+            query="SELECT seq, event_type, created_at,"
+            " octet_length(payload::text) AS payload_bytes,"
+            " CASE WHEN octet_length(payload::text) <= %s THEN payload ELSE NULL END AS payload"
+            " FROM retrieval_events WHERE run_id = %s",
+            params=(MAX_EVENT_BYTES, run_id),
+            keys=("seq",),
+            request_scope=scope("events", ctx.org_id, run_id),
+            limit=limit,
+            token=cursor,
+            order=order,
+            force_page=True,
+        )
+        for row in rows:
+            if (
+                row["payload_bytes"] > MAX_EVENT_BYTES
+                or len(_event_json(row, str(run_id)).encode()) > MAX_EVENT_BYTES
+            ):
+                raise _trace_too_large("event_bytes", MAX_EVENT_BYTES)
+    assert page is not None
+    page_headers(response, page)
+    return {
+        "run_id": str(run_id),
+        "items": [_event_body(row, str(run_id)) for row in rows],
+        "next_cursor": page["next_cursor"],
+        "previous_cursor": page["previous_cursor"],
+    }
 
 
 @router.post(
