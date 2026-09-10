@@ -393,59 +393,32 @@ def test_gross_profit_identity_still_catches_a_break_with_contra_presented_cogs(
 
 
 # --------------------------------------------------------------------------
-# Identity slice matching and `unit` case: a known gap, deliberately pinned
-# --------------------------------------------------------------------------
-# PR #145 review M2 observed that normalize/payload.py:148 upper-cases
-# `currency` while line 142 leaves `unit` exactly as the issuer wrote it, so
-# 'usd' and 'USD' key different slices in `_context` and an identity spanning
-# both is skipped rather than checked. That observation is correct and the gap
-# is real -- issue #153 owns it.
-#
-# Case-folding in `_facts` alone was tried here and REVERTED, because it makes
-# the system worse: `duplicates.comparability_key_for` does not fold, so
-# folding one side breaks the handoff `_sole` depends on. The two tests below
-# pin both halves of that reasoning so neither can be undone by accident.
+# Unit case policy must keep accounting ambiguity aligned with duplicates.
 
 
-def test_gross_profit_identity_skips_across_unit_casing_known_gap() -> None:
-    """Pins the KNOWN GAP that issue #153 owns: unit case splits the slice.
-
-    This asserts today's failing-open behaviour on purpose. When #153 lands a
-    consistent unit policy this test SHOULD fail -- update it then rather than
-    silencing it, and make sure the duplicate/conflict side folds too.
-    """
+def test_gross_profit_identity_compares_across_unit_casing() -> None:
     payloads = [
         kpi("revenue", "1000", period=DURATION, unit="USD"),
         kpi("cogs", "300", period=DURATION, unit="usd"),
-        kpi("gross_profit", "600", period=DURATION, unit="USD"),  # wrong: should be 700
+        kpi("gross_profit", "600", period=DURATION, unit="USD"),
     ]
-    assert identity_errors(payloads) == {}
+    result = identity_errors(payloads)
+    assert set(result) == {0, 1, 2}
+    assert all(c == [f"{IDENTITY_PREFIX}gross_profit_mismatch"] for c in result.values())
 
 
-def test_unit_case_split_still_lets_a_break_be_caught_in_its_own_slice() -> None:
-    """Why folding in `_facts` alone was reverted, not just deferred.
-
-    Two `revenue` rows for one economic quantity differing only in unit case --
-    a duplicate extraction from two spans of the same filing. Unfolded, they sit
-    in separate slices, so the 'USD' slice holds exactly one revenue and the
-    genuine gross-profit break IS caught.
-
-    Folding only `_facts` merged them into one slice, `_sole` backed off to
-    `validate.conflicts` as designed, and conflicts -- still keyed on the
-    unfolded unit via `comparability_key_for` -- never saw the pair. The break
-    then disappeared with no blocker from any checker at all, strictly worse
-    than the gap above. If this test ever starts returning `{}`, a one-sided
-    fold has been reintroduced.
-    """
+def test_unit_case_ambiguity_defers_to_duplicate_detection() -> None:
     payloads = [
         kpi("revenue", "1000", period=DURATION, unit="USD"),
         kpi("revenue", "1000", period=DURATION, unit="usd"),
         kpi("cogs", "400", period=DURATION, unit="USD"),
-        kpi("gross_profit", "700", period=DURATION, unit="USD"),  # wrong: 1000-400=600
+        kpi("gross_profit", "700", period=DURATION, unit="USD"),
     ]
-    result = identity_errors(payloads)
-    assert set(result) == {0, 2, 3}
-    assert all(c == [f"{IDENTITY_PREFIX}gross_profit_mismatch"] for c in result.values())
+    assert identity_errors(payloads) == {}
+    result = validate_proposals(run_id="unit-case", payloads=payloads)
+    assert all(
+        "duplicate_candidate" in p.validation_summary["blockers"] for p in result.proposals[:2]
+    )
 
 
 # --------------------------------------------------------------------------

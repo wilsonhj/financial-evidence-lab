@@ -244,9 +244,8 @@ def test_a_non_monetary_unit_needs_no_currency() -> None:
         ("SEK/yr", True),
         # A non-monetary numerator stays non-monetary however it is rated.
         ("count/mo", False),
-        # Lowercase is rejected upstream rather than folded (issue #153), so it
-        # is deliberately not treated as monetary here.
-        ("usd", False),
+        # ADR-0019 recognizes ASCII case aliases without rewriting payloads.
+        ("usd", True),
     ],
 )
 def test_the_monetary_unit_boundary_is_pinned_per_spelling(unit: str, monetary: bool) -> None:

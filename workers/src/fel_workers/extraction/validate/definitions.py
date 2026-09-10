@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from fel_ontology.models import MetricDef, OntologyDocument
+from fel_ontology.units import canonical_unit
 
 # The unit family each ontology ``value_type`` admits. Unit *strings* are never
 # compared: the ontology writes ``USD/yr`` where a filing writes ``USD``, and a
@@ -82,10 +83,11 @@ def _unit_errors(payload: dict[str, Any], metric: MetricDef) -> list[str]:
         return []
     errors: list[str] = []
     unit = payload.get("unit")
+    comparison_unit = canonical_unit(unit)
     currency = payload.get("currency")
     expected = _UNIT_BY_VALUE_TYPE.get(metric.value_type)
     if expected is not None:
-        if unit != expected:
+        if comparison_unit != expected:
             errors.append(
                 f"unit {unit!r} cannot express {metric.value_type} metric "
                 f"{metric.id} (expected {expected!r})"
@@ -96,7 +98,7 @@ def _unit_errors(payload: dict[str, Any], metric: MetricDef) -> list[str]:
                 f"currency, got {currency!r}"
             )
     elif metric.value_type in _CURRENCY_VALUE_TYPES:
-        if unit in set(_UNIT_BY_VALUE_TYPE.values()):
+        if comparison_unit in tuple(_UNIT_BY_VALUE_TYPE.values()):
             errors.append(f"unit {unit!r} cannot express currency metric {metric.id}")
         if not isinstance(currency, str) or not currency:
             errors.append(f"currency metric {metric.id} declares no currency")

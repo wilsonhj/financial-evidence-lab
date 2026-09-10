@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, datetime
 from uuid import uuid4
 
@@ -15,6 +16,7 @@ from fel_workers.extraction.hashing import sha256_hex
 from fel_workers.extraction.persist import MemoryPersistStore
 from fel_workers.extraction.types import (
     STAGE_ORDER,
+    WORKFLOW_VERSION,
     EvidenceBlock,
     ExtractionRunRequest,
     WorkflowState,
@@ -36,7 +38,7 @@ def _request(**overrides: object) -> ExtractionRunRequest:
         as_of=datetime(2026, 7, 1, tzinfo=UTC),
         corpus_version_id=str(uuid4()),
         ontology_version="saas-metrics/v1",
-        workflow_version="extraction-workflow/v1",
+        workflow_version=WORKFLOW_VERSION,
         provider="mock",
         model="mock-structured-v1",
         policy_id=str(uuid4()),
@@ -181,3 +183,31 @@ def test_redaction_strips_prompt_dumps() -> None:
     assert cleaned["messages"] == "[redacted]"
     assert cleaned["api_key"] == "[redacted]"
     assert cleaned["run_id"] == "ok"
+
+
+def test_legacy_workflow_is_rejected_before_any_checkpoint_recovery() -> None:
+    class NoRecovery(MemoryCheckpointStore):
+        def load_succeeded(self, **kwargs):
+            pytest.fail("old version reached checkpoint recovery")
+
+    state = WorkflowState(request=replace(_request(), workflow_version="extraction-workflow/v1"))
+    out = run_extraction_workflow(
+        state, WorkflowDeps(structured_llm=MockStructuredLLMProvider(), checkpoint=NoRecovery())
+    )
+    assert out.status == "failed"
+    assert "unsupported workflow version" in out.error["message"]
+    assert out.stages == {}
+
+
+def test_stage_input_hashes_pin_policy_and_component_versions(monkeypatch) -> None:
+    from fel_workers.extraction import workflow
+    from fel_workers.extraction.hashing import hash_json
+
+    state = WorkflowState(request=_request())
+    before = {
+        s: hash_json(workflow._stage_input_payload(state, s)) for s in ("normalize", "validate")
+    }
+    monkeypatch.setattr(workflow, "UNIT_POLICY_VERSION", "future-policy")
+    assert all(hash_json(workflow._stage_input_payload(state, s)) != before[s] for s in before)
+    assert workflow._stage_input_payload(state, "normalize")["normalizer_version"] == "normalize/v1"
+    assert workflow._stage_input_payload(state, "validate")["validator_version"] == "validate/v2"
