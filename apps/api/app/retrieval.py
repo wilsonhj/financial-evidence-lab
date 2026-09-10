@@ -297,12 +297,21 @@ class _RunWriter:
             (json.dumps(budget_usage), json.dumps(timings_ms), cost_usd, self._run_id),
         )
 
-    def fail(self, error: dict[str, str], *, cost_usd: Decimal = Decimal("0")) -> None:
+    def fail(
+        self,
+        error: dict[str, str],
+        *,
+        cost_usd: Decimal = Decimal("0"),
+        generation: dict[str, str | None] | None = None,
+    ) -> None:
         # Append the terminal ``run_failed`` event, then move the run to the
         # terminal ``failed`` status. ``fel_guard_retrieval_run`` allows a
         # transition to ``failed`` from any open status once ``run_failed`` is the
         # latest event; only column-scoped grant fields are written.
-        self.emit("run_failed", {"error": error})
+        payload: dict[str, Any] = {"error": error}
+        if generation is not None:
+            payload["generation"] = generation
+        self.emit("run_failed", payload)
         self._conn.execute(
             "UPDATE retrieval_runs SET status = 'failed', finished_at = now(),"
             " error = %s::jsonb, cost_usd = %s WHERE id = %s",
@@ -353,9 +362,10 @@ def _lane_call(lane: str, lane_query: LaneQuery, timings: dict[str, int]) -> Lan
 
 @dataclass
 class _RunUsage:
-    """Keep reported spend available even if subsequent persistence fails."""
+    """Keep provider usage available even if subsequent persistence fails."""
 
     cost_usd: Decimal = Decimal("0")
+    generation: dict[str, str | None] | None = None
 
 
 def _execute_pipeline(
@@ -485,12 +495,13 @@ def _execute_pipeline(
         input_tokens=generation.input_tokens,
         output_tokens=generation.output_tokens,
     )
-    generation_audit = {
+    generation_audit: dict[str, str | None] = {
         "provider": generation.provider,
         "model": generation.model,
         "response_id": generation.response_id,
         "estimated_cost_usd": str(generation.estimated_cost_usd),
     }
+    usage.generation = generation_audit
     for claim in generation.claims:
         writer.emit(
             "claim_generated",
@@ -919,7 +930,12 @@ def _run_pipeline_or_fail(
             record_usage(conn, ctx, usage_kind, cost_usd)
     except Exception as exc:
         _record_run_failure(
-            ctx, run_id=run_id, exc=exc, usage_kind=usage_kind, cost_usd=usage.cost_usd
+            ctx,
+            run_id=run_id,
+            exc=exc,
+            usage_kind=usage_kind,
+            cost_usd=usage.cost_usd,
+            generation=usage.generation,
         )
 
 
@@ -930,12 +946,15 @@ def _record_run_failure(
     exc: Exception,
     usage_kind: str,
     cost_usd: Decimal,
+    generation: dict[str, str | None] | None,
 ) -> None:
     """Append ``run_failed`` and move the run to ``failed`` in a fresh transaction."""
     error = _failure_envelope(exc)
     with tenant_connection(ctx) as conn:
         conn.execute("SELECT set_config('statement_timeout', %s, true)", (_STATEMENT_TIMEOUT,))
-        _RunWriter(conn, run_id=run_id, org_id=ctx.org_id).fail(error, cost_usd=cost_usd)
+        _RunWriter(conn, run_id=run_id, org_id=ctx.org_id).fail(
+            error, cost_usd=cost_usd, generation=generation
+        )
         if cost_usd > 0:
             record_usage(conn, ctx, usage_kind, cost_usd)
 

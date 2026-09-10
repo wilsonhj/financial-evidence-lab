@@ -710,6 +710,7 @@ def test_unknown_pinned_provider_persists_failed_run(
     trace = client.get(f"/v1/retrieval-runs/{created['run_id']}", headers=_headers(*org))
     assert trace.status_code == 200, trace.text
     assert trace.json()["status"] == "failed"
+    assert "generation" not in trace.json()["events"][-1]["payload"]
 
 
 def test_lane_failure_persists_failed_run(
@@ -749,10 +750,13 @@ def test_dangling_citation_persists_failed_run(
         GenerationResult,
         StructuredClaimGenerator,
     )
+    generation_calls = 0
 
     def _dangling_generate(
         self: Any, question: str, context: Any, *, as_of: str
     ) -> GenerationResult:
+        nonlocal generation_calls
+        generation_calls += 1
         assert context, "expected accepted context to cite against"
         ghost = str(uuid.uuid4())
         claim = GeneratedClaim(
@@ -782,6 +786,13 @@ def test_dangling_citation_persists_failed_run(
     assert row["error"]["code"] == "DANGLING_CITATION"
 
     trace = client.get(f"/v1/retrieval-runs/{created['run_id']}", headers=_headers(*org))
+    assert trace.json()["events"][-1]["payload"]["generation"] == {
+        "provider": "mock",
+        "model": "mock",
+        "response_id": "dangling-response",
+        "estimated_cost_usd": "0",
+    }
+    assert generation_calls == 1
     assert trace.status_code == 200, trace.text
     assert trace.json()["status"] == "failed"
 
