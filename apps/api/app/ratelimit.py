@@ -28,6 +28,7 @@ from __future__ import annotations
 import math
 import threading
 import time
+import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Annotated
@@ -153,7 +154,9 @@ def rate_limit(route: str) -> Callable[[TenantContext], None]:
     def dependency(
         ctx: Annotated[TenantContext, Depends(get_tenant_context)],
     ) -> None:
-        retry_after = get_limiter().check(ctx.org_id, route)
+        # Membership already validated this UUID in PostgreSQL. Equivalent
+        # claim spellings must spend the same organization's bucket.
+        retry_after = get_limiter().check(str(uuid.UUID(ctx.org_id)), route)
         if retry_after is not None:
             raise api_error(
                 429,

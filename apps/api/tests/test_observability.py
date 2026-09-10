@@ -43,9 +43,10 @@ def test_dsn_initialises_the_sdk_with_pii_disabled(monkeypatch: pytest.MonkeyPat
     assert len(fake.calls) == 1
     call = fake.calls[0]
     assert call["dsn"] == "https://public@sentry.invalid/42"
-    # Financial documents and tenant claims are never automatic error-report
-    # payloads; this flag is the whole reason the call is written out here.
+    # PII filtering alone does not disable request bodies or frame locals.
     assert call["send_default_pii"] is False
+    assert call["include_local_variables"] is False
+    assert call["max_request_body_size"] == "never"
 
 
 def test_dsn_without_the_sdk_warns_and_keeps_booting(

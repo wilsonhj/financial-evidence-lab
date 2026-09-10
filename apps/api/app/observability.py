@@ -56,9 +56,9 @@ def configure_error_reporting() -> None:
       dependencies here — wiring the dependency is a separate, reviewable
       change. A DSN set without the SDK installed warns loudly rather than
       failing the boot or silently swallowing the intent.
-    * ``send_default_pii=False`` — request bodies, headers and user identifiers
-      are never attached automatically. Financial documents and tenant claims
-      are not error-report payloads.
+    * Default PII collection, request bodies, and stack-frame locals are
+      disabled explicitly, keeping document text and tenant claims out of
+      these automatic error-report fields.
     """
     dsn = os.environ.get("FEL_SENTRY_DSN")
     if not dsn:
@@ -71,7 +71,12 @@ def configure_error_reporting() -> None:
             " error reporting is disabled"
         )
         return
-    sentry_sdk.init(dsn=dsn, send_default_pii=False)
+    sentry_sdk.init(
+        dsn=dsn,
+        send_default_pii=False,
+        include_local_variables=False,
+        max_request_body_size="never",
+    )
 
 
 class RequestContextMiddleware(BaseHTTPMiddleware):

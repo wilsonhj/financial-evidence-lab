@@ -11,10 +11,11 @@ import uuid
 from collections.abc import Iterator
 
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
-from app.auth import make_mock_token
-from app.ratelimit import RateLimiter, set_limiter
+from app.auth import TenantContext, make_mock_token
+from app.ratelimit import RateLimiter, rate_limit, set_limiter
 from tests.conftest import requires_db
 
 
@@ -86,6 +87,25 @@ def test_zero_qps_disables_the_limiter(clock: _Clock) -> None:
     limiter = RateLimiter(qps=0.0, burst=0, clock=clock)
     assert not limiter.enabled
     assert all(limiter.check("org", "route") is None for _ in range(100))
+
+
+def test_equivalent_organization_ids_share_the_route_bucket(clock: _Clock) -> None:
+    org_id = str(uuid.uuid4())
+    user_id = str(uuid.uuid4())
+    limiter = RateLimiter(qps=1.0, burst=1, clock=clock)
+    set_limiter(limiter)
+    dependency = rate_limit("createQuery")
+    dependency(TenantContext(org_id, user_id, "owner"))
+
+    for spelling in (org_id.upper(), "{" + org_id + "}", org_id.replace("-", "")):
+        with pytest.raises(HTTPException) as caught:
+            dependency(TenantContext(spelling, user_id, "owner"))
+        assert caught.value.status_code == 429
+        assert caught.value.headers == {"Retry-After": "1"}
+
+    assert len(limiter._buckets) == 1
+    rate_limit("createQueryRerun")(TenantContext(org_id, user_id, "owner"))
+    dependency(TenantContext(str(uuid.uuid4()), user_id, "owner"))
 
 
 def test_negative_configuration_is_rejected() -> None:
