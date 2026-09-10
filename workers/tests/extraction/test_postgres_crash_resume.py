@@ -1117,10 +1117,10 @@ def test_checkpoint_attempt_collision_cannot_repair_another_identity(
             incoming.input_hash = sha256_hex("other identity")
         elif collision == "workflow_version":
             args["workflow_version"] = "other-workflow/v1"
-        from fel_workers.extraction.errors import StepFailed
+        from fel_workers.extraction.errors import LeaseLost
 
         events = PostgresEventStore(conn)
-        with pytest.raises(StepFailed, match="checkpoint conflict"):
+        with pytest.raises(LeaseLost, match="checkpoint conflict"):
             store.commit_succeeded_atomic(
                 **args, record=incoming, events=events, event_payload={"step_name": "classify"}
             )
@@ -1141,7 +1141,7 @@ def test_checkpoint_collision_preserves_concurrent_owner(
     extraction_db_url: str, initial: str
 ) -> None:
     """A concurrent winner after the read must survive the stale completion."""
-    from fel_workers.extraction.errors import StepFailed
+    from fel_workers.extraction.errors import LeaseLost
     from fel_workers.extraction.types import StageRecord
 
     request = _request(str(uuid.uuid4()))
@@ -1190,7 +1190,7 @@ def test_checkpoint_collision_preserves_concurrent_owner(
                 (json.dumps(winner.output), winner.output_hash, request.run_id),
             )
         events = PostgresEventStore(conn)
-        with pytest.raises(StepFailed, match="checkpoint.*changed|checkpoint.*conflict"):
+        with pytest.raises(LeaseLost, match="checkpoint.*changed|checkpoint.*conflict"):
             stale.commit_succeeded_atomic(
                 **args, record=loser, events=events, event_payload={"step_name": "classify"}
             )

@@ -12,7 +12,7 @@ from typing import Any
 import psycopg
 
 from fel_workers.extraction.checkpoint import MemoryCheckpointStore
-from fel_workers.extraction.errors import ExtractionError, StepFailed
+from fel_workers.extraction.errors import ExtractionError, LeaseLost, StepFailed
 from fel_workers.extraction.events import (
     ExtractionEvent,
     MemoryEventStore,
@@ -880,7 +880,8 @@ class PostgresCheckpointStore:
             key = (run_id, org_id, record.step_name, record.input_hash, workflow_version)
             version = self._rejected.get(key)
             if version is None:
-                raise StepFailed(
+                self._memory = MemoryCheckpointStore()
+                raise LeaseLost(
                     "checkpoint conflict without rejected row", code="checkpoint_conflict"
                 )
             # Only the exact row rejected by this worker can be repaired. A
@@ -915,7 +916,8 @@ class PostgresCheckpointStore:
                 ),
             ).fetchone()
             if repaired is None:
-                raise StepFailed("checkpoint changed since rejection", code="checkpoint_conflict")
+                self._memory = MemoryCheckpointStore()
+                raise LeaseLost("checkpoint changed since rejection", code="checkpoint_conflict")
             record.attempt = repaired[0]
 
     def commit_failed(
