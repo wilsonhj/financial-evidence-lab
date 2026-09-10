@@ -98,7 +98,7 @@ packages:
     depends_on: []
     team: platform
     branch: agent/node24-runtime
-    status: review
+    status: merged # PR #250 @ 9e59edb; issue #249 closed.
     # Owner-authorized Node/workspace pin migration; authorization is recorded
     # on issue #249 and its contract-change PR. No contract/schema changes.
     allowed_paths:
@@ -634,7 +634,7 @@ packages:
     depends_on: [M2-RETRIEVAL-BACKEND]
     team: platform
     branch: cherry/191-api-hardening
-    status: review # PR #232 OPEN (contract-change, agent-task), not a draft. Its author recorded on 2026-09-06 that it must carry its own contract half. Commit 3a8384b (on the branch after merging main @ 75fad38; push pending on credentials) does so: the two 402 COST_LIMIT_EXCEEDED responses on createQuery/createQueryRerun, a RateLimited response with Retry-After referenced as 429 from those two plus createRetrievalFeedback, info.version/CONTRACT_VERSION/package.json to 0.5.0, regenerated client, contracts vitest 32 passed, check:generated clean. It deliberately does NOT declare ListLimit or the 413 READER_TOO_LARGE the author's comment also listed: the branch head 2479eb2 defers list and reader caps back to #191, serves neither, and apps/api/tests/test_list_contract.py asserts the list routes declare no limit parameter, so declaring them would create the contract-path-nothing-serves defect the #246 parity test exists to catch. List bounding stays with #191. SERIALIZE AGAINST #241 — see the CONTRACT CONTENTION note below.
+    status: review # PR #232 OPEN (contract-change, agent-task), not a draft. Its author recorded on 2026-09-06 that it must carry its own contract half. Commit 3a8384b (on the branch after merging main @ 75fad38; pushed and reviewed; historical SHA) does so: the two 402 COST_LIMIT_EXCEEDED responses on createQuery/createQueryRerun, a RateLimited response with Retry-After referenced as 429 from those two plus createRetrievalFeedback, info.version/CONTRACT_VERSION/package.json to 0.5.0, regenerated client, contracts vitest 32 passed, check:generated clean. It deliberately does NOT declare ListLimit or the 413 READER_TOO_LARGE the author's comment also listed: the branch head 2479eb2 defers list and reader caps back to #191, serves neither, and apps/api/tests/test_list_contract.py asserts the list routes declare no limit parameter, so declaring them would create the contract-path-nothing-serves defect the #246 parity test exists to catch. List bounding stays with #191. SERIALIZE AGAINST #241 — see the CONTRACT CONTENTION note below.
     allowed_paths:
       - apps/api/**
       - packages/contracts/** # the 0.5.0 additions above; shared path, contract-change label already present
@@ -645,7 +645,7 @@ packages:
     depends_on: [M2-CLAIMS-VERIFICATION]
     team: retrieval
     branch: cherry/193-claims-output
-    status: review # PR #241 OPEN (contract-change, agent-task), not a draft. TWO GATES, both real: (1) it proposes docs/decisions/ADR-0014-claims-output-contract.md, Status Proposed, awaiting integration-lead acceptance — a lead decision this reconciliation cannot make; (2) that filename COLLIDES with docs/decisions/ADR-0014-migration-ledger-and-applier.md, which is already on trunk at 75fad38 via PR #247. Two accepted-numbering ADRs cannot share 0014; the open PR must renumber to the next free number before merge. Neither gate is recorded anywhere else. SERIALIZE AGAINST #232 — see below.
+    status: review # PR #241 OPEN (contract-change, agent-task), not a draft. Owner accepted ADR content and renumber to ADR-0015 in the September 7 PR comment. September 9 review fixes transformed-prose full support; final checks and integration remain. Contract 0.6.0 follows #232 at 0.5.0. SERIALIZE AGAINST #232 — see below.
     allowed_paths:
       - apps/api/**
       - packages/contracts/**
@@ -664,8 +664,8 @@ packages:
   #      values AGREE — nothing asserts that adding surface requires a bump, so
   #      a second PR landing paths at an unchanged 0.5.0 stays green.
   # Resume rule 3 forbids two concurrent owners of packages/contracts/** anyway.
-  # The order is the lead's to set; #232 is unblocked by an ADR decision and
-  # #241 is not, which is an argument for #232 first, but it is not a ruling.
+  # September 9 integration order: #232 at 0.5.0, then #241 at 0.6.0.
+  # ADR content for #241 was already accepted by the owner on September 7.
   - id: ARCH-M3-PLUMBING # NULL confidence for unscored proposals, derived review priority
     issue: 194
     tasks: []

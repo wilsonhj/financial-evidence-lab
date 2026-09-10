@@ -1,6 +1,34 @@
 # Implementation status
 
-Last updated: 2026-09-06 (reconcile to trunk `75fad38`; registers the #188 architecture-review packages and the two open PRs. Every count below is dated where it appears — re-resolve against `origin/main`)
+Last updated: 2026-09-09. The dated September 6 inventory below is historical; this review and the linked issue audit supersede its open-state and gate observations. Resolve GitHub state before dispatch.
+
+## September 9 review and resolution plan
+
+The live review began with **39 open issues and four open PRs**, against
+`main` at `75fad38`. PR #250 subsequently merged at `9e59edb`, closing #249.
+The issue audit and resolution specification are in
+[`2026-09-09-backlog-resolution-spec.md`](../research/2026-09-09-backlog-resolution-spec.md);
+its dependency-ordered implementation plan is in
+[`2026-09-09-backlog-resolution.md`](../superpowers/plans/2026-09-09-backlog-resolution.md).
+They are subordinate to the canonical product requirements, not another task ledger.
+
+The owner accepted #241's ADR content and renumbering to ADR-0015 on September 7.
+That supersedes the acceptance hold recorded in the historical inventory below.
+The current review reproduced and fixed #232's UUID-spelling rate-limit bypass
+and #241's transformed-prose full-support defect. Integration order is #232
+(contract 0.5.0), then #241 (contract 0.6.0); each needs fresh CI including
+PostgreSQL after integration. #191 and #203 retain their residual work.
+
+Issues #141, #157, #189, #198 and #202 were already closed at this review's
+snapshot; the historical statements below that call them open are superseded.
+#190 still needs deployed least-privilege verification. #200 still needs
+reproducible runtime dependency resolution and healthcheck deployment wiring;
+`httpx2` is already absent from main. The executable #201 gate exists, but its
+mock baseline misses Recall@10; do not lower the release threshold to close it.
+
+No dispatch dependency, credential policy, or canonical task checkbox changes
+as a result of this documentation review. An implementation marked merged does
+not certify its milestone's live acceptance gate.
 
 ## Repository
 
@@ -122,7 +150,7 @@ Four sequential migrations landed in three days — `0006` through `0009` — ea
 
 **Trunk health at `75fad38`: green.** All five GitHub Actions check runs — `JS/TS`, `Python`, `DB — migration and backup-restore smoke`, `Web — Playwright E2E (fixture mode)`, `Secret scan (gitleaks)` — are `completed / success`. A sixth gate now exists and is not in that list because it only runs on pull requests: `.github/workflows/shared-paths.yml` fails any PR touching a shared path without the `contract-change` label. The `cursor`, `claude`, `supabase` and `vercel` check **suites** still sit permanently `queued` and are still not gates.
 
-**Open PRs at 2026-09-06: #232 and #241.** Both are `contract-change` + `agent-task`, both are ready for review rather than draft, and **both must be serialized against each other** — they modify `apps/api/app/retrieval.py` and both target OpenAPI `0.5.0`. Their real gates, neither of which is recorded on the PR itself:
+**Open PRs at 2026-09-06: #232 and #241.** Both are `contract-change` + `agent-task`, both are ready for review rather than draft, and **both must be serialized against each other** — they modify `apps/api/app/retrieval.py` and both target OpenAPI `0.5.0`. The gates recorded at that historical snapshot (superseded by the September 9 review above):
 
 - **#241** (`cherry/193-claims-output`, closes #193) — consumes validated `claims-output/v1` provider output instead of copying selected context, and assigns claim status and confidence only through verification. It bumps `info.version`, `package.json` and `CONTRACT_VERSION` to `0.5.0` together. **Gate A:** it proposes `docs/decisions/ADR-0014-claims-output-contract.md` with `Status: Proposed`, awaiting integration-lead acceptance. **Gate B:** that filename **collides** with `docs/decisions/ADR-0014-migration-ledger-and-applier.md`, already on trunk via PR #247 — the open PR must renumber before merge.
 - **#232** (`cherry/191-api-hardening`, refs #191 and #203) — connection pooling, durable per-organization query budgets, rate limiting, and optional API Sentry init. Its author corrected the record on 2026-09-06: the PR is **no longer blocked on the `0.5.0` release decision**, because #246 cherry-picked the #192 parity commit *without* the four contract additions that describe behaviour existing only here. It must therefore carry its own contract half. Commit `3a8384b` on the branch (after merging `main` @ `75fad38`; push pending on credentials) adds the two 402 `COST_LIMIT_EXCEEDED` responses, the `RateLimited` response with `Retry-After`, the `0.5.0` bump and the regenerated client. It deliberately omits the `ListLimit` parameter and the 413 `READER_TOO_LARGE` that the author's comment also listed: the branch head defers list and reader caps back to #191 and serves neither, and `apps/api/tests/test_list_contract.py` asserts the list routes declare no `limit` parameter, so declaring them would be a contract path nothing serves. Note that `contracts.test.ts` asserts only that `info.version` and `CONTRACT_VERSION` *agree*; nothing asserts that adding surface requires a bump, so skipping it stays green.
