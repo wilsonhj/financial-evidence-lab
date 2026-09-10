@@ -15,6 +15,7 @@ from typing import Any
 from fel_calculation_engine.canonical import canonical_json, content_hash
 from fel_calculation_engine.errors import SnapshotError
 from fel_calculation_engine.graph import ModelGraph
+from fel_calculation_engine.iteration import IterationGroup
 from fel_calculation_engine.nodes import ExpressionFormulaNode, Node
 from fel_calculation_engine.values import require_safe_id
 
@@ -32,6 +33,10 @@ class GraphSnapshot:
     def nodes(self) -> tuple[Node, ...]:
         return self.graph.nodes
 
+    @property
+    def iteration_groups(self) -> tuple[IterationGroup, ...]:
+        return self.graph.iteration_groups
+
     @classmethod
     def build(
         cls,
@@ -40,16 +45,22 @@ class GraphSnapshot:
         *,
         parent: GraphSnapshot | None = None,
         scenario_id: str | None = None,
+        iteration_groups: Iterable[IterationGroup] | None = None,
     ) -> GraphSnapshot:
         require_safe_id(model_id, "model_id", SnapshotError)
         if scenario_id is not None:
             require_safe_id(scenario_id, "scenario_id", SnapshotError)
         if parent is not None and parent.model_id != model_id:
             raise SnapshotError("a snapshot cannot derive from another model's snapshot")
-        graph = ModelGraph.build(nodes)
+        groups = (
+            parent.iteration_groups if iteration_groups is None and parent else iteration_groups
+        )
+        graph = ModelGraph.build(nodes, iteration_groups=groups or ())
         version = 1 if parent is None else parent.version + 1
         parent_id = None if parent is None else parent.snapshot_id
-        payload = _payload(model_id, version, parent_id, scenario_id, graph.nodes)
+        payload = _payload(
+            model_id, version, parent_id, scenario_id, graph.nodes, graph.iteration_groups
+        )
         return cls(
             snapshot_id=content_hash(payload),
             model_id=model_id,
@@ -59,18 +70,36 @@ class GraphSnapshot:
             graph=graph,
         )
 
-    def derive(self, nodes: Iterable[Node], *, scenario_id: str | None = None) -> GraphSnapshot:
-        """A new version of this model with a full replacement node set."""
-        return GraphSnapshot.build(self.model_id, nodes, parent=self, scenario_id=scenario_id)
+    def derive(
+        self,
+        nodes: Iterable[Node],
+        *,
+        scenario_id: str | None = None,
+        iteration_groups: Iterable[IterationGroup] | None = None,
+    ) -> GraphSnapshot:
+        """Replace the node set, preserving policies unless explicitly replaced."""
+        return GraphSnapshot.build(
+            self.model_id,
+            nodes,
+            parent=self,
+            scenario_id=scenario_id,
+            iteration_groups=iteration_groups,
+        )
 
     def with_nodes(
-        self, replacements: Iterable[Node], *, scenario_id: str | None = None
+        self,
+        replacements: Iterable[Node],
+        *,
+        scenario_id: str | None = None,
+        iteration_groups: Iterable[IterationGroup] | None = None,
     ) -> GraphSnapshot:
-        """A new version replacing (or adding) the given nodes by id; everything else is kept."""
+        """Replace/add nodes by id; omitted iteration policies remain immutable."""
         merged = {node.node_id: node for node in self.graph.nodes}
         for node in replacements:
             merged[node.node_id] = node
-        return self.derive(merged.values(), scenario_id=scenario_id)
+        return self.derive(
+            merged.values(), scenario_id=scenario_id, iteration_groups=iteration_groups
+        )
 
     def payload(self) -> dict[str, Any]:
         return _payload(
@@ -79,6 +108,7 @@ class GraphSnapshot:
             self.parent_snapshot_id,
             self.scenario_id,
             self.graph.nodes,
+            self.iteration_groups,
         )
 
     def canonical_json(self) -> str:
@@ -94,11 +124,12 @@ def _payload(
     parent_snapshot_id: str | None,
     scenario_id: str | None,
     nodes: tuple[Node, ...],
+    iteration_groups: tuple[IterationGroup, ...],
 ) -> dict[str, Any]:
-    return {
+    payload: dict[str, Any] = {
         "schema": (
             "fel-calc-snapshot/v2"
-            if any(isinstance(n, ExpressionFormulaNode) for n in nodes)
+            if iteration_groups or any(isinstance(n, ExpressionFormulaNode) for n in nodes)
             else "fel-calc-snapshot/v1"
         ),
         "model_id": model_id,
@@ -107,6 +138,9 @@ def _payload(
         "scenario_id": scenario_id,
         "nodes": list(nodes),
     }
+    if payload["schema"] == "fel-calc-snapshot/v2":
+        payload["iteration_groups"] = list(iteration_groups)
+    return payload
 
 
 __all__ = ["GraphSnapshot"]

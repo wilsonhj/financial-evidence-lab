@@ -18,6 +18,8 @@ from fel_calculation_engine.errors import (
     CycleError,
     FormulaError,
     GraphError,
+    IterationConvergenceError,
+    IterationPolicyError,
     LineageError,
     MissingInputError,
     NodeValidationError,
@@ -38,6 +40,7 @@ from fel_calculation_engine.formulas import (
     rewrite_formula_references,
 )
 from fel_calculation_engine.graph import Edge, ModelGraph
+from fel_calculation_engine.iteration import IterationGroup, IterationRun
 from fel_calculation_engine.nodes import (
     AggregationNode,
     AggregationOp,
@@ -80,6 +83,10 @@ from fel_calculation_engine.values import (
 )
 
 __all__ = [
+    "IterationGroup",
+    "IterationRun",
+    "IterationPolicyError",
+    "IterationConvergenceError",
     "Binary",
     "Literal",
     "Reference",
