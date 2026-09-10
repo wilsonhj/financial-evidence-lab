@@ -78,3 +78,19 @@ are explicit; failed iteration publishes no successful partial result. HTTP,
 DB persistence, graph UI and live release evidence remain separate issues.
 Independent implementation review and current CI are required before merge;
 only the integration lead updates canonical completion state after verification.
+
+## CI security follow-up
+
+The first final CI run reported four low-severity Bandit findings: two
+assertions used only for constructor-proven type narrowing, and two false
+positives treating the lexer's `token` character comparisons as hardcoded
+passwords. Replaced the assertions with static casts after the existing graph
+validation and renamed the character variable; no validation was removed and
+no suppression was added. The complete CI Bandit command passed afterward:
+
+```text
+bandit -q -r apps workers evals packages/providers packages/retrieval packages/retrieval-evals packages/ontology packages/calculation-engine scripts -c pyproject.toml
+```
+
+Focused parser, iteration and generated-property suites: 86 passed in 0.43s.
+Strict engine mypy, Ruff and Black checks also passed.

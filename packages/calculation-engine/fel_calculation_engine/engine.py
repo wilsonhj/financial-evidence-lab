@@ -26,6 +26,7 @@ from datetime import UTC, datetime
 from decimal import Decimal, DecimalException
 from time import perf_counter
 from types import MappingProxyType
+from typing import cast
 
 from fel_calculation_engine.canonical import content_hash, sha256_hex
 from fel_calculation_engine.errors import (
@@ -258,7 +259,7 @@ def _iterate(
                     current[member] = evaluate_formula(node.ast, inputs)
                 else:
                     # Graph construction restricts group members to these two shapes.
-                    assert isinstance(node, FormulaNode)
+                    node = cast(FormulaNode, node)
                     quantity = inputs[node.operands[0]]
                     for ref in node.operands[1:]:
                         rhs = inputs[ref]
@@ -320,8 +321,7 @@ def _iterate(
         record = replace(record, run_id=content_hash(record.payload()))
         outputs: dict[str, CalcResult] = {}
         for member in group.members:
-            node = graph.by_id[member]
-            assert isinstance(node, FormulaNode | ExpressionFormulaNode)
+            node = cast(FormulaNode | ExpressionFormulaNode, graph.by_id[member])
             outputs[member] = CalcResult(
                 result_id=content_hash(
                     {

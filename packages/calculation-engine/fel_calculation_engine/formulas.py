@@ -118,17 +118,17 @@ class _Parser:
     def expression(self, minimum: int = 0, depth: int = 1) -> FormulaAST:
         if depth > MAX_AST_DEPTH:
             raise FormulaError("formula exceeds parse depth limit")
-        token = self.peek()
-        if token in ("+", "-"):
+        char = self.peek()
+        if char in ("+", "-"):
             self.offset += 1
-            left: FormulaAST = Unary(token, self.expression(3, depth + 1))
-        elif token == "(":
+            left: FormulaAST = Unary(char, self.expression(3, depth + 1))
+        elif char == "(":
             self.offset += 1
             left = self.expression(0, depth + 1)
             if self.peek() != ")":
                 raise FormulaError("expected closing parenthesis")
             self.offset += 1
-        elif token == "[":
+        elif char == "[":
             end = self.text.find("]", self.offset + 1)
             if end < 0:
                 raise FormulaError("expected closing reference bracket")
@@ -147,12 +147,12 @@ class _Parser:
         if self.count > MAX_AST_NODES:
             raise FormulaError("formula exceeds AST node limit")
         while True:
-            token = self.peek()
-            precedence = {"+": 1, "-": 1, "*": 2, "/": 2}.get(token, -1)
+            char = self.peek()
+            precedence = {"+": 1, "-": 1, "*": 2, "/": 2}.get(char, -1)
             if precedence < minimum:
                 break
             self.offset += 1
-            left = Binary(token, left, self.expression(precedence + 1, depth + 1))
+            left = Binary(char, left, self.expression(precedence + 1, depth + 1))
             self.count += 1
             if self.count > MAX_AST_NODES:
                 raise FormulaError("formula exceeds AST node limit")
