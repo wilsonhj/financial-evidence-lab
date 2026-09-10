@@ -10,10 +10,12 @@ ADR-0017 records the initial dispatch and scope narrowing.
 
 | Issue | Branch | Scope | State | Evidence |
 |---|---|---|---|---|
-| #248 | agent/test-query-p95-flake | API query test/performance instructions | implementing | Reproduce noisy wall-clock test, replace functional gate with operation invariant |
+| #248 | agent/test-query-p95-flake | API query test/performance instructions | merged, PR #256 @ 1e6765c | Independent review; real PostgreSQL module 24 passed, 1 deliberate benchmark skip; opt-in local p95 0.052s; all CI passed |
 | #230 | agent/test-publish-race-wait | Two named ingestion race test files | implementing | Prove timeout warning visible under pytest -q, preserve cleanup |
-| #221 | agent/arch-checkpoint-rerun | Extraction source/tests only | implementing | Real PostgreSQL corrupt-checkpoint repair and fresh-store resume |
-| #188 | agent/188-parallel-execution | Execution plan and ownership | coordinating | Pairwise paths and dependencies checked |
+| #221 | agent/arch-checkpoint-rerun | Extraction source/tests only | PR #257 under independent review | 468 real PostgreSQL extraction tests passed; stale-owner repair race under investigation |
+| #137 | agent/137-cutover-hardening | Retrieval API provenance and retrieval/evaluation model guards | dispatched | Reconcile existing refusal/cost/supports behavior before implementing actual residuals |
+| #219 | agent/m4-formula-ast | Read-only engine architecture investigation | design preparation | Retain both parent requirements; no canonical edits or implementation before concrete ADR and ownership |
+| #188 | agent/188-execution-wave2 | Execution plan and ownership | coordinating | Initial control PR #254 merged @ 2b15032; subsequent paths checked |
 
 Ruling: narrow #230 and #221 test ownership — their original workers/tests/**
 globs overlapped, while the required implementation is separable — any shared
@@ -35,3 +37,9 @@ unanswered question.
 The remaining 34 issues retain the dependency and closure criteria in the
 [complete audit](../research/2026-09-09-open-issue-audit.md). Leaf code completion,
 operational rollout and milestone live acceptance are recorded separately.
+
+September 10 dispatch ruling: #137 follows merged #248 and owns only its named
+API files plus retrieval/evaluation packages. It does not overlap #221's
+extraction subtree or #230's ingestion tests. #219 is read-only design work
+until its AST/iteration ADR and canonical task additions are concretely reviewed.
+No shared contract or root configuration change is delegated to #137.

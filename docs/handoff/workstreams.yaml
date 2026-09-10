@@ -97,7 +97,7 @@ packages:
     tasks: []
     depends_on: []
     team: integration
-    branch: agent/188-parallel-execution
+    branch: agent/188-execution-wave2
     status: active
     allowed_paths:
       - docs/handoff/execution-2026-09-09.md
@@ -773,6 +773,19 @@ packages:
     allowed_paths:
       - packages/calculation-engine/**
       - specs/** # shared; a Spec Kit task addition, contract-change
+  - id: CLAIMS-CUTOVER-HARDENING
+    issue: 137
+    tasks: [] # Residual defense-in-depth; no task completion claim.
+    depends_on: [M2-CLAIMS-VERIFICATION]
+    team: retrieval
+    branch: agent/137-cutover-hardening
+    status: active # ADR-0017 subsequent dispatch; API test issue #248 merged first.
+    allowed_paths:
+      - apps/api/app/retrieval.py
+      - apps/api/tests/test_retrieval_api.py
+      - packages/retrieval/fel_retrieval/**
+      - packages/retrieval/tests/**
+      - packages/retrieval-evals/**
   - id: ARCH-CHECKPOINT-RERUN # repair durable step output/hash after a corrupt checkpoint
     issue: 221
     tasks: []
@@ -801,7 +814,7 @@ packages:
     depends_on: []
     team: trust
     branch: agent/test-query-p95-flake # not yet created
-    status: active # Owner-authorized parallel execution, ADR-0017; September 9 session.
+    status: merged # PR #256 @ 1e6765c; real SQL-budget regression, opt-in p95 benchmark.
     allowed_paths:
       - apps/api/tests/test_retrieval_api.py
       - apps/api/tests/test_query_performance_contract.py
