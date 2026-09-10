@@ -1082,7 +1082,6 @@ def test_checkpoint_repair_rolls_back_when_completion_event_fails(extraction_db_
 def test_checkpoint_attempt_collision_cannot_repair_another_identity(
     extraction_db_url: str, collision: str
 ) -> None:
-    from fel_workers.extraction.errors import LeaseLost
     from fel_workers.extraction.types import StageRecord
 
     run_id = str(uuid.uuid4())
@@ -1116,14 +1115,20 @@ def test_checkpoint_attempt_collision_cannot_repair_another_identity(
             incoming.input_hash = sha256_hex("other identity")
         elif collision == "workflow_version":
             args["workflow_version"] = "other-workflow/v1"
-        with pytest.raises(LeaseLost, match="checkpoint"):
-            store.commit_succeeded(**args, record=incoming)
+        committed = store.commit_succeeded(**args, record=incoming)
         assert (
             conn.execute(
-                "SELECT * FROM extraction_run_steps WHERE run_id = %s",
+                "SELECT * FROM extraction_run_steps WHERE run_id = %s AND attempt = 1",
                 (run_id,),
             ).fetchall()
             == before
+        )
+        assert committed.attempt == 2
+        assert (
+            PostgresCheckpointStore(conn).load_succeeded(
+                **args, step_name="classify", input_hash=incoming.input_hash
+            )
+            == committed
         )
 
 

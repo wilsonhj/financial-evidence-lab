@@ -814,6 +814,11 @@ class PostgresCheckpointStore:
         ):
             raise ValueError("repair requires a rejected checkpoint with the same identity")
         step_id = str(uuid.uuid4())
+        # A crashed/failed attempt or a different input may already occupy the
+        # requested attempt number. Append at the next free number instead of
+        # silently losing the new checkpoint. The success index still arbitrates
+        # competing writes; a simultaneous attempt-number collision fails closed.
+        # Provider retry counts remain in the completion event's model_step audit.
         inserted = self.conn.execute(
             """
             INSERT INTO extraction_run_steps (
@@ -822,13 +827,18 @@ class PostgresCheckpointStore:
                 provider_response_id,
                 input_tokens, output_tokens, cost_usd, error, started_at, finished_at
             ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s,
+                %s, %s, %s, %s,
+                GREATEST(%s, COALESCE((
+                    SELECT MAX(attempt) + 1 FROM extraction_run_steps
+                     WHERE run_id = %s AND org_id = %s AND step_name = %s
+                ), 1)),
+                %s, %s, %s,
                 %s::jsonb, %s, %s, %s,
                 %s,
                 %s, %s, %s, %s, now(), now()
             )
             ON CONFLICT DO NOTHING
-            RETURNING id
+            RETURNING attempt
             """,
             (
                 step_id,
@@ -836,6 +846,9 @@ class PostgresCheckpointStore:
                 run_id,
                 record.step_name,
                 record.attempt,
+                run_id,
+                org_id,
+                record.step_name,
                 record.status,
                 record.input_hash,
                 record.output_hash,
@@ -853,6 +866,8 @@ class PostgresCheckpointStore:
                 json.dumps(record.error) if record.error is not None else None,
             ),
         ).fetchone()
+        if inserted is not None:
+            record.attempt = inserted[0]
         if inserted is None and record.status == "succeeded":
             if rejected is None:
                 self._checkpoint_superseded()
