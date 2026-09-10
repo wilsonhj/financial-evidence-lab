@@ -29,6 +29,7 @@ from typing import Any
 from fel_workers.extraction.events import redact_event_payload, redact_log_payload
 from fel_workers.extraction.hashing import hash_json, sha256_hex, stage_input_hash
 from fel_workers.extraction.serialize import serialize_stage_output
+from fel_workers.extraction.types import WORKFLOW_VERSION
 
 from .conftest import FIXTURE_SPAN
 
@@ -75,12 +76,12 @@ def test_long_prose_survives_the_durable_column_verbatim() -> None:
         run_id=_RUN_ID,
         step_name="normalize",
         payload={"raw_proposals": [restored]},
-        workflow_version="extraction-workflow/v1",
+        workflow_version=WORKFLOW_VERSION,
     ) == stage_input_hash(
         run_id=_RUN_ID,
         step_name="normalize",
         payload={"raw_proposals": [driver]},
-        workflow_version="extraction-workflow/v1",
+        workflow_version=WORKFLOW_VERSION,
     )
 
 

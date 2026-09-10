@@ -36,6 +36,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from fel_ontology.models import MetricDef, OntologyDocument
+from fel_ontology.units import canonical_unit
 from fel_workers.extraction.hashing import canonical_json
 from fel_workers.extraction.validate.range import check_range
 
@@ -75,7 +76,7 @@ _GROSS_PROFIT_ID = "gross_profit"
 
 
 def _is_percent_unit(unit: Any) -> bool:
-    return isinstance(unit, str) and unit.strip().lower() in _PERCENT_UNITS
+    return isinstance(unit, str) and canonical_unit(unit) in _PERCENT_UNITS
 
 
 def _decimal_or_none(value: Any) -> Decimal | None:
@@ -234,7 +235,11 @@ def _facts(payloads: list[dict[str, Any]]) -> list[_Fact]:
             continue
         metric_id = payload.get("metric_id")
         value = _decimal_or_none(payload.get("value"))
-        if value is None or not isinstance(metric_id, str):
+        if (
+            value is None
+            or not isinstance(metric_id, str)
+            or not isinstance(payload.get("unit"), str)
+        ):
             continue
         dims = payload.get("dimensions") or {}
         if not isinstance(dims, dict):
@@ -245,30 +250,7 @@ def _facts(payloads: list[dict[str, Any]]) -> list[_Fact]:
                 metric_id=metric_id,
                 entity_id=str(payload.get("entity_id") or ""),
                 period=canonical_json(payload.get("period")),
-                # Whitespace-trimmed but deliberately NOT case-folded. Issue
-                # #153 tracks the real defect: 'usd' and 'USD' key different
-                # slices here, so an identity spanning both is skipped rather
-                # than checked.
-                #
-                # Case-folding *only here* was tried and reverted, because it
-                # makes things worse rather than better.
-                # `duplicates.comparability_key_for` does not fold, so folding
-                # this side alone breaks the contract `_sole` relies on: two
-                # rows differing only in unit case merge into one slice, `_sole`
-                # correctly backs off to `validate.conflicts` — and conflicts,
-                # still keyed on the unfolded unit, never sees the pair. A real
-                # identity break then vanishes with no blocker from any checker,
-                # where before the fold it was caught. Both sides have to fold
-                # together, and `comparability_key_for` feeds the conflict
-                # identity, so that is a contract change with persisted-id
-                # consequences — #153, not a one-line edit here.
-                #
-                # `.strip()` stays: whitespace carries no semantic distinction,
-                # so trimming cannot over-merge, and it keeps direct
-                # `identity_errors` callers (the test suite, anything bypassing
-                # the normalizer) from silently dropping a ' USD' row out of
-                # its slice.
-                unit=str(payload.get("unit") or "").strip(),
+                unit=canonical_unit(payload["unit"]),
                 currency=str(payload.get("currency") or ""),
                 dimensions=tuple(sorted((str(k), str(v)) for k, v in dims.items())),
                 # Mantissa + exponent collapsed exactly once, here, so every

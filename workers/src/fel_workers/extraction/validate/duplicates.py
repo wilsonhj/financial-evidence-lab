@@ -15,6 +15,7 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Any
 
+from fel_ontology.units import UNIT_POLICY_VERSION, canonical_unit
 from fel_workers.extraction.hashing import canonical_json, hash_json
 
 # Entries of the identity key that a metric's ontology comparability key already
@@ -46,7 +47,7 @@ def comparability_key_for(payload: dict[str, Any]) -> dict[str, Any]:
         "metric_id": payload.get("metric_id"),
         "entity_id": payload.get("entity_id"),
         "period": payload.get("period"),
-        "unit": payload.get("unit"),
+        "unit": canonical_unit(payload.get("unit")),
         "currency": payload.get("currency"),
         "dimensions": payload.get("dimensions") or {},
         "qualifiers": payload.get("qualifiers") or {},
@@ -70,7 +71,7 @@ def conflict_key_for(
     if ontology_comparability_key:
         identity = {k: v for k, v in identity.items() if k not in _ONTOLOGY_SUPERSEDES}
         identity["comparability"] = ontology_comparability_key
-    return hash_json(identity)
+    return hash_json({"unit_policy_version": UNIT_POLICY_VERSION, "identity": identity})
 
 
 def canonical_magnitude(value: Any, scale: Any) -> Any:

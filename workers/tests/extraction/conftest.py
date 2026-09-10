@@ -9,6 +9,7 @@ import pytest
 
 from fel_providers.mocks import MockStructuredLLMProvider
 from fel_workers.extraction.hashing import sha256_hex
+from fel_workers.extraction.types import WORKFLOW_VERSION
 
 FIXTURE_SPAN = "22222222-2222-4222-8222-222222222222"
 FIXTURE_ENTITY = "11111111-1111-4111-8111-111111111111"
@@ -46,7 +47,7 @@ def sample_payload(*, modes: list[str] | None = None, text: str | None = None) -
         "as_of": datetime(2026, 7, 1, tzinfo=UTC).isoformat(),
         "corpus_version_id": str(uuid4()),
         "ontology_version": "saas-metrics/v1",
-        "workflow_version": "extraction-workflow/v1",
+        "workflow_version": WORKFLOW_VERSION,
         "provider": "mock",
         "model": "mock-structured-v1",
         "input_manifest": {"source_span_ids": [FIXTURE_SPAN]},

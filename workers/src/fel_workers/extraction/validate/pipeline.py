@@ -7,11 +7,13 @@ from typing import Any, cast
 
 from fel_ontology import build_comparability_key
 from fel_ontology.models import OntologyDocument
+from fel_ontology.units import UNIT_POLICY_VERSION
 from fel_workers.extraction.errors import IntegrityError
 from fel_workers.extraction.hashing import hash_json, proposal_id_for, sha256_hex
 from fel_workers.extraction.types import (
     NON_MAGNITUDE_NORMALIZER_BLOCKERS,
     NORMALIZER_BLOCKERS_KEY,
+    VALIDATOR_VERSION,
     ConflictDraft,
     ExtractionMode,
     ProposalDraft,
@@ -240,6 +242,8 @@ def _build_draft(
         record_confidence=None,
         field_confidences={},
         validation_summary={
+            "unit_policy_version": UNIT_POLICY_VERSION,
+            "validator_version": VALIDATOR_VERSION,
             "ok": not blockers,
             "blockers": blockers,
             "duplicate": False,

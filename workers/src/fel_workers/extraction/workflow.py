@@ -10,6 +10,7 @@ from typing import Any, Protocol
 
 from fel_ontology import load_saas_metrics
 from fel_ontology.models import OntologyDocument
+from fel_ontology.units import UNIT_POLICY_VERSION
 from fel_providers.interfaces import StructuredLLMProvider
 from fel_workers.extraction.budget import RunBudget
 from fel_workers.extraction.checkpoint import MemoryCheckpointStore
@@ -38,7 +39,9 @@ from fel_workers.extraction.telemetry import emit
 from fel_workers.extraction.types import (
     MODE_STAGES,
     NORMALIZER_BLOCKERS_KEY,
+    NORMALIZER_VERSION,
     STAGE_ORDER,
+    VALIDATOR_VERSION,
     WORKFLOW_VERSION,
     EvidenceBlock,
     ExtractionRunRequest,
@@ -200,6 +203,8 @@ def run_extraction_workflow(state: WorkflowState, deps: WorkflowDeps) -> Workflo
 
     try:
         try:
+            if state.request.workflow_version != WORKFLOW_VERSION:
+                raise StepFailed(f"unsupported workflow version: {state.request.workflow_version}")
             for step_name in STAGE_ORDER:
                 _boundary(ctx)
                 if _should_skip_mode_stage(state, step_name):
@@ -676,9 +681,17 @@ def _stage_input_payload(state: WorkflowState, step_name: str) -> Any:
     if step_name in MODE_STAGES.values():
         return {"candidates": state.candidates, "classification": state.classification}
     if step_name == "normalize":
-        return {"raw_proposals": state.raw_proposals}
+        return {
+            "raw_proposals": state.raw_proposals,
+            "normalizer_version": NORMALIZER_VERSION,
+            "unit_policy_version": UNIT_POLICY_VERSION,
+        }
     if step_name == "validate":
-        return {"normalized": state.normalized}
+        return {
+            "normalized": state.normalized,
+            "validator_version": VALIDATOR_VERSION,
+            "unit_policy_version": UNIT_POLICY_VERSION,
+        }
     if step_name == "verify_citations":
         return {"validated_count": len(state.validated)}
     if step_name == "detect_conflicts":
@@ -796,9 +809,6 @@ def _stage_validate_request(state: WorkflowState) -> dict[str, Any]:
             raise StepFailed(f"unknown mode: {mode}")
     if not req.input_hash.startswith("sha256:"):
         raise StepFailed("input_hash must be sha256:…")
-    if req.workflow_version != WORKFLOW_VERSION:
-        # Allow pin mismatch only when explicitly testing; still record.
-        pass
     return {"ok": True, "modes": list(req.modes)}
 
 

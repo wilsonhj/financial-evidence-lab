@@ -15,6 +15,7 @@ from fel_workers.extraction.budget import RunBudget
 from fel_workers.extraction.errors import ProviderRefused, SchemaInvalid
 from fel_workers.extraction.roles import ROLE_SPECS, Role
 from fel_workers.extraction.runner import Abstention, run_model_step
+from fel_workers.extraction.types import WORKFLOW_VERSION
 
 
 class _ScriptedProvider:
@@ -74,7 +75,7 @@ def test_exactly_one_repair_then_schema_invalid() -> None:
             budget=RunBudget(),
             run_id="00000000-0000-4000-8000-000000000001",
             step_name="extract_kpi",
-            workflow_version="extraction-workflow/v1",
+            workflow_version=WORKFLOW_VERSION,
             provider_ref="mock",
             model_ref="mock-structured-v1",
         )
@@ -93,7 +94,7 @@ def test_refusal_is_not_abstention() -> None:
             budget=RunBudget(),
             run_id="00000000-0000-4000-8000-000000000001",
             step_name="extract_kpi",
-            workflow_version="extraction-workflow/v1",
+            workflow_version=WORKFLOW_VERSION,
             provider_ref="mock",
             model_ref="mock-structured-v1",
         )
@@ -110,7 +111,7 @@ def test_empty_valid_envelope_is_abstention() -> None:
         budget=RunBudget(),
         run_id="00000000-0000-4000-8000-000000000001",
         step_name="extract_kpi",
-        workflow_version="extraction-workflow/v1",
+        workflow_version=WORKFLOW_VERSION,
         provider_ref="mock",
         model_ref="mock-structured-v1",
     )
@@ -134,7 +135,7 @@ def test_root_input_hash_stable_across_repair() -> None:
         budget=RunBudget(),
         run_id="00000000-0000-4000-8000-000000000001",
         step_name="extract_kpi",
-        workflow_version="extraction-workflow/v1",
+        workflow_version=WORKFLOW_VERSION,
         provider_ref="mock",
         model_ref="mock-structured-v1",
     )
@@ -202,7 +203,7 @@ def test_closed_role_schemas_reject_unexpected_checkpoint_fields(
             budget=RunBudget(),
             run_id="00000000-0000-4000-8000-000000000001",
             step_name=step_name,
-            workflow_version="extraction-workflow/v1",
+            workflow_version=WORKFLOW_VERSION,
             provider_ref="mock",
             model_ref="mock-structured-v1",
         )
