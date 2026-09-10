@@ -16,6 +16,7 @@ import threading
 import time
 import uuid
 from datetime import UTC, datetime
+from decimal import Decimal
 from typing import Any
 
 import psycopg
@@ -366,12 +367,58 @@ def test_provider_refusal_abstains(
     assert trace["status"] == "abstained"
     assert trace["claims"] == []
     assert trace["events"][-1]["type"] == "run_abstained"
+    assert trace["events"][-1]["payload"]["reason"] == "provider_refused"
+    assert trace["events"][-1]["payload"]["reason"] != "insufficient_evidence"
     # Retrieval still ran: context was selected before the abstention.
     assert trace["candidates"], "expected candidates even when abstaining"
 
     row = _run_row(db_url, created["run_id"])
     assert row["status"] == "abstained"
     assert row["last_event"] == "run_abstained"
+
+
+def test_generation_audit_records_provider_response_and_estimated_cost(
+    client: TestClient,
+    org: tuple[str, str],
+    seeded: dict[str, str],
+    db_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from dataclasses import replace
+
+    from fel_providers.interfaces import StructuredGenerationRequest, StructuredModelResult
+
+    class AuditedProvider(MockStructuredLLMProvider):
+        def generate_structured(
+            self, request: StructuredGenerationRequest
+        ) -> StructuredModelResult:
+            return replace(
+                super().generate_structured(request),
+                response_id="response-audit-137",
+                estimated_cost_usd=Decimal("0.001234"),
+            )
+
+    monkeypatch.setattr(retrieval, "MockStructuredLLMProvider", AuditedProvider)
+    created = _create(client, org, seeded["workspace_id"])
+    trace = client.get(f"/v1/retrieval-runs/{created['run_id']}", headers=_headers(*org)).json()
+
+    generation_audit = trace["events"][-1]["payload"]["generation"]
+    assert generation_audit == {
+        "provider": "mock",
+        "model": "mock-structured-v1",
+        "response_id": "response-audit-137",
+        "estimated_cost_usd": "0.001234",
+    }
+    with psycopg.connect(db_url, autocommit=True) as conn:
+        run_cost = conn.execute(
+            "SELECT cost_usd FROM retrieval_runs WHERE id = %s", (created["run_id"],)
+        ).fetchone()
+        usage_cost = conn.execute(
+            "SELECT cost_usd FROM usage_events WHERE org_id = %s ORDER BY id DESC LIMIT 1",
+            (org[0],),
+        ).fetchone()
+    assert run_cost is not None and run_cost[0] > 0
+    assert usage_cost is not None and usage_cost[0] == run_cost[0]
 
 
 def test_question_containing_refuse_still_answers(
@@ -430,12 +477,19 @@ def test_invalid_generation_abstains_with_usage_and_retrieval_trace(
     assert trace["budget_usage"]["output_tokens"] == 9
     event = trace["events"][-1]
     assert event["type"] == "run_abstained"
-    assert event["payload"] == {
+    assert {key: event["payload"][key] for key in ("reason", "code")} == {
         "reason": "generation_contract_invalid",
         "code": (
             "CLAIMS_OUTPUT_SCHEMA_INVALID" if invalid_kind == "schema" else "UNKNOWN_CONTEXT_ITEM"
         ),
     }
+    generation = event["payload"]["generation"]
+    assert {key: generation[key] for key in ("provider", "model", "estimated_cost_usd")} == {
+        "provider": "mock",
+        "model": "mock-structured-v1",
+        "estimated_cost_usd": "0",
+    }
+    assert generation["response_id"].startswith("mockresp_")
     assert "MODEL_PRIVATE_TEXT" not in response.text
     assert not any(e["type"] == "claim_generated" for e in trace["events"])
 
@@ -467,7 +521,14 @@ def test_explicit_model_abstention_is_distinct_and_does_not_log_model_reason(
     trace = response.json()
     assert trace["status"] == "abstained"
     assert trace["claims"] == []
-    assert trace["events"][-1]["payload"] == {"reason": "model_abstained"}
+    payload = trace["events"][-1]["payload"]
+    assert payload["reason"] == "model_abstained"
+    assert set(payload["generation"]) == {
+        "provider",
+        "model",
+        "response_id",
+        "estimated_cost_usd",
+    }
     assert trace["budget_usage"]["input_tokens"] == 17
     assert trace["budget_usage"]["output_tokens"] == 9
     assert "MODEL_PRIVATE_REASON" not in response.text
@@ -649,6 +710,7 @@ def test_unknown_pinned_provider_persists_failed_run(
     trace = client.get(f"/v1/retrieval-runs/{created['run_id']}", headers=_headers(*org))
     assert trace.status_code == 200, trace.text
     assert trace.json()["status"] == "failed"
+    assert "generation" not in trace.json()["events"][-1]["payload"]
 
 
 def test_lane_failure_persists_failed_run(
@@ -689,9 +751,13 @@ def test_dangling_citation_persists_failed_run(
         StructuredClaimGenerator,
     )
 
+    generation_calls = 0
+
     def _dangling_generate(
         self: Any, question: str, context: Any, *, as_of: str
     ) -> GenerationResult:
+        nonlocal generation_calls
+        generation_calls += 1
         assert context, "expected accepted context to cite against"
         ghost = str(uuid.uuid4())
         claim = GeneratedClaim(
@@ -707,6 +773,8 @@ def test_dangling_citation_persists_failed_run(
             model="mock",
             input_tokens=1,
             output_tokens=1,
+            response_id="dangling-response",
+            estimated_cost_usd=Decimal("0"),
             refused=False,
         )
 
@@ -719,6 +787,13 @@ def test_dangling_citation_persists_failed_run(
     assert row["error"]["code"] == "DANGLING_CITATION"
 
     trace = client.get(f"/v1/retrieval-runs/{created['run_id']}", headers=_headers(*org))
+    assert trace.json()["events"][-1]["payload"]["generation"] == {
+        "provider": "mock",
+        "model": "mock",
+        "response_id": "dangling-response",
+        "estimated_cost_usd": "0",
+    }
+    assert generation_calls == 1
     assert trace.status_code == 200, trace.text
     assert trace.json()["status"] == "failed"
 

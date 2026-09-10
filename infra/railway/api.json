@@ -2,7 +2,7 @@
   "$schema": "https://railway.com/railway.schema.json",
   "build": {
     "builder": "RAILPACK",
-    "buildCommand": "pip install -r requirements.txt"
+    "buildCommand": "bash scripts/runtime/install.sh"
   },
   "deploy": {
     "preDeployCommand": "python scripts/db/migrate.py --database-url \"$FEL_DATABASE_URL\"",

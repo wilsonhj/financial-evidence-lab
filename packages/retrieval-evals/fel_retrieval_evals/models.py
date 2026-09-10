@@ -52,6 +52,12 @@ class NumericAnswer:
     scale_exponent: int
     period: str
 
+    def __post_init__(self) -> None:
+        if self.low > self.high:
+            raise ValueError(f"range low {self.low} exceeds high {self.high}")
+        if self.scale_exponent not in SCALE_EXPONENTS.values():
+            raise ValueError(f"unknown scale exponent: {self.scale_exponent!r}")
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "kind": "numeric",

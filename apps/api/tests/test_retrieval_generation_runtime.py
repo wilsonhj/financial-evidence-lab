@@ -123,7 +123,7 @@ def test_generation_rejections_preserve_usage_and_finish_abstained(
     }
     assert returned_usage == writer.usage
     assert returned_cost == usage.cost_usd == writer.cost_usd == Decimal("0.000350")
-    expected_payload = {"reason": "generation_contract_invalid"}
+    expected_payload: dict[str, Any] = {"reason": "generation_contract_invalid"}
     if response_kind == "schema":
         expected_payload["code"] = "CLAIMS_OUTPUT_SCHEMA_INVALID"
     elif response_kind == "unknown_citation":
@@ -132,6 +132,7 @@ def test_generation_rejections_preserve_usage_and_finish_abstained(
         expected_payload = {"reason": "model_abstained"}
     else:
         expected_payload = {"reason": "provider_refused"}
+    expected_payload["generation"] = usage.generation
     assert writer.events[-1] == ("run_abstained", expected_payload)
     assert "MODEL_PRIVATE_TEXT" not in str(writer.events)
     assert persisted_claims == []
