@@ -17,11 +17,14 @@ a required check. Enable strict checks against the current base and prohibit
 force-push/deletion of `main`. Shared-path changes continue to require the
 `contract-change` label and integration-lead review under AGENTS.md.
 
-This file records intent; it does not itself configure GitHub. The September
-10, 2026 read-only API audit found `main` unprotected and no repository rulesets.
-Apply and read back required checks after their implementation PR is merged;
-record the resulting protection/ruleset artifact in #203. No actual protection
-application is claimed by this document.
+This file documents GitHub configuration; editing it does not apply settings.
+The September 10, 2026 initial API audit found `main` unprotected with no
+repository rulesets. After PR #269 merged, the integration lead applied and
+read back branch protection: all seven checks above are bound to the GitHub
+Actions app (15368), strict/up-to-date checking and administrator enforcement
+are enabled, and force-pushes/deletion are disabled. The application record is
+in [issue #203](https://github.com/wilsonhj/financial-evidence-lab/issues/203).
+No required-review count or fabricated second CODEOWNER was configured.
 
 CODEOWNERS still names the existing real integration lead. Adding a second
 reviewer requires an identified GitHub account/team with repository access;
