@@ -372,7 +372,7 @@ packages:
     depends_on: [M3-EXTRACTION-CORE] # M3-CONTRACT (frozen 0004 + OpenAPI v0.4.0) inherited via M3-EXTRACTION-CORE
     team: contracts
     branch: agent/extraction-steps-output # not yet created
-    status: merged # PR #236 @ 22831da (2026-09-05). Migration 0006 adds extraction_run_steps.output, written in the same INSERT as output_hash under CHECK ((output IS NULL) = (output_hash IS NULL)), so the hash and the value it hashes are one row and one write and can never be separately durable. That also makes the event stream's published "metadata only" guarantee true. The merge resolved seven conflicts in safety-critical code against PR #211, which had landed #146/#204's terminal-run guards in the same two files; RunAlreadyTerminal, TERMINAL_RUN_STATUSES, _assert_run_open and load_run_status all survive, checked explicitly rather than assumed. Issue #157 is still OPEN on GitHub — the PR declared no closing issue. This entry read `blocked` from that merge until the present reconciliation, so for a day the queue described a landed migration as work the lead still had to sequence (#179's defect class). ADR-0011's SSE revisit trigger is CLEARED by this merge; see M3-REVIEW below.
+    status: merged # PR #236 @ 22831da (2026-09-05). Migration 0006 adds extraction_run_steps.output, written in the same INSERT as output_hash under CHECK ((output IS NULL) = (output_hash IS NULL)), so the hash and the value it hashes are one row and one write and can never be separately durable. That also makes the event stream's published "metadata only" guarantee true. The merge resolved seven conflicts in safety-critical code against PR #211, which had landed #146/#204's terminal-run guards in the same two files; RunAlreadyTerminal, TERMINAL_RUN_STATUSES, _assert_run_open and load_run_status all survive, checked explicitly rather than assumed. Issue #157 was verified closed in the September 9 GitHub snapshot. This entry read `blocked` from that merge until the present reconciliation, so for a day the queue described a landed migration as work the lead still had to sequence (#179's defect class). ADR-0011's SSE revisit trigger is CLEARED by this merge; see M3-REVIEW below.
     allowed_paths:
       # CONTENTION: the last two paths below are a SUBSET of M3-CONFIDENCE-GATE
       # (#62)'s claim set (#62 also claims evals/**), so these two packages can
@@ -611,7 +611,7 @@ packages:
     depends_on: [M3-EXTRACTION-CORE]
     team: platform
     branch: cherry/189-jobs-hardening
-    status: merged # PR #237 @ 5d8ccca (2026-09-05); migration 0007 adds jobs.cancel_requested_at, which #211 named as the missing half of cooperative cancel. All three defects in #189 fixed and each verified by execution rather than by reading the diff. Issue #189 is still OPEN on GitHub — the PR declared no closing issue; closing it is the lead's call, not a signal of residual work.
+    status: merged # PR #237 @ 5d8ccca (2026-09-05); migration 0007 adds jobs.cancel_requested_at, which #211 named as the missing half of cooperative cancel. All three defects in #189 fixed and each verified by execution rather than by reading the diff. Issue #189 was verified closed in the September 9 GitHub snapshot.
     allowed_paths:
       - db/migrations/**
       - workers/src/fel_workers/**
@@ -714,7 +714,7 @@ packages:
     depends_on: [M2-OBSERVATORY-UI]
     team: experience
     branch: cherry/198-web-tests
-    status: merged # PR #231 @ 9f4b8a0 (2026-09-04), the first of the recovery cherry-picks. Colocated render tests for every web component, a reader accessibility test, the skip link, and EvidenceReader's useState cluster replaced by a keyed reducer. One integration commit was needed because the branch forked before PR #176 made RootLayout an async Server Component. Issue #198 still OPEN; the PR declared no closing issue.
+    status: merged # PR #231 @ 9f4b8a0 (2026-09-04), the first of the recovery cherry-picks. Colocated render tests for every web component, a reader accessibility test, the skip link, and EvidenceReader's useState cluster replaced by a keyed reducer. One integration commit was needed because the branch forked before PR #176 made RootLayout an async Server Component. Issue #198 was verified closed in the September 9 GitHub snapshot.
     allowed_paths: [apps/web/**]
   - id: ARCH-RUNTIME-DEPS # runtime/dev requirements split, worker health endpoint
     issue: 200 # carries the worker half of #203
@@ -722,7 +722,7 @@ packages:
     depends_on: []
     team: platform
     branch: cherry/200-runtime-and-health
-    status: blocked # PARTIAL, not merged. PR #242 @ 796525e (2026-09-05) landed two of #200's four: requirements.txt now holds the five actual runtime dependencies and both Railway buildCommands install from it, and workers/src/fel_workers/health.py plus a worker Sentry init exist. RESIDUAL: unlocked dependency floors, and the unused httpx2. #242 also introduced a defect it did not carry the fix for — a preDeployCommand naming scripts/db/migrate.py, which did not exist until PR #247 @ 75fad38 supplied it; that is fixed, recorded here so the sequence is not rediscovered.
+    status: blocked # PARTIAL, not merged. PR #242 @ 796525e (2026-09-05) landed two of #200's four: requirements.txt now holds the five actual runtime dependencies and both Railway buildCommands install from it, and workers/src/fel_workers/health.py plus a worker Sentry init exist. RESIDUAL: unlocked dependency closure and deployed healthcheck/recovery wiring. httpx2 is already absent; worker health.py exists but infra/railway/worker.json does not configure healthcheckPath. #242 also introduced a defect it did not carry the fix for — a preDeployCommand naming scripts/db/migrate.py, which did not exist until PR #247 @ 75fad38 supplied it; that is fixed, recorded here so the sequence is not rediscovered.
     allowed_paths:
       - requirements.txt
       - requirements-dev.txt
@@ -745,7 +745,7 @@ packages:
     depends_on: []
     team: platform
     branch: fix/ci-checks-that-verify-nothing
-    status: merged # PR #227 @ c763bf8 (2026-09-04). CI sets FEL_REQUIRE_DB=1 and both conftests raise at import when the flag is set with no URL, so dropping or mis-scoping TEST_DATABASE_URL can no longer turn 218 tests into silent skips behind a green check. The laptop path (no flag, no URL) still skips deliberately. The same PR fixed #199's migration-harness loop, which printed "OK: 0 migration harness(es) run" and exited 0. Issue #202 still OPEN; no residual identified.
+    status: merged # PR #227 @ c763bf8 (2026-09-04). CI sets FEL_REQUIRE_DB=1 and both conftests raise at import when the flag is set with no URL, so dropping or mis-scoping TEST_DATABASE_URL can no longer turn 218 tests into silent skips behind a green check. The laptop path (no flag, no URL) still skips deliberately. The same PR fixed #199's migration-harness loop, which printed "OK: 0 migration harness(es) run" and exited 0. Issue #202 was verified closed in the September 9 GitHub snapshot; no residual identified.
     allowed_paths:
       - .github/workflows/** # shared; integration-lead authorization required
       - apps/api/tests/**
@@ -770,13 +770,13 @@ packages:
     allowed_paths:
       - packages/calculation-engine/**
       - specs/** # shared; a Spec Kit task addition, contract-change
-  - id: ARCH-CHECKPOINT-RERUN # re-establish a selectable event when a stage re-run is not byte-identical
+  - id: ARCH-CHECKPOINT-RERUN # repair durable step output/hash after a corrupt checkpoint
     issue: 221
     tasks: []
     depends_on: [EXTRACTION-STEPS-OUTPUT]
     team: extraction
     branch: agent/arch-checkpoint-rerun # not yet created
-    status: blocked # A PREREQUISITE FOR THE LIVE ADAPTER, and unreachable before it: it only bites when a stage re-run is not byte-identical, and every provider on trunk is a deterministic mock, so #208's Postgres scenarios pass for that reason rather than because the path is sound. The fix changes _insert_step_row's ON CONFLICT DO NOTHING to a targeted DO UPDATE on the success-uniqueness index — the atomic commit path — so it wants its own PR, its own review, and a Postgres test with a NON-deterministic stub provider, the shape no current test uses. Sequence with ARCH-PROVIDER-ADR (#195) and before RELEASE-LIVE-CUTOVER (#177).
+    status: blocked # Before live activation, reproduce against the migration-0006 row-output store: load_succeeded reads output/output_hash on the step row, not an event. _insert_step_row still uses ON CONFLICT DO NOTHING. A repair must atomically persist the new output/hash/usage while preserving identity pins, then pass a fresh-store resume test with a non-deterministic provider. Do not assume deterministic corrupt-row repair is safe without testing it. Sequence before #195 live activation and #177; no event-payload checkpoint restoration.
     allowed_paths:
       - workers/src/fel_workers/extraction/**
       - workers/tests/**

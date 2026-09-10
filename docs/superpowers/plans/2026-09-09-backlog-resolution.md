@@ -109,12 +109,13 @@ and registering disjoint allowed paths; otherwise serialize the broad worker
 globs. Keep #221, #153, #154 and #194 sequential where extraction paths overlap.
 
 - #248 separates deterministic endpoint behavior from a reference-profile
-  latency benchmark. Inject a clock for functional assertions; retain the real
+  latency benchmark. Assert a query-count/operation-budget invariant for the
+  functional test, including an injected extra-query regression; retain the real
   performance target in a dedicated benchmark rather than raising a timeout.
-- #230 requires observed lock contention before releasing the blocker. A
-  deadline reached without detection must emit the warning required by the
-  issue, visible under pytest -q; any change to a hard failure needs a measured
-  justification and updated acceptance. Retain
+- #230 waits a bounded interval to observe lock contention. On timeout, emit
+  the warning required by the issue, visible under pytest -q, then release the
+  blocker and finish cleanup. A hard failure needs measured justification and
+  updated acceptance. Retain
   database-scoped lock filtering and clean up both connections on failure.
 - #221 corrupts a stored output/hash, uses a deliberately non-deterministic
   provider for recovery, restarts the store, and proves the new durable output
@@ -126,8 +127,10 @@ globs. Keep #221, #153, #154 and #194 sequential where extraction paths overlap.
 - #154 tests known-polarity and free-text guidance ranges, signed bounds,
   floor/ceiling and preserved source values. Use the approved ordering semantics
   across normalization and validation rather than comparing raw magnitudes.
-- #137 fixes only residual refusal, stale prose and citation-verifier tests;
-  do not reimplement the required `supports` argument or model status guards.
+- #137 distinguishes refusal from insufficient evidence, preserves response/
+  model/config and estimated/actual cost provenance, and tests genuinely missing
+  evaluation value/lineage/range/scale invariants. Do not reimplement the already
+  required `supports` argument or existing model status guards.
 - #194 resolves the unreachable tool interface with explicit per-role dispatch
   or a documented no-tool provider mode. Forbidden tools and bounded calls must
   be tested. Preserve already wired cancellation and nullable unscored confidence.
@@ -177,12 +180,20 @@ the accepted baseline; any substitution needs its benchmark-backed ADR.
 at least eight distinct stress features. #177 provisions named credentials,
 resolves corpus sources, runs repeated predeclared embedding comparisons under
 the 512-dimension constraint, and stores immutable configs/usage/results. #56
-then proves 20 issuers/eight years and stable hashes/idempotence. #201 executes
+then proves 20 issuers/eight years and stable hashes/idempotence. #132 also owns
+  the live semantic-verifier integration in `packages/retrieval/**`, using #195
+  provider transport: test generated paraphrases, sign/negation contradictions,
+  refusal/timeouts, budget and redaction, then measure entailment precision at
+  >=95%. This is necessary because #241 deliberately retains a conservative
+  lexical mock. Register the scope before dispatch. #201 executes
 the real gate over the built index; #132 completes the 65-question live report.
 If Recall@10 fails, use the accepted top-100 reranker trigger before index
 redesign, and preserve the failure while fixing it.
 
-#108 configures the hosted HTTP reader and integrity-error mapping, then proves
+Before #108, register separate lead-owned prerequisites for the web integrity
+error mapping and `infra/railway/web.json`; the smoke issue may not absorb
+product fixes outside its scope. Once those merge, #108 configures the isolated
+hosted HTTP reader and proves
 worker → PostgreSQL → API → production browser against pinned document versions.
 Test authentication, citations, ETag/304, missing/integrity cases and tenant
 isolation. #96 and #87 close only after their remaining hosted criteria pass.
@@ -205,7 +216,7 @@ raw checkpoint outputs or cause a terminal run to resume.
 
 #62 follows #61 and live-cutover evidence: calibrate on held-out labels, record
 calibration version, enforce 0.85/0.80 thresholds and never auto-approve money,
-guidance or assumptions. Test admin-only audited threshold edits and invalid/
+guidance or assumptions. Test owner-only audited threshold edits and invalid/
 conflicting records regardless of confidence. Execute extraction and numeric
 gates plus live structured-output smoke before declaring M3 complete.
 
@@ -216,7 +227,7 @@ gates plus live structured-output smoke before declaring M3 complete.
 #219 first records separate AST and iteration dispositions. The default plan
 implements the current parent requirements; any deferral or amendment needs an
 accepted scope decision. Extend the existing Decimal engine rather than
-rebuilding #63: safe formula
+rebuilding #63. For each retained clause, implement safe formula
 AST, typed operations, dependency extraction, rejected undeclared cycles and
 explicit iterative groups with bounded iterations/tolerance/non-convergence.
 Test illegal syntax, unit/period mismatch, deterministic recalculation and
@@ -275,7 +286,7 @@ ownership is serialized. Keep the coordinator slot available for integration.
 
 ## Final verification of this plan
 
-Compare all 39 issue IDs in the dated audit against this plan's waves and epic
+Compare all 40 session issue IDs (39 initial plus #252) in the dated audit against this plan's waves and epic
 closure rules. Re-query GitHub after merges; record newly discovered issues and
 PRs separately. Confirm each relative document link resolves, workstream IDs
 are unique, dependencies resolve and the graph is acyclic. Do not interpret
