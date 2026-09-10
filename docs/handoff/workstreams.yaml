@@ -97,7 +97,7 @@ packages:
     tasks: []
     depends_on: []
     team: integration
-    branch: agent/188-execution-wave2
+    branch: agent/188-execution-wave3
     status: active
     allowed_paths:
       - docs/handoff/execution-2026-09-09.md
@@ -640,6 +640,15 @@ packages:
       - db/migrations/**
       - workers/src/fel_workers/**
       - workers/tests/**
+  - id: WORKER-ROLE-NOTE-REVIEW
+    issue: 190
+    tasks: []
+    depends_on: [ARCH-DB-WORKER-ROLE]
+    team: integration
+    branch: agent/190-role-note-review
+    status: active # Correct deployment overclaim found during independent review of external PR #260.
+    allowed_paths:
+      - db/migrations/README.md
   - id: ARCH-API-HARDENING # cost ceilings wired, per-org rate limiting, bounded lists, pooling, Sentry
     issue: 191 # also carries the API half of #203
     tasks: []

@@ -4,6 +4,14 @@ Plan: [backlog resolution](../superpowers/plans/2026-09-09-backlog-resolution.md
 Parent specification and canonical task ledger govern; this is issue execution
 evidence, not a second task-completion checklist.
 
+September 10 continuation: control PR #258 merged at abc6bcc. External PR #260
+removes the unreachable tool layer under #194's accepted option (b) and corrects
+the worker-role note. Review found its new wording overclaims deployed role
+enforcement: FEL_WORKER_DB_ROLE is still opt-in. A dedicated #190 documentation
+worktree corrects that claim before integration; no schema or deployed-role
+acceptance is implied. #194 code remains under read-only integration review
+until #221's extraction repair merges. All remote commits are preserved.
+
 Starting revision: a184374. Starting live inventory: 37 issues, zero PRs.
 Owner requested implementation of all open issues with parallel agents.
 ADR-0017 records the initial dispatch and scope narrowing.
