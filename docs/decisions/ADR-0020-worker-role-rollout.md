@@ -22,14 +22,18 @@ already-applied migration or claiming the missing historical ADR was present.
 ## Decision
 
 Set the committed worker start command to
-`env FEL_WORKER_DB_ROLE=fel_worker python -m fel_workers run`. The explicit
+`env -u FEL_MIGRATION_DATABASE_URL FEL_WORKER_DB_ROLE=fel_worker python -m fel_workers run`. The explicit
 non-secret value overrides an inherited blank or different service variable.
 The existing connection setup selects the role before queue operations; failure
 to select it stops startup. Local library/CLI use retains its existing opt-in
 switch. This change neither broadens grants nor changes tenant policy.
 
-Keep the migration-ledger check in the separate pre-deploy process, outside
-the runtime role selection. Operators provision login membership in
+The separate pre-deploy ledger check uses `FEL_MIGRATION_DATABASE_URL` when
+configured, otherwise the existing `FEL_DATABASE_URL` for compatibility. The
+worker command removes the migration override from its environment. The ledger
+is owner-only, so a restricted runtime login requires that separate migration
+connection; missing privileges fail the check rather than expanding grants.
+Operators provision login membership in
 `fel_worker` and keep migration authority separate from runtime credentials.
 `SET ROLE` constrains subsequent normal worker operations; selecting it from
 an owner/superuser login is not a security boundary against arbitrary malicious

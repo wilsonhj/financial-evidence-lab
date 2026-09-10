@@ -4,7 +4,7 @@ Config-as-code for the Railway services. Each service in the Railway
 dashboard points its "config file path" at the matching JSON file here.
 
 - `api.json` — FastAPI service (`uvicorn`, `/health` healthcheck).
-- `worker.json` — job-queue consumer (`python -m fel_workers run`) with a
+- `worker.json` — job-queue consumer (the role-pinned command in `worker.json`) with a
   `/health` startup check. Railway health checks gate deployments; they do
   not continuously restart an already deployed service. The worker therefore
   also runs an in-process watchdog. If neither the idle consumer loop nor a
@@ -27,13 +27,28 @@ redeploying.
 
 ## Worker environment wiring
 
-Variables are set in the Railway service's Variables tab, never in these
-JSON files (no secrets in this tree — see `../README.md` and
-`docs/handoff/CREDENTIALS.md`). Only variable NAMES are documented here.
+Secrets and provider configuration belong in the Railway service's Variables
+tab (see `../README.md` and `docs/handoff/CREDENTIALS.md`). The non-secret
+`FEL_WORKER_DB_ROLE=fel_worker` assignment is pinned in the worker start command
+and overrides any inherited service value. Each worker connection selects this
+role before queue operations; inability to select it stops startup. The separate
+pre-deploy migration check uses `FEL_MIGRATION_DATABASE_URL` when set, falling
+back to `FEL_DATABASE_URL` for existing deployments. The worker process removes
+that migration override from its environment.
+
+Provision a runtime login that can select `fel_worker` without owner/superuser
+authority, keeping migration credentials separate. Selecting a restricted role
+from a superuser login does not prevent malicious SQL from resetting the role.
+After deploying, verify the service uses this config, inspect `session_user` and
+`current_user` on a worker connection, and verify permitted writes plus refused
+deletion/DDL. Record role names and results only, never connection strings.
+The committed command and local tests do not establish hosted adoption; #190
+retains that acceptance. See ADR-0020 for the rollout boundary.
 
 | Variable | Required | Purpose |
 | --- | --- | --- |
-| `FEL_DATABASE_URL` | yes | Postgres connection string for the job queue. The consumer exits with status 2 if unset. |
+| `FEL_DATABASE_URL` | yes | Runtime Postgres connection for the job queue; the login must be able to select `fel_worker`. The consumer exits with status 2 if unset. |
+| `FEL_MIGRATION_DATABASE_URL` | with a restricted runtime login | Pre-deploy connection able to read the owner-only migration ledger in the same database. Omitted only when the existing database connection can perform that check. Removed from the worker process environment. |
 | `FEL_WORKER_HEALTH_PORT` | no | Overrides the health endpoint port. When absent, the worker uses Railway's injected `PORT`; outside Railway, no HTTP endpoint is opened unless either variable is set. The watchdog always runs. |
 | `FEL_SEC_LIVE` | to select live mode | When set truthy (see "Mode flag values" below), binds the live EDGAR client. Live mode fails closed: the process exits with status 2 unless `FEL_STORAGE_DIR` and `FEL_SEC_USER_AGENT` are also set. |
 | `FEL_MOCK_SMOKE` | to select mock mode | When set truthy, explicitly opts in to the deterministic mock providers. Non-production smoke option ONLY: a mock run claims real queued jobs and completes them with fabricated output, so it must be isolated on a non-production database/queue. Never set on a service pointed at production. |
