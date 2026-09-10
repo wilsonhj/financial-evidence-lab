@@ -750,6 +750,7 @@ def test_dangling_citation_persists_failed_run(
         GenerationResult,
         StructuredClaimGenerator,
     )
+
     generation_calls = 0
 
     def _dangling_generate(
