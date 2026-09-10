@@ -41,6 +41,7 @@ import json
 import time
 import uuid
 from collections.abc import Callable, Iterator, Mapping
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Annotated, Any
@@ -52,9 +53,17 @@ from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
 from app.auth import TenantContext
 from app.config import settings
+from app.costs import (
+    enforce_ceilings,
+    lock_query_budget,
+    record_usage,
+    reserve_query_cost,
+    token_cost_usd,
+)
 from app.db import tenant_connection
 from app.dependencies import get_tenant_context
 from app.errors import api_error
+from app.ratelimit import rate_limit
 from fel_providers import EmbeddingProvider, MockEmbeddingProvider
 from fel_providers.interfaces import StructuredLLMProvider
 from fel_providers.mocks import MockStructuredLLMProvider
@@ -256,25 +265,38 @@ class _RunWriter:
             (status, self._run_id),
         )
 
-    def finish_succeeded(self, *, budget_usage: dict[str, int], timings_ms: dict[str, int]) -> None:
+    def finish_succeeded(
+        self,
+        *,
+        budget_usage: dict[str, int],
+        timings_ms: dict[str, int],
+        cost_usd: Decimal,
+    ) -> None:
         # Single terminal UPDATE: all columns are within the migration's
         # column-scoped grant, and run_completed is already the latest event.
         self._conn.execute(
             "UPDATE retrieval_runs SET status = 'succeeded', finished_at = now(),"
-            " budget_usage = %s::jsonb, timings_ms = %s::jsonb WHERE id = %s",
-            (json.dumps(budget_usage), json.dumps(timings_ms), self._run_id),
+            " budget_usage = %s::jsonb, timings_ms = %s::jsonb, cost_usd = %s WHERE id = %s",
+            (json.dumps(budget_usage), json.dumps(timings_ms), cost_usd, self._run_id),
         )
 
-    def finish_abstained(self, *, budget_usage: dict[str, int], timings_ms: dict[str, int]) -> None:
+    def finish_abstained(
+        self,
+        *,
+        budget_usage: dict[str, int],
+        timings_ms: dict[str, int],
+        cost_usd: Decimal,
+    ) -> None:
         # verifying -> abstained; run_abstained is already the latest event so the
         # terminal-event guard passes. Only column-scoped grant fields are written.
+        # An abstention still consumed provider tokens, so it still carries a cost.
         self._conn.execute(
             "UPDATE retrieval_runs SET status = 'abstained', finished_at = now(),"
-            " budget_usage = %s::jsonb, timings_ms = %s::jsonb WHERE id = %s",
-            (json.dumps(budget_usage), json.dumps(timings_ms), self._run_id),
+            " budget_usage = %s::jsonb, timings_ms = %s::jsonb, cost_usd = %s WHERE id = %s",
+            (json.dumps(budget_usage), json.dumps(timings_ms), cost_usd, self._run_id),
         )
 
-    def fail(self, error: dict[str, str]) -> None:
+    def fail(self, error: dict[str, str], *, cost_usd: Decimal = Decimal("0")) -> None:
         # Append the terminal ``run_failed`` event, then move the run to the
         # terminal ``failed`` status. ``fel_guard_retrieval_run`` allows a
         # transition to ``failed`` from any open status once ``run_failed`` is the
@@ -282,8 +304,8 @@ class _RunWriter:
         self.emit("run_failed", {"error": error})
         self._conn.execute(
             "UPDATE retrieval_runs SET status = 'failed', finished_at = now(),"
-            " error = %s::jsonb WHERE id = %s",
-            (json.dumps(error), self._run_id),
+            " error = %s::jsonb, cost_usd = %s WHERE id = %s",
+            (json.dumps(error), cost_usd, self._run_id),
         )
 
 
@@ -328,6 +350,13 @@ def _lane_call(lane: str, lane_query: LaneQuery, timings: dict[str, int]) -> Lan
     return _call
 
 
+@dataclass
+class _RunUsage:
+    """Keep reported spend available even if subsequent persistence fails."""
+
+    cost_usd: Decimal = Decimal("0")
+
+
 def _execute_pipeline(
     conn: psycopg.Connection[Any],
     *,
@@ -337,8 +366,12 @@ def _execute_pipeline(
     mode: str,
     embedding_provider: str,
     embedding_model: str,
-) -> None:
+    usage: _RunUsage,
+) -> tuple[dict[str, int], Decimal]:
     """Run lanes -> fusion once and persist the full ordered trace.
+
+    Returns the run's budget usage and its metered cost so the caller can write
+    the ``usage_events`` row against the same numbers the trace records.
 
     All writes are on ``conn`` (tenant/RLS); each lane SELECTs over its own
     dedicated public-corpus connection via ``execute_lanes``. Everything runs
@@ -435,6 +468,12 @@ def _execute_pipeline(
         _resolve_generation_provider(GENERATION_PROVIDER, GENERATION_MODEL)
     )
     generation = generator.generate(plan["variants"][0], context, as_of=plan["effective_as_of"])
+    # Capture reported usage before verification or database writes can fail.
+    usage.cost_usd = token_cost_usd(
+        settings(),
+        input_tokens=generation.input_tokens,
+        output_tokens=generation.output_tokens,
+    )
     for claim in generation.claims:
         writer.emit(
             "claim_generated",
@@ -476,14 +515,16 @@ def _execute_pipeline(
         "verifying": verifying_ms,
         "total": planning_ms + retrieving_ms + fusing_ms + generating_ms + verifying_ms,
     }
+    cost_usd = usage.cost_usd
     # Missing supporting evidence yields abstention; a contradicted claim is
     # preserved and displayed (the run still succeeds).
     if should_abstain(claims):
         writer.emit("run_abstained", {"reason": "insufficient_evidence"})
-        writer.finish_abstained(budget_usage=budget_usage, timings_ms=timings_ms)
+        writer.finish_abstained(budget_usage=budget_usage, timings_ms=timings_ms, cost_usd=cost_usd)
     else:
         writer.emit("run_completed", {"status": "succeeded"})
-        writer.finish_succeeded(budget_usage=budget_usage, timings_ms=timings_ms)
+        writer.finish_succeeded(budget_usage=budget_usage, timings_ms=timings_ms, cost_usd=cost_usd)
+    return budget_usage, cost_usd
 
 
 def _decision_dict(decision: Any, stamp: str) -> dict[str, Any]:
@@ -785,6 +826,7 @@ def _insert_run(
             PLANNER_VERSION,
         ),
     )
+    reserve_query_cost(conn, ctx, run_id, settings().research_query_cost_usd)
     return run_id
 
 
@@ -815,6 +857,7 @@ def _run_pipeline_or_fail(
     mode: str,
     embedding_provider: str,
     embedding_model: str,
+    usage_kind: str,
 ) -> None:
     """Execute the pipeline for an already-persisted run, recording durable failure.
 
@@ -822,11 +865,18 @@ def _run_pipeline_or_fail(
     tenant transaction. A pipeline exception rolls that transaction back (no
     partial trace) and is then recorded as a terminal ``failed`` run in a fresh
     transaction, so a failure is always durably observable.
+
+    The terminal trace and usage event commit together. If either write fails,
+    both roll back and the fresh failure transaction records any provider spend
+    already reported. If the database cannot persist that either, the queued
+    run and its admission reservation remain, so the budget fails closed.
     """
+    usage = _RunUsage()
+
     try:
         with tenant_connection(ctx) as conn:
             conn.execute("SELECT set_config('statement_timeout', %s, true)", (_STATEMENT_TIMEOUT,))
-            _execute_pipeline(
+            _, cost_usd = _execute_pipeline(
                 conn,
                 run_id=run_id,
                 org_id=ctx.org_id,
@@ -834,21 +884,53 @@ def _run_pipeline_or_fail(
                 mode=mode,
                 embedding_provider=embedding_provider,
                 embedding_model=embedding_model,
+                usage=usage,
             )
+            record_usage(conn, ctx, usage_kind, cost_usd)
     except Exception as exc:
-        _record_run_failure(ctx, run_id=run_id, exc=exc)
+        _record_run_failure(
+            ctx, run_id=run_id, exc=exc, usage_kind=usage_kind, cost_usd=usage.cost_usd
+        )
 
 
-def _record_run_failure(ctx: TenantContext, *, run_id: str, exc: Exception) -> None:
+def _record_run_failure(
+    ctx: TenantContext,
+    *,
+    run_id: str,
+    exc: Exception,
+    usage_kind: str,
+    cost_usd: Decimal,
+) -> None:
     """Append ``run_failed`` and move the run to ``failed`` in a fresh transaction."""
     error = _failure_envelope(exc)
     with tenant_connection(ctx) as conn:
         conn.execute("SELECT set_config('statement_timeout', %s, true)", (_STATEMENT_TIMEOUT,))
-        _RunWriter(conn, run_id=run_id, org_id=ctx.org_id).fail(error)
+        _RunWriter(conn, run_id=run_id, org_id=ctx.org_id).fail(error, cost_usd=cost_usd)
+        if cost_usd > 0:
+            record_usage(conn, ctx, usage_kind, cost_usd)
+
+
+# --- Cost controls ----------------------------------------------------------
+# Spec 18.2 gives a standard research query a USD 0.25 hard cost ceiling. That
+# figure is charged against the user/org ceilings *before* the pipeline runs:
+# a caller already at their limit is refused rather than billed and then told.
+# The hard stop keeps the code costs.py already raises and tests
+# (COST_LIMIT_EXCEEDED / 402) rather than inventing a second name for one
+# condition; see the costs module docstring for why 402 and not 429.
+_COST_WARNING_HEADER = "X-FEL-Cost-Warning"
+
+
+def _enforce_query_ceilings(conn: psycopg.Connection[Any], ctx: TenantContext) -> str | None:
+    cfg = settings()
+    return enforce_ceilings(conn, ctx, cfg, cfg.research_query_cost_usd)
 
 
 # --- Endpoints --------------------------------------------------------------
-@router.post("/workspaces/{workspace_id}/queries", status_code=202)
+@router.post(
+    "/workspaces/{workspace_id}/queries",
+    status_code=202,
+    dependencies=[Depends(rate_limit("createQuery"))],
+)
 def create_query(
     workspace_id: uuid.UUID,
     body: CreateQuery,
@@ -857,9 +939,14 @@ def create_query(
     response: Response,
 ) -> dict[str, Any]:
     with tenant_connection(ctx) as conn:
+        lock_query_budget(conn, ctx)
         replay = _idempotent_replay(conn, ctx, "createQuery", idempotency_key)
         if replay is not None:
+            # A replay bills nothing and is not a new billable run, so it is
+            # neither ceiling-checked nor metered.
             return replay
+
+        cost_warning = _enforce_query_ceilings(conn, ctx)
 
         workspace = conn.execute(
             "SELECT id, entity_id, as_of FROM workspaces WHERE id = %s", (str(workspace_id),)
@@ -916,12 +1003,19 @@ def create_query(
         mode="execute",
         embedding_provider=index["embedding_provider"],
         embedding_model=index["embedding_model"],
+        usage_kind="research_query",
     )
+    if cost_warning is not None:
+        response.headers[_COST_WARNING_HEADER] = cost_warning
     response.status_code = 202
     return accepted
 
 
-@router.post("/queries/{query_id}/reruns", status_code=202)
+@router.post(
+    "/queries/{query_id}/reruns",
+    status_code=202,
+    dependencies=[Depends(rate_limit("createQueryRerun"))],
+)
 def create_query_rerun(
     query_id: uuid.UUID,
     ctx: Annotated[TenantContext, Depends(get_tenant_context)],
@@ -929,9 +1023,14 @@ def create_query_rerun(
     response: Response,
 ) -> dict[str, Any]:
     with tenant_connection(ctx) as conn:
+        lock_query_budget(conn, ctx)
         replay = _idempotent_replay(conn, ctx, "createQueryRerun", idempotency_key)
         if replay is not None:
             return replay
+
+        # A rerun re-executes the whole pipeline, so it is billable exactly like
+        # a new query and carries the same ceiling.
+        cost_warning = _enforce_query_ceilings(conn, ctx)
 
         query = conn.execute(
             "SELECT id, plan, index_version_id FROM queries WHERE id = %s", (str(query_id),)
@@ -974,7 +1073,10 @@ def create_query_rerun(
         mode="rerun",
         embedding_provider=embedding_provider,
         embedding_model=embedding_model,
+        usage_kind="research_query_rerun",
     )
+    if cost_warning is not None:
+        response.headers[_COST_WARNING_HEADER] = cost_warning
     response.status_code = 202
     return accepted
 
@@ -984,6 +1086,7 @@ def get_query(
     query_id: uuid.UUID,
     ctx: Annotated[TenantContext, Depends(get_tenant_context)],
 ) -> dict[str, Any]:
+    """Return the complete immutable query snapshot and run history."""
     with tenant_connection(ctx, snapshot_read=True) as conn:
         query = conn.execute(
             "SELECT id, parent_query_id, question, plan, created_at FROM queries WHERE id = %s",
@@ -1224,7 +1327,11 @@ def stream_retrieval_run_events(
     )
 
 
-@router.post("/retrieval-runs/{run_id}/feedback", status_code=201)
+@router.post(
+    "/retrieval-runs/{run_id}/feedback",
+    status_code=201,
+    dependencies=[Depends(rate_limit("createRetrievalFeedback"))],
+)
 def create_retrieval_feedback(
     run_id: uuid.UUID,
     body: EvidenceFeedback,

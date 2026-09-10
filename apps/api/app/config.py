@@ -28,6 +28,31 @@ class Settings:
     org_monthly_soft_limit_usd: Decimal = field(
         default_factory=lambda: Decimal(os.environ.get("FEL_ORG_MONTHLY_SOFT_USD", "500"))
     )
+    # Spec section 18.2: "a standard research query has a USD 0.25 hard cost
+    # ceiling". Charged against the ceilings *before* the pipeline runs, so a
+    # caller at the limit is stopped rather than discovering it after billing.
+    research_query_cost_usd: Decimal = field(
+        default_factory=lambda: Decimal(os.environ.get("FEL_RESEARCH_QUERY_COST_USD", "0.25"))
+    )
+    # Placeholder token pricing used to convert reported provider usage into a
+    # metered cost. The pinned providers are deterministic mocks today; a live
+    # provider factory (packages/providers) will carry real per-model rates.
+    cost_per_1k_input_usd: Decimal = field(
+        default_factory=lambda: Decimal(os.environ.get("FEL_COST_PER_1K_INPUT_USD", "0.005"))
+    )
+    cost_per_1k_output_usd: Decimal = field(
+        default_factory=lambda: Decimal(os.environ.get("FEL_COST_PER_1K_OUTPUT_USD", "0.015"))
+    )
+    # In-process rate limiting (#191). 0 qps disables the limiter entirely.
+    rate_limit_qps: float = field(
+        default_factory=lambda: float(os.environ.get("FEL_RATE_LIMIT_QPS", "5"))
+    )
+    rate_limit_burst: float = field(
+        default_factory=lambda: float(os.environ.get("FEL_RATE_LIMIT_BURST", "20"))
+    )
+    # Connection pool sizing (#191).
+    db_pool_min: int = field(default_factory=lambda: int(os.environ.get("FEL_DB_POOL_MIN", "1")))
+    db_pool_max: int = field(default_factory=lambda: int(os.environ.get("FEL_DB_POOL_MAX", "10")))
 
 
 def settings() -> Settings:

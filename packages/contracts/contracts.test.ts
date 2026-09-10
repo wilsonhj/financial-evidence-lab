@@ -83,11 +83,11 @@ describe("contract schemas", () => {
 });
 
 describe("contract version identity (VERSIONING.md)", () => {
-  it("openapi info.version and CONTRACT_VERSION agree on the 0.4.0 minor bump", () => {
+  it("openapi info.version and CONTRACT_VERSION agree on the 0.5.0 minor bump", () => {
     const yaml = readFileSync(join(here, "openapi/openapi.yaml"), "utf8");
     const infoVersion = /^ {2}version: (\d+\.\d+\.\d+)$/m.exec(yaml)?.[1];
     expect(infoVersion).toBe(CONTRACT_VERSION);
-    expect(CONTRACT_VERSION).toBe("0.4.0");
+    expect(CONTRACT_VERSION).toBe("0.5.0");
   });
 
   it("SCHEMA_IDS covers every schema file (and nothing else)", () => {
