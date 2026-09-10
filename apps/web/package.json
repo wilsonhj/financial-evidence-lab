@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "@fel/contracts": "workspace:*",
-    "next": "16.2.11",
+    "next": "16.3.3",
     "react": "19.2.7",
     "react-dom": "19.2.7"
   },
@@ -25,6 +25,6 @@
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",
     "typescript": "~6.0.0",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.11"
   }
 }
