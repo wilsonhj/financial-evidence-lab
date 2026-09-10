@@ -406,11 +406,9 @@ def resolve_health_port() -> int | None:
 def init_sentry() -> bool:
     """Initialise Sentry when ``FEL_SENTRY_DSN`` is set; otherwise do nothing.
 
-    Returns whether the SDK was initialised. The import is lazy and optional
-    on purpose: ``sentry-sdk`` is not a worker dependency, so a deployment
-    that has not installed it must still start — but silently swallowing the
-    DSN would leave an operator believing errors are being reported when they
-    are not, so the missing SDK is logged as a warning.
+    Returns whether the SDK was initialised. The deployed runtime lock includes
+    the SDK. Lazy import preserves custom installations without it, warning
+    when a configured DSN cannot be used.
 
     ``send_default_pii=False`` is not the SDK default in every version and is
     pinned here deliberately: worker jobs carry tenant identifiers and filing
@@ -422,11 +420,7 @@ def init_sentry() -> bool:
     if not dsn:
         return False
     try:
-        # Imported through importlib, not a plain `import sentry_sdk`, for the
-        # same reason apps/api/app/observability.py does: the SDK is
-        # deliberately NOT a declared dependency, so a static import makes
-        # mypy fail on every checkout that has not installed an optional
-        # package the code is written to work without.
+        # Match the API's lazy initialization for custom installs without the SDK.
         sentry_sdk = importlib.import_module("sentry_sdk")
     except ImportError:
         log.warning(

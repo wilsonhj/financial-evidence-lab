@@ -76,6 +76,12 @@ jobs:
       - name: Install browser OS dependencies on every run
         run: pnpm --filter @fel/web exec playwright install-deps chromium
       - run: pnpm --filter @fel/web run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-results
+          path: apps/web/test-results/
+          if-no-files-found: ignore
 
   python:
     name: Python — format, lint, typecheck, test, security

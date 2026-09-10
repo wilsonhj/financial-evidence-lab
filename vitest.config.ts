@@ -14,6 +14,7 @@ export default defineConfig({
       include: ["apps/*/src/**/*.{ts,tsx}", "packages/*/src/**/*.{ts,tsx}", "scripts/*.mjs"],
       exclude: ["**/*.test.{ts,tsx,mjs}", "**/*.d.ts", "**/generated/**", "**/test-support/**"],
       reporter: ["text", "json-summary"],
+      thresholds: { statements: 85.08, branches: 76.15, functions: 82.89, lines: 86.33 },
     },
   },
 });

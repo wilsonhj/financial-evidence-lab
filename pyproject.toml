@@ -71,5 +71,6 @@ source = [
 omit = ["*/tests/*"]
 
 [tool.coverage.report]
+fail_under = 88.41
 precision = 2
 show_missing = true
