@@ -6,8 +6,8 @@ cited evidence so a claim's rendered status can never outrun what the evidence
 supports:
 
 * ``CitationVerifier`` is a typed ``Protocol``; ``MockCitationVerifier`` is the
-  deterministic default (no network). Entailment is decided by lexical coverage
-  of the claim by its evidence span, and — for arithmetic-bearing claims — by the
+  deterministic default (no network). Full mock entailment requires whole-evidence
+  text identity (whitespace normalized), and — for arithmetic-bearing claims — the
   numeric-tuple check, so a number that does not check out is *contradictory*
   regardless of how well the surrounding words overlap.
 * ``validate_numeric`` checks value, unit, period, sign and scale as five
@@ -29,6 +29,7 @@ from __future__ import annotations
 import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from decimal import ROUND_DOWN, Decimal
 from typing import Protocol
 
 from fel_retrieval.generation import (
@@ -39,9 +40,8 @@ from fel_retrieval.generation import (
 )
 
 # Lexical coverage thresholds for the mock entailment judgement. A claim whose
-# tokens are fully covered by its evidence span is entailed; substantial-but-
-# partial coverage is a partial edge; anything below is irrelevant.
-_ENTAILED_COVERAGE = 1.0
+# text matches the whole evidence is entailed; lexical overlap alone is at
+# most a partial edge because token sets discard signs, negation and word order.
 _PARTIAL_COVERAGE = 0.5
 
 # Numeric-check dimensions, in the fixed order they are reported (spec §11.4).
@@ -58,13 +58,25 @@ class CitationIntegrityError(RuntimeError):
         self.code = code
 
 
+# Confidence is reported to four decimal places; an exact Decimal so no float
+# rounding can turn "almost fully covered" into a rendered 1.
+_CONFIDENCE_QUANTUM = Decimal("0.0001")
+
+
 @dataclass(frozen=True)
 class CitationEdge:
-    """A verified claim -> evidence edge."""
+    """A verified claim -> evidence edge.
+
+    ``confidence`` is the verifier's own support score for this edge in
+    ``[0, 1]``. It is the ONLY source of a claim's confidence (#193): generation
+    proposes claims with confidence unset, so nothing downstream can render a
+    constant 1 that no evidence check produced.
+    """
 
     status: str
     numeric_checks: dict[str, bool]
     rationale: str
+    confidence: Decimal = Decimal("0")
 
 
 def _tokens(text: str) -> set[str]:
@@ -113,7 +125,8 @@ class CitationVerifier(Protocol):
 class MockCitationVerifier:
     """Deterministic entailment + numeric verifier (no network).
 
-    Text entailment is lexical coverage of the claim by its evidence span. When a
+    Full text support requires identity with the whole whitespace-normalized
+    evidence. Lexical coverage alone is at most partial, never semantic proof. When a
     numeric tuple is asserted, the numeric check is decisive: missing evidence
     numeric fails closed as non-supporting (never lexical ``entailed``), and any
     failed dimension makes the edge ``contradictory`` (the number is wrong).
@@ -127,6 +140,15 @@ class MockCitationVerifier:
         self, claim_text: str, evidence: ContextItem, *, claim_numeric: NumericTuple | None
     ) -> CitationEdge:
         numeric_checks: dict[str, bool] = {}
+        if claim_numeric is None and evidence.numeric is not None and re.search(r"\d", claim_text):
+            # A model can omit its numeric object. Do not let lexical token
+            # overlap then certify a numeric fact (tokens discard signs).
+            return CitationEdge(
+                status="irrelevant",
+                numeric_checks={},
+                rationale="numeric fact claim has no independently asserted numeric tuple",
+                confidence=Decimal("0"),
+            )
         if claim_numeric is not None:
             if evidence.numeric is None:
                 # Claim asserts a number but the cited evidence has none — fail
@@ -135,6 +157,7 @@ class MockCitationVerifier:
                     status="irrelevant",
                     numeric_checks={},
                     rationale="claim asserts numeric but evidence has no numeric tuple",
+                    confidence=Decimal("0"),
                 )
             numeric_checks = validate_numeric(claim_numeric, evidence.numeric)
             if not all(numeric_checks.values()):
@@ -143,10 +166,11 @@ class MockCitationVerifier:
                     status="contradictory",
                     numeric_checks=numeric_checks,
                     rationale=f"numeric mismatch: {', '.join(failed)}",
+                    confidence=Decimal("0"),
                 )
 
         coverage = _coverage(claim_text, evidence.text)
-        if coverage >= _ENTAILED_COVERAGE:
+        if coverage and " ".join(claim_text.split()) == " ".join(evidence.text.split()):
             status = "entailed"
         elif coverage >= _PARTIAL_COVERAGE:
             status = "partial"
@@ -155,7 +179,20 @@ class MockCitationVerifier:
         return CitationEdge(
             status=status,
             numeric_checks=numeric_checks,
-            rationale=f"lexical coverage {coverage:.2f}",
+            rationale=(
+                "whole-evidence text identity"
+                if status == "entailed"
+                else f"lexical coverage {coverage:.2f}; semantic entailment unverified"
+            ),
+            # A transformed claim can cover every token without preserving meaning.
+            confidence=(
+                Decimal("1")
+                if status == "entailed"
+                else min(
+                    Decimal(str(coverage)).quantize(_CONFIDENCE_QUANTUM, rounding=ROUND_DOWN),
+                    Decimal("1") - _CONFIDENCE_QUANTUM,
+                )
+            ),
         )
 
 
@@ -216,6 +253,19 @@ def should_abstain(claims: Sequence[GeneratedClaim]) -> bool:
     return all(claim.status == "unsupported" for claim in claims)
 
 
+def claim_confidence(edges: Sequence[CitationEdge]) -> Decimal | None:
+    """Fold verified edges into the claim's confidence (``None`` if uncited).
+
+    The weakest edge decides (``min``), so a claim is only as confident as its
+    least-supported citation: adding a loosely-related citation can lower a
+    claim's confidence but can never raise it. Generation never sets confidence,
+    so this is the only place one is produced (#193).
+    """
+    if not edges:
+        return None
+    return min(edge.confidence for edge in edges)
+
+
 def verify_claims(
     claims: Sequence[GeneratedClaim],
     context: Sequence[ContextItem],
@@ -231,12 +281,14 @@ def verify_claims(
     verified: list[GeneratedClaim] = []
     for claim in claims:
         new_citations: list[ClaimCitation] = []
+        edges: list[CitationEdge] = []
         for citation in claim.citations:
             item = assert_citation_integrity(citation, accepted)
             # The claim asserts its own numeric; every edge checks that assertion
             # against its OWN cited evidence, so a second correctly-cited fact is
             # never mis-flagged by the value of an earlier one.
             edge = verifier.verify(claim.text, item, claim_numeric=claim.numeric)
+            edges.append(edge)
             new_citations.append(
                 ClaimCitation(
                     item_id=citation.item_id,
@@ -247,18 +299,20 @@ def verify_claims(
                     verifier=verifier.name,
                     model=verifier.model,
                     version=verifier.version,
+                    quote=citation.quote,
                 )
             )
         status = classify_claim([c.status for c in new_citations])
         if status == "supported" and claim.calculation_lineage:
             status = "derived"
+        confidence = claim_confidence(edges)
         verified.append(
             GeneratedClaim(
                 ord=claim.ord,
                 text=claim.text,
                 status=status,
                 citations=tuple(new_citations),
-                confidence=claim.confidence,
+                confidence=confidence,
                 calculation_lineage=claim.calculation_lineage,
                 numeric=claim.numeric,
             )
@@ -269,6 +323,7 @@ def verify_claims(
 __all__ = [
     "NUMERIC_CHECK_KEYS",
     "CitationEdge",
+    "claim_confidence",
     "CitationIntegrityError",
     "CitationVerifier",
     "MockCitationVerifier",

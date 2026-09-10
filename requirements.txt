@@ -9,4 +9,9 @@ fastapi>=0.121.0
 uvicorn>=0.32.0
 pydantic>=2.9.2
 httpx>=0.27.2
-psycopg[binary]>=3.2
+# The `pool` extra is load-bearing, not incidental: apps/api/app/db.py
+# serves every request from a psycopg_pool.ConnectionPool (#191). It has
+# to be here rather than in requirements-dev.txt, because production
+# installs this file and would otherwise raise at first database use
+# while every test passed.
+psycopg[binary,pool]>=3.2

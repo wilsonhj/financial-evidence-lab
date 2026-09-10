@@ -83,11 +83,12 @@ describe("contract schemas", () => {
 });
 
 describe("contract version identity (VERSIONING.md)", () => {
-  it("openapi info.version and CONTRACT_VERSION agree on the 0.4.0 minor bump", () => {
+  it("openapi, package, and CONTRACT_VERSION agree on the 0.6.0 minor bump", () => {
     const yaml = readFileSync(join(here, "openapi/openapi.yaml"), "utf8");
     const infoVersion = /^ {2}version: (\d+\.\d+\.\d+)$/m.exec(yaml)?.[1];
     expect(infoVersion).toBe(CONTRACT_VERSION);
-    expect(CONTRACT_VERSION).toBe("0.4.0");
+    expect(CONTRACT_VERSION).toBe("0.6.0");
+    expect(load("package.json").version).toBe(CONTRACT_VERSION);
   });
 
   it("SCHEMA_IDS covers every schema file (and nothing else)", () => {
@@ -95,6 +96,47 @@ describe("contract version identity (VERSIONING.md)", () => {
       .map((f) => `https://contracts.fel.dev/schemas/${f.replace(".schema.json", "")}/v1`)
       .sort();
     expect(Object.values(SCHEMA_IDS).slice().sort()).toEqual(fromFiles);
+  });
+});
+
+describe("structured claims output (ADR-0015)", () => {
+  const validate = ajv.getSchema(SCHEMA_IDS.claimsOutput)!;
+
+  it("requires an independently asserted integer scale for numeric claims", () => {
+    for (const scale of [undefined, null, "6", 1.5, true]) {
+      const fixture = load("fixtures/claims-output.json");
+      if (scale === undefined) delete fixture.claims[0].numeric.scale;
+      else fixture.claims[0].numeric.scale = scale;
+      expect(validate(fixture), `scale=${String(scale)}`).toBe(false);
+    }
+    for (const scale of [-6, 0, 6]) {
+      const fixture = load("fixtures/claims-output.json");
+      fixture.claims[0].numeric.scale = scale;
+      expect(validate(fixture), JSON.stringify(validate.errors)).toBe(true);
+    }
+  });
+
+  it("accepts finite decimal strings and rejects non-decimal or non-finite values", () => {
+    for (const value of ["NaN", "Infinity", "-Infinity", "1e6", "1_000", " 100", "100\n", 100]) {
+      const fixture = load("fixtures/claims-output.json");
+      fixture.claims[0].numeric.value = value;
+      expect(validate(fixture), JSON.stringify(value)).toBe(false);
+    }
+    for (const value of ["0", "-100", "100.25", "-0.001"]) {
+      const fixture = load("fixtures/claims-output.json");
+      fixture.claims[0].numeric.value = value;
+      expect(validate(fixture), JSON.stringify(validate.errors)).toBe(true);
+    }
+  });
+
+  it("keeps unknown unit and period required and nullable", () => {
+    for (const field of ["unit", "period"]) {
+      const fixture = load("fixtures/claims-output.json");
+      fixture.claims[0].numeric[field] = null;
+      expect(validate(fixture), JSON.stringify(validate.errors)).toBe(true);
+      delete fixture.claims[0].numeric[field];
+      expect(validate(fixture), field).toBe(false);
+    }
   });
 });
 

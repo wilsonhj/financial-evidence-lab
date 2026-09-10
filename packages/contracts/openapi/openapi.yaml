@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Financial Evidence Lab API
-  version: 0.4.0
+  version: 0.6.0
   description: >-
     Frozen v1 contract surface (ADR-0001). This file seeds the M0 freeze:
     conventions (error envelope, idempotency, optimistic concurrency,
@@ -10,7 +10,16 @@ info:
     v0.4.0 adds bounded agentic extraction (ADR-0007): extraction runs,
     typed resumable SSE, proposals/review, approved versions, plus a
     compatible open-enum loosening for volatile M2 planner/lane/event
-    labels. Modeling and forecasting paths arrive in later minors.
+    labels. v0.5.0 declares the API hardening surface (#191): createQuery
+    and createQueryRerun answer 402 COST_LIMIT_EXCEEDED when a user daily
+    or organization monthly hard cost ceiling (spec 18.2) would be crossed,
+    and those two plus createRetrievalFeedback answer 429 RATE_LIMITED with
+    Retry-After when the per-organization token bucket for the route is
+    exhausted. Both are additive response codes on existing operations; no
+    path, parameter, field, or enum changes. List bounding and its query
+    parameter are deliberately not declared here — lists stay unbounded
+    until pagination lands with a client that can page. Modeling and
+    forecasting paths arrive in later minors.
 servers:
   - url: /
 # `x-fel-status: planned` on a path item means the contract is frozen but the
@@ -359,12 +368,24 @@ paths:
                 $ref: "#/components/schemas/QueryAccepted"
         "401":
           $ref: "#/components/responses/Error"
+        "402":
+          description: >-
+            COST_LIMIT_EXCEEDED. A user daily or organization monthly hard
+            cost ceiling would be crossed by this run (spec 18.2). Retrying
+            does not help until the period rolls over or an administrator
+            raises the limit, which is why this is not a 429.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "403":
           $ref: "#/components/responses/Error"
         "409":
           $ref: "#/components/responses/Error"
         "422":
           $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/RateLimited"
         default:
           $ref: "#/components/responses/Error"
   /v1/queries/{queryId}:
@@ -407,6 +428,16 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/QueryAccepted"
+        "402":
+          description: >-
+            COST_LIMIT_EXCEEDED. A rerun re-executes the pipeline and carries
+            the same hard cost ceiling as a new query.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          $ref: "#/components/responses/RateLimited"
         default:
           $ref: "#/components/responses/Error"
   /v1/retrieval-runs/{runId}:
@@ -481,6 +512,8 @@ paths:
       responses:
         "201":
           description: Feedback recorded.
+        "429":
+          $ref: "#/components/responses/RateLimited"
         default:
           $ref: "#/components/responses/Error"
   /v1/workspaces/{workspaceId}/extraction-runs:
@@ -879,6 +912,20 @@ components:
   responses:
     Error:
       description: Error envelope (all non-2xx responses use this shape).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    RateLimited:
+      description: >-
+        RATE_LIMITED. Per-organization request budget for this route is
+        exhausted. Retry-After gives the whole seconds to wait.
+      headers:
+        Retry-After:
+          description: Seconds to wait before retrying.
+          schema:
+            type: integer
+            minimum: 1
       content:
         application/json:
           schema:

@@ -386,6 +386,91 @@ def test_question_containing_refuse_still_answers(
     assert trace["events"][-1]["type"] == "run_completed"
 
 
+@pytest.mark.parametrize("invalid_kind", ["schema", "unknown_citation"])
+def test_invalid_generation_abstains_with_usage_and_retrieval_trace(
+    client: TestClient,
+    org: tuple[str, str],
+    seeded: dict[str, str],
+    monkeypatch: pytest.MonkeyPatch,
+    invalid_kind: str,
+) -> None:
+    from dataclasses import replace
+
+    from fel_providers.interfaces import StructuredGenerationRequest, StructuredModelResult
+
+    class InvalidProvider(MockStructuredLLMProvider):
+        def generate_structured(
+            self, request: StructuredGenerationRequest
+        ) -> StructuredModelResult:
+            result = super().generate_structured(request)
+            parsed: dict[str, Any] = {"claims": "invalid", "abstain": None}
+            if invalid_kind == "unknown_citation":
+                parsed = {
+                    "claims": [
+                        {
+                            "text": "MODEL_PRIVATE_TEXT",
+                            "numeric": None,
+                            "citations": [{"item_id": "MODEL_PRIVATE_TEXT", "quote": "x"}],
+                        }
+                    ],
+                    "abstain": None,
+                }
+            return replace(result, parsed=parsed, input_tokens=17, output_tokens=9)
+
+    monkeypatch.setattr(retrieval, "MockStructuredLLMProvider", InvalidProvider)
+    created = _create(client, org, seeded["workspace_id"])
+    response = client.get(f"/v1/retrieval-runs/{created['run_id']}", headers=_headers(*org))
+    trace = response.json()
+    assert trace["status"] == "abstained"
+    assert trace["claims"] == []
+    assert trace["candidates"]
+    assert trace["budget_usage"]["input_tokens"] == 17
+    assert trace["budget_usage"]["output_tokens"] == 9
+    event = trace["events"][-1]
+    assert event["type"] == "run_abstained"
+    assert event["payload"] == {
+        "reason": "generation_contract_invalid",
+        "code": (
+            "CLAIMS_OUTPUT_SCHEMA_INVALID" if invalid_kind == "schema" else "UNKNOWN_CONTEXT_ITEM"
+        ),
+    }
+    assert "MODEL_PRIVATE_TEXT" not in response.text
+    assert not any(e["type"] == "claim_generated" for e in trace["events"])
+
+
+def test_explicit_model_abstention_is_distinct_and_does_not_log_model_reason(
+    client: TestClient,
+    org: tuple[str, str],
+    seeded: dict[str, str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from dataclasses import replace
+
+    from fel_providers.interfaces import StructuredGenerationRequest, StructuredModelResult
+
+    class AbstainingProvider(MockStructuredLLMProvider):
+        def generate_structured(
+            self, request: StructuredGenerationRequest
+        ) -> StructuredModelResult:
+            return replace(
+                super().generate_structured(request),
+                parsed={"claims": [], "abstain": {"reason": "MODEL_PRIVATE_REASON"}},
+                input_tokens=17,
+                output_tokens=9,
+            )
+
+    monkeypatch.setattr(retrieval, "MockStructuredLLMProvider", AbstainingProvider)
+    created = _create(client, org, seeded["workspace_id"])
+    response = client.get(f"/v1/retrieval-runs/{created['run_id']}", headers=_headers(*org))
+    trace = response.json()
+    assert trace["status"] == "abstained"
+    assert trace["claims"] == []
+    assert trace["events"][-1]["payload"] == {"reason": "model_abstained"}
+    assert trace["budget_usage"]["input_tokens"] == 17
+    assert trace["budget_usage"]["output_tokens"] == 9
+    assert "MODEL_PRIVATE_REASON" not in response.text
+
+
 def test_trace_replay_byte_stable(
     client: TestClient, org: tuple[str, str], seeded: dict[str, str]
 ) -> None:
