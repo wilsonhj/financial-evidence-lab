@@ -95,10 +95,12 @@ class LeaseHeartbeat:
         job: queue.ClaimedJob,
         *,
         interval_seconds: float = DEFAULT_HEARTBEAT_INTERVAL_SECONDS,
+        heartbeat_succeeded: Callable[[], None] | None = None,
     ) -> None:
         self._connection_factory = connection_factory
         self._job = job
         self._interval_seconds = interval_seconds
+        self._heartbeat_succeeded = heartbeat_succeeded
         self._stop = threading.Event()
         self._lease_lost = threading.Event()
         self._thread = threading.Thread(
@@ -125,6 +127,8 @@ class LeaseHeartbeat:
                         self._lease_lost.set()
                         log.warning("lease lost mid-job %s (heartbeat fenced out)", self._job.id)
                         return
+                    if self._heartbeat_succeeded is not None:
+                        self._heartbeat_succeeded()
         except Exception:  # noqa: BLE001 — heartbeat must never kill the worker
             log.exception("heartbeat connection failed for job %s", self._job.id)
 
@@ -314,6 +318,7 @@ def run_worker(
     should_continue: Callable[[], bool] = lambda: True,
     heartbeat_interval_seconds: float = DEFAULT_HEARTBEAT_INTERVAL_SECONDS,
     heartbeat_connection_factory: Callable[[], psycopg.Connection[Any]] | None = None,
+    heartbeat_succeeded: Callable[[], None] | None = None,
     reap_interval_iterations: int = 1,
     stale_after_seconds: float = queue.HEARTBEAT_STALE_SECONDS,
     structured_llm: StructuredLLMProvider | None = None,
@@ -449,7 +454,10 @@ def run_worker(
         # ("dead_letter" | "cancel", redacted-at-the-sink reason).
         verdict: tuple[str, str] | None = None
         heartbeat = LeaseHeartbeat(
-            connection_factory, job, interval_seconds=heartbeat_interval_seconds
+            connection_factory,
+            job,
+            interval_seconds=heartbeat_interval_seconds,
+            heartbeat_succeeded=heartbeat_succeeded,
         )
         heartbeat.start()
 
