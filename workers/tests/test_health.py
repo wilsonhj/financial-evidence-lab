@@ -11,7 +11,9 @@ health check consumes.
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
+import textwrap
 import urllib.error
 import urllib.request
 from collections.abc import Iterator
@@ -19,6 +21,7 @@ from typing import Any
 
 import pytest
 
+from fel_workers import health
 from fel_workers.__main__ import init_sentry, resolve_health_port
 from fel_workers.health import Liveness, start_health_server
 
@@ -112,7 +115,10 @@ def test_age_is_measured_from_construction_before_the_first_touch(
 
 def test_health_port_env_parsing(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("FEL_WORKER_HEALTH_PORT", raising=False)
+    monkeypatch.delenv("PORT", raising=False)
     assert resolve_health_port() is None
+    monkeypatch.setenv("PORT", "9090")
+    assert resolve_health_port() == 9090
     monkeypatch.setenv("FEL_WORKER_HEALTH_PORT", " 8080 ")
     assert resolve_health_port() == 8080
     monkeypatch.setenv("FEL_WORKER_HEALTH_PORT", "http")
@@ -121,6 +127,61 @@ def test_health_port_env_parsing(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("FEL_WORKER_HEALTH_PORT", "70000")
     with pytest.raises(RuntimeError, match="1..65535"):
         resolve_health_port()
+
+
+def test_watchdog_requests_process_failure_once_liveness_is_stale(clock: FakeClock) -> None:
+    liveness = Liveness(queue="ingestion", monotonic=clock)
+    exit_codes: list[int] = []
+    watchdog = health.start_liveness_watchdog(
+        liveness,
+        max_age_seconds=30.0,
+        check_interval_seconds=0.01,
+        exit_process=exit_codes.append,
+    )
+    try:
+        clock.now += 31.0
+        assert watchdog.stale.wait(timeout=1.0)
+    finally:
+        watchdog.stop()
+    assert exit_codes == [1]
+
+
+def test_watchdog_stop_prevents_exit_during_normal_shutdown(clock: FakeClock) -> None:
+    liveness = Liveness(queue="ingestion", monotonic=clock)
+    exit_codes: list[int] = []
+    watchdog = health.start_liveness_watchdog(
+        liveness,
+        max_age_seconds=30.0,
+        check_interval_seconds=0.01,
+        exit_process=exit_codes.append,
+    )
+    watchdog.stop()
+    clock.now += 31.0
+    assert not watchdog.stale.wait(timeout=0.05)
+    assert exit_codes == []
+
+
+def test_failed_watchdog_process_can_be_restarted_by_a_supervisor() -> None:
+    program = textwrap.dedent("""
+        import sys
+        import time
+        sys.path.insert(0, "workers/src")
+        from fel_workers.health import Liveness, start_liveness_watchdog
+
+        start_liveness_watchdog(
+            Liveness(), max_age_seconds=0.02, check_interval_seconds=0.005
+        )
+        time.sleep(5)
+        """)
+    returncodes = [
+        subprocess.run(
+            [sys.executable, "-c", program],
+            check=False,
+            timeout=2,
+        ).returncode
+        for _restart_attempt in range(2)
+    ]
+    assert returncodes == [1, 1]
 
 
 # --------------------------------------------------------------------------

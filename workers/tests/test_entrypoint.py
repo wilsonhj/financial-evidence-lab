@@ -416,6 +416,7 @@ def test_run_main_starts_the_health_endpoint_when_a_port_is_set(
     assert run_main(["--max-iterations", "1"]) == 0
     should_continue = captured["should_continue"]
     assert should_continue() is True  # touches liveness; must not raise
+    assert callable(captured["heartbeat_succeeded"])
 
 
 def test_run_main_rejects_a_bad_health_port(monkeypatch: pytest.MonkeyPatch) -> None:

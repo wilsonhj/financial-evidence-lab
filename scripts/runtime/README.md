@@ -24,6 +24,10 @@ dependency version reproducibility and installed imports, not byte-identical
 wheels or a hosted deployment. Regenerate locks when package metadata changes;
 review dependency upgrades and run the full CI suite before merging them.
 
-Worker restart acceptance remains separate from startup health: Railway checks
-`/health` only during deployment, not continuously. See the
+Railway checks `/health` during deployment startup, not continuously. The
+worker therefore also exits with status 1 when its queue liveness becomes
+stale, allowing the configured `ON_FAILURE` policy to restart it. Successful
+lease heartbeats keep legitimate long-running jobs healthy; failed heartbeats
+do not. Local subprocess tests prove the exit and supervisor contract. Hosted
+restart acceptance remains pending a configured Railway environment. See the
 [Railway healthcheck contract](https://docs.railway.com/deployments/healthchecks).

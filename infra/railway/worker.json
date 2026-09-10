@@ -7,6 +7,7 @@
   "deploy": {
     "preDeployCommand": "python scripts/db/migrate.py --check --database-url \"$FEL_DATABASE_URL\"",
     "startCommand": "python -m fel_workers run",
+    "healthcheckPath": "/health",
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 3
   }
