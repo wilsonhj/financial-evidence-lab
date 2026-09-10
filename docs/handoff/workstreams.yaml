@@ -97,7 +97,7 @@ packages:
     tasks: []
     depends_on: []
     team: integration
-    branch: agent/188-execution-wave2
+    branch: agent/188-execution-wave3
     status: active
     allowed_paths:
       - docs/handoff/execution-2026-09-09.md
@@ -635,11 +635,32 @@ packages:
     depends_on: [ARCH-QUEUE-DURABILITY] # serialized: same db/migrations/** and consumer.py surface; 0008 follows 0007
     team: platform
     branch: cherry/190-worker-role
-    status: merged # PR #238 @ cf532cb (2026-09-05). Creates fel_worker with per-table grants and RLS policies instead of the blanket bypass migration 0001 had always described but never created. RESIDUAL, deliberate: it is opt-in — unset FEL_WORKER_DB_ROLE leaves the pre-existing behaviour, so workers still connect as the migration owner until a deploy sets it. Enabling it in the deployed environments is a lead action with no package. Issue #190 still OPEN.
+    status: merged # PR #238 @ cf532cb (2026-09-05). Creates fel_worker with per-table grants and RLS policies instead of the blanket bypass migration 0001 had always described but never created. RESIDUAL, deliberate: it is opt-in — unset FEL_WORKER_DB_ROLE leaves the pre-existing behaviour, so workers still connect as the migration owner until a deploy sets it. The WORKER-ROLE-ROLLOUT package owns committed startup selection; hosted verification remains a lead action. Issue #190 still OPEN.
     allowed_paths:
       - db/migrations/**
       - workers/src/fel_workers/**
       - workers/tests/**
+  - id: WORKER-ROLE-NOTE-REVIEW
+    issue: 190
+    tasks: []
+    depends_on: [ARCH-DB-WORKER-ROLE]
+    team: integration
+    branch: agent/190-role-note-review
+    status: merged # PR #260 @ c16955c; corrected opt-in deployment wording, without claiming hosted adoption.
+    allowed_paths:
+      - db/migrations/README.md
+  - id: WORKER-ROLE-ROLLOUT
+    issue: 190
+    tasks: []
+    depends_on: [WORKER-ROLE-NOTE-REVIEW, ARCH-RUNTIME-DEPS]
+    team: platform
+    branch: agent/190-worker-role-rollout
+    status: active # Select the existing migration-0008 role in the committed Railway command; hosted adoption remains separately verified.
+    allowed_paths:
+      - infra/railway/worker.json
+      - infra/railway/README.md
+      - workers/tests/test_worker_db_role.py
+      - docs/decisions/ADR-0020-worker-role-rollout.md
   - id: ARCH-API-HARDENING # cost ceilings wired, per-org rate limiting, bounded lists, pooling, Sentry
     issue: 191 # also carries the API half of #203
     tasks: []
@@ -675,7 +696,7 @@ packages:
     depends_on: [M3-EXTRACTION-CORE]
     team: extraction
     branch: cherry/194-confidence-priority
-    status: blocked # PARTIAL, not merged. PR #240 @ c25e27b (2026-09-05) landed two of #194's three complaints: record_confidence is Decimal | None = None instead of a hard-coded 0 (migration 0006 dropped the NOT NULL, which is why this had to follow #236), and review_priority is derived rather than always "high". The THIRD is untouched and its PR says so: the tool allowlist is never invoked. Not dispatchable as written — the residual needs re-scoping against what #240 left, and the true confidence value is #62's calibrator, not this package.
+    status: merged # PR #260 @ c16955c removes unreachable tools under accepted option (b); cancellation and NULL confidence already verified. #194 closed; actual calibration remains #62.
     allowed_paths:
       - workers/src/fel_workers/extraction/**
       - workers/tests/**
@@ -725,7 +746,7 @@ packages:
     depends_on: []
     team: platform
     branch: agent/200-locked-runtime
-    status: active # PR #259; hashed runtime closure and health/recovery residuals under ADR-0017.
+    status: merged # PR #259 @ 7a69133; independently verified clean hashed installs, packaged assets and heartbeat recovery; issue #200 retains hosted restart acceptance.
     allowed_paths:
       - requirements.txt
       - requirements-dev.txt
@@ -795,7 +816,7 @@ packages:
     depends_on: [M2-CLAIMS-VERIFICATION]
     team: retrieval
     branch: agent/137-cutover-hardening
-    status: active # ADR-0017 subsequent dispatch; API test issue #248 merged first.
+    status: merged # PR #261 @ 29c241c; provider provenance survives success and rollback failures; independent review and current CI passed; issue #137 closed.
     allowed_paths:
       - apps/api/app/retrieval.py
       - apps/api/tests/test_retrieval_api.py
@@ -808,10 +829,26 @@ packages:
     depends_on: [EXTRACTION-STEPS-OUTPUT]
     team: extraction
     branch: agent/arch-checkpoint-rerun # not yet created
-    status: active # Owner-authorized parallel execution, ADR-0017; September 9 session.
+    status: merged # PR #257 @ 6c409e8; independently verified 479 PostgreSQL extraction tests and owner-preserving repair CAS.
     allowed_paths:
       - workers/src/fel_workers/extraction/**
       - workers/tests/extraction/**
+
+  - id: EXTRACTION-UNIT-POLICY
+    issue: 153
+    tasks: []
+    depends_on: [ARCH-CHECKPOINT-RERUN, ARCH-M3-PLUMBING]
+    team: extraction
+    branch: agent/153-unit-policy
+    status: active # ADR-0019 comparison policy and versioned new-run rollout precede implementation.
+    allowed_paths:
+      - packages/ontology/fel_ontology/units.py
+      - packages/ontology/fel_ontology/data/currency-codes.json
+      - packages/ontology/tests/test_units.py
+      - workers/src/fel_workers/extraction/**
+      - workers/tests/extraction/**
+      - docs/decisions/ADR-0019-unit-comparison-policy.md
+      - docs/runbooks/unit-policy-migration.md
 
   - id: TEST-PUBLISH-RACE-WAIT # the publish-race wait loop falls through silently
     issue: 230
