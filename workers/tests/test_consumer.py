@@ -209,6 +209,11 @@ def test_slow_handler_survives_reaper_thanks_to_heartbeats(
     queue.enqueue(corpus_conn, kind=JOB_KIND_SEC_FILING_FETCH, payload=_FETCH_PAYLOAD)
     stop_reaping = threading.Event()
     reaped_total = 0
+    successful_heartbeats = 0
+
+    def heartbeat_succeeded() -> None:
+        nonlocal successful_heartbeats
+        successful_heartbeats += 1
 
     def aggressive_reaper() -> None:
         nonlocal reaped_total
@@ -226,12 +231,14 @@ def test_slow_handler_survives_reaper_thanks_to_heartbeats(
             queue_name="default",
             max_iterations=2,
             heartbeat_interval_seconds=0.1,  # << 0.5s: keeps the claim fresh
+            heartbeat_succeeded=heartbeat_succeeded,
         )
     finally:
         stop_reaping.set()
         reaper.join()
     assert completed == 1
     assert reaped_total == 0, "heartbeats must keep the running claim fresh"
+    assert successful_heartbeats > 0
     row = corpus_conn.execute("SELECT status, attempts FROM jobs").fetchone()
     assert row is not None and row[0] == "succeeded" and row[1] == 1
 
@@ -303,6 +310,35 @@ def test_lease_lost_mid_job_result_is_discarded(corpus_conn: psycopg.Connection)
     assert row is not None
     assert row[0] == "running", "the new owner's claim must remain untouched"
     assert row[1] is None, "no terminal error may be written by the fenced-out worker"
+
+
+def test_failed_lease_heartbeat_does_not_report_liveness(
+    corpus_conn: psycopg.Connection,
+) -> None:
+    """A fenced heartbeat must not conceal a stalled handler from watchdog."""
+    db_url = os.environ["TEST_DATABASE_URL"]
+    queue.enqueue(corpus_conn, kind=JOB_KIND_SEC_FILING_FETCH, payload=_FETCH_PAYLOAD)
+    job = queue.claim_one(corpus_conn)
+    assert job is not None
+    corpus_conn.execute("UPDATE jobs SET lease = %s WHERE id = %s", (str(uuid.uuid4()), job.id))
+    reported = threading.Event()
+
+    def connection_factory() -> psycopg.Connection:
+        return psycopg.connect(db_url, autocommit=True)
+
+    heartbeat = consumer.LeaseHeartbeat(
+        connection_factory,
+        job,
+        interval_seconds=0.01,
+        heartbeat_succeeded=reported.set,
+    )
+    heartbeat.start()
+    deadline = time.monotonic() + 1.0
+    while not heartbeat.lease_lost and time.monotonic() < deadline:
+        time.sleep(0.01)
+    heartbeat.stop()
+    assert heartbeat.lease_lost
+    assert not reported.is_set()
 
 
 # --- Terminal-outcome and cancellation wiring (#189) ----------------------

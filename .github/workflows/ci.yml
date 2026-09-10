@@ -91,8 +91,8 @@ jobs:
         with:
           python-version-file: .python-version
           cache: pip
-          cache-dependency-path: requirements-dev.txt
-      - run: pip install -r requirements-dev.txt
+          cache-dependency-path: requirements-dev.lock
+      - run: pip install --require-hashes -r requirements-dev.lock
       - name: Apply migrations
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
@@ -104,7 +104,30 @@ jobs:
       - run: mypy apps/api/app workers/src evals/graders packages/providers/fel_providers packages/retrieval/fel_retrieval packages/retrieval-evals/fel_retrieval_evals packages/ontology/fel_ontology packages/calculation-engine/fel_calculation_engine scripts/db
       - run: pytest
       - run: bandit -q -r apps workers evals packages/providers packages/retrieval packages/retrieval-evals packages/ontology packages/calculation-engine scripts -c pyproject.toml
-      - run: pip-audit -r requirements-dev.txt
+      - run: pip-audit -r requirements.lock
+      - run: pip-audit -r requirements-dev.lock
+      - run: pip-audit -r scripts/runtime/build.lock
+
+  runtime:
+    name: Python — reproducible production installs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version-file: .python-version
+          cache: pip
+          cache-dependency-path: |
+            requirements.lock
+            scripts/runtime/build.lock
+      - name: Build twice without development tools or source-path overrides
+        run: |
+          for build in one two; do
+            python -m venv "$RUNNER_TEMP/runtime-$build"
+            bash scripts/runtime/install.sh "$RUNNER_TEMP/runtime-$build/bin/python"
+            "$RUNNER_TEMP/runtime-$build/bin/python" -I scripts/runtime/verify.py > "$RUNNER_TEMP/runtime-$build.json"
+          done
+          diff -u "$RUNNER_TEMP/runtime-one.json" "$RUNNER_TEMP/runtime-two.json"
 
   database:
     name: DB — migration and backup-restore smoke
