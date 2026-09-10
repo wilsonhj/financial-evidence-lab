@@ -646,9 +646,21 @@ packages:
     depends_on: [ARCH-DB-WORKER-ROLE]
     team: integration
     branch: agent/190-role-note-review
-    status: active # Correct deployment overclaim found during independent review of external PR #260.
+    status: merged # PR #260 @ c16955c; corrected opt-in deployment wording, without claiming hosted adoption.
     allowed_paths:
       - db/migrations/README.md
+  - id: WORKER-ROLE-ROLLOUT
+    issue: 190
+    tasks: []
+    depends_on: [WORKER-ROLE-NOTE-REVIEW, ARCH-RUNTIME-DEPS]
+    team: platform
+    branch: agent/190-worker-role-rollout
+    status: active # Select the existing migration-0008 role in the committed Railway command; hosted adoption remains separately verified.
+    allowed_paths:
+      - infra/railway/worker.json
+      - infra/railway/README.md
+      - workers/tests/test_worker_db_role.py
+      - docs/decisions/ADR-0020-worker-role-rollout.md
   - id: ARCH-API-HARDENING # cost ceilings wired, per-org rate limiting, bounded lists, pooling, Sentry
     issue: 191 # also carries the API half of #203
     tasks: []
@@ -734,7 +746,7 @@ packages:
     depends_on: []
     team: platform
     branch: agent/200-locked-runtime
-    status: active # PR #259; hashed runtime closure and health/recovery residuals under ADR-0017.
+    status: merged # PR #259 @ 7a69133; independently verified clean hashed installs, packaged assets and heartbeat recovery; issue #200 retains hosted restart acceptance.
     allowed_paths:
       - requirements.txt
       - requirements-dev.txt
@@ -804,7 +816,7 @@ packages:
     depends_on: [M2-CLAIMS-VERIFICATION]
     team: retrieval
     branch: agent/137-cutover-hardening
-    status: active # ADR-0017 subsequent dispatch; API test issue #248 merged first.
+    status: merged # PR #261 @ 29c241c; provider provenance survives success and rollback failures; independent review and current CI passed; issue #137 closed.
     allowed_paths:
       - apps/api/app/retrieval.py
       - apps/api/tests/test_retrieval_api.py

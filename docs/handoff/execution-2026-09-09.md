@@ -4,13 +4,12 @@ Plan: [backlog resolution](../superpowers/plans/2026-09-09-backlog-resolution.md
 Parent specification and canonical task ledger govern; this is issue execution
 evidence, not a second task-completion checklist.
 
-September 10 continuation: control PR #258 merged at abc6bcc. External PR #260
-removes the unreachable tool layer under #194's accepted option (b) and corrects
-the worker-role note. Review found its new wording overclaims deployed role
-enforcement: FEL_WORKER_DB_ROLE is still opt-in. A dedicated #190 documentation
-worktree corrects that claim before integration; no schema or deployed-role
-acceptance is implied. #194 code remains under read-only integration review
-until #221's extraction repair merges. All remote commits are preserved.
+September 10 continuation: control PR #258 merged at abc6bcc. PR #257
+merged the owner-preserving checkpoint repair at 6c409e8; external PR #260
+then removed the unreachable tool layer and corrected the worker-role note at
+c16955c. PR #261 merged claims provenance at 29c241c and PR #259 merged
+locked runtime installation and heartbeat recovery at 7a69133. The latter
+retains hosted restart acceptance under #200. All remote commits are preserved.
 
 Starting revision: a184374. Starting live inventory: 37 issues, zero PRs.
 Owner requested implementation of all open issues with parallel agents.
@@ -21,12 +20,13 @@ ADR-0017 records the initial dispatch and scope narrowing.
 | #248 | agent/test-query-p95-flake | API query test/performance instructions | merged, PR #256 @ 1e6765c | Independent review; real PostgreSQL module 24 passed, 1 deliberate benchmark skip; opt-in local p95 0.052s; all CI passed |
 | #230 | agent/test-publish-race-wait | Two named ingestion race test files | merged, PR #255 @ 802d0eb | Independent review caught real-clock test flake; deterministic-clock fix reviewed; warning-removal mutation fails; real PostgreSQL 3 passed; all CI passed |
 | #221 | agent/arch-checkpoint-rerun | Extraction source/tests only | merged, PR #257 @ 6c409e8 | Immutable rejected-row CAS preserves concurrent owner; failed-attempt retry durable; independent 479 PostgreSQL tests passed |
-| #137 | agent/137-cutover-hardening | Retrieval API provenance and retrieval/evaluation model guards | dispatched | Reconcile existing refusal/cost/supports behavior before implementing actual residuals |
+| #137 | agent/137-cutover-hardening | Retrieval API provenance and retrieval/evaluation model guards | merged, PR #261 @ 29c241c | Independent review verified provenance through rollback failure; current CI passed; issue closed |
 | #219 | agent/m4-formula-ast | Calculation engine, ADR-0018 and canonical task additions | design accepted for implementation | Restricted typed formula AST; explicit bounded Jacobi groups, caller-specified seeds/tolerances, immutable group provenance; no parent scope deferral |
-| #200 | agent/200-locked-runtime | Runtime packaging, locks and health/recovery | PR #259 implementing | Clean install exposed missing provider package and worker prompt/schema data; corrected; heartbeat recovery next |
+| #200 | agent/200-locked-runtime | Runtime packaging, locks and health/recovery | code merged, PR #259 @ 7a69133; hosted acceptance pending | Independent clean install, all packaged assets, 50 focused PostgreSQL tests and current CI passed; watchdog exits and local supervisor relaunch proved |
 | #194 | claude/close-trailing-acceptance-gaps | Remove unreachable extraction tool layer | merged, PR #260 @ c16955c | Independent code review and full PostgreSQL extraction suite passed; worker-role adoption remains #190 |
 | #153 | agent/153-unit-policy | Ontology-owned comparison policy and extraction checks | design accepted for implementation | ADR-0019; preserve payload spelling, version conflict grouping, require fresh version-pinned runs |
-| #188 | agent/188-execution-wave2 | Execution plan and ownership | coordinating | Initial control PR #254 merged @ 2b15032; subsequent paths checked |
+| #190 | agent/190-worker-role-rollout | Committed Railway role selection | dispatched | Existing migration-0008 role and grant tests; hosted verification remains pending |
+| #188 | agent/188-execution-wave3 | Execution plan and ownership | coordinating | Initial control PR #254 merged @ 2b15032; subsequent paths checked |
 
 Ruling: narrow #230 and #221 test ownership — their original workers/tests/**
 globs overlapped, while the required implementation is separable — any shared
@@ -82,3 +82,14 @@ new extraction runs and enforce the version before checkpoint recovery so old
 validation cannot silently satisfy the new policy. ADR-0019 records the exact
 policy and compatibility boundary. Do not broaden unrelated unit-family
 validation or currency-field syntax, or change #154's guidance ordering here.
+
+#190 residual ruling: after #200 merges, select the existing `fel_worker` role
+in the Railway worker start command, keeping migration checks in their separate
+pre-deploy process. Verify the exact command and effective worker role locally,
+including forbidden deletion/DDL. Do not change role grants or the optional
+local development switch. Configuration merge alone does not prove an existing
+hosted process has adopted the role; record that acceptance separately.
+
+The old worker sources cite ADR-0013, but that number belongs to canonical
+ledger reconciliation on main. ADR-0020 records the rollout decision without
+rewriting immutable migration 0008 or misattributing the historical decision.
