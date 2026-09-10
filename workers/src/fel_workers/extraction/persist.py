@@ -784,6 +784,9 @@ class PostgresCheckpointStore:
         self._insert_step_row(
             run_id=run_id, org_id=org_id, workflow_version=workflow_version, record=record
         )
+        # A repair replaces a cached success too, but only after the DB write
+        # (and, on the atomic path, its event) has committed.
+        self._memory = MemoryCheckpointStore()
         return self._memory.commit_succeeded(
             run_id=run_id, org_id=org_id, workflow_version=workflow_version, record=record
         )
@@ -797,7 +800,7 @@ class PostgresCheckpointStore:
         record: StageRecord,
     ) -> None:
         step_id = str(uuid.uuid4())
-        self.conn.execute(
+        inserted = self.conn.execute(
             """
             INSERT INTO extraction_run_steps (
                 id, org_id, run_id, step_name, attempt, status, input_hash, output_hash,
@@ -811,6 +814,7 @@ class PostgresCheckpointStore:
                 %s, %s, %s, %s, now(), now()
             )
             ON CONFLICT DO NOTHING
+            RETURNING id
             """,
             (
                 step_id,
@@ -834,7 +838,41 @@ class PostgresCheckpointStore:
                 record.cost_usd,
                 json.dumps(record.error) if record.error is not None else None,
             ),
-        )
+        ).fetchone()
+        if inserted is None and record.status == "succeeded":
+            # A rejected checkpoint may already own the success key. Repair the
+            # value and its audit metadata together; preserve identity (including
+            # the original attempt) and status. Other attempt-key conflicts keep
+            # their existing DO NOTHING behavior and cannot replace a failed row.
+            repaired = self.conn.execute(
+                """
+                UPDATE extraction_run_steps
+                   SET output = %s::jsonb, output_hash = %s,
+                       provider_response_id = %s, input_tokens = %s,
+                       output_tokens = %s, cost_usd = %s, error = %s::jsonb,
+                       finished_at = now()
+                 WHERE run_id = %s AND org_id = %s AND step_name = %s
+                   AND input_hash = %s AND workflow_version = %s
+                   AND status = 'succeeded'
+                RETURNING attempt
+                """,
+                (
+                    json.dumps(record.output) if record.output is not None else None,
+                    record.output_hash,
+                    record.provider_response_id,
+                    record.input_tokens,
+                    record.output_tokens,
+                    record.cost_usd,
+                    json.dumps(record.error) if record.error is not None else None,
+                    run_id,
+                    org_id,
+                    record.step_name,
+                    record.input_hash,
+                    workflow_version,
+                ),
+            ).fetchone()
+            if repaired is not None:
+                record.attempt = repaired[0]
 
     def commit_failed(
         self,
@@ -910,6 +948,9 @@ class PostgresCheckpointStore:
                 event_type="step_completed",
                 payload=event_payload,
             )
+        # A repair replaces a cached success too, but only after the DB write
+        # (and, on the atomic path, its event) has committed.
+        self._memory = MemoryCheckpointStore()
         return self._memory.commit_succeeded(
             run_id=run_id, org_id=org_id, workflow_version=workflow_version, record=record
         )

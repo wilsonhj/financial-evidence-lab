@@ -35,8 +35,9 @@ from __future__ import annotations
 import json
 import os
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit, urlunsplit
@@ -878,4 +879,245 @@ def test_step_commit_and_its_event_are_one_transaction(extraction_db_url: str) -
                 workflow_version=request.workflow_version,
             )
             is None
+        )
+
+
+@pytest.mark.skipif(TEST_DATABASE_URL is None, reason="TEST_DATABASE_URL not configured")
+@pytest.mark.parametrize("changed_output", [False, True], ids=["deterministic", "varying"])
+def test_corrupt_checkpoint_repair_survives_another_process_death(
+    extraction_db_url: str, changed_output: bool
+) -> None:
+    """#221: replacing a rejected row must survive loss of the memory cache."""
+
+    class Provider(_CountingLLM):
+        def __init__(self, *, revision: int, die_after: int | None = None) -> None:
+            super().__init__(die_after=die_after)
+            self.revision = revision
+            self.classify_calls = 0
+
+        def generate_structured(self, request: Any) -> Any:
+            result = super().generate_structured(request)
+            if request.schema_name == "classifier":
+                self.classify_calls += 1
+                parsed = dict(result.parsed)
+                if changed_output:
+                    parsed["document_type"] = f"10-Q revision {self.revision}"
+                return replace(
+                    result,
+                    parsed=parsed,
+                    response_id=f"repair-{self.revision}",
+                    input_tokens=10 * self.revision,
+                    output_tokens=5 * self.revision,
+                    estimated_cost_usd=Decimal("0.01") * self.revision,
+                )
+            return result
+
+    class CrashAfterClassify(PostgresCheckpointStore):
+        def commit_succeeded_atomic(self, **kwargs: Any) -> Any:
+            record = super().commit_succeeded_atomic(**kwargs)
+            if record.step_name == "classify":
+                raise _ProcessDeath("after durable classify commit")
+            return record
+
+    def crashing_deps(conn: psycopg.Connection, revision: int) -> WorkflowDeps:
+        return replace(
+            _postgres_deps(conn, Provider(revision=revision)),
+            checkpoint=CrashAfterClassify(conn=conn),
+        )
+
+    run_id = str(uuid.uuid4())
+    request = _request(run_id)
+    pins_sql = """
+        SELECT id, org_id, run_id, step_name, attempt, status, input_hash,
+               workflow_version, schema_version, prompt_version, started_at
+          FROM extraction_run_steps WHERE run_id = %s AND step_name = 'classify'
+    """
+    with psycopg.connect(extraction_db_url, autocommit=True) as conn:
+        _seed_parents(conn)
+        _seed_run(conn, request)
+        PostgresPersistStore(conn).mark_running(run_id=run_id, org_id=_ORG)
+        with pytest.raises(_ProcessDeath):
+            run_extraction_workflow(
+                WorkflowState(request=request, evidence=_evidence()),
+                crashing_deps(conn, 1),
+            )
+        original_pins = conn.execute(pins_sql, (run_id,)).fetchall()
+        original_hash = conn.execute(
+            "SELECT output_hash FROM extraction_run_steps"
+            " WHERE run_id = %s AND step_name = 'classify'",
+            (run_id,),
+        ).fetchone()[0]
+        conn.execute(
+            "UPDATE extraction_run_steps SET output = jsonb_set("
+            "output, '{document_type}', '\"corrupted\"'::jsonb)"
+            " WHERE run_id = %s AND step_name = 'classify'",
+            (run_id,),
+        )
+
+    # Die again after repairing just classify. A third pass must read the row,
+    # not the successful second pass's in-process checkpoint cache.
+    with psycopg.connect(extraction_db_url, autocommit=True) as conn:
+        conn.execute("SELECT set_config('app.org_id', %s, false)", (_ORG,))
+        with pytest.raises(_ProcessDeath):
+            run_extraction_workflow(
+                WorkflowState(request=request, evidence=_evidence()),
+                crashing_deps(conn, 2),
+            )
+        assert conn.execute(pins_sql, (run_id,)).fetchall() == original_pins
+        output, output_hash, response_id, inputs, outputs, cost = conn.execute(
+            "SELECT output, output_hash, provider_response_id, input_tokens,"
+            " output_tokens, cost_usd FROM extraction_run_steps"
+            " WHERE run_id = %s AND step_name = 'classify'",
+            (run_id,),
+        ).fetchone()
+        assert output["document_type"] == ("10-Q revision 2" if changed_output else "10-Q")
+        assert hash_json(output) == output_hash
+        assert (output_hash != original_hash) == changed_output
+        assert (response_id, inputs, outputs, cost) == ("repair-2", 20, 10, Decimal("0.02"))
+        usage = PostgresPersistStore(conn).load_usage(run_id=run_id, org_id=_ORG)
+        assert (usage.calls_used, usage.input_tokens_used, usage.output_tokens_used) == (2, 30, 15)
+        assert usage.cost_usd == Decimal("0.03")
+
+    with psycopg.connect(extraction_db_url, autocommit=True) as conn:
+        conn.execute("SELECT set_config('app.org_id', %s, false)", (_ORG,))
+        third = Provider(revision=3)
+        final = run_extraction_workflow(
+            WorkflowState(request=request, evidence=_evidence()),
+            _postgres_deps(conn, third),
+        )
+        assert third.classify_calls == 0
+        assert final.status == "waiting_review"
+        rejected = conn.execute(
+            "SELECT count(*) FROM extraction_run_events WHERE run_id = %s"
+            " AND payload->'error'->>'code' = 'checkpoint_rejected'",
+            (run_id,),
+        ).fetchone()[0]
+        assert rejected == 1
+        assert final.usage.calls_used == third.calls + 2
+        assert final.usage.cost_usd >= Decimal("0.03")
+
+
+@pytest.mark.skipif(TEST_DATABASE_URL is None, reason="TEST_DATABASE_URL not configured")
+def test_checkpoint_repair_rolls_back_when_completion_event_fails(extraction_db_url: str) -> None:
+    """A failed repair transaction retains the prior checkpoint in DB and cache."""
+    from fel_workers.extraction.types import StageRecord
+
+    run_id = str(uuid.uuid4())
+    request = _request(run_id)
+    original = StageRecord(
+        step_name="classify",
+        attempt=1,
+        status="succeeded",
+        input_hash=sha256_hex("repair rollback"),
+        output={"document_type": "old"},
+        output_hash=hash_json({"document_type": "old"}),
+        provider_response_id="old-response",
+        cost_usd=Decimal("0.01"),
+    )
+    repaired = replace(
+        original,
+        attempt=2,
+        output={"document_type": "new"},
+        output_hash=hash_json({"document_type": "new"}),
+        provider_response_id="new-response",
+        cost_usd=Decimal("0.02"),
+    )
+    with psycopg.connect(extraction_db_url, autocommit=True) as conn:
+        _seed_parents(conn)
+        _seed_run(conn, request)
+        PostgresPersistStore(conn).mark_running(run_id=run_id, org_id=_ORG)
+        args = dict(run_id=run_id, org_id=_ORG, workflow_version=request.workflow_version)
+        store = PostgresCheckpointStore(conn)
+        store.commit_succeeded_atomic(
+            **args,
+            record=original,
+            events=PostgresEventStore(conn),
+            event_payload={"step_name": "classify", "output_hash": original.output_hash},
+        )
+        failing_events = _ExplodingEventStore(conn=conn)
+        failing_events.fail_on_step = "classify"
+        with pytest.raises(RuntimeError, match="injected event-append failure"):
+            store.commit_succeeded_atomic(
+                **args,
+                record=repaired,
+                events=failing_events,
+                event_payload={"step_name": "classify", "output_hash": repaired.output_hash},
+            )
+        for reader in (store, PostgresCheckpointStore(conn)):
+            loaded = reader.load_succeeded(
+                **args,
+                step_name="classify",
+                input_hash=original.input_hash,
+            )
+            assert loaded == original
+        assert (
+            conn.execute(
+                "SELECT count(*) FROM extraction_run_events WHERE run_id = %s",
+                (run_id,),
+            ).fetchone()[0]
+            == 1
+        )
+
+        committed = store.commit_succeeded_atomic(
+            **args,
+            record=repaired,
+            events=PostgresEventStore(conn),
+            event_payload={"step_name": "classify", "output_hash": repaired.output_hash},
+        )
+        assert committed.output == {"document_type": "new"}
+        assert committed.attempt == 1  # the original row's immutable identity
+        for reader in (store, PostgresCheckpointStore(conn)):
+            loaded = reader.load_succeeded(
+                **args,
+                step_name="classify",
+                input_hash=original.input_hash,
+            )
+            assert loaded == committed
+
+
+@pytest.mark.skipif(TEST_DATABASE_URL is None, reason="TEST_DATABASE_URL not configured")
+@pytest.mark.parametrize("collision", ["failed", "input_hash", "workflow_version"])
+def test_checkpoint_attempt_collision_cannot_repair_another_identity(
+    extraction_db_url: str, collision: str
+) -> None:
+    from fel_workers.extraction.types import StageRecord
+
+    run_id = str(uuid.uuid4())
+    request = _request(run_id)
+    original = StageRecord(
+        step_name="classify",
+        attempt=1,
+        status="failed" if collision == "failed" else "succeeded",
+        input_hash=sha256_hex("original identity"),
+    )
+    with psycopg.connect(extraction_db_url, autocommit=True) as conn:
+        _seed_parents(conn)
+        _seed_run(conn, request)
+        PostgresPersistStore(conn).mark_running(run_id=run_id, org_id=_ORG)
+        store = PostgresCheckpointStore(conn)
+        args = dict(run_id=run_id, org_id=_ORG, workflow_version=request.workflow_version)
+        commit = store.commit_failed if collision == "failed" else store.commit_succeeded
+        commit(**args, record=original)
+        before = conn.execute(
+            "SELECT * FROM extraction_run_steps WHERE run_id = %s",
+            (run_id,),
+        ).fetchall()
+        incoming = replace(
+            original,
+            status="succeeded",
+            output={"new": True},
+            output_hash=hash_json({"new": True}),
+            cost_usd=Decimal("0.02"),
+        )
+        if collision == "input_hash":
+            incoming.input_hash = sha256_hex("other identity")
+        elif collision == "workflow_version":
+            args["workflow_version"] = "other-workflow/v1"
+        store.commit_succeeded(**args, record=incoming)
+        assert (
+            conn.execute(
+                "SELECT * FROM extraction_run_steps WHERE run_id = %s",
+                (run_id,),
+            ).fetchall()
+            == before
         )

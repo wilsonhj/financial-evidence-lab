@@ -358,10 +358,9 @@ def _commit_fence(ctx: _ExecCtx, step_name: str) -> None:
     the run's real owner read back on resume. Since ADR-0011 the output lives on
     the step row, whose success key is the partial unique index
     ``(run_id, step_name, input_hash, workflow_version) WHERE status='succeeded'``
-    and whose INSERT is ``ON CONFLICT DO NOTHING`` — a zombie's write now loses
-    the race instead of winning it. The fence is still worth keeping: it stops
-    the zombie writing at all, and it is the only thing that stops a lease-less
-    worker appending events to a run it no longer owns.
+    and rejected checkpoints can be repaired at that key. The fence stops a
+    lease-less worker replacing the owner's checkpoint or appending events to
+    a run it no longer owns.
 
     Raising here writes nothing and the owner re-runs the stage, which is
     idempotent by construction (keyed on ``input_hash``). The wall-clock cap is
