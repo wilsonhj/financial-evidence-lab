@@ -1136,7 +1136,7 @@ def test_checkpoint_attempt_collision_cannot_repair_another_identity(
 
 
 @pytest.mark.skipif(TEST_DATABASE_URL is None, reason="TEST_DATABASE_URL not configured")
-@pytest.mark.parametrize("initial", ["absent", "loaded_valid", "rejected"])
+@pytest.mark.parametrize("initial", ["absent", "loaded_valid", "rejected", "rejected_metadata"])
 def test_checkpoint_collision_preserves_concurrent_owner(
     extraction_db_url: str, initial: str
 ) -> None:
@@ -1159,6 +1159,8 @@ def test_checkpoint_collision_preserves_concurrent_owner(
         output={"document_type": "owner"},
         output_hash=hash_json({"document_type": "owner"}),
     )
+    if initial == "rejected_metadata":
+        winner = replace(original, provider_response_id="new-owner-response")
     loser = replace(
         original,
         output={"document_type": "stale"},
@@ -1176,7 +1178,7 @@ def test_checkpoint_collision_preserves_concurrent_owner(
         if initial != "absent":
             owner.commit_succeeded(**args, record=original)
         loaded = stale.load_succeeded(**args, step_name="classify", input_hash=original.input_hash)
-        if initial == "rejected":
+        if initial.startswith("rejected"):
             stale.reject_loaded(**args, record=loaded)
             # Mutating the returned object cannot change the captured DB token.
             loaded.output = winner.output
@@ -1185,9 +1187,15 @@ def test_checkpoint_collision_preserves_concurrent_owner(
             owner.commit_succeeded(**args, record=winner)
         else:
             owner_conn.execute(
-                "UPDATE extraction_run_steps SET output = %s::jsonb, output_hash = %s"
+                "UPDATE extraction_run_steps SET output = %s::jsonb, output_hash = %s,"
+                " provider_response_id = %s"
                 " WHERE run_id = %s AND step_name = 'classify'",
-                (json.dumps(winner.output), winner.output_hash, request.run_id),
+                (
+                    json.dumps(winner.output),
+                    winner.output_hash,
+                    winner.provider_response_id,
+                    request.run_id,
+                ),
             )
         events = PostgresEventStore(conn)
         with pytest.raises(LeaseLost, match="checkpoint.*changed|checkpoint.*conflict"):
@@ -1272,4 +1280,231 @@ def test_success_after_failed_attempt_is_durable(extraction_db_url: str) -> None
                 (request.run_id,),
             ).fetchone()[0]
             == 1
+        )
+
+
+@pytest.mark.skipif(TEST_DATABASE_URL is None, reason="TEST_DATABASE_URL not configured")
+@pytest.mark.parametrize("atomic", [False, True])
+def test_duplicate_success_cannot_replace_valid_checkpoint(
+    extraction_db_url: str, atomic: bool
+) -> None:
+    """A delayed writer must not replace a winner or append a false completion."""
+    from fel_workers.extraction.errors import LeaseLost
+    from fel_workers.extraction.types import StageRecord
+
+    run_id = str(uuid.uuid4())
+    request = _request(run_id)
+    winner = StageRecord(
+        step_name="classify",
+        attempt=1,
+        status="succeeded",
+        input_hash=sha256_hex("competing success"),
+        output={"document_type": "owner"},
+        output_hash=hash_json({"document_type": "owner"}),
+        provider_response_id="owner",
+        cost_usd=Decimal("0.02"),
+    )
+    stale = replace(
+        winner,
+        output={"document_type": "stale"},
+        output_hash=hash_json({"document_type": "stale"}),
+        provider_response_id="stale",
+        cost_usd=Decimal("0.01"),
+    )
+    with psycopg.connect(extraction_db_url, autocommit=True) as conn:
+        _seed_parents(conn)
+        _seed_run(conn, request)
+        PostgresPersistStore(conn).mark_running(run_id=run_id, org_id=_ORG)
+        args = dict(run_id=run_id, org_id=_ORG, workflow_version=request.workflow_version)
+        stores = [PostgresCheckpointStore(conn), PostgresCheckpointStore(conn)]
+        for store in stores:
+            assert (
+                store.load_succeeded(**args, step_name="classify", input_hash=winner.input_hash)
+                is None
+            )
+
+        def commit(store: PostgresCheckpointStore, record: StageRecord) -> StageRecord:
+            if atomic:
+                return store.commit_succeeded_atomic(
+                    **args,
+                    record=record,
+                    events=PostgresEventStore(conn),
+                    event_payload={"step_name": "classify", "output_hash": record.output_hash},
+                )
+            return store.commit_succeeded(**args, record=record)
+
+        commit(stores[0], winner)
+        before = conn.execute(
+            "SELECT * FROM extraction_run_steps WHERE run_id=%s", (run_id,)
+        ).fetchall()
+        with pytest.raises(LeaseLost, match="checkpoint"):
+            commit(stores[1], stale)
+        assert (
+            conn.execute("SELECT * FROM extraction_run_steps WHERE run_id=%s", (run_id,)).fetchall()
+            == before
+        )
+        for store in (*stores, PostgresCheckpointStore(conn)):
+            assert (
+                store.load_succeeded(**args, step_name="classify", input_hash=winner.input_hash)
+                == winner
+            )
+        assert conn.execute(
+            "SELECT count(*) FROM extraction_run_events WHERE run_id=%s", (run_id,)
+        ).fetchone()[0] == int(atomic)
+
+
+@pytest.mark.skipif(TEST_DATABASE_URL is None, reason="TEST_DATABASE_URL not configured")
+@pytest.mark.parametrize("changed_output", [False, True], ids=["deterministic", "varying"])
+@pytest.mark.parametrize("atomic", [False, True])
+def test_stale_repair_cannot_replace_another_workers_repair(
+    extraction_db_url: str, changed_output: bool, atomic: bool
+) -> None:
+    from fel_workers.extraction.errors import LeaseLost
+    from fel_workers.extraction.types import StageRecord
+
+    run_id = str(uuid.uuid4())
+    request = _request(run_id)
+    damaged = StageRecord(
+        step_name="classify",
+        attempt=1,
+        status="succeeded",
+        input_hash=sha256_hex("competing repairs"),
+        output={"document_type": "corrupted"},
+        output_hash=hash_json({"document_type": "original"}),
+        provider_response_id="original-response",
+    )
+    winner_output = {"document_type": "revised" if changed_output else "original"}
+    winner = replace(
+        damaged,
+        output=winner_output,
+        output_hash=hash_json(winner_output),
+        provider_response_id="winner-response",
+        cost_usd=Decimal("0.02"),
+    )
+    stale = replace(
+        damaged,
+        output={"document_type": "stale"},
+        output_hash=hash_json({"document_type": "stale"}),
+        provider_response_id="stale-response",
+    )
+    with psycopg.connect(extraction_db_url, autocommit=True) as conn:
+        _seed_parents(conn)
+        _seed_run(conn, request)
+        PostgresPersistStore(conn).mark_running(run_id=run_id, org_id=_ORG)
+        args = dict(run_id=run_id, org_id=_ORG, workflow_version=request.workflow_version)
+        stale_store = PostgresCheckpointStore(conn)
+
+        def commit(
+            store: PostgresCheckpointStore, record: StageRecord, rejected: StageRecord | None = None
+        ) -> StageRecord:
+            if rejected is not None:
+                store.reject_loaded(**args, record=rejected)
+            if atomic:
+                return store.commit_succeeded_atomic(
+                    **args,
+                    record=record,
+                    events=PostgresEventStore(conn),
+                    event_payload={"step_name": "classify", "output_hash": record.output_hash},
+                )
+            return store.commit_succeeded(**args, record=record)
+
+        commit(stale_store, damaged)
+        observed = stale_store.load_succeeded(
+            **args, step_name="classify", input_hash=damaged.input_hash
+        )
+        assert observed == damaged
+        owner = PostgresCheckpointStore(conn)
+        owner_observed = owner.load_succeeded(
+            **args, step_name="classify", input_hash=damaged.input_hash
+        )
+        commit(owner, winner, owner_observed)
+        before = conn.execute(
+            "SELECT * FROM extraction_run_steps WHERE run_id=%s", (run_id,)
+        ).fetchall()
+        with pytest.raises(LeaseLost, match="checkpoint"):
+            commit(stale_store, stale, observed)
+        assert (
+            conn.execute("SELECT * FROM extraction_run_steps WHERE run_id=%s", (run_id,)).fetchall()
+            == before
+        )
+        for reader in (stale_store, PostgresCheckpointStore(conn)):
+            assert (
+                reader.load_succeeded(**args, step_name="classify", input_hash=damaged.input_hash)
+                == winner
+            )
+        assert conn.execute(
+            "SELECT count(*) FROM extraction_run_events WHERE run_id=%s", (run_id,)
+        ).fetchone()[0] == 2 * int(atomic)
+
+
+@pytest.mark.skipif(TEST_DATABASE_URL is None, reason="TEST_DATABASE_URL not configured")
+def test_superseded_checkpoint_stops_workflow_without_terminal_write(
+    extraction_db_url: str,
+) -> None:
+    """A losing commit must not run downstream stages or fail the owner's run."""
+    from fel_workers.extraction.errors import LeaseLost
+
+    class RacingStore(PostgresCheckpointStore):
+        def commit_succeeded_atomic(self, **kwargs: Any) -> Any:
+            record = kwargs["record"]
+            if record.step_name == "classify":
+                output = {**record.output, "document_type": "current owner"}
+                winner = replace(record, output=output, output_hash=hash_json(output))
+                winner_args = {
+                    **kwargs,
+                    "record": winner,
+                    "event_payload": {**kwargs["event_payload"], "output_hash": winner.output_hash},
+                }
+                PostgresCheckpointStore(self.conn).commit_succeeded_atomic(**winner_args)
+            return super().commit_succeeded_atomic(**kwargs)
+
+    request = _request(str(uuid.uuid4()))
+    with psycopg.connect(extraction_db_url, autocommit=True) as conn:
+        _seed_parents(conn)
+        _seed_run(conn, request)
+        PostgresPersistStore(conn).mark_running(run_id=request.run_id, org_id=_ORG)
+        deps = replace(_postgres_deps(conn, _CountingLLM()), checkpoint=RacingStore(conn))
+        state = WorkflowState(request=request, evidence=_evidence())
+        with pytest.raises(LeaseLost) as error:
+            run_extraction_workflow(state, deps)
+        assert error.value.code == "checkpoint_superseded"
+        assert state.status == "running"
+        assert "classify" not in state.stages
+        assert (
+            conn.execute(
+                "SELECT status FROM extraction_runs WHERE id=%s", (request.run_id,)
+            ).fetchone()[0]
+            == "running"
+        )
+        assert (
+            conn.execute(
+                "SELECT output->>'document_type' FROM extraction_run_steps"
+                " WHERE run_id=%s AND step_name='classify'",
+                (request.run_id,),
+            ).fetchone()[0]
+            == "current owner"
+        )
+        assert (
+            conn.execute(
+                "SELECT count(*) FROM extraction_run_events WHERE run_id=%s"
+                " AND event_type='step_completed' AND payload->>'step_name'='classify'",
+                (request.run_id,),
+            ).fetchone()[0]
+            == 1
+        )
+        assert (
+            conn.execute(
+                "SELECT count(*) FROM extraction_run_events WHERE run_id=%s"
+                " AND event_type IN ('run_failed','run_succeeded')",
+                (request.run_id,),
+            ).fetchone()[0]
+            == 0
+        )
+        assert (
+            conn.execute(
+                "SELECT count(*) FROM extraction_run_events WHERE run_id=%s"
+                " AND event_type='step_started' AND payload->>'step_name'='collect_candidates'",
+                (request.run_id,),
+            ).fetchone()[0]
+            == 0
         )

@@ -882,7 +882,7 @@ class PostgresCheckpointStore:
             if version is None:
                 self._memory = MemoryCheckpointStore()
                 raise LeaseLost(
-                    "checkpoint conflict without rejected row", code="checkpoint_conflict"
+                    "checkpoint conflict without rejected row", code="checkpoint_superseded"
                 )
             # Only the exact row rejected by this worker can be repaired. A
             # concurrent insert/repair must not lose its output or gain a stale
@@ -917,7 +917,7 @@ class PostgresCheckpointStore:
             ).fetchone()
             if repaired is None:
                 self._memory = MemoryCheckpointStore()
-                raise LeaseLost("checkpoint changed since rejection", code="checkpoint_conflict")
+                raise LeaseLost("checkpoint changed since rejection", code="checkpoint_superseded")
             record.attempt = repaired[0]
 
     def commit_failed(
