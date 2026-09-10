@@ -2,9 +2,8 @@
 # Deployed images install this file; requirements-dev.txt adds the toolchain
 # on top of it via `-r requirements.txt`.
 #
-# Minimum versions track known-clean releases; pip-audit gates both files in
-# CI. A hashed lock file is out of scope here (tracked separately) — these
-# floors are not a substitute for pinned, hash-verified installs.
+# Human-edited floors are resolved together with first-party package metadata
+# by scripts/runtime/lock.sh. Deployments install hash-verified requirements.lock.
 fastapi>=0.121.0
 uvicorn>=0.32.0
 pydantic>=2.9.2
