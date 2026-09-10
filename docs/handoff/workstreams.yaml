@@ -97,7 +97,7 @@ packages:
     tasks: []
     depends_on: []
     team: integration
-    branch: agent/188-execution-wave5
+    branch: agent/188-execution-wave6
     status: active
     allowed_paths:
       - specs/001-financial-evidence-lab/tasks.md # Lead-only verified checkbox/annotation updates.
@@ -105,6 +105,8 @@ packages:
       - docs/handoff/workstreams.yaml
       - docs/decisions/ADR-0017-parallel-backlog-execution.md
       - docs/superpowers/plans/2026-09-09-backlog-resolution.md
+      - docs/superpowers/plans/2026-09-10-extraction-complexity-split.md
+      - .github/required-checks.md # Reconcile verified September 10 protection settings only.
   - id: PLATFORM-NODE24
     issue: 249
     tasks: [] # Runtime maintenance; canonical task completion is unchanged.
@@ -708,7 +710,7 @@ packages:
       - evals/harness/reader_cross_stack.py
       - evals/tests/test_reader_cross_stack.py
       - evals/datasets/reader-cross-stack/**
-    # Exclude apps/api/tests/test_observability.py: #203 owns it until merge.
+    # Exclude apps/api/tests/test_observability.py: observability is outside this dispatch.
     # No edit to app/observability.py, root locks or worker extraction paths.
   - id: ARCH-CLAIMS-OUTPUT # consume provider claims JSON under claims-output/v1 instead of copying context
     issue: 193
@@ -749,17 +751,35 @@ packages:
     allowed_paths:
       - docs/decisions/**
       - packages/providers/**
-  - id: ARCH-COMPLEXITY-SPLIT # split apps/api/app/retrieval.py and extraction/workflow.py
+  - id: ARCH-COMPLEXITY-SPLIT # Extraction-only portion; API awaits #191.
     issue: 196
     tasks: []
-    depends_on: [ARCH-API-HARDENING, ARCH-CLAIMS-OUTPUT] # both open PRs rewrite retrieval.py; a refactor before they land guarantees conflicts
-    team: platform
-    branch: agent/arch-complexity-split # not yet created
-    status: blocked # No-behaviour-change refactor of the two largest files (retrieval.py 1268 lines, workflow.py 997). CONTENTION is the whole point of the edges above: #232 and #241 both rewrite apps/api/app/retrieval.py, and #236 rewrote extraction/workflow.py. Sequencing this before they merge would force the same conflict resolution twice in safety-critical code.
+    depends_on: [EXTRACTION-GUIDANCE-RANGE-POLICY]
+    team: extraction
+    branch: agent/arch-complexity-split
+    status: active # Mechanical split preserving unchanged tests/goldens and all checkpoint/ownership patch seams.
     allowed_paths:
-      - apps/api/**
-      - workers/src/fel_workers/extraction/**
-      - workers/tests/**
+      - workers/src/fel_workers/extraction/workflow.py
+      - workers/src/fel_workers/extraction/persist.py
+      - workers/src/fel_workers/extraction/workflow_context.py
+      - workers/src/fel_workers/extraction/workflow_checkpoint.py
+      - workers/src/fel_workers/extraction/workflow_codec.py
+      - workers/src/fel_workers/extraction/stages/__init__.py
+      - workers/src/fel_workers/extraction/stages/validate_request.py
+      - workers/src/fel_workers/extraction/stages/assemble_evidence.py
+      - workers/src/fel_workers/extraction/stages/model.py
+      - workers/src/fel_workers/extraction/stages/normalize.py
+      - workers/src/fel_workers/extraction/stages/validate.py
+      - workers/src/fel_workers/extraction/stages/verify_citations.py
+      - workers/src/fel_workers/extraction/stages/detect_conflicts.py
+      - workers/src/fel_workers/extraction/stages/persist_proposals.py
+      - workers/src/fel_workers/extraction/persist_types.py
+      - workers/src/fel_workers/extraction/persist_memory.py
+      - workers/src/fel_workers/extraction/persist_checkpoint.py
+      - workers/src/fel_workers/extraction/persist_events.py
+      - workers/src/fel_workers/extraction/persist_reads.py
+    # No API edits until #191 merges and the lead registers the API portion.
+    # Tests and financial/hash/version modules remain byte-identical.
   - id: ARCH-SCHEMA-HYGIENE # org_id FKs, dangling active_scenario_id, M4/M5 tables
     issue: 197
     tasks: []
@@ -784,7 +804,7 @@ packages:
     depends_on: []
     team: platform
     branch: agent/200-locked-runtime
-    status: merged # PR #259 @ 7a69133; independently verified clean hashed installs, packaged assets and heartbeat recovery; issue #200 retains hosted restart acceptance.
+    status: merged # PR #259 @ 7a69133; independently verified clean hashed installs, packaged assets and heartbeat recovery; issue #200 is closed in GitHub; hosted restart remains live-cutover verification, not inferred from code merge.
     allowed_paths:
       - requirements.txt
       - requirements-dev.txt
@@ -841,7 +861,7 @@ packages:
     depends_on: [ARCH-API-HARDENING, ARCH-RUNTIME-DEPS, WORKER-ROLE-ROLLOUT]
     team: platform
     branch: agent/203-ci-observability
-    status: active # ADR-0017 residual dispatch; accepted existing Sentry behavior, measured coverage baseline and explicit required checks.
+    status: merged # PR #269 @ c7b2d0c; measured coverage gates and real SDK privacy verified, final CI passed; seven required checks applied/read back. #203 retains real CODEOWNER and hosted telemetry acceptance.
     allowed_paths:
       - .github/workflows/ci.yml
       - .github/required-checks.md
@@ -917,7 +937,7 @@ packages:
     depends_on: [EXTRACTION-UNIT-POLICY]
     team: extraction
     branch: agent/154-guidance-range-ordering
-    status: active # ADR-0022 narrowly canonicalizes wholly negative bounds and validates all range metrics; fresh v3 runs and conflict namespace.
+    status: merged # PR #270 @ 3fbc8ac; 720 PostgreSQL-enabled source tests, independent 141 tests and endpoint matrix, final CI passed; #154 closed.
     allowed_paths:
       - workers/src/fel_workers/extraction/**
       - workers/tests/extraction/**

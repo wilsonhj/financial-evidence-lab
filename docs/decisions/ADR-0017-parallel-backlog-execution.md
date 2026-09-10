@@ -53,3 +53,14 @@ focused passing tests, independent review and current required CI. The control
 PR validates unique workstream IDs, resolved acyclic dependencies and pairwise
 non-overlap of the dispatched paths. Durable completion evidence lives in
 GitHub and the execution record, separate from the canonical task ledger.
+
+
+#196 extraction ruling: after #154 merges, narrow the existing refactor dispatch
+to the exact workflow/stage/checkpoint/store modules in workstreams.yaml. Keep
+all tests/goldens, financial logic, hashes, version pins and SQL unchanged.
+Preserve workflow-global crash/hash hooks and persistence ownership patching.
+The existing 510-line accounting validator is within the issue's approximate
+500-line target and stays unchanged. API retrieval remains excluded until
+#191 merges and the lead registers that portion. This split alone cannot close
+#196. The lead may publish its bounded plan and reconcile verified branch
+protection settings in .github/required-checks.md within the control PR.
