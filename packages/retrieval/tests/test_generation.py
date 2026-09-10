@@ -471,3 +471,51 @@ def test_numeric_tuple_sign_is_derived() -> None:
     assert NumericTuple(Decimal("1.5"), "USD", "FY2025", 6).sign == 1
     assert NumericTuple(Decimal("-1.5"), "USD", "FY2025", 6).sign == -1
     assert NumericTuple(Decimal("0"), "USD", "FY2025", 6).sign == 0
+
+
+@pytest.mark.parametrize(
+    ("source", "text", "numeric"),
+    [
+        ("Income was -100 million USD", "Income was 100 million USD", None),
+        ("Revenue did not grow", "Revenue did grow", None),
+        ("Revenue exceeded costs", "Costs exceeded revenue", None),
+        (
+            "Income was -100 million USD",
+            "Income was 100 million USD",
+            NumericTuple(Decimal("-100"), "USD", "FY2026", 6),
+        ),
+    ],
+)
+def test_transformed_provider_prose_cannot_receive_full_mock_support(
+    source: str, text: str, numeric: NumericTuple | None
+) -> None:
+    """A grounded quote and matching tuple cannot certify altered claim meaning."""
+    from fel_retrieval.verification import MockCitationVerifier, verify_claims
+
+    item = _ctx("a", source, numeric=numeric)
+    assertion = (
+        {
+            "value": str(numeric.value),
+            "unit": numeric.unit,
+            "period": numeric.period,
+            "scale": numeric.scale,
+        }
+        if numeric is not None
+        else None
+    )
+    provider = StubProvider(
+        {
+            "claims": [
+                {
+                    "text": text,
+                    "citations": [{"item_id": "a", "quote": source}],
+                    "numeric": assertion,
+                }
+            ],
+            "abstain": None,
+        }
+    )
+    generated = StructuredClaimGenerator(provider).generate("Income?", [item], as_of=AS_OF)
+    [verified] = verify_claims(generated.claims, [item], MockCitationVerifier())
+    assert verified.status not in {"supported", "derived"}
+    assert verified.confidence is not None and verified.confidence < Decimal("1")

@@ -83,11 +83,11 @@ describe("contract schemas", () => {
 });
 
 describe("contract version identity (VERSIONING.md)", () => {
-  it("openapi, package, and CONTRACT_VERSION agree on the 0.5.0 minor bump", () => {
+  it("openapi, package, and CONTRACT_VERSION agree on the 0.6.0 minor bump", () => {
     const yaml = readFileSync(join(here, "openapi/openapi.yaml"), "utf8");
     const infoVersion = /^ {2}version: (\d+\.\d+\.\d+)$/m.exec(yaml)?.[1];
     expect(infoVersion).toBe(CONTRACT_VERSION);
-    expect(CONTRACT_VERSION).toBe("0.5.0");
+    expect(CONTRACT_VERSION).toBe("0.6.0");
     expect(load("package.json").version).toBe(CONTRACT_VERSION);
   });
 
@@ -99,7 +99,7 @@ describe("contract version identity (VERSIONING.md)", () => {
   });
 });
 
-describe("structured claims output (ADR-0014)", () => {
+describe("structured claims output (ADR-0015)", () => {
   const validate = ajv.getSchema(SCHEMA_IDS.claimsOutput)!;
 
   it("requires an independently asserted integer scale for numeric claims", () => {

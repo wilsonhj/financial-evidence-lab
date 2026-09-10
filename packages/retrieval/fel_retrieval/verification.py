@@ -6,8 +6,8 @@ cited evidence so a claim's rendered status can never outrun what the evidence
 supports:
 
 * ``CitationVerifier`` is a typed ``Protocol``; ``MockCitationVerifier`` is the
-  deterministic default (no network). Entailment is decided by lexical coverage
-  of the claim by its evidence span, and — for arithmetic-bearing claims — by the
+  deterministic default (no network). Full mock entailment requires whole-evidence
+  text identity (whitespace normalized), and — for arithmetic-bearing claims — the
   numeric-tuple check, so a number that does not check out is *contradictory*
   regardless of how well the surrounding words overlap.
 * ``validate_numeric`` checks value, unit, period, sign and scale as five
@@ -40,9 +40,8 @@ from fel_retrieval.generation import (
 )
 
 # Lexical coverage thresholds for the mock entailment judgement. A claim whose
-# tokens are fully covered by its evidence span is entailed; substantial-but-
-# partial coverage is a partial edge; anything below is irrelevant.
-_ENTAILED_COVERAGE = 1.0
+# text matches the whole evidence is entailed; lexical overlap alone is at
+# most a partial edge because token sets discard signs, negation and word order.
 _PARTIAL_COVERAGE = 0.5
 
 # Numeric-check dimensions, in the fixed order they are reported (spec §11.4).
@@ -126,7 +125,8 @@ class CitationVerifier(Protocol):
 class MockCitationVerifier:
     """Deterministic entailment + numeric verifier (no network).
 
-    Text entailment is lexical coverage of the claim by its evidence span. When a
+    Full text support requires identity with the whole whitespace-normalized
+    evidence. Lexical coverage alone is at most partial, never semantic proof. When a
     numeric tuple is asserted, the numeric check is decisive: missing evidence
     numeric fails closed as non-supporting (never lexical ``entailed``), and any
     failed dimension makes the edge ``contradictory`` (the number is wrong).
@@ -170,7 +170,7 @@ class MockCitationVerifier:
                 )
 
         coverage = _coverage(claim_text, evidence.text)
-        if coverage >= _ENTAILED_COVERAGE:
+        if coverage and " ".join(claim_text.split()) == " ".join(evidence.text.split()):
             status = "entailed"
         elif coverage >= _PARTIAL_COVERAGE:
             status = "partial"
@@ -179,11 +179,20 @@ class MockCitationVerifier:
         return CitationEdge(
             status=status,
             numeric_checks=numeric_checks,
-            rationale=f"lexical coverage {coverage:.2f}",
-            # Full support (1) requires full lexical coverage AND, when the claim
-            # asserts a number, every numeric dimension checking out — both are
-            # already true on this branch.
-            confidence=Decimal(str(coverage)).quantize(_CONFIDENCE_QUANTUM, rounding=ROUND_DOWN),
+            rationale=(
+                "whole-evidence text identity"
+                if status == "entailed"
+                else f"lexical coverage {coverage:.2f}; semantic entailment unverified"
+            ),
+            # A transformed claim can cover every token without preserving meaning.
+            confidence=(
+                Decimal("1")
+                if status == "entailed"
+                else min(
+                    Decimal(str(coverage)).quantize(_CONFIDENCE_QUANTUM, rounding=ROUND_DOWN),
+                    Decimal("1") - _CONFIDENCE_QUANTUM,
+                )
+            ),
         )
 
 

@@ -91,10 +91,10 @@ def test_cross_version_span_fails_closed() -> None:
 
 
 # --- entailment classification ---------------------------------------------
-def test_verifier_entailed_on_full_coverage() -> None:
+def test_verifier_entailed_on_whole_evidence_identity() -> None:
     v = MockCitationVerifier()
     item = _item("a", "Revenue was 100 million dollars")
-    edge = v.verify("Revenue was 100 million", item, claim_numeric=None)
+    edge = v.verify("  Revenue was 100\n million dollars  ", item, claim_numeric=None)
     assert edge.status == "entailed"
 
 

@@ -1,9 +1,9 @@
-# ADR-0014: Structured claims output and independent numeric verification
+# ADR-0015: Structured claims output and independent numeric verification
 
-Status: Proposed
+Status: Accepted
 Date: 2026-09-06
 Occasioned by: issue #193 and review of PR #241
-Blocks: integration-lead acceptance and review before the shared contract is merged
+Acceptance: integration-lead review on 2026-09-07 ([PR #241](https://github.com/wilsonhj/financial-evidence-lab/pull/241#issuecomment-5574652267)); renumber to ADR-0015 approved there.
 
 ## Context
 
@@ -19,11 +19,11 @@ model asserting the wrong magnitude. Inheriting missing unit or period similarly
 turns unknown assertions into apparent agreement. Spec sections 13.3 and 19.6
 require independent numeric value, unit, period, sign, and scale checks.
 
-## Proposed decision
+## Decision
 
 1. Register the new `claims-output/v1` schema, its fixture, and deterministic
    contract tests in `packages/contracts`. Advance OpenAPI `info.version`,
-   `CONTRACT_VERSION`, and the package version from 0.4.0 to 0.5.0. The new schema
+   `CONTRACT_VERSION`, and the package version from 0.5.0 to 0.6.0, serialized after PR #232. The new schema
    retains its initial `x-fel-version: 1.0.0`; it has not been released, so fixing
    its proposed shape does not revise an already frozen v1 schema.
 2. Validate model output structurally before constructing claims. Objects reject
@@ -67,6 +67,22 @@ require independent numeric value, unit, period, sign, and scale checks.
   the generation schema while retaining full local output validation. This
   mock-only change does not prove that live-provider boundary.
 
+## Mock verification boundary
+
+The deterministic mock grants full text support only when the claim matches the
+whole evidence text after whitespace normalization. Token overlap for transformed
+prose is at most partial support with confidence below 1, even when a separately
+asserted numeric tuple matches. Token sets do not preserve signs, negation, or
+word order. Numeric mismatches remain decisive before the text check.
+
+The prompt exposes evidence numeric metadata; independent assertion means the
+provider returns its own tuple, not that it is blinded to the evidence. Matching
+that tuple does not establish agreement between the claim prose and the tuple.
+The whole-text restriction closes that gap for the mock without claiming live
+semantic verification. Partial mock coverage is a lexical score, not a calibrated
+probability of correctness. Live cutover must supply and evaluate a semantic
+verifier before transformed prose can receive full support.
+
 ## Alternatives rejected
 
 - Delay the version bump until an HTTP change: contradicts the explicit new-schema
@@ -87,7 +103,6 @@ Retrieval tests must reject altered magnitude and unknown numeric metadata as
 verified agreement, reject unselected citations and ungrounded quotes, and retain
 usage on abstention. Mock tests must exercise both numeric and qualitative output.
 
-The implementation is prepared for review under the user's explicit instruction
-to fix verified PR issues. This Proposed ADR does not assert acceptance or waive
-the required `contract-change` label, issue authorization, or integration-lead
-review. The lead must accept this decision before merge and dependent rebases.
+The integration lead accepted the decision and renumbering in the linked review.
+The required `contract-change` label and review still apply to implementation
+changes; acceptance does not waive verification or merge sequencing.
