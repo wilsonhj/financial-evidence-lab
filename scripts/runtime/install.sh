@@ -14,6 +14,6 @@ trap 'rm -rf "$runtime_builder"' EXIT
 "$runtime_builder/venv/bin/python" -m pip wheel --no-deps --no-build-isolation \
   --wheel-dir "$runtime_builder/wheels" ./packages/providers \
   ./packages/ontology ./packages/retrieval ./workers ./apps/api
-"$runtime_python" -m pip install --no-deps "$runtime_builder"/wheels/*.whl
+"$runtime_python" -m pip install --force-reinstall --no-deps "$runtime_builder"/wheels/*.whl
 "$runtime_python" -m pip check
 "$runtime_python" -I scripts/runtime/verify.py

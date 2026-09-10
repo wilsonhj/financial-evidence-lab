@@ -19,3 +19,4 @@ where = ["src"]
 # stays in packages/contracts/schemas/ — see extraction/contracts/__init__.py.
 [tool.setuptools.package-data]
 "fel_workers.extraction.contracts" = ["*.json"]
+"fel_workers.extraction" = ["prompts/*.txt", "schemas/*.json"]
