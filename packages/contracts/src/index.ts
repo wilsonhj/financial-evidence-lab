@@ -2,6 +2,8 @@ export type { components, paths, operations } from "./generated/api";
 
 /** Frozen schema registry: name -> versioned $id (see VERSIONING.md). */
 export const SCHEMA_IDS = {
+  retrievalEventPage: "https://contracts.fel.dev/schemas/retrieval-event-page/v1",
+  documentVersionReference: "https://contracts.fel.dev/schemas/document-version-reference/v1",
   sourceSpan: "https://contracts.fel.dev/schemas/source-span/v1",
   financialFact: "https://contracts.fel.dev/schemas/financial-fact/v1",
   claim: "https://contracts.fel.dev/schemas/claim/v1",
@@ -19,4 +21,4 @@ export const SCHEMA_IDS = {
   extractionPayload: "https://contracts.fel.dev/schemas/extraction-payload/v1",
 } as const;
 
-export const CONTRACT_VERSION = "0.6.0" as const;
+export const CONTRACT_VERSION = "0.7.0" as const;

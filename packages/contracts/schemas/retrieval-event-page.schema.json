@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.fel.dev/schemas/retrieval-event-page/v1",
+  "x-fel-version": "1.0.0",
+  "title": "RetrievalEventPage",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["run_id", "items", "next_cursor", "previous_cursor"],
+  "properties": {
+    "run_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "items": {
+      "type": "array",
+      "maxItems": 200,
+      "items": {
+        "$ref": "https://contracts.fel.dev/schemas/retrieval-event/v1"
+      }
+    },
+    "next_cursor": {
+      "type": ["string", "null"],
+      "maxLength": 2048
+    },
+    "previous_cursor": {
+      "type": ["string", "null"],
+      "maxLength": 2048
+    }
+  }
+}

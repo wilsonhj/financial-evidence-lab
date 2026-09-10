@@ -310,6 +310,42 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/document-versions/resolve": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Resolve at most 200 visible parsed version IDs under a cutoff and corpus pin */
+    get: operations["resolveDocumentVersions"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/retrieval-runs/{runId}/event-history": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        runId: components["parameters"]["RunId"];
+      };
+      cookie?: never;
+    };
+    /** Bounded persisted event inspection, independent of complete trace limits */
+    get: operations["getRetrievalEventHistory"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/v1/retrieval-runs/{runId}/feedback": {
     parameters: {
       query?: never;
@@ -706,8 +742,27 @@ export interface components {
       spans: components["schemas"]["ReaderSpanRecord"][];
       facts: components["schemas"]["ReaderFactRecord"][];
     };
+    ReaderSiblingPage: {
+      /** @enum {string} */
+      scope: "page" | "excluded";
+      returned: number;
+      limit: number;
+      /** @description True only when this response contains the entire eligible sibling set. Unpinned cross-page browsing is not immutable comparison coverage. */
+      complete: boolean;
+      next_cursor: string | null;
+      previous_cursor: string | null;
+    };
+    DocumentVersionReference: components["schemas"]["document-version-reference.schema"];
+    RetrievalEventPage: {
+      /** Format: uuid */
+      run_id: string;
+      items: components["schemas"]["RetrievalEvent"][];
+      next_cursor: string | null;
+      previous_cursor: string | null;
+    };
     /** @description Composite version-pinned reader evidence (ADR-0005). Canonical JSON Schema: https://contracts.fel.dev/schemas/reader-response/v1. */
     ReaderResponse: {
+      sibling_page?: components["schemas"]["ReaderSiblingPage"];
       /**
        * Format: date-time
        * @description Effective inclusive cutoff actually enforced, UTC.
@@ -1191,6 +1246,13 @@ export interface components {
       reported_or_derived: "reported" | "derived";
       confidence?: number;
     };
+    /** DocumentVersionReference */
+    "document-version-reference.schema": {
+      /** Format: uuid */
+      document_version_id: string;
+      /** Format: uuid */
+      document_id: string;
+    };
     period: {
       /** @enum {unknown} */
       type: "instant" | "duration" | "trailing_window" | "forecast";
@@ -1612,6 +1674,33 @@ export interface components {
     );
   };
   responses: {
+    /** @description PAGINATION_REQUIRED. Complete legacy response exceeds the ceiling. Restart parameters appear in error.details. */
+    PaginationRequired: {
+      headers: {
+        [name: string]: unknown;
+      };
+      content: {
+        "application/json": components["schemas"]["Error"];
+      };
+    };
+    /** @description READER_TOO_LARGE. Individual evidence or total response exceeds a fixed resource bound; error.details identifies resource, limit_kind and limit. */
+    ReaderTooLarge: {
+      headers: {
+        [name: string]: unknown;
+      };
+      content: {
+        "application/json": components["schemas"]["Error"];
+      };
+    };
+    /** @description TRACE_TOO_LARGE. Complete trace or indivisible event exceeds a fixed resource bound; no partial success. */
+    TraceTooLarge: {
+      headers: {
+        [name: string]: unknown;
+      };
+      content: {
+        "application/json": components["schemas"]["Error"];
+      };
+    };
     /** @description Error envelope (all non-2xx responses use this shape). */
     Error: {
       headers: {
@@ -1643,10 +1732,19 @@ export interface components {
     QueryId: string;
     RunId: string;
     ExtractionId: string;
+    /** @description Explicit page mode; default 50 inside page mode. Without limit or cursor, complete legacy results up to 50, otherwise PAGINATION_REQUIRED. Cursor carries the original limit. */
+    PageLimit: number;
+    /** @description Opaque scope-bound continuation; reauthenticate every request. Not a cross-request MVCC snapshot. */
+    PageCursor: string;
+    PageOrder: "asc" | "desc";
     Cursor: string;
   };
   requestBodies: never;
   headers: {
+    /** @description Continuation in the named direction; absent when no page exists. */
+    PageCursor: string;
+    /** @description Effective limit in explicit page mode. */
+    PageLimit: number;
     /** @description Version tag for optimistic concurrency. */
     ETag: string;
   };
@@ -1676,7 +1774,13 @@ export interface operations {
   };
   listWorkspaces: {
     parameters: {
-      query?: never;
+      query?: {
+        /** @description Explicit page mode; default 50 inside page mode. Without limit or cursor, complete legacy results up to 50, otherwise PAGINATION_REQUIRED. Cursor carries the original limit. */
+        limit?: components["parameters"]["PageLimit"];
+        /** @description Opaque scope-bound continuation; reauthenticate every request. Not a cross-request MVCC snapshot. */
+        cursor?: components["parameters"]["PageCursor"];
+        order?: components["parameters"]["PageOrder"];
+      };
       header?: never;
       path?: never;
       cookie?: never;
@@ -1686,12 +1790,17 @@ export interface operations {
       /** @description Workspaces. */
       200: {
         headers: {
+          "X-FEL-Next-Cursor": components["headers"]["PageCursor"];
+          "X-FEL-Previous-Cursor": components["headers"]["PageCursor"];
+          "X-FEL-Page-Limit": components["headers"]["PageLimit"];
           [name: string]: unknown;
         };
         content: {
           "application/json": components["schemas"]["Workspace"][];
         };
       };
+      409: components["responses"]["PaginationRequired"];
+      422: components["responses"]["Error"];
       default: components["responses"]["Error"];
     };
   };
@@ -1837,6 +1946,12 @@ export interface operations {
   listEntityDocuments: {
     parameters: {
       query?: {
+        corpus_version_id?: string;
+        /** @description Explicit page mode; default 50 inside page mode. Without limit or cursor, complete legacy results up to 50, otherwise PAGINATION_REQUIRED. Cursor carries the original limit. */
+        limit?: components["parameters"]["PageLimit"];
+        /** @description Opaque scope-bound continuation; reauthenticate every request. Not a cross-request MVCC snapshot. */
+        cursor?: components["parameters"]["PageCursor"];
+        order?: components["parameters"]["PageOrder"];
         /** @description Cutoff timestamp; only documents publicly available at or before this instant are returned. Enforced server-side. */
         as_of?: string;
       };
@@ -1851,12 +1966,17 @@ export interface operations {
       /** @description Documents. */
       200: {
         headers: {
+          "X-FEL-Next-Cursor": components["headers"]["PageCursor"];
+          "X-FEL-Previous-Cursor": components["headers"]["PageCursor"];
+          "X-FEL-Page-Limit": components["headers"]["PageLimit"];
           [name: string]: unknown;
         };
         content: {
           "application/json": components["schemas"]["DocumentMeta"][];
         };
       };
+      409: components["responses"]["PaginationRequired"];
+      422: components["responses"]["Error"];
       default: components["responses"]["Error"];
     };
   };
@@ -1886,6 +2006,12 @@ export interface operations {
   getDocumentReader: {
     parameters: {
       query?: {
+        /** @description False returns target-only evidence with explicit excluded coverage. */
+        include_siblings?: boolean;
+        /** @description Opt into sibling page mode; default 10 within page mode. */
+        sibling_limit?: number;
+        sibling_cursor?: string;
+        sibling_order?: "asc" | "desc";
         /** @description Inclusive cutoff (published_at <= as_of), enforced server-side on the target document and all nested evidence. Must carry an explicit UTC offset. Defaults to the request time; the response echoes the effective value actually enforced. */
         as_of?: string;
         /** @description Pin evidence to a published (active or superseded) corpus version. Unknown or draft corpus versions return 404 with details.resource = "corpus_version". */
@@ -1917,6 +2043,8 @@ export interface operations {
           "application/json": components["schemas"]["Error"];
         };
       };
+      409: components["responses"]["PaginationRequired"];
+      413: components["responses"]["ReaderTooLarge"];
       default: components["responses"]["Error"];
     };
   };
@@ -2040,7 +2168,13 @@ export interface operations {
   };
   getQuery: {
     parameters: {
-      query?: never;
+      query?: {
+        /** @description Explicit page mode; default 50 inside page mode. Without limit or cursor, complete legacy results up to 50, otherwise PAGINATION_REQUIRED. Cursor carries the original limit. */
+        limit?: components["parameters"]["PageLimit"];
+        /** @description Opaque scope-bound continuation; reauthenticate every request. Not a cross-request MVCC snapshot. */
+        cursor?: components["parameters"]["PageCursor"];
+        order?: components["parameters"]["PageOrder"];
+      };
       header?: never;
       path: {
         queryId: components["parameters"]["QueryId"];
@@ -2052,6 +2186,9 @@ export interface operations {
       /** @description Query snapshot. */
       200: {
         headers: {
+          "X-FEL-Next-Cursor": components["headers"]["PageCursor"];
+          "X-FEL-Previous-Cursor": components["headers"]["PageCursor"];
+          "X-FEL-Page-Limit": components["headers"]["PageLimit"];
           [name: string]: unknown;
         };
         content: {
@@ -2059,6 +2196,8 @@ export interface operations {
         };
       };
       404: components["responses"]["Error"];
+      409: components["responses"]["PaginationRequired"];
+      422: components["responses"]["Error"];
       default: components["responses"]["Error"];
     };
   };
@@ -2118,6 +2257,7 @@ export interface operations {
           "application/json": components["schemas"]["RetrievalTrace"];
         };
       };
+      413: components["responses"]["TraceTooLarge"];
       default: components["responses"]["Error"];
     };
   };
@@ -2146,6 +2286,62 @@ export interface operations {
       401: components["responses"]["Error"];
       403: components["responses"]["Error"];
       404: components["responses"]["Error"];
+      413: components["responses"]["TraceTooLarge"];
+      default: components["responses"]["Error"];
+    };
+  };
+  resolveDocumentVersions: {
+    parameters: {
+      query: {
+        document_version_id: string[];
+        as_of?: string;
+        corpus_version_id?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Visible references only; unknown or hidden versions do not resolve. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["document-version-reference.schema"][];
+        };
+      };
+      default: components["responses"]["Error"];
+    };
+  };
+  getRetrievalEventHistory: {
+    parameters: {
+      query?: {
+        /** @description Explicit page mode; default 50 inside page mode. Without limit or cursor, complete legacy results up to 50, otherwise PAGINATION_REQUIRED. Cursor carries the original limit. */
+        limit?: components["parameters"]["PageLimit"];
+        /** @description Opaque scope-bound continuation; reauthenticate every request. Not a cross-request MVCC snapshot. */
+        cursor?: components["parameters"]["PageCursor"];
+        order?: components["parameters"]["PageOrder"];
+      };
+      header?: never;
+      path: {
+        runId: components["parameters"]["RunId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description One event page. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RetrievalEventPage"];
+        };
+      };
+      413: components["responses"]["TraceTooLarge"];
       default: components["responses"]["Error"];
     };
   };
