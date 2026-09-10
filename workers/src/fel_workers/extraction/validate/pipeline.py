@@ -294,7 +294,7 @@ def citation_status_for(
       citations that cannot support anything.
     * `verified` — the row asserted the span's content address and it matched.
       This is the only claim code can prove: a role that actually opened the span
-      through the `read_span` tool has its `text_hash` (see `extraction/tools.py`).
+      by content address can assert its `text_hash`.
     * `partial` — the span is pinned but the row asserted nothing further about
       its content. Membership alone is not verification, and it is what a
       string-form citation (`"evidence": ["<span-id>"]`) can express at most, so
