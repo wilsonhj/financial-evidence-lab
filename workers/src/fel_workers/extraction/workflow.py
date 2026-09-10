@@ -2,176 +2,69 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
-from dataclasses import dataclass, field
-from datetime import datetime
-from decimal import Decimal
-from typing import Any, Protocol
+from typing import Any
 
 from fel_ontology import load_saas_metrics
-from fel_ontology.models import OntologyDocument
 from fel_ontology.units import UNIT_POLICY_VERSION
-from fel_providers.interfaces import StructuredLLMProvider
 from fel_workers.extraction.budget import RunBudget
-from fel_workers.extraction.checkpoint import MemoryCheckpointStore
 from fel_workers.extraction.errors import (
     BudgetExceeded,
     Cancelled,
     ExtractionError,
-    IntegrityError,
     LeaseLost,
     ProviderRefused,
     StepFailed,
 )
-from fel_workers.extraction.events import MemoryEventStore
 from fel_workers.extraction.hashing import (
     canonical_json,
     hash_json,
-    sha256_hex,
     stage_input_hash,
 )
-from fel_workers.extraction.normalize.pipeline import normalize_payload
-from fel_workers.extraction.persist import MemoryPersistStore, UsageSnapshot
-from fel_workers.extraction.roles.base import ROLE_SPECS
-from fel_workers.extraction.runner import Abstention, run_model_step
 from fel_workers.extraction.serialize import serialize_stage_output
+from fel_workers.extraction.stages.assemble_evidence import (
+    _stage_assemble_evidence as _stage_assemble_evidence,
+)
+from fel_workers.extraction.stages.detect_conflicts import (
+    _stage_detect_conflicts as _stage_detect_conflicts,
+)
+from fel_workers.extraction.stages.model import _evidence_dicts as _evidence_dicts
+from fel_workers.extraction.stages.model import _stage_model as _stage_model
+from fel_workers.extraction.stages.normalize import _stage_normalize as _stage_normalize
+from fel_workers.extraction.stages.persist_proposals import _stage_persist as _stage_persist
+from fel_workers.extraction.stages.validate import _stage_validate as _stage_validate
+from fel_workers.extraction.stages.validate_request import (
+    _stage_validate_request as _stage_validate_request,
+)
+from fel_workers.extraction.stages.verify_citations import (
+    _stage_verify_citations as _stage_verify_citations,
+)
 from fel_workers.extraction.telemetry import emit
 from fel_workers.extraction.types import (
     MODE_STAGES,
-    NORMALIZER_BLOCKERS_KEY,
     NORMALIZER_VERSION,
     RANGE_POLICY_VERSION,
     STAGE_ORDER,
     VALIDATOR_VERSION,
     WORKFLOW_VERSION,
-    EvidenceBlock,
-    ExtractionRunRequest,
     Role,
     StageRecord,
     WorkflowState,
 )
-from fel_workers.extraction.validate import validate_proposals
-from fel_workers.extraction.validate.pipeline import citation_status_for
-from fel_workers.redact import redact_error_text
-
-
-class CheckpointStore(Protocol):
-    def load_succeeded(
-        self,
-        *,
-        run_id: str,
-        org_id: str,
-        step_name: str,
-        input_hash: str,
-        workflow_version: str,
-    ) -> StageRecord | None: ...
-
-    def commit_succeeded(
-        self,
-        *,
-        run_id: str,
-        org_id: str,
-        workflow_version: str,
-        record: StageRecord,
-    ) -> StageRecord: ...
-
-
-class EventStore(Protocol):
-    def append(
-        self, *, org_id: str, run_id: str, event_type: str, payload: dict[str, Any]
-    ) -> Any: ...
-
-
-class PersistStore(Protocol):
-    def persist_proposals(
-        self,
-        *,
-        run_id: str,
-        org_id: str,
-        workspace_id: str,
-        drafts: list[Any],
-    ) -> list[Any]: ...
-
-    def persist_conflicts(
-        self,
-        *,
-        org_id: str,
-        workspace_id: str,
-        drafts: list[Any],
-    ) -> list[Any]: ...
-
-    def persist_outputs_atomic(
-        self,
-        *,
-        run_id: str,
-        org_id: str,
-        workspace_id: str,
-        proposals: list[Any],
-        conflicts: list[Any],
-        events: Any,
-    ) -> tuple[list[Any], list[Any]]:
-        """Proposals, evidence and conflicts in one transaction — see `_stage_persist`."""
-        ...
-
-    def set_run_status(
-        self,
-        *,
-        run_id: str,
-        org_id: str,
-        status: str,
-        error: dict[str, Any] | None = None,
-    ) -> None: ...
-
-    def record_usage(self, *, run_id: str, org_id: str, usage: UsageSnapshot) -> None: ...
-
-    def load_usage(self, *, run_id: str, org_id: str) -> UsageSnapshot: ...
-
-
-@dataclass
-class WorkflowDeps:
-    structured_llm: StructuredLLMProvider
-    checkpoint: CheckpointStore = field(default_factory=MemoryCheckpointStore)
-    events: EventStore = field(default_factory=MemoryEventStore)
-    persist: PersistStore = field(default_factory=MemoryPersistStore)
-    ontology: OntologyDocument | None = None
-    cancel_check: Callable[[], bool] = lambda: False
-    lease_check: Callable[[], bool] = lambda: True
-    evidence_loader: Callable[[ExtractionRunRequest], list[EvidenceBlock]] | None = None
-    # Crash-injection for tests: raise after committing this many new stages.
-    crash_after_stages: int | None = None
-
-
-@dataclass(frozen=True)
-class _ModelStepAudit:
-    """One model step's provenance, for the ``extraction_run_steps`` row.
-
-    ``run_model_step`` knows the response ids, the attempt count and the request
-    hashes; the row that has columns for them is written by ``_run_stage``, which
-    only ever saw the stage output. Without this hand-off every step row carried
-    ``provider_response_id=NULL``, zero tokens, zero cost and ``attempt=1`` even
-    after a repair — an audit trail that reconciles with nothing.
-    """
-
-    provider_response_id: str | None
-    input_tokens: int
-    output_tokens: int
-    cost_usd: Decimal
-    attempts: int
-    instructions_hash: str
-    attempt_request_hashes: tuple[str, ...]
-    response_ids: tuple[str, ...]
-
-
-@dataclass
-class _ExecCtx:
-    state: WorkflowState
-    deps: WorkflowDeps
-    budget: RunBudget
-    ontology: OntologyDocument
-    newly_committed: int = 0
-    model_calls: int = 0
-    # Set by `_stage_model`, consumed by `_run_stage`; cleared before each dispatch.
-    model_audit: _ModelStepAudit | None = None
+from fel_workers.extraction.workflow_checkpoint import _commit_stage as _commit_stage
+from fel_workers.extraction.workflow_checkpoint import _is_recoverable as _is_recoverable
+from fel_workers.extraction.workflow_checkpoint import (
+    _record_stage_failure as _record_stage_failure,
+)
+from fel_workers.extraction.workflow_checkpoint import _record_usage as _record_usage
+from fel_workers.extraction.workflow_checkpoint import _reject_checkpoint as _reject_checkpoint
+from fel_workers.extraction.workflow_codec import _restore_output as _restore_output
+from fel_workers.extraction.workflow_codec import evidence_map as evidence_map
+from fel_workers.extraction.workflow_context import CheckpointStore as CheckpointStore
+from fel_workers.extraction.workflow_context import EventStore as EventStore
+from fel_workers.extraction.workflow_context import PersistStore as PersistStore
+from fel_workers.extraction.workflow_context import WorkflowDeps as WorkflowDeps
+from fel_workers.extraction.workflow_context import _ExecCtx as _ExecCtx
+from fel_workers.extraction.workflow_context import _ModelStepAudit as _ModelStepAudit
 
 
 def run_extraction_workflow(state: WorkflowState, deps: WorkflowDeps) -> WorkflowState:
@@ -293,31 +186,6 @@ def run_extraction_workflow(state: WorkflowState, deps: WorkflowDeps) -> Workflo
     return state
 
 
-def _record_usage(ctx: _ExecCtx) -> None:
-    """Persist accumulated usage and emit ``budget_updated``."""
-    req = ctx.state.request
-    usage = UsageSnapshot(
-        calls_used=ctx.budget.calls_used,
-        input_tokens_used=ctx.budget.input_tokens_used,
-        output_tokens_used=ctx.budget.output_tokens_used,
-        cost_usd=ctx.budget.cost_usd,
-        wall_seconds_used=ctx.budget.elapsed_seconds(),
-    )
-    ctx.deps.persist.record_usage(run_id=req.run_id, org_id=req.org_id, usage=usage)
-    ctx.deps.events.append(
-        org_id=req.org_id,
-        run_id=req.run_id,
-        event_type="budget_updated",
-        payload={
-            "calls_used": usage.calls_used,
-            "input_tokens_used": usage.input_tokens_used,
-            "output_tokens_used": usage.output_tokens_used,
-            "cost_usd": str(usage.cost_usd),
-            "wall_seconds_used": usage.wall_seconds_used,
-        },
-    )
-
-
 def _should_skip_mode_stage(state: WorkflowState, step_name: str) -> bool:
     for mode, stage in MODE_STAGES.items():
         if step_name == stage and mode not in state.request.modes:
@@ -377,202 +245,6 @@ def _commit_fence(ctx: _ExecCtx, step_name: str) -> None:
         raise LeaseLost(f"queue lease lost before committing stage {step_name}")
     if ctx.deps.cancel_check():
         raise Cancelled(f"run cancelled before committing stage {step_name}")
-
-
-def _is_recoverable(ctx: _ExecCtx, record: StageRecord) -> bool:
-    """Reject a checkpoint that cannot hand back the output it claims.
-
-    Two rejections, both fail-closed, both answered the same way: re-run the
-    stage. That is always safe — a stage is idempotent by construction, keyed on
-    ``input_hash`` — whereas trusting a checkpoint that is wrong about its own
-    output is not.
-
-    **Missing output.** ``output_hash`` non-null with ``output is None`` was the
-    torn state a crash between the step commit and its ``step_completed`` event
-    left behind, back when the event payload was the only carrier. Migration 0006
-    puts the output on the step row in the same INSERT as its hash, under
-    ``CHECK ((output IS NULL) = (output_hash IS NULL))``, so new rows cannot be
-    torn. Rows written before 0006 on runs that have since gone terminal are
-    unrepairable — 0004 forbids UPDATE on a terminal run and DELETE outright — so
-    this branch is retained permanently as a legacy-row defence. Treating such a
-    row as a completed stage skips it with zero model calls and lands the run
-    ``succeeded`` + ``abstained=True`` with no proposals: silent data loss
-    dressed up as a legitimate abstention.
-
-    **Output that does not match its hash** (issue #158). ``output_hash`` is
-    ``hash_json`` over the serialized output, so recomputing it is a complete
-    check of the restored payload: any edit, truncation or substitution anywhere
-    in the subtree changes it. Nothing else would catch a tampered or corrupted
-    ``steps.output`` — ``_restore_output``'s ``text_hash`` check covers only
-    ``assemble_evidence``'s span text, and the model-derived subtrees
-    (``classification``, ``candidates``, ``raw_proposals``, ``normalized``) have
-    no other content address at all. A mismatch would otherwise be laundered into
-    proposal identity: ``raw_payload_hash`` and ``proposal_id_for`` are computed
-    from the restored payload, so the run would emit self-consistent proposals
-    that no longer describe what the stage actually produced.
-
-    The rejection is reported as a ``step_failed`` event carrying
-    ``error.code = 'checkpoint_rejected'``. The event vocabulary is frozen —
-    ``ALLOWED_EVENT_TYPES`` mirrors 0004's ``event_type`` CHECK, which has no
-    ``checkpoint_rejected`` member and would reject the insert — so the reason
-    travels in the payload instead. See the operator runbook.
-    """
-    if record.output_hash is not None and record.output is None:
-        _reject_checkpoint(
-            ctx,
-            record=record,
-            reason="checkpoint_output_missing",
-            message=(
-                f"step {record.step_name} claims output_hash {record.output_hash} "
-                "but stored no output"
-            ),
-        )
-        return False
-    if record.output is not None:
-        actual = hash_json(serialize_stage_output(record.output))
-        if actual != record.output_hash:
-            _reject_checkpoint(
-                ctx,
-                record=record,
-                reason="checkpoint_hash_mismatch",
-                message=(
-                    f"step {record.step_name} stored output hashing to {actual} "
-                    f"under output_hash {record.output_hash}"
-                ),
-            )
-            return False
-    return True
-
-
-def _reject_checkpoint(ctx: _ExecCtx, *, record: StageRecord, reason: str, message: str) -> None:
-    """Record a refused checkpoint, then let the caller re-run the stage.
-
-    Best-effort, like ``_record_stage_failure``: a store that is itself failing
-    must not turn a recoverable re-run into a crash. The event type is
-    ``step_failed`` because the vocabulary is frozen — see ``_is_recoverable``.
-    """
-    req = ctx.state.request
-    reject_loaded = getattr(ctx.deps.checkpoint, "reject_loaded", None)
-    if reject_loaded is not None:
-        reject_loaded(
-            run_id=req.run_id,
-            org_id=req.org_id,
-            workflow_version=req.workflow_version,
-            record=record,
-        )
-    emit(
-        "stage_checkpoint_rejected",
-        run_id=req.run_id,
-        step_name=record.step_name,
-        input_hash=record.input_hash,
-        output_hash=record.output_hash,
-        reason=reason,
-    )
-    try:
-        ctx.deps.events.append(
-            org_id=req.org_id,
-            run_id=req.run_id,
-            event_type="step_failed",
-            payload={
-                "step_name": record.step_name,
-                "input_hash": record.input_hash,
-                "output_hash": record.output_hash,
-                "error": {"code": "checkpoint_rejected", "message": message},
-                "reason": reason,
-                "action": "stage_re_executed",
-            },
-        )
-    except Exception:  # pragma: no cover — never block the re-run on telemetry
-        return
-
-
-def _commit_stage(
-    ctx: _ExecCtx, *, record: StageRecord, event_payload: dict[str, Any]
-) -> StageRecord:
-    """Commit a succeeded stage row and its ``step_completed`` event as one unit.
-
-    Since ADR-0011 the stage's result is durable on the step row itself
-    (``extraction_run_steps.output``, written in the same INSERT as
-    ``output_hash``), so the event is no longer the carrier of anything a resume
-    needs — it is telemetry. The transaction is kept anyway, for a narrower
-    reason than the one it was written for: a crash between the two writes now
-    costs an audit event rather than an extraction, and an audit trail with holes
-    in it is still a defect. Stores that can do it atomically expose
-    ``commit_succeeded_atomic``; the in-memory doubles have no durability
-    boundary to straddle and fall back to the two-call form.
-    """
-    req = ctx.state.request
-    atomic = getattr(ctx.deps.checkpoint, "commit_succeeded_atomic", None)
-    if callable(atomic):
-        committed: StageRecord = atomic(
-            run_id=req.run_id,
-            org_id=req.org_id,
-            workflow_version=req.workflow_version,
-            record=record,
-            events=ctx.deps.events,
-            event_payload=event_payload,
-        )
-        return committed
-    committed = ctx.deps.checkpoint.commit_succeeded(
-        run_id=req.run_id,
-        org_id=req.org_id,
-        workflow_version=req.workflow_version,
-        record=record,
-    )
-    ctx.deps.events.append(
-        org_id=req.org_id,
-        run_id=req.run_id,
-        event_type="step_completed",
-        payload=event_payload,
-    )
-    return committed
-
-
-def _record_stage_failure(
-    ctx: _ExecCtx, *, step_name: str, input_hash: str, exc: BaseException
-) -> None:
-    """Write the failed step row and its ``step_failed`` event, then let the caller re-raise.
-
-    Without this a failing stage leaves ``extraction_run_steps`` with no row and
-    no error for the step that actually broke — the only signal is the run-level
-    ``run_failed`` payload, so step-level diagnosis of a failed run is impossible.
-
-    Every write here is best-effort and guarded: a store that is itself failing
-    (the common case when a stage dies) must not replace the real exception with
-    a bookkeeping one. The lease is checked first because a run whose lease is
-    gone no longer owns these rows.
-    """
-    req = ctx.state.request
-    code = getattr(exc, "code", None) or type(exc).__name__
-    error = {"code": str(code), "message": redact_error_text(str(exc))}
-    try:
-        if not ctx.deps.lease_check():
-            return
-        record = StageRecord(
-            step_name=step_name,
-            attempt=1,
-            status="failed",
-            input_hash=input_hash,
-            error=error,
-        )
-        commit_failed = getattr(ctx.deps.checkpoint, "commit_failed", None)
-        if callable(commit_failed):
-            commit_failed(
-                run_id=req.run_id,
-                org_id=req.org_id,
-                workflow_version=req.workflow_version,
-                record=record,
-            )
-            ctx.state.stages[step_name] = record
-        ctx.deps.events.append(
-            org_id=req.org_id,
-            run_id=req.run_id,
-            event_type="step_failed",
-            payload={"step_name": step_name, "input_hash": input_hash, "error": error},
-        )
-        emit("step_failed", run_id=req.run_id, step_name=step_name, code=error["code"])
-    except Exception:  # pragma: no cover — never mask the originating failure
-        return
 
 
 def _run_stage(ctx: _ExecCtx, step_name: str) -> None:
@@ -707,73 +379,6 @@ def _stage_input_payload(state: WorkflowState, step_name: str) -> Any:
     return {"step": step_name}
 
 
-def _restore_output(state: WorkflowState, step_name: str, output: Any) -> None:
-    if output is None:
-        return
-    if step_name == "assemble_evidence" and isinstance(output, list):
-        restored: list[EvidenceBlock] = []
-        for block in output:
-            if isinstance(block, EvidenceBlock):
-                restored.append(block)
-                continue
-            if not isinstance(block, dict):
-                continue
-            published = block.get("published_at")
-            published_at = None
-            if isinstance(published, datetime):
-                published_at = published
-            elif isinstance(published, str) and published:
-                published_at = datetime.fromisoformat(published.replace("Z", "+00:00"))
-            text = str(block.get("text") or "")
-            text_hash = str(block["text_hash"])
-            if sha256_hex(text) != text_hash:
-                # Fail closed: re-extracting from altered text under the original
-                # hash would emit proposals whose citations do not describe them.
-                raise IntegrityError(
-                    f"restored evidence for span {block['source_span_id']} does not "
-                    "match its checkpointed text_hash"
-                )
-            restored.append(
-                EvidenceBlock(
-                    source_span_id=str(block["source_span_id"]),
-                    document_version_id=str(block["document_version_id"]),
-                    text=text,
-                    text_hash=text_hash,
-                    published_at=published_at,
-                )
-            )
-        state.evidence = restored
-    elif step_name == "classify" and isinstance(output, dict):
-        state.classification = output
-    elif step_name == "collect_candidates" and isinstance(output, dict):
-        state.candidates = list(output.get("candidates") or [])
-    elif step_name in MODE_STAGES.values() and isinstance(output, dict):
-        proposals = output.get("proposals") or []
-        if isinstance(proposals, list):
-            state.raw_proposals.extend(proposals)
-    elif step_name == "normalize" and isinstance(output, dict):
-        state.normalized = list(output.get("normalized") or [])
-    elif step_name == "validate" and isinstance(output, dict):
-        state.normalized = list(output.get("normalized") or state.normalized)
-        # Rebuild drafts so resume after validate does not lose proposals.
-        rebuilt = validate_proposals(
-            run_id=state.request.run_id,
-            payloads=state.normalized,
-            evidence_by_span=dict(evidence_map(state.evidence)),
-        )
-        state.validated = rebuilt.proposals
-        state.conflicts = rebuilt.conflicts
-    elif step_name == "detect_conflicts" and isinstance(output, dict):
-        if not state.validated and state.normalized:
-            rebuilt = validate_proposals(
-                run_id=state.request.run_id,
-                payloads=state.normalized,
-                evidence_by_span=dict(evidence_map(state.evidence)),
-            )
-            state.validated = rebuilt.proposals
-            state.conflicts = rebuilt.conflicts
-
-
 def _dispatch_stage(ctx: _ExecCtx, step_name: str) -> Any:
     state = ctx.state
     if step_name == "validate_request":
@@ -801,248 +406,6 @@ def _dispatch_stage(ctx: _ExecCtx, step_name: str) -> Any:
     if step_name == "persist_proposals":
         return _stage_persist(ctx)
     raise StepFailed(f"unknown stage: {step_name}")
-
-
-def _stage_validate_request(state: WorkflowState) -> dict[str, Any]:
-    req = state.request
-    if not req.modes:
-        raise StepFailed("modes must be non-empty")
-    for mode in req.modes:
-        if mode not in MODE_STAGES:
-            raise StepFailed(f"unknown mode: {mode}")
-    if not req.input_hash.startswith("sha256:"):
-        raise StepFailed("input_hash must be sha256:…")
-    return {"ok": True, "modes": list(req.modes)}
-
-
-def _stage_assemble_evidence(ctx: _ExecCtx) -> list[dict[str, Any]]:
-    state = ctx.state
-    if ctx.deps.evidence_loader is not None:
-        blocks = ctx.deps.evidence_loader(state.request)
-    else:
-        blocks = list(state.evidence)
-    if not blocks:
-        # Empty evidence is valid abstention path later — not an integrity error here.
-        state.evidence = []
-        return []
-    for block in blocks:
-        if not block.text_hash.startswith("sha256:"):
-            raise IntegrityError(f"evidence text_hash missing for {block.source_span_id}")
-        if sha256_hex(block.text) != block.text_hash:
-            # Fail closed at ingest, not only on resume: the hash is the
-            # citation's content address, so a digest that does not describe
-            # the text makes every proposal cite evidence it cannot prove.
-            raise IntegrityError(
-                f"evidence text_hash does not describe its text for {block.source_span_id}"
-            )
-        if block.published_at is not None and block.published_at > state.request.as_of:
-            from fel_workers.extraction.errors import CutoffViolation
-
-            raise CutoffViolation(f"span {block.source_span_id} published_at after as_of cutoff")
-    state.evidence = blocks
-    return [
-        {
-            "source_span_id": b.source_span_id,
-            "document_version_id": b.document_version_id,
-            "text": b.text,
-            "text_hash": b.text_hash,
-            "published_at": b.published_at.isoformat() if b.published_at else None,
-        }
-        for b in blocks
-    ]
-
-
-def _evidence_dicts(state: WorkflowState) -> list[dict[str, str]]:
-    return [{"source_span_id": e.source_span_id, "text": e.text} for e in state.evidence]
-
-
-def _stage_model(ctx: _ExecCtx, role: Role, step_name: str) -> dict[str, Any]:
-    spec = ROLE_SPECS[role]
-    req = ctx.state.request
-    # The budget is the only per-call usage ledger, so this step's share of it is
-    # the delta across the call (repair attempt included).
-    before_input = ctx.budget.input_tokens_used
-    before_output = ctx.budget.output_tokens_used
-    before_cost = ctx.budget.cost_usd
-    try:
-        result = run_model_step(
-            provider=ctx.deps.structured_llm,
-            spec=spec,
-            evidence_blocks=_evidence_dicts(ctx.state),
-            budget=ctx.budget,
-            run_id=req.run_id,
-            step_name=step_name,
-            workflow_version=req.workflow_version,
-            provider_ref=req.provider,
-            model_ref=req.model,
-            max_output_tokens=min(4096, req.max_output_tokens),
-        )
-    except ProviderRefused:
-        # Refusal is a typed failure for the run (never abstention).
-        raise
-    ctx.model_calls += result.attempts
-    ctx.model_audit = _ModelStepAudit(
-        # The accepted answer is the last attempt's, never the rejected one.
-        provider_response_id=result.response_ids[-1] if result.response_ids else None,
-        input_tokens=ctx.budget.input_tokens_used - before_input,
-        output_tokens=ctx.budget.output_tokens_used - before_output,
-        cost_usd=ctx.budget.cost_usd - before_cost,
-        attempts=result.attempts,
-        instructions_hash=result.instructions_hash,
-        attempt_request_hashes=result.attempt_request_hashes,
-        response_ids=result.response_ids,
-    )
-    _record_usage(ctx)
-    if isinstance(result.outcome, Abstention):
-        ctx.state.abstained = True
-        if role == Role.CLASSIFIER:
-            ctx.state.classification = {
-                "document_type": "unknown",
-                "sections": [],
-                "relevant_modes": list(req.modes),
-                "abstained": True,
-                "reason": result.outcome.reason,
-            }
-            return ctx.state.classification
-        if role == Role.FACT_CANDIDATES:
-            ctx.state.candidates = []
-            return {"candidates": [], "abstained": True, "reason": result.outcome.reason}
-        return {"proposals": [], "abstained": True, "reason": result.outcome.reason}
-
-    outcome = result.outcome
-    if not isinstance(outcome, dict):
-        raise TypeError(f"role {role} returned non-object outcome")
-    if role == Role.CLASSIFIER:
-        ctx.state.classification = dict(outcome)
-        return ctx.state.classification
-    if role == Role.FACT_CANDIDATES:
-        raw_candidates = outcome.get("candidates") or []
-        candidates = list(raw_candidates) if isinstance(raw_candidates, list) else []
-        ctx.state.candidates = [c for c in candidates if isinstance(c, dict)]
-        return {"candidates": ctx.state.candidates}
-    raw_proposals = outcome.get("proposals") or []
-    proposals = list(raw_proposals) if isinstance(raw_proposals, list) else []
-    # Stamp entity / issuer when mock omitted them.
-    stamped: list[dict[str, Any]] = []
-    for prop in proposals:
-        if not isinstance(prop, dict):
-            continue
-        item = dict(prop)
-        # Pin entity_id to the run request (overwrite model output).
-        item["entity_id"] = req.entity_id
-        item.setdefault("issuer_label", req.issuer_label)
-        stamped.append(item)
-    ctx.state.raw_proposals.extend(stamped)
-    return {"proposals": stamped}
-
-
-def _stage_normalize(state: WorkflowState) -> dict[str, Any]:
-    """Normalize every raw proposal, keeping the unnormalizable ones visible.
-
-    Dropping a payload the normalizer rejects made it vanish with no blocker, no
-    event and no counter: when every proposal hit that path the run landed
-    ``succeeded`` + ``abstained=True`` with nothing to review — total loss
-    dressed up as a legitimate abstention. So the payload is carried forward
-    unchanged with the rejection reason attached on ``NORMALIZER_BLOCKERS_KEY``,
-    the same channel the normalizer already uses for the blockers it detects
-    without aborting; ``validate/pipeline`` lifts it into
-    ``validation_summary["blockers"]``, so the candidate reaches review as a
-    proposal that cannot be accepted, reason included. Carrying it beats merely
-    counting it because a reviewer can then see *which* payload was rejected.
-
-    The counts are part of the stage output — hence of the durable
-    ``step_completed`` event — so loss is legible without diffing event blobs.
-    """
-    normalized: list[dict[str, Any]] = []
-    blocked = 0
-    for raw in state.raw_proposals:
-        payload, blockers = normalize_payload(raw)
-        if blockers:
-            blocked += 1
-            payload = {**payload, NORMALIZER_BLOCKERS_KEY: blockers}
-        normalized.append(payload)
-    state.normalized = normalized
-    if blocked:
-        emit("normalize_blocked", run_id=state.request.run_id, blocked=blocked)
-    return {
-        "normalized": normalized,
-        "normalized_count": len(normalized),
-        "blocked_count": blocked,
-    }
-
-
-def _stage_validate(ctx: _ExecCtx) -> dict[str, Any]:
-    state = ctx.state
-    result = validate_proposals(
-        run_id=state.request.run_id,
-        payloads=state.normalized,
-        evidence_by_span=dict(evidence_map(state.evidence)),
-        ontology=ctx.ontology,
-    )
-    state.validated = result.proposals
-    state.conflicts = result.conflicts
-    return {
-        "normalized": state.normalized,
-        "proposal_count": len(result.proposals),
-        "conflict_count": len(result.conflicts),
-    }
-
-
-def _stage_verify_citations(state: WorkflowState) -> dict[str, Any]:
-    """Grade every citation row from the pinned evidence, overwriting the row.
-
-    The grade is assigned, never defaulted: `setdefault` let a model-supplied
-    `citation_status: "verified"` survive into `extraction_proposal_evidence`,
-    which 0004 makes append-only — UPDATE and DELETE both raise — so the wrong
-    value could never be corrected. `citation_status_for` is the single rule (see
-    its docstring for why span membership alone earns `partial`, not `verified`).
-    """
-    pinned = dict(evidence_map(state.evidence))
-    counts = {"verified": 0, "partial": 0, "invalid": 0}
-    for draft in state.validated:
-        for row in draft.evidence:
-            status = citation_status_for(row, evidence_by_span=pinned)
-            row["citation_status"] = status
-            counts[status] += 1
-    return {
-        "invalid_citations": counts["invalid"],
-        "partial_citations": counts["partial"],
-        "verified_citations": counts["verified"],
-        "checked": len(state.validated),
-    }
-
-
-def _stage_detect_conflicts(state: WorkflowState) -> dict[str, Any]:
-    # Conflicts already computed in validate; re-export deterministically.
-    return {
-        "conflict_keys": [c.conflict_key for c in state.conflicts],
-        "count": len(state.conflicts),
-    }
-
-
-def _stage_persist(ctx: _ExecCtx) -> dict[str, Any]:
-    if not ctx.deps.lease_check():
-        raise LeaseLost("queue lease lost before persist")
-    state = ctx.state
-    req = state.request
-    # One transaction for proposals, their evidence and their conflicts. Written
-    # separately these were three autocommitted groups, so a conflict failure —
-    # 0004's `conflict_terminal` guard is the reachable trigger — left the
-    # proposals durable with no conflict membership. Those orphans cannot be
-    # repaired: once the run finalises `failed`, `fel_guard_extraction_proposal`
-    # blocks moving them to `rejected` and DELETE is forbidden outright.
-    persisted, conflicts = ctx.deps.persist.persist_outputs_atomic(
-        run_id=req.run_id,
-        org_id=req.org_id,
-        workspace_id=req.workspace_id,
-        proposals=state.validated,
-        conflicts=state.conflicts,
-        events=ctx.deps.events,
-    )
-    for draft in persisted:
-        if draft.state != "needs_review":
-            raise StepFailed("proposal escaped needs_review — auto-approve forbidden")
-    return {"persisted": len(persisted), "conflicts": len(conflicts)}
 
 
 def _normalize_blocked_count(state: WorkflowState) -> int:
@@ -1088,17 +451,6 @@ def _finalize_success(ctx: _ExecCtx) -> None:
         )
         ctx.deps.persist.set_run_status(run_id=req.run_id, org_id=req.org_id, status="succeeded")
     emit("run_finished", run_id=req.run_id, status=state.status)
-
-
-def evidence_map(blocks: list[EvidenceBlock]) -> Mapping[str, dict[str, Any]]:
-    return {
-        b.source_span_id: {
-            "document_version_id": b.document_version_id,
-            "text": b.text,
-            "text_hash": b.text_hash,
-        }
-        for b in blocks
-    }
 
 
 __all__ = [
