@@ -15,7 +15,7 @@ from typing import Any
 from fel_calculation_engine.canonical import canonical_json, content_hash
 from fel_calculation_engine.errors import SnapshotError
 from fel_calculation_engine.graph import ModelGraph
-from fel_calculation_engine.nodes import Node
+from fel_calculation_engine.nodes import ExpressionFormulaNode, Node
 from fel_calculation_engine.values import require_safe_id
 
 
@@ -96,7 +96,11 @@ def _payload(
     nodes: tuple[Node, ...],
 ) -> dict[str, Any]:
     return {
-        "schema": "fel-calc-snapshot/v1",
+        "schema": (
+            "fel-calc-snapshot/v2"
+            if any(isinstance(n, ExpressionFormulaNode) for n in nodes)
+            else "fel-calc-snapshot/v1"
+        ),
         "model_id": model_id,
         "version": version,
         "parent_snapshot_id": parent_snapshot_id,

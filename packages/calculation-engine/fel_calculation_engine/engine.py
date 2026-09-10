@@ -35,10 +35,12 @@ from fel_calculation_engine.errors import (
     UnitError,
     ValueTypeError,
 )
+from fel_calculation_engine.formulas import evaluate_formula
 from fel_calculation_engine.nodes import (
     AggregationNode,
     AnalystAssumptionNode,
     CheckOp,
+    ExpressionFormulaNode,
     ForecastModelOutputNode,
     FormulaNode,
     Node,
@@ -175,6 +177,9 @@ def _compute(
     lineage = Lineage(Provenance.DERIVED, derived_from=tuple(p.result_id for p in inputs))
     if isinstance(node, OperationalDriverNode):
         return inputs[0].quantity, available_at, lineage, None, None
+    if isinstance(node, ExpressionFormulaNode):
+        quantity = evaluate_formula(node.ast, {p.node_id: p.quantity for p in inputs})
+        return quantity, available_at, lineage, node.formula_version, None
     if isinstance(node, FormulaNode):
         return _fold(node, inputs), available_at, lineage, node.formula_version, None
     if isinstance(node, AggregationNode):
@@ -232,7 +237,11 @@ def evaluate(
                 + ',"node":'
                 + graph.definitions[node_id]
                 + ',"schema":"'
-                + RESULT_SCHEMA
+                + (
+                    "fel-calc-result/v2"
+                    if isinstance(node, ExpressionFormulaNode)
+                    else RESULT_SCHEMA
+                )
                 + '"}'
             )
             results[node_id] = CalcResult(
@@ -264,7 +273,11 @@ def evaluate(
         raise
     evaluation_id = content_hash(
         {
-            "schema": EVALUATION_SCHEMA,
+            "schema": (
+                "fel-calc-evaluation/v2"
+                if any(isinstance(n, ExpressionFormulaNode) for n in graph.nodes)
+                else EVALUATION_SCHEMA
+            ),
             "snapshot_id": snapshot.snapshot_id,
             "cutoff": cutoff_utc,
             "results": [results[node_id].result_id for node_id in graph.order],

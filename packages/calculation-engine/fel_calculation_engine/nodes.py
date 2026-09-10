@@ -20,7 +20,14 @@ from decimal import Decimal
 from enum import StrEnum
 from typing import ClassVar
 
-from fel_calculation_engine.errors import NodeValidationError
+from fel_calculation_engine.errors import FormulaError, NodeValidationError
+from fel_calculation_engine.formulas import (
+    GRAMMAR_VERSION,
+    FormulaAST,
+    format_formula,
+    formula_dependencies,
+    parse_formula,
+)
 from fel_calculation_engine.periods import FiscalPeriod, FiscalYear
 from fel_calculation_engine.units import Unit, UnitKind
 from fel_calculation_engine.values import (
@@ -257,6 +264,48 @@ class FormulaNode(Node):
 
     def inputs(self) -> tuple[tuple[str, str], ...]:
         return tuple((f"operand[{i}]", operand) for i, operand in enumerate(self.operands))
+
+
+@dataclass(frozen=True, slots=True)
+class ExpressionFormulaNode(Node):
+    """A parsed arithmetic formula; source text is never an execution authority."""
+
+    kind: ClassVar[NodeKind] = NodeKind.FORMULA
+    provenance: ClassVar[Provenance] = Provenance.DERIVED
+
+    ast: FormulaAST
+    formula_version: str
+    grammar_version: str = GRAMMAR_VERSION
+
+    def __post_init__(self) -> None:
+        Node.__post_init__(self)
+        if self.grammar_version != GRAMMAR_VERSION:
+            raise FormulaError("unsupported formula grammar version")
+        if not formula_dependencies(self.ast):
+            raise FormulaError("a formula must reference at least one node")
+        _node_id(self.formula_version, f"{self.node_id}.formula_version")
+
+    @classmethod
+    def from_expression(
+        cls,
+        *,
+        node_id: str,
+        label: str,
+        unit: Unit,
+        period: FiscalPeriod,
+        expression: str,
+        formula_version: str,
+    ) -> ExpressionFormulaNode:
+        return cls(node_id, label, unit, period, parse_formula(expression), formula_version)
+
+    @property
+    def expression(self) -> str:
+        return format_formula(self.ast)
+
+    def inputs(self) -> tuple[tuple[str, str], ...]:
+        return tuple(
+            (f"reference[{i}]", ref) for i, ref in enumerate(formula_dependencies(self.ast))
+        )
 
 
 @dataclass(frozen=True, slots=True)

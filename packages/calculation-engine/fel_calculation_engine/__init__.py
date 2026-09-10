@@ -27,12 +27,23 @@ from fel_calculation_engine.errors import (
     UnitError,
     ValueTypeError,
 )
+from fel_calculation_engine.formulas import (
+    Binary,
+    Literal,
+    Reference,
+    Unary,
+    evaluate_formula,
+    formula_dependencies,
+    parse_formula,
+    rewrite_formula_references,
+)
 from fel_calculation_engine.graph import Edge, ModelGraph
 from fel_calculation_engine.nodes import (
     AggregationNode,
     AggregationOp,
     AnalystAssumptionNode,
     CheckOp,
+    ExpressionFormulaNode,
     ForecastModelOutputNode,
     FormulaNode,
     Node,
@@ -69,6 +80,15 @@ from fel_calculation_engine.values import (
 )
 
 __all__ = [
+    "Binary",
+    "Literal",
+    "Reference",
+    "Unary",
+    "parse_formula",
+    "formula_dependencies",
+    "evaluate_formula",
+    "rewrite_formula_references",
+    "ExpressionFormulaNode",
     "CALC_CONTEXT",
     "COUNT",
     "PERCENT",

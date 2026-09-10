@@ -24,9 +24,11 @@ from fel_calculation_engine.errors import (
     ScenarioError,
     UnitError,
 )
+from fel_calculation_engine.formulas import infer_formula_unit
 from fel_calculation_engine.nodes import (
     AggregationNode,
     AggregationOp,
+    ExpressionFormulaNode,
     FormulaNode,
     Node,
     NodeKind,
@@ -253,6 +255,10 @@ def _check_types(by_id: Mapping[str, Node], order: tuple[str, ...]) -> None:
         if isinstance(node, OperationalDriverNode | ReportedFinancialOutputNode):
             _require_unit(node, inputs[0].unit)
             _require_same_period(node, inputs[0])
+        elif isinstance(node, ExpressionFormulaNode):
+            for operand in inputs:
+                _require_period_kind(node, operand)
+            _require_unit(node, infer_formula_unit(node.ast, {p.node_id: p.unit for p in inputs}))
         elif isinstance(node, FormulaNode):
             for operand in inputs:
                 _require_period_kind(node, operand)
