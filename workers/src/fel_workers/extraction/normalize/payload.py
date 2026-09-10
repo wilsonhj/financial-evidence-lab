@@ -189,6 +189,10 @@ def _normalize_numeric_fields(out: dict[str, Any], *, value_keys: tuple[str, ...
     # XBRL ingestion keeps the exponent the same way: parser.py preserves the ix
     # `scale` attribute into `financial_facts.scale`.
     restated, common_scale = _reconcile_scale(mantissas)
+    # Only an inverted, wholly negative guidance range has unambiguous signed
+    # bounds to canonicalize (ADR-0022). Keep positive and mixed-sign errors.
+    if value_keys == ("low", "high") and restated["high"] < restated["low"] < 0:
+        restated["low"], restated["high"] = restated["high"], restated["low"]
     for key, mantissa in restated.items():
         out[key] = format_decimal(mantissa)
     if not blockers:

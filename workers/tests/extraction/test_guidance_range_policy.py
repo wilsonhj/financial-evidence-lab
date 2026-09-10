@@ -194,3 +194,80 @@ def test_all_conflict_shapes_receive_both_policy_namespaces():
         assert conflict_key_for(payload) == hash_json(
             {**legacy, "range_policy_version": RANGE_POLICY_VERSION}
         )
+
+
+@pytest.mark.parametrize(
+    "kind,low,high,expected_hash,expected_id",
+    [
+        (
+            "guidance",
+            "(5)",
+            "(15)",
+            "sha256:9f958fbc45e1f0d12bf8e894e67a5a6f218046b38ea454b2e161c22599503835",
+            "e51b8bfc-2fb4-40c7-ae94-8a295203074c",
+        ),
+        (
+            "guidance",
+            "120",
+            "125",
+            "sha256:cb582a938376e870422b267ab50b3983f4e08ad040143776cfacb4444ecaf91f",
+            "096e8683-f512-4c28-af7d-891d864522b1",
+        ),
+        (
+            "kpi",
+            "100",
+            None,
+            "sha256:1b42d9f6e7c51c6efb85b6500e96bc36860b507ba10f979d7ca93917be8914ab",
+            "ed1ac2d2-f6f5-4ab1-a188-93d059f41479",
+        ),
+    ],
+)
+def test_clean_payload_hash_and_proposal_id_goldens(kind, low, high, expected_hash, expected_id):
+    raw = dict(
+        kind=kind,
+        metric_id="revenue",
+        unit="usd",
+        raw_value=f"{low} to {high}" if high else low,
+        scale=0,
+        currency="USD",
+    )
+    raw.update(dict(shape="range", low=low, high=high) if high else dict(value=low))
+    draft = validate([normalize_payload(raw)]).proposals[0]
+    assert (draft.raw_payload_hash, draft.id) == (expected_hash, expected_id)
+    assert draft.validation_summary["normalizer_version"] == "normalize/v2"
+    assert draft.validation_summary["validator_version"] == "validate/v3"
+    assert draft.validation_summary["range_policy_version"] == "guidance-range-order/v1"
+    assert not set(draft.payload) & {
+        "normalizer_version",
+        "validator_version",
+        "range_policy_version",
+    }
+    legacy = dict(draft.payload)
+    if low == "(5)":
+        legacy.update(low="-5", high="-15")
+        previous = validate([legacy]).proposals[0]
+        assert (
+            previous.raw_payload_hash
+            == "sha256:6291dd7b1986ab31c66e10575bfcfa01e0e060b8e0f5353ebc6716a6fa780666"
+        )
+        assert previous.id == "87bb8498-858c-4402-a0a3-5623c9b696f2"
+        assert previous.id != draft.id
+    else:
+        assert hash_json(legacy) == expected_hash
+
+
+def test_range_policy_namespaces_ontology_substituted_identity():
+    payload = normalize_payload(guidance())
+    draft = validate([payload]).proposals[0]
+    ontology_key = draft.comparability_key["key"]
+    assert ontology_key
+    identity = {
+        k: v
+        for k, v in comparability_key_for(payload).items()
+        if k not in {"metric_id", "qualifiers"}
+    }
+    identity["comparability"] = ontology_key
+    legacy = {"unit_policy_version": "unit-comparison/v1", "identity": identity}
+    actual = conflict_key_for(payload, ontology_comparability_key=ontology_key)
+    assert actual != hash_json(legacy)
+    assert actual == hash_json({**legacy, "range_policy_version": "guidance-range-order/v1"})

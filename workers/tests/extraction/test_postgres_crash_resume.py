@@ -1516,7 +1516,7 @@ def test_superseded_checkpoint_stops_workflow_without_terminal_write(
 
 
 @pytest.mark.parametrize("death_stage", ["normalize", "validate"])
-def test_v2_unit_policy_survives_durable_crash_resume(extraction_db_url, monkeypatch, death_stage):
+def test_unit_policy_survives_durable_crash_resume(extraction_db_url, monkeypatch, death_stage):
     from fel_workers.extraction import workflow
 
     from .test_accounting_identities import kpi
@@ -1586,51 +1586,84 @@ def test_v2_unit_policy_survives_durable_crash_resume(extraction_db_url, monkeyp
         )
 
 
-def test_legacy_succeeded_checkpoints_cannot_bypass_version_gate(extraction_db_url, monkeypatch):
-    from fel_workers.extraction import workflow
+@pytest.mark.parametrize("version", ["extraction-workflow/v1", "extraction-workflow/v2"])
+def test_legacy_succeeded_checkpoints_cannot_bypass_version_gate(
+    extraction_db_url, monkeypatch, version
+):
+    from fel_workers.extraction.hashing import stage_input_hash
+    from fel_workers.extraction.types import StageRecord
 
-    request = replace(_request(str(uuid.uuid4())), workflow_version="extraction-workflow/v1")
-    original_inputs = workflow._stage_input_payload
+    from .test_guidance_range_policy import guidance
 
-    def legacy_inputs(state, stage):
-        payload = original_inputs(state, stage)
-        if stage in {"normalize", "validate"}:
-            payload = {
-                k: v
-                for k, v in payload.items()
-                if k not in {"unit_policy_version", "normalizer_version", "validator_version"}
-            }
-        return payload
-
-    original_commit = workflow._commit_stage
-
-    def commit(ctx, **kwargs):
-        record = original_commit(ctx, **kwargs)
-        if record.step_name == "persist_proposals":
-            raise _ProcessDeath()
-        return record
-
+    request = replace(_request(str(uuid.uuid4())), workflow_version=version, modes=("guidance",))
+    raw = guidance("(5)", "(15)", metric="net_loss", entity_id=_ENTITY)
+    # Literal pre-v3 representation, not new-policy outputs relabelled as old.
+    normalized = [
+        {
+            **raw,
+            "low": "-5",
+            "high": "-15",
+            "sign": "negative",
+            "reported_or_derived": "management_assertion",
+            "_normalizer_version": "normalize/v1",
+        }
+    ]
+    inputs = {
+        "validate_request": {
+            "run_id": request.run_id,
+            "modes": ["guidance"],
+            "input_hash": request.input_hash,
+            "ontology_version": request.ontology_version,
+        },
+        "normalize": {"raw_proposals": [raw]},
+        "validate": {"normalized": normalized},
+    }
+    if version == "extraction-workflow/v2":
+        inputs["normalize"].update(
+            normalizer_version="normalize/v1", unit_policy_version="unit-comparison/v1"
+        )
+        inputs["validate"].update(
+            validator_version="validate/v2", unit_policy_version="unit-comparison/v1"
+        )
+    outputs = {
+        "validate_request": {"valid": True},
+        "normalize": {"normalized": normalized, "normalized_count": 1, "blocked_count": 0},
+        "validate": {"normalized": normalized, "proposal_count": 1, "conflict_count": 0},
+    }
     with psycopg.connect(extraction_db_url, autocommit=True) as conn:
         _seed_parents(conn)
         _seed_run(conn, request)
         PostgresPersistStore(conn).mark_running(run_id=request.run_id, org_id=_ORG)
-        with monkeypatch.context() as old:
-            old.setattr(workflow, "WORKFLOW_VERSION", "extraction-workflow/v1")
-            old.setattr(workflow, "_commit_stage", commit)
-            old.setattr(workflow, "_stage_input_payload", legacy_inputs)
-            with pytest.raises(_ProcessDeath):
-                run_extraction_workflow(
-                    WorkflowState(request=request), _postgres_deps(conn, _CountingLLM())
-                )
-        rows = conn.execute(
-            "SELECT step_name, output, output_hash FROM extraction_run_steps "
-            "WHERE run_id=%s AND status='succeeded'",
+        store = PostgresCheckpointStore(conn)
+        for stage, output in outputs.items():
+            store.commit_succeeded(
+                run_id=request.run_id,
+                org_id=_ORG,
+                workflow_version=version,
+                record=StageRecord(
+                    step_name=stage,
+                    attempt=1,
+                    status="succeeded",
+                    input_hash=stage_input_hash(
+                        run_id=request.run_id,
+                        step_name=stage,
+                        workflow_version=version,
+                        payload=inputs[stage],
+                    ),
+                    output=output,
+                    output_hash=hash_json(output),
+                ),
+            )
+        before = conn.execute(
+            "SELECT * FROM extraction_run_steps WHERE run_id=%s ORDER BY step_name",
             (request.run_id,),
         ).fetchall()
-        assert {"validate_request", "normalize", "validate", "persist_proposals"} <= {
-            r[0] for r in rows
-        }
-        assert all(hash_json(r[1]) == r[2] for r in rows)
+        assert len(before) == 3
+        hashes = conn.execute(
+            "SELECT output, output_hash FROM extraction_run_steps WHERE run_id=%s",
+            (request.run_id,),
+        ).fetchall()
+        assert all(hash_json(output) == output_hash for output, output_hash in hashes)
     with psycopg.connect(extraction_db_url, autocommit=True) as conn:
         llm = _CountingLLM()
         deps = _postgres_deps(conn, llm)
@@ -1647,11 +1680,22 @@ def test_legacy_succeeded_checkpoints_cannot_bypass_version_gate(extraction_db_u
             conn.execute(
                 "SELECT workflow_version FROM extraction_runs WHERE id=%s", (request.run_id,)
             ).fetchone()[0]
-            == "extraction-workflow/v1"
+            == version
+        )
+        assert (
+            conn.execute(
+                "SELECT * FROM extraction_run_steps WHERE run_id=%s ORDER BY step_name",
+                (request.run_id,),
+            ).fetchall()
+            == before
         )
 
 
-def test_policy_namespace_preserves_old_adjudication_and_replay_guard(extraction_db_url):
+@pytest.mark.parametrize("legacy_version", ["extraction-workflow/v1", "extraction-workflow/v2"])
+@pytest.mark.parametrize("ranges", [False, True], ids=["kpi", "negative-ranges"])
+def test_policy_namespace_preserves_old_adjudication_and_replay_guard(
+    extraction_db_url, legacy_version, ranges
+):
     from fel_workers.extraction.errors import StepFailed
     from fel_workers.extraction.types import ConflictDraft
     from fel_workers.extraction.validate import validate_proposals
@@ -1661,19 +1705,44 @@ def test_policy_namespace_preserves_old_adjudication_and_replay_guard(extraction
 
     request = _request(str(uuid.uuid4()))
     payloads = [kpi("revenue", "1000"), kpi("revenue", "900", unit="usd")]
+    if ranges:
+        from fel_workers.extraction.normalize import normalize_payload
+
+        from .test_guidance_range_policy import guidance
+
+        payloads = [
+            normalize_payload(guidance(a, b, metric="net_loss"))
+            for a, b in [("(5)", "(15)"), ("(15)", "(5)")]
+        ]
     for p in payloads:
         p["entity_id"] = _ENTITY
         p["dimensions"] = {"test_slice": request.run_id}
         p["evidence"] = []
     result = validate_proposals(run_id=request.run_id, payloads=payloads)
-    old_request = replace(_request(str(uuid.uuid4())), workflow_version="extraction-workflow/v1")
-    historical = validate_proposals(
-        run_id=old_request.run_id, payloads=[dict(p, unit="USD") for p in payloads]
-    )
+    old_request = replace(_request(str(uuid.uuid4())), workflow_version=legacy_version)
+    historical_payloads = [dict(p, unit="USD") for p in payloads]
+    if ranges:
+        historical_payloads[0].update(low="-5", high="-15")
+        assert result.conflicts[0].reason_codes == ["duplicate_candidate"]
+    historical = validate_proposals(run_id=old_request.run_id, payloads=historical_payloads)
+    if ranges:
+        # Free-text legacy ranges did not receive the now-universal ordering check.
+        for proposal in historical.proposals:
+            proposal.validation_summary["blockers"] = [
+                b
+                for b in proposal.validation_summary["blockers"]
+                if b != "guidance range low must be <= high"
+            ]
     for proposal in historical.proposals:
-        proposal.validation_summary.pop("unit_policy_version")
-        proposal.validation_summary["validator_version"] = "validate/v1"
+        proposal.validation_summary.pop("range_policy_version")
+        proposal.validation_summary.pop("normalizer_version")
+        proposal.validation_summary["validator_version"] = "validate/v2"
+        if legacy_version == "extraction-workflow/v1":
+            proposal.validation_summary.pop("unit_policy_version")
+            proposal.validation_summary["validator_version"] = "validate/v1"
     legacy_identity = comparability_key_for(payloads[0])
+    if legacy_version == "extraction-workflow/v2":
+        legacy_identity = {"unit_policy_version": "unit-comparison/v1", "identity": legacy_identity}
     legacy = ConflictDraft(
         conflict_key=hash_json(legacy_identity),
         reason_codes=["value_disagreement"],
@@ -1733,3 +1802,111 @@ def test_policy_namespace_preserves_old_adjudication_and_replay_guard(extraction
         with pytest.raises(StepFailed) as exc:
             store.persist_conflicts(org_id=_ORG, workspace_id=_WORKSPACE, drafts=result.conflicts)
         assert exc.value.code == "conflict_terminal"
+
+
+@pytest.mark.parametrize("death_stage", ["normalize", "validate"])
+def test_v3_signed_range_policy_survives_durable_crash_resume(
+    extraction_db_url, monkeypatch, death_stage
+):
+    from copy import deepcopy
+
+    from fel_workers.extraction import workflow
+    from fel_workers.extraction.validate import validate_proposals
+    from fel_workers.extraction.validate.duplicates import conflict_key_for
+
+    from .test_guidance_range_policy import ORDERING, guidance
+
+    request = replace(_request(str(uuid.uuid4())), modes=("guidance",))
+    raw = [
+        guidance("(5)", "(15)", metric="net_loss"),
+        guidance("(15)", "(5)", metric="net_loss"),
+        guidance("300", "200", metric="revenue"),
+    ]
+    for payload in raw:
+        payload["entity_id"] = _ENTITY
+        payload["dimensions"] = {"test_slice": request.run_id}
+        payload["evidence"][0]["text_hash"] = sha256_hex(LONG_SPAN_TEXT)
+    original_dispatch = workflow._dispatch_stage
+
+    def dispatch(ctx, step_name):
+        output = original_dispatch(ctx, step_name)
+        if step_name == "extract_guidance":
+            ctx.state.raw_proposals = deepcopy(raw)
+            return {"proposals": deepcopy(raw)}
+        return output
+
+    monkeypatch.setattr(workflow, "_dispatch_stage", dispatch)
+    original_commit = workflow._commit_stage
+    captured = {}
+
+    def commit(ctx, **kwargs):
+        record = original_commit(ctx, **kwargs)
+        if record.step_name == death_stage:
+            captured["normalized"] = deepcopy(ctx.state.normalized)
+            captured["result"] = validate_proposals(
+                run_id=request.run_id,
+                payloads=ctx.state.normalized,
+                evidence_by_span=dict(workflow.evidence_map(ctx.state.evidence)),
+            )
+            raise _ProcessDeath()
+        return record
+
+    with psycopg.connect(extraction_db_url, autocommit=True) as conn:
+        _seed_parents(conn)
+        _seed_run(conn, request)
+        PostgresPersistStore(conn).mark_running(run_id=request.run_id, org_id=_ORG)
+        monkeypatch.setattr(workflow, "_commit_stage", commit)
+        first = _CountingLLM()
+        with pytest.raises(_ProcessDeath):
+            run_extraction_workflow(WorkflowState(request=request), _postgres_deps(conn, first))
+        assert first.calls == 3
+        saved = conn.execute(
+            "SELECT step_name,input_hash,output_hash,output FROM extraction_run_steps "
+            "WHERE run_id=%s AND status='succeeded' ORDER BY step_name",
+            (request.run_id,),
+        ).fetchall()
+        assert all(hash_json(row[3]) == row[2] for row in saved)
+        assert next(row[3] for row in saved if row[0] == "extract_guidance")["proposals"] == raw
+    monkeypatch.setattr(workflow, "_commit_stage", original_commit)
+    with psycopg.connect(extraction_db_url, autocommit=True) as conn:
+        second = _CountingLLM()
+        final = run_extraction_workflow(
+            WorkflowState(request=request), _postgres_deps(conn, second)
+        )
+        assert final.status == "waiting_review", final.error
+        assert second.calls == 0
+        assert final.normalized == captured["normalized"]
+        assert final.validated == captured["result"].proposals
+        assert [replace(c, id=None) for c in final.conflicts] == captured["result"].conflicts
+        assert [(p["low"], p["high"]) for p in final.normalized] == [
+            ("-15", "-5"),
+            ("-15", "-5"),
+            ("300", "200"),
+        ]
+        assert final.conflicts[0].reason_codes == ["duplicate_candidate"]
+        assert final.conflicts[0].conflict_key == conflict_key_for(final.normalized[0])
+        assert final.validated[2].validation_summary["blockers"].count(ORDERING) == 1
+        assert all(
+            p.validation_summary["range_policy_version"] == "guidance-range-order/v1"
+            for p in final.validated
+        )
+        restored = conn.execute(
+            "SELECT step_name,input_hash,output_hash,output FROM extraction_run_steps "
+            "WHERE run_id=%s AND status='succeeded' ORDER BY step_name",
+            (request.run_id,),
+        ).fetchall()
+        assert all(row in restored for row in saved)
+        persisted = conn.execute(
+            "SELECT id,payload,raw_payload_hash,validation_summary "
+            "FROM extraction_proposals WHERE run_id=%s",
+            (request.run_id,),
+        ).fetchall()
+        assert len(persisted) == 3
+        expected = {p.id: p for p in final.validated}
+        for pid, payload, raw_hash, summary in persisted:
+            draft = expected[str(pid)]
+            assert (payload, raw_hash, summary) == (
+                draft.payload,
+                draft.raw_payload_hash,
+                draft.validation_summary,
+            )
