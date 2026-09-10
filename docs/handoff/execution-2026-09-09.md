@@ -14,7 +14,7 @@ ADR-0017 records the initial dispatch and scope narrowing.
 | #230 | agent/test-publish-race-wait | Two named ingestion race test files | merged, PR #255 @ 802d0eb | Independent review caught real-clock test flake; deterministic-clock fix reviewed; warning-removal mutation fails; real PostgreSQL 3 passed; all CI passed |
 | #221 | agent/arch-checkpoint-rerun | Extraction source/tests only | PR #257 under independent review | 468 real PostgreSQL extraction tests passed; stale-owner repair race under investigation |
 | #137 | agent/137-cutover-hardening | Retrieval API provenance and retrieval/evaluation model guards | dispatched | Reconcile existing refusal/cost/supports behavior before implementing actual residuals |
-| #219 | agent/m4-formula-ast | Read-only engine architecture investigation | design preparation | Retain both parent requirements; no canonical edits or implementation before concrete ADR and ownership |
+| #219 | agent/m4-formula-ast | Calculation engine, ADR-0018 and canonical task additions | design accepted for implementation | Restricted typed formula AST; explicit bounded Jacobi groups, caller-specified seeds/tolerances, immutable group provenance; no parent scope deferral |
 | #200 | agent/200-locked-runtime | Runtime packaging, locks and health/recovery | PR #259 implementing | Clean install exposed missing provider package and worker prompt/schema data; corrected; heartbeat recovery next |
 | #188 | agent/188-execution-wave2 | Execution plan and ownership | coordinating | Initial control PR #254 merged @ 2b15032; subsequent paths checked |
 
@@ -57,3 +57,10 @@ extraction checkpoint persistence using compare-and-swap. Consumer source and
 its named test file are therefore assigned to #200 for heartbeat observation;
 they remain disjoint from #221's extraction subtrees. #200 must not alter queue
 claim/fencing semantics when observing successful lease heartbeats.
+
+#219 design ruling: retain both §8.5 clauses. Record concrete grammar, bounded
+Jacobi iteration and group provenance mechanics in ADR-0018; add T0411/T0412
+unchecked in the canonical ledger, then implement. Existing Decimal precision,
+units, cutoff rules and legacy graph identities remain binding. The narrow
+workstreams edit in that PR only maps those two new task IDs; the coordinator
+does not edit this file concurrently while that mapping is prepared.

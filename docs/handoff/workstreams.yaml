@@ -779,14 +779,16 @@ packages:
       - apps/api/**
   - id: M4-FORMULA-AST # spec 8.5 formula AST + explicitly-modelled iterative cycles
     issue: 219
-    tasks: [] # deliberately empty AND that is the finding: neither capability appears in tasks.md, so adding them is itself a Spec Kit change
+    tasks: [] # T0411/T0412 reserved; assigned with their canonical additions in #219's PR.
     depends_on: [M4-MODEL-CALC]
     team: modeling
     branch: agent/m4-formula-ast # not yet created
-    status: blocked # Filed out of PR #212 rather than fixed in it. spec 8.5 requires a formula AST and explicitly-modelled iterative cycles; #212 shipped neither and tracked neither. Blocked on a lead decision that precedes implementation: whether these belong to M4 at all. If they do, the canonical ledger needs tasks (specs/**, contract-change) and iterative cycles need an accepted ADR covering the convergence contract and its provenance consequences.
+    status: active # Both parent requirements retained. Independent design reviewed; ADR-0018 and unchecked canonical additions precede implementation.
     allowed_paths:
       - packages/calculation-engine/**
-      - specs/** # shared; a Spec Kit task addition, contract-change
+      - specs/001-financial-evidence-lab/tasks.md
+      - docs/decisions/ADR-0018-formula-ast-and-explicit-iteration.md
+      - docs/handoff/workstreams.yaml # Only map this package's new canonical task IDs.
   - id: CLAIMS-CUTOVER-HARDENING
     issue: 137
     tasks: [] # Residual defense-in-depth; no task completion claim.
