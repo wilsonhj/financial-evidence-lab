@@ -7,7 +7,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
-from typing import Any
+from typing import Any, NoReturn
 
 import psycopg
 
@@ -856,7 +856,6 @@ class PostgresCheckpointStore:
         if inserted is None and record.status == "succeeded":
             if rejected is None:
                 self._checkpoint_superseded()
-            assert rejected is not None
             # Only replace the exact corrupt value this attempt rejected. Both
             # predicates matter: a deterministic repair keeps the original hash
             # but changes the damaged output. A competing winner must survive.
@@ -893,10 +892,9 @@ class PostgresCheckpointStore:
             ).fetchone()
             if repaired is None:
                 self._checkpoint_superseded()
-            assert repaired is not None
             record.attempt = repaired[0]
 
-    def _checkpoint_superseded(self) -> None:
+    def _checkpoint_superseded(self) -> NoReturn:
         # The in-flight result cannot safely drive downstream stages. Abort via
         # the workflow's non-terminal fencing path; a fresh attempt reloads the
         # durable winner. Never cache or emit completion for the losing result.
