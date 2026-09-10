@@ -20,10 +20,12 @@ ADR-0017 records the initial dispatch and scope narrowing.
 |---|---|---|---|---|
 | #248 | agent/test-query-p95-flake | API query test/performance instructions | merged, PR #256 @ 1e6765c | Independent review; real PostgreSQL module 24 passed, 1 deliberate benchmark skip; opt-in local p95 0.052s; all CI passed |
 | #230 | agent/test-publish-race-wait | Two named ingestion race test files | merged, PR #255 @ 802d0eb | Independent review caught real-clock test flake; deterministic-clock fix reviewed; warning-removal mutation fails; real PostgreSQL 3 passed; all CI passed |
-| #221 | agent/arch-checkpoint-rerun | Extraction source/tests only | PR #257 under independent review | 468 real PostgreSQL extraction tests passed; stale-owner repair race under investigation |
+| #221 | agent/arch-checkpoint-rerun | Extraction source/tests only | merged, PR #257 @ 6c409e8 | Immutable rejected-row CAS preserves concurrent owner; failed-attempt retry durable; independent 479 PostgreSQL tests passed |
 | #137 | agent/137-cutover-hardening | Retrieval API provenance and retrieval/evaluation model guards | dispatched | Reconcile existing refusal/cost/supports behavior before implementing actual residuals |
 | #219 | agent/m4-formula-ast | Calculation engine, ADR-0018 and canonical task additions | design accepted for implementation | Restricted typed formula AST; explicit bounded Jacobi groups, caller-specified seeds/tolerances, immutable group provenance; no parent scope deferral |
 | #200 | agent/200-locked-runtime | Runtime packaging, locks and health/recovery | PR #259 implementing | Clean install exposed missing provider package and worker prompt/schema data; corrected; heartbeat recovery next |
+| #194 | claude/close-trailing-acceptance-gaps | Remove unreachable extraction tool layer | merged, PR #260 @ c16955c | Independent code review and full PostgreSQL extraction suite passed; worker-role adoption remains #190 |
+| #153 | agent/153-unit-policy | Ontology-owned comparison policy and extraction checks | design accepted for implementation | ADR-0019; preserve payload spelling, version conflict grouping, require fresh version-pinned runs |
 | #188 | agent/188-execution-wave2 | Execution plan and ownership | coordinating | Initial control PR #254 merged @ 2b15032; subsequent paths checked |
 
 Ruling: narrow #230 and #221 test ownership — their original workers/tests/**
@@ -43,7 +45,7 @@ provider-spend cap requested from the owner, names/locations only. Offline
 implementation continues; no paid call or hosted mutation is justified by an
 unanswered question.
 
-The remaining 34 issues retain the dependency and closure criteria in the
+Other issues retain the dependency and closure criteria in the
 [complete audit](../research/2026-09-09-open-issue-audit.md). Leaf code completion,
 operational rollout and milestone live acceptance are recorded separately.
 
@@ -72,3 +74,11 @@ unchecked in the canonical ledger, then implement. Existing Decimal precision,
 units, cutoff rules and legacy graph identities remain binding. The narrow
 workstreams edit in that PR only maps those two new task IDs; the coordinator
 does not edit this file concurrently while that mapping is prepared.
+
+#153 ruling: use one ASCII-guarded explicit unit vocabulary at comparison
+boundaries, preserving raw payload spelling and distinct unknown/Unicode units.
+Namespace new conflict grouping; never rewrite historical adjudication. Version
+new extraction runs and enforce the version before checkpoint recovery so old
+validation cannot silently satisfy the new policy. ADR-0019 records the exact
+policy and compatibility boundary. Do not broaden unrelated unit-family
+validation or currency-field syntax, or change #154's guidance ordering here.

@@ -684,7 +684,7 @@ packages:
     depends_on: [M3-EXTRACTION-CORE]
     team: extraction
     branch: cherry/194-confidence-priority
-    status: blocked # PARTIAL, not merged. PR #240 @ c25e27b (2026-09-05) landed two of #194's three complaints: record_confidence is Decimal | None = None instead of a hard-coded 0 (migration 0006 dropped the NOT NULL, which is why this had to follow #236), and review_priority is derived rather than always "high". The THIRD is untouched and its PR says so: the tool allowlist is never invoked. Not dispatchable as written — the residual needs re-scoping against what #240 left, and the true confidence value is #62's calibrator, not this package.
+    status: merged # PR #260 @ c16955c removes unreachable tools under accepted option (b); cancellation and NULL confidence already verified. #194 closed; actual calibration remains #62.
     allowed_paths:
       - workers/src/fel_workers/extraction/**
       - workers/tests/**
@@ -817,10 +817,26 @@ packages:
     depends_on: [EXTRACTION-STEPS-OUTPUT]
     team: extraction
     branch: agent/arch-checkpoint-rerun # not yet created
-    status: active # Owner-authorized parallel execution, ADR-0017; September 9 session.
+    status: merged # PR #257 @ 6c409e8; independently verified 479 PostgreSQL extraction tests and owner-preserving repair CAS.
     allowed_paths:
       - workers/src/fel_workers/extraction/**
       - workers/tests/extraction/**
+
+  - id: EXTRACTION-UNIT-POLICY
+    issue: 153
+    tasks: []
+    depends_on: [ARCH-CHECKPOINT-RERUN, ARCH-M3-PLUMBING]
+    team: extraction
+    branch: agent/153-unit-policy
+    status: active # ADR-0019 comparison policy and versioned new-run rollout precede implementation.
+    allowed_paths:
+      - packages/ontology/fel_ontology/units.py
+      - packages/ontology/fel_ontology/data/currency-codes.json
+      - packages/ontology/tests/test_units.py
+      - workers/src/fel_workers/extraction/**
+      - workers/tests/extraction/**
+      - docs/decisions/ADR-0019-unit-comparison-policy.md
+      - docs/runbooks/unit-policy-migration.md
 
   - id: TEST-PUBLISH-RACE-WAIT # the publish-race wait loop falls through silently
     issue: 230
