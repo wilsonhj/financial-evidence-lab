@@ -794,7 +794,7 @@ packages:
     depends_on: [ARCH-QUEUE-DURABILITY]
     team: trust
     branch: agent/266-terminal-schedule-test
-    status: active # Reproduced in #203 baseline: compare durable schedule before/after, not independent database/host clocks.
+    status: active # Reproduced in #203 baseline: compare scheduled/finished database instants, not independent database/host clocks.
     allowed_paths:
       - workers/tests/test_queue.py
   - id: ARCH-CI-OBSERVABILITY # measured coverage floors, required checks, browser cache and deployable Sentry
