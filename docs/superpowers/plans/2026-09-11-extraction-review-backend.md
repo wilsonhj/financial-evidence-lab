@@ -1,6 +1,6 @@
 # Extraction review backend implementation breakdown
 
-> PR280 is merged at c105f1b. Implement only after the separate #135 event-ordering prerequisite and wave9 ownership registration merge. Use the executing-plans skill for test-first slices. This breakdown does not duplicate or mark the canonical task ledger.
+> PR280 is merged at c105f1b and event-ordering PR283 at 2e3f92b. Implement after #284's candidate-read contract follow-up merges. Use the executing-plans skill for test-first slices. This breakdown does not duplicate or mark the canonical task ledger.
 
 **Goal:** Serve the accepted authenticated extraction run, review, immutable history and live event contracts with atomic database mutations and real evidence revalidation.
 
@@ -17,9 +17,30 @@
 3. Existing `apps/api/tests/test_openapi_parity.py:101` forbids serving any path still marked planned. Test each router in an isolated app while building slices. Final router mount and **lead-owned removal of extraction path planned markers** must be one narrow integration commit, under ADR0024 and contract-change authorization. Do not weaken parity, mount incomplete routes or leave generated types stale. Lead owns marker-only edits to root/subordinate contracts and regeneration if needed; implementation does not independently edit shared paths.
 4. Permissions is a current contract, not an auth redesign: `GET /v1/workspaces/{workspaceId}/extraction-permissions` returns `{workspace_id,allowed_actions}` with exactly create/cancel/rerun/accept/edit/reject/merge/correct. Derive it from the actual DB-resolved role and visible workspace. Owners/editors get all; reviewers get accept/edit/reject/merge/correct; viewers get an empty array. Use no-store and reauthorize every mutation after this UI hint.
 5. Policy selection is deterministic: `SELECT ... FROM extraction_policies WHERE org_id=%s ORDER BY version DESC LIMIT 1`. Rows are immutable, UNIQUE(org_id,version), indexed in descending version order; there is no active flag (`0004_extraction_core.sql:42–72`, M3 data-model:9). “Active policy” means this latest existing version for new creation. Do not create one automatically. A missing policy produces a safe configuration failure and no run/job/event/audit/receipt side effects.
-6. `ExtractionRunCreate` has **no policy_id**, but has optional nullable **corpus_version_id** (`openapi.yaml:2863–2938`). Honor an explicit valid active/superseded corpus using existing `require_corpus`; omitted/null chooses the unique current active corpus (`0002_corpus_core.sql:152–163`). `require_corpus(None)` only skips validation; it does not select a pin. Missing current corpus fails before enqueue. Return the selected exact pins through the contracted run representation. Web need not request policy IDs or a new policy-list endpoint.
+6. `ExtractionRunCreate` has **no policy_id**, but has optional nullable **corpus_version_id** (`openapi.yaml:2863–2938`). Honor an explicit valid active/superseded corpus using existing `require_corpus`; omitted/null chooses the unique current active corpus (`0002_corpus_core.sql:152–163`). `require_corpus(None)` only skips validation; it does not select a pin. Missing current corpus fails before enqueue. Return only the selected pins exposed by the closed `ExtractionRun` representation. That response also has no `policy_id`: persist and verify the immutable policy binding through database/worker tests, without adding an uncontracted response field. Web need not request policy IDs or a new policy-list endpoint.
 
 ## Exact implementation ownership
+
+ADR-0024 Amendment 1 / #284 updates the planned contract to 0.9.0. Proposal
+payload reads can use ExtractionCandidateFields (`extraction-candidate-fields/v1`)
+when the strict financial schema fails or any JSON numeric leaf is not a safe
+integer (absolute value above 9,007,199,254,740,991 or fractional; exclude booleans
+and numeric strings). This recursive display predicate changes no financial rule.
+Read the bounded stored JSON text before ordinary numeric decoding to classify it
+losslessly; Python's standard JSON decimal/int hooks suffice. Remove only legitimate
+worker evidence extensions before classification; unknown fields still fail schema.
+For the text branch, SQL extracts only present allowlisted public fields as
+`(payload -> key)::text`, yielding strings with the persisted JSON value/type.
+Missing remains absent and JSON null becomes `null` text. Do not reconstruct those
+strings from decoded floats, alter stored payloads/hashes or invent fields.
+Preflight payload bytes at 1 MiB before fetching and bound each displayed field
+to 65,536 characters; overflow is explicit 413, never truncation. Proposal reads
+allow zero evidence, while approved/review/correction schemas stay strict.
+Project actual blockers to safe failure diagnostics even when stored `ok` is true;
+never echo raw summaries, submitted values or unknown control-field names. A text
+wrapper by itself is neither an approval nor a newly invented financial blocker.
+Add fixtures/tests for malformed values, unsafe/fractional numbers, nested fields,
+null/missing, omitted controls, empty evidence, stale `ok` and strict inputs.
 
 New `apps/api/app/extraction/` files:
 

@@ -153,3 +153,50 @@ four roles may read. Reauthorize every mutation; use no-store and keep these
 mutable capabilities out of immutable artifact representations/ETags. No new
 authentication system or trust in token role claims is introduced. The handler
 and role matrix tests belong to the dependent #61 backend implementation.
+
+## Amendment 1: readable invalid candidates (#284)
+
+Accepted by the integration lead on 2026-09-11 after independent design review.
+Worker normalization deliberately preserves malformed candidates with blockers;
+the proposal read contract must not hide them or require a repair to display them.
+Only `ExtractionProposal.payload` gains an alternative closed wrapper with
+`schema_version: extraction-candidate-fields/v1` and `fields`. The latter is a
+closed map of the finite union of existing public financial property names to
+strings containing each persisted field's JSON representation. The financial
+payload schema itself, approved records and all mutation inputs remain strict.
+Only proposal-read evidence permits zero edges. Top-level proposal kind, metric,
+confidence, state and version retain their existing definitions.
+
+Read classification strips only legitimate worker evidence extensions before
+checking the frozen financial schema. Use the text projection if the candidate
+fails that schema or contains a JSON numeric leaf that is not an integer within
+plus/minus 9,007,199,254,740,991. Apply this display predicate recursively, excluding
+booleans and numeric strings; fractional numbers conservatively use text. Ordinary
+schema-valid, display-safe data keeps its existing shape even when other blockers
+remain. The wrapper does not determine financial validity or approval status.
+For the text projection, obtain allowlisted field text directly from PostgreSQL
+`(payload -> key)::text`, before numeric decoding in Python or JavaScript. Missing
+keys remain absent; present JSON null becomes the string `null`. This preserves
+persisted JSON values and types, not original provider lexical spelling (JSONB
+normalizes formatting). Do not use this display representation for financial
+hashing. Unknown/control field names and values are omitted from the public map.
+
+The browser renders these strings as plain text without JSON.parse, Number,
+HTML interpretation or automatic conversion into edit commands. An edit is a
+deliberately supplied full strict replacement. No new lossless parser is needed.
+Bound each field representation to 65,536 characters and preflight serialized
+proposal payload bytes to 1 MiB before fetching; overflow returns a typed 413 with
+the safe resource ID, never a truncated candidate. The finite field map bounds
+its overall shape. Projection of stored blockers is separate and safe: retain
+failure codes without reflecting submitted values, unknown field names or raw
+summary objects. Never infer an overall pass from `validation_summary.ok`, which
+can remain true after duplicate blockers were appended.
+
+Issue #284 owns package/OpenAPI version 0.9.0, the new individually versioned
+schema, generated types, fixtures/tests, reference OpenAPI alignment and backend/
+web plan clarifications. The API list-contract test may change only its shared
+version assertion. ADR-0017 and the handoff register this prerequisite before
+both runtime lanes. No migration, worker change, provider call or task completion
+is implied. Require invalid-value/empty-evidence fixtures, safe-number edge cases,
+control-field rejection, unchanged valid shape, strict mutation rejection,
+generation checks, independent review and all required CI before merge.

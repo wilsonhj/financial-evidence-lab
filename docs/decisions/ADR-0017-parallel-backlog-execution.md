@@ -128,3 +128,11 @@ Preserve the independent #64 model/scenario research as a non-binding note.
 Its scalar eligibility, unit/period, historical evidence and scenario-layer
 questions require resolution before that feature's contract freeze. Publication
 does not select those policies or clear #61/#62 prerequisites.
+
+Wave 10 ruling: event-ordering PR #283 merged at 2e3f92b after independent
+approval and all seven required checks. Preflight found that existing blocked
+worker proposals cannot satisfy the strict proposal-read payload/evidence shape.
+Issue #284, under ADR-0024 Amendment 1, owns the narrow read representation
+follow-up and package 0.9.0 release. Register it before both #61 runtime lanes;
+this does not change their disjoint implementation ownership or financial inputs.
+No canonical checkbox or live-provider/credential gate is changed.

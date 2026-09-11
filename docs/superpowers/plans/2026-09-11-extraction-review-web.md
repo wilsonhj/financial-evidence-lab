@@ -1,7 +1,7 @@
 # Extraction review web implementation breakdown
 
 Subordinate to accepted ADR-0024 and docs/superpowers/plans/2026-09-10-extraction-review.md.
-PR #280 supplies the merged contract at c105f1b. Implementation waits for the registered event-ordering prerequisite and explicit dispatch; this plan does not certify live acceptance.
+PR #280 supplies the initial contract at c105f1b; event-ordering PR #283 is merged at 2e3f92b. Implementation waits for #284's candidate-read contract and explicit dispatch; this plan does not certify live acceptance.
 
 ## Boundaries
 
@@ -11,6 +11,18 @@ app/api/extraction/**, colocated tests and e2e/extraction-review.spec.ts.
 Only existing production change: minimal desk/page.tsx navigation link.
 No root dependency/configuration or shared-contract edits by web owner.
 Import components and operations from generated @fel/contracts; no manual wire-type mirrors.
+
+Use the 0.9.0 generated ExtractionCandidateFields alternative for proposal payloads.
+Its fixed `extraction-candidate-fields/v1` discriminator denotes a read-only map
+of public financial field names to their persisted JSON text. Render field strings
+as plain text without JSON.parse, Number, HTML interpretation or automatic edit
+conversion. This preserves malformed values and unsafe/fractional JSON numbers;
+missing and JSON null remain distinct. The wrapper itself does not indicate a
+financial failure or approval; show actual validations. Allow an empty evidence
+list and render the missing evidence explicitly. Full replacement edit/correction
+commands still require the unchanged strict financial payload schema. Validate
+closed field names and 65,536-character field limits; test unsafe integers,
+fractional/nested values, quotes, null/missing, no controls and safe rendering.
 
 ## Implementation slices and proof
 
