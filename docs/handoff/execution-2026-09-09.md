@@ -30,8 +30,10 @@ ADR-0017 records the initial dispatch and scope narrowing.
 | #266 | agent/266-terminal-schedule-test | Test database-clock invariant | merged, PR #267 @ 41857d2 | Independent 17 PostgreSQL tests, regression mutation and final CI passed |
 | #154 | agent/154-guidance-range-ordering | Signed guidance ordering and universal range validation | merged, PR #270 @ 3fbc8ac | 720 PostgreSQL-enabled source tests; independent 141 tests, 1681 endpoint combinations, final CI passed; issue closed |
 | #191 | agent/191-pagination-reader | Bounded API reads and coordinated web consumers | active, PR #272 | Backend and web agents share one worktree with disjoint file ownership; adversarial and integration checks pending |
-| #196 | agent/arch-complexity-split | Extraction control/stages/checkpoints/stores | dispatched | Mechanical split only; unchanged tests/goldens; API portion waits for #191 |
-| #188 | agent/188-execution-wave6 | Execution plan and ownership | coordinating | Initial control PR #254 merged @ 2b15032; subsequent paths checked |
+| #196 | agent/arch-complexity-split | Extraction control/stages/checkpoints/stores | extraction merged, PR #274 @ 5e0bf99 | 1112 full worker/ontology/provider tests, independent 208 PostgreSQL tests and 64 global bindings; unchanged tests/goldens/SQL; API portion waits for #191 |
+| #197 | agent/197-data-model-design | Canonical model/forecast/export storage sketch | merged, PR #275 @ 05d85d8; issue closed | Existing 0009 PostgreSQL harness and independent design/231 engine tests passed; historical missed ordering disclosed; table implementation stays #64/#66/#68 |
+| #81 | agent/81-sec-fixture-recovery | Historical fixture recovery and supplemental SEC discovery | blocked after read-only recovery design | Final d8fd80e has 60 rows/7 asserted features; no committed validator/bytes/receipts. Current SEC contact identity requested; no fetches or new byte verification |
+| #188 | agent/188-execution-wave7 | Execution plan and ownership | coordinating | Initial control PR #254 merged @ 2b15032; subsequent paths checked |
 
 Ruling: narrow #230 and #221 test ownership — their original workers/tests/**
 globs overlapped, while the required implementation is separable — any shared
@@ -166,3 +168,21 @@ reuse/provision versus secure creation was requested, with no answer yet. No
 API-dependent design, code or smoke test has been undertaken after this gate.
 Second CODEOWNER identity and approved live environment/spend cap also remain
 unanswered. Independent offline work continues.
+
+
+#191 bounded test-path ruling: the full PostgreSQL suite found the existing
+`test_query_snapshot_keeps_every_run` in `test_retrieval_costs.py` assumes a
+51-run legacy success. Authorize only its request/expectation update: the
+unpaged call must return PAGINATION_REQUIRED, then an explicit page must retain
+all 51 runs. Preserve the metering assertions and all other cost tests. This
+single test path is disjoint from the parallel web coverage work.
+
+#81 recovery finding: PR #76's final three dataset blobs at d8fd80e exist only
+on retired integration history, not main. Restoring that source requires its
+MIT notice and explicit provisional provenance. No fetcher, validator, full
+byte cache or receipt log was recovered. Historical labels do not establish
+fresh verification. Original validation/excerpt/amendment debt precedes the
+required 3–6 supplemental issuers and >=8 byte-verified feature gate. The
+approved current FEL_SEC_USER_AGENT is missing; the owner was asked for the
+application/contact identity. No historical personal identity was adopted and
+no SEC request was made. A blocked dataset-only dispatch records this work.
