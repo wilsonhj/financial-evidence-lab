@@ -98,7 +98,7 @@ packages:
     depends_on: []
     team: integration
     branch: agent/188-execution-wave6
-    status: active
+    status: merged # PR #273 @ a94d14c; wave 6 dispatch/evidence verified.
     allowed_paths:
       - specs/001-financial-evidence-lab/tasks.md # Lead-only verified checkbox/annotation updates.
       - docs/handoff/execution-2026-09-09.md
@@ -780,16 +780,21 @@ packages:
       - workers/src/fel_workers/extraction/persist_reads.py
     # No API edits until #191 merges and the lead registers the API portion.
     # Tests and financial/hash/version modules remain byte-identical.
-  - id: ARCH-SCHEMA-HYGIENE # org_id FKs, dangling active_scenario_id, M4/M5 tables
+  - id: ARCH-SCHEMA-HYGIENE # Existing 0009 hygiene plus the missing M4/M5 design.
     issue: 197
     tasks: []
-    depends_on: [ARCH-DB-WORKER-ROLE] # serialized on db/migrations/**; 0009 follows 0008
-    team: platform
-    branch: cherry/197-fk-hygiene
-    status: blocked # PARTIAL, not merged. PR #239 @ d64e400 (2026-09-05) landed migration 0009: audit_events, usage_events and jobs each gained an org_id FK to organizations with ON DELETE RESTRICT. RESIDUAL, untouched: the dangling workspaces.active_scenario_id, and the absent M4/M5 roadmap tables. The second residual is arguably M4/M5 package scope rather than hygiene; the lead should split or re-scope before dispatch.
+    depends_on: [ARCH-DB-WORKER-ROLE]
+    team: integration
+    branch: agent/197-data-model-design
+    status: active # ADR-0023 completes the late design sketch; #64/#66/#68 own future table contracts, not this design PR.
     allowed_paths:
-      - db/migrations/**
-      - workers/tests/**
+      - specs/001-financial-evidence-lab/plan.md # Section 7 only; no task ledger changes.
+      - docs/decisions/ADR-0023-model-and-forecast-storage-boundaries.md
+      - docs/handoff/workstreams.yaml # This entry and completed wave 6 control status only.
+    # PR #239 @ d64e400 already delivered migration 0009, validated organization
+    # FKs and the reserved active-scenario comment. Existing harness reverified.
+    # #63 merged before the sketch: the missed historical order is disclosed,
+    # not claimed retroactively. #64 must land the same-workspace scenario FK.
   - id: ARCH-WEB-TEST-PARITY # colocated component tests, reader a11y test, keyed reader reducer
     issue: 198
     tasks: []
