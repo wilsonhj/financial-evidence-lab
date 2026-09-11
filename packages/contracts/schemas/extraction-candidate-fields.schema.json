@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.fel.dev/schemas/extraction-candidate-fields/v1",
+  "x-fel-version": "1.0.0",
+  "title": "ExtractionCandidateFields",
+  "description": "Read-only public candidate fields as persisted PostgreSQL JSON text. Render strings verbatim; do not parse, use for financial hashing, infer approval, or convert automatically into mutation inputs. Embedded JSON syntax is guaranteed by the producer, not structural schema validation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "fields"],
+  "properties": {
+    "schema_version": {
+      "const": "extraction-candidate-fields/v1"
+    },
+    "fields": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Only present public financial keys; missing keys remain absent and present JSON null is the string null. Unknown and internal control fields are omitted.",
+      "properties": {
+        "category": {
+          "$ref": "#/$defs/jsonText"
+        },
+        "currency": {
+          "$ref": "#/$defs/jsonText"
+        },
+        "definition": {
+          "$ref": "#/$defs/jsonText"
+        },
+        "description": {
+          "$ref": "#/$defs/jsonText"
+        },
+        "dimensions": {
+          "$ref": "#/$defs/jsonText"
+        },
+        "direction": {
+          "$ref": "#/$defs/jsonText"
+        },
+        "entity_id": {
+          "$ref": "#/$defs/jsonText"
+        },
+        "high": {
+          "$ref": "#/$defs/jsonText"
+        },
+        "issuer_label": {
+          "$ref": "#/$defs/jsonText"
+        },
+        "kind": {
+          "$ref": "#/$defs/jsonText"
+        },
+        "low": {
+          "$ref": "#/$defs/jsonText"
+        },
+        "metric_id": {
+          "$ref": "#/$defs/jsonText"
+        },
+        "period": {
+          "$ref": "#/$defs/jsonText"
+        },
+        "qualifiers": {
+          "$ref": "#/$defs/jsonText"
+        },
+        "raw_value": {
+          "$ref": "#/$defs/jsonText"
+        },
+        "reported_or_derived": {
+          "$ref": "#/$defs/jsonText"
+        },
+        "scale": {
+          "$ref": "#/$defs/jsonText"
+        },
+        "schema_version": {
+          "$ref": "#/$defs/jsonText"
+        },
+        "shape": {
+          "$ref": "#/$defs/jsonText"
+        },
+        "sign": {
+          "$ref": "#/$defs/jsonText"
+        },
+        "target_metric_ids": {
+          "$ref": "#/$defs/jsonText"
+        },
+        "text": {
+          "$ref": "#/$defs/jsonText"
+        },
+        "unit": {
+          "$ref": "#/$defs/jsonText"
+        },
+        "value": {
+          "$ref": "#/$defs/jsonText"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "jsonText": {
+      "type": "string",
+      "maxLength": 65536,
+      "contentMediaType": "application/json",
+      "description": "The persisted field JSON representation, including quotes for JSON strings. Overlong values produce a typed 413; never truncate."
+    }
+  }
+}

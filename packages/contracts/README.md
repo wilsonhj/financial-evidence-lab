@@ -24,6 +24,29 @@ Consumers: FastAPI models must round-trip these schemas (contract tests on
 the Python side arrive with M0-PLATFORM); the web app imports types from
 `@fel/contracts`.
 
+## Readable candidates 0.9.0 (ADR-0024 Amendment 1)
+
+Only proposal reads add `ExtractionCandidateFields`, an individually versioned
+`extraction-candidate-fields/v1` wrapper, and allow empty evidence. Its closed
+24-key public financial map contains bounded JSON-text strings, preserving the
+persisted value/type when the ordinary payload cannot be displayed safely.
+Missing keys stay absent; JSON null is the string `null`. This display alternative
+does not determine approval or financial validity. Existing strict payloads,
+approved versions and all mutation inputs keep their schemas and evidence rules.
+
+The future backend selects this branch for schema-invalid candidates or any
+fractional/unsafe numeric leaf, and obtains each present field from PostgreSQL
+`(payload -> key)::text` before ordinary numeric decoding. It bounds fields to
+65,536 characters and preflights payload bytes at 1 MiB, returning 413 rather
+than truncating. Consumers render strings verbatim, without parsing, HTML
+interpretation or automatic edit conversion. These producer/renderer behaviors
+remain the dependent runtime lanes' responsibility; this package validates the
+closed structure and lengths. `contentMediaType` is descriptive, not an embedded
+JSON parser. Fixtures include literal large numbers, fractions, nulls and nested
+values as text; they do not certify runtime branch selection or browser rendering.
+
+`SCHEMA_IDS.extractionCandidateFields` registers the new standalone schema. Its
+references are internal, so no additional external-reference alias is needed.
 
 ## Extraction review 0.8.0 (ADR-0024)
 

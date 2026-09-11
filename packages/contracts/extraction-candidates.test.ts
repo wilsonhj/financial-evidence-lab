@@ -64,6 +64,43 @@ describe("read-only extraction candidates (ADR-0024 Amendment 1)", () => {
     }
   });
 
+  it("allows exactly the public financial field vocabulary, including malformed field text", () => {
+    const fields = Object.fromEntries(
+      [
+        "category",
+        "currency",
+        "definition",
+        "description",
+        "dimensions",
+        "direction",
+        "entity_id",
+        "high",
+        "issuer_label",
+        "kind",
+        "low",
+        "metric_id",
+        "period",
+        "qualifiers",
+        "raw_value",
+        "reported_or_derived",
+        "scale",
+        "schema_version",
+        "shape",
+        "sign",
+        "target_metric_ids",
+        "text",
+        "unit",
+        "value",
+      ].map((key) => [key, "null"]),
+    );
+    const proposal = {
+      ...load("fixtures/extraction-proposal.json"),
+      payload: { schema_version: version, fields },
+    };
+    expect(validate("ExtractionProposal")(proposal)).toBe(true);
+    expect(reference("ExtractionProposal")(proposal)).toBe(true);
+  });
+
   it("rejects malformed wrapper structure, raw JSON values and non-public keys", () => {
     const fixture = load("fixtures/extraction-proposal.json");
     const invalid = [

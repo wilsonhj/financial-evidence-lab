@@ -2,6 +2,7 @@ export type { components, paths, operations } from "./generated/api";
 
 /** Frozen schema registry: name -> versioned $id (see VERSIONING.md). */
 export const SCHEMA_IDS = {
+  extractionCandidateFields: "https://contracts.fel.dev/schemas/extraction-candidate-fields/v1",
   extractionReviewCommand: "https://contracts.fel.dev/schemas/extraction-review-command/v1",
   extractionReviewResult: "https://contracts.fel.dev/schemas/extraction-review-result/v1",
   extractionConflict: "https://contracts.fel.dev/schemas/extraction-conflict/v1",
@@ -26,7 +27,7 @@ export const SCHEMA_IDS = {
   extractionPayload: "https://contracts.fel.dev/schemas/extraction-payload/v1",
 } as const;
 
-export const CONTRACT_VERSION = "0.8.0" as const;
+export const CONTRACT_VERSION = "0.9.0" as const;
 
 /** Relative file references resolved against canonical $id values (ADR-0024).
  * Register these aliases alongside SCHEMA_IDS for offline JSON Schema validation.

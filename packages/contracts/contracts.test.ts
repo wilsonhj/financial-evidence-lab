@@ -88,11 +88,11 @@ describe("contract schemas", () => {
 });
 
 describe("contract version identity (VERSIONING.md)", () => {
-  it("openapi, package, and CONTRACT_VERSION agree on the 0.8.0 minor bump", () => {
+  it("openapi, package, and CONTRACT_VERSION agree on the 0.9.0 minor bump", () => {
     const yaml = readFileSync(join(here, "openapi/openapi.yaml"), "utf8");
     const infoVersion = /^ {2}version: (\d+\.\d+\.\d+)$/m.exec(yaml)?.[1];
     expect(infoVersion).toBe(CONTRACT_VERSION);
-    expect(CONTRACT_VERSION).toBe("0.8.0");
+    expect(CONTRACT_VERSION).toBe("0.9.0");
     expect(load("package.json").version).toBe(CONTRACT_VERSION);
   });
 

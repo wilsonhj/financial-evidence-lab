@@ -6,14 +6,14 @@
 
 **Architecture:** Small extraction routers call transaction-owning services; leaves receive the same tenant connection and never independently commit. Reuse current API auth/RLS, pagination, reader byte checks and the installed pure worker normalizer/validator. No financial reimplementation or general service framework.
 
-**Tech stack:** Existing Python3.11/FastAPI/Pydantic/psycopg/PostgreSQL stack, frozen worker/ontology wheels and generated OpenAPI0.8.0 contract. No new dependencies or provider work.
+**Tech stack:** Existing Python3.11/FastAPI/Pydantic/psycopg/PostgreSQL stack, frozen worker/ontology wheels and generated OpenAPI0.9.0 contract after #284. No new dependencies or provider work.
 
 **Spec:** `docs/superpowers/plans/2026-09-10-extraction-review.md`, accepted ADR0024, `specs/003-agentic-extraction/{spec,data-model}.md`, current root OpenAPI and extraction JSON schemas. Source inspected in `/private/tmp/fel-impl-278` at a7ad7ac plus permissions delta0bb237b. Root owns final published control records and merges.
 
 ## Readiness and integration decisions
 
 1. PR280 supplies migration0011, compatible conflict occurrence store, closed review commands/results, immutable validation context, bounded read contracts and workspace extraction-permissions. Its merge is c105f1b; no duplicate schema/migration changes in this lane.
-2. EXTRACTION-EVENT-ORDERING under #135 separately fixes proven commit-order replay loss in current worker stores. Its plan is `docs/superpowers/plans/2026-09-11-extraction-event-ordering.md`. Live SSE completion depends on that reviewed fix; it changes no event IDs/schema/hash/version. Root's wave9 control currently gates API/web dispatch behind it.
+2. EXTRACTION-EVENT-ORDERING under #135 merged as PR283 at 2e3f92b, fixing proven commit-order replay loss in current worker stores. Its plan is `docs/superpowers/plans/2026-09-11-extraction-event-ordering.md`. Preserve its run-first writer locking; it changes no event IDs/schema/hash/version. API/web dispatch now waits for #284 and explicit lead authorization.
 3. Existing `apps/api/tests/test_openapi_parity.py:101` forbids serving any path still marked planned. Test each router in an isolated app while building slices. Final router mount and **lead-owned removal of extraction path planned markers** must be one narrow integration commit, under ADR0024 and contract-change authorization. Do not weaken parity, mount incomplete routes or leave generated types stale. Lead owns marker-only edits to root/subordinate contracts and regeneration if needed; implementation does not independently edit shared paths.
 4. Permissions is a current contract, not an auth redesign: `GET /v1/workspaces/{workspaceId}/extraction-permissions` returns `{workspace_id,allowed_actions}` with exactly create/cancel/rerun/accept/edit/reject/merge/correct. Derive it from the actual DB-resolved role and visible workspace. Owners/editors get all; reviewers get accept/edit/reject/merge/correct; viewers get an empty array. Use no-store and reauthorize every mutation after this UI hint.
 5. Policy selection is deterministic: `SELECT ... FROM extraction_policies WHERE org_id=%s ORDER BY version DESC LIMIT 1`. Rows are immutable, UNIQUE(org_id,version), indexed in descending version order; there is no active flag (`0004_extraction_core.sql:42–72`, M3 data-model:9). “Active policy” means this latest existing version for new creation. Do not create one automatically. A missing policy produces a safe configuration failure and no run/job/event/audit/receipt side effects.
@@ -41,6 +41,10 @@ never echo raw summaries, submitted values or unknown control-field names. A tex
 wrapper by itself is neither an approval nor a newly invented financial blocker.
 Add fixtures/tests for malformed values, unsafe/fractional numbers, nested fields,
 null/missing, omitted controls, empty evidence, stale `ok` and strict inputs.
+Resolve selected claim IDs through their retrieval run/workspace, citations/items
+and source spans, with complete scoped byte verification. The default extraction
+mock cites fixed span IDs: lifecycle tests must seed those real fixture pins or
+use existing scripted-mock injection, without weakening citation checks.
 
 New `apps/api/app/extraction/` files:
 

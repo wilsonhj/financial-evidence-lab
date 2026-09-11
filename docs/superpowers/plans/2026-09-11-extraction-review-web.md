@@ -23,6 +23,8 @@ list and render the missing evidence explicitly. Full replacement edit/correctio
 commands still require the unchanged strict financial payload schema. Validate
 closed field names and 65,536-character field limits; test unsafe integers,
 fractional/nested values, quotes, null/missing, no controls and safe rendering.
+Generated TypeScript alone does not validate runtime data: use explicit guards
+typed by the generated contracts and compose the existing file-backed AJV schemas.
 
 ## Implementation slices and proof
 
@@ -38,6 +40,9 @@ fractional/nested values, quotes, null/missing, no controls and safe rendering.
    Forward only needed If-Match/Idempotency-Key/resume fields and expose the
    upstream ETag/Location/status/closed error envelope. Never forward arbitrary
    URLs or browser authorization. Abort upstream when browser disconnects.
+   Reject upstream redirects or validate their destination against the configured
+   trusted upstream; validate and translate Location without following arbitrary
+   paths with the configured bearer.
    Prove credential containment, scope rejection, exact 412/409/413 behavior
    and identical retry key/body. API remains the authorization authority.
 
@@ -72,6 +77,9 @@ fractional/nested values, quotes, null/missing, no controls and safe rendering.
    update preserving an edit, correction history, cancel/rerun and source reader
    links. Include keyboard focus, labels and announcement behavior. A local
    worker-to-browser stream smoke remains distinct from hosted #108 acceptance.
+   Standard Playwright configuration hardcodes fixture mode. Prove actual HTTP
+   worker/browser streaming with a separately launched HTTP-mode server on a
+   dedicated port; the finite fixture stream is not evidence of live delivery.
 
 ## Integration questions before implementation
 
@@ -84,8 +92,9 @@ fractional/nested values, quotes, null/missing, no controls and safe rendering.
   omitted/null, backend selects the unique active corpus. Never widen source
   scope or silently substitute another corpus. Missing configuration fails
   explicitly; no policy creation or provider fallback is implied by this UI.
-- Backend owns event ordering and replay guarantees. Await its proof of safe
-  monotonic replay before using numeric event IDs as a durable watermark.
+- PR283 established worker commit ordering at 2e3f92b. Backend must retain the
+  same run-first lock order and prove live replay before the UI uses numeric
+  event IDs as a durable watermark; existing mock streams do not prove this.
 - Lead owns planned-marker removal with backend router mount, preserving strict
   OpenAPI parity tests. Web builds only against the final committed contract.
 
