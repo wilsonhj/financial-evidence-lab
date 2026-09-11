@@ -97,8 +97,8 @@ packages:
     tasks: []
     depends_on: []
     team: integration
-    branch: agent/188-execution-wave7
-    status: active # Wave 7 reconciles merged extraction/design portions and one #191 regression-test path.
+    branch: agent/188-execution-wave8
+    status: merged # Wave 8 records the reviewed #272 merge and bounded independent follow-up dispatches.
     allowed_paths:
       - specs/001-financial-evidence-lab/tasks.md # Lead-only verified checkbox/annotation updates.
       - docs/handoff/execution-2026-09-09.md
@@ -106,6 +106,8 @@ packages:
       - docs/decisions/ADR-0017-parallel-backlog-execution.md
       - docs/superpowers/plans/2026-09-09-backlog-resolution.md
       - docs/superpowers/plans/2026-09-10-extraction-complexity-split.md
+      - docs/superpowers/plans/2026-09-10-retrieval-complexity-split.md
+      - docs/superpowers/plans/2026-09-10-sec-fixture-offline-restoration.md
       - .github/required-checks.md # Reconcile verified September 10 protection settings only.
   - id: PLATFORM-NODE24
     issue: 249
@@ -681,7 +683,7 @@ packages:
     depends_on: [ARCH-API-HARDENING, CLAIMS-CUTOVER-HARDENING]
     team: platform
     branch: agent/191-pagination-reader
-    status: active # ADR-0021 coordinates explicit bounded pages, complete-or-error reader/trace limits and all actual web consumers.
+    status: merged # PR #272 @ fa4cfa2; independent final-head approval and eight PG regressions, all seven required CI checks and preview passed. Contract 0.7.0; provider billing remains #195-owned.
     allowed_paths:
       - apps/api/app/pagination.py
       - apps/api/app/config.py
@@ -787,9 +789,13 @@ packages:
     depends_on: [ARCH-API-PAGINATION-READER, ARCH-COMPLEXITY-SPLIT]
     team: platform
     branch: agent/196-api-complexity-split
-    status: blocked # Await #191 merge and a concrete final-source split design. Do not dispatch this broad ownership alongside #61.
+    status: ready # PR #272 merged; exact mechanical split plan registered. GitHub closed #196 on September 11, but the API portion remains in this execution scope.
     allowed_paths:
-      - apps/api/**
+      - apps/api/app/retrieval.py
+      - apps/api/app/retrieval_queries.py
+      - apps/api/app/retrieval_run_store.py
+      - apps/api/app/retrieval_pipeline.py
+      - apps/api/app/retrieval_reads.py
   - id: ARCH-SCHEMA-HYGIENE # Existing 0009 hygiene plus the missing M4/M5 design.
     issue: 197
     tasks: []
@@ -983,10 +989,25 @@ packages:
       - apps/api/tests/test_query_performance_contract.py
       - apps/api/PERFORMANCE.md
 
-  - id: SEC-FIXTURE-RECOVERY-SUPPLEMENT
+  - id: SEC-FIXTURE-OFFLINE-RESTORATION
     issue: 81
     tasks: []
     depends_on: []
+    team: data
+    branch: agent/81-sec-fixture-offline
+    status: ready # Local Git recovery and explicitly limited structural checks only; no SEC calls or full acceptance claim.
+    allowed_paths:
+      - evals/datasets/sec-fixtures/manifest.jsonl
+      - evals/datasets/sec-fixtures/README.md
+      - evals/datasets/sec-fixtures/excerpts/README.md
+      - evals/datasets/sec-fixtures/SOURCE-LICENSE.txt
+      - evals/datasets/sec-fixtures/validate.py
+      - evals/datasets/sec-fixtures/tests/test_validate.py
+
+  - id: SEC-FIXTURE-RECOVERY-SUPPLEMENT
+    issue: 81
+    tasks: []
+    depends_on: [SEC-FIXTURE-OFFLINE-RESTORATION]
     team: data
     branch: agent/81-sec-fixture-recovery
     status: blocked # Historical blobs recovered in read-only research, not newly byte-verified. Approved FEL_SEC_USER_AGENT and fresh SEC evidence remain missing.

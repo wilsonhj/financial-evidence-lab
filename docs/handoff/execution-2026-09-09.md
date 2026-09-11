@@ -186,3 +186,30 @@ required 3–6 supplemental issuers and >=8 byte-verified feature gate. The
 approved current FEL_SEC_USER_AGENT is missing; the owner was asked for the
 application/contact identity. No historical personal identity was adopted and
 no SEC request was made. A blocked dataset-only dispatch records this work.
+
+
+September 11 UTC: PR #272 merged at fa4cfa2eb03865471bd9d29bf8016cf825a4c71f.
+Independent review approved exact head e590bc94134720407726e59cac2519416e1f2adf
+after eight final PostgreSQL regressions passed; lead approval and final CI
+links are recorded in the PR. All seven required checks and preview passed.
+Earlier full verification included 1,898 Python and 457 JavaScript tests with
+unchanged coverage floors. No actual provider billing or hosted gate is claimed.
+
+The live inventory before this merge contained 25 open issues and only PR #272.
+GitHub had closed #196 at 00:18 UTC without an API implementation; its remaining
+five-file split stays in the plan, with administrative closure preserved.
+The [retrieval split plan](../superpowers/plans/2026-09-10-retrieval-complexity-split.md)
+keeps all seven router endpoints and runtime patch behavior stable, with tests,
+goldens, financial calculations and SQL unchanged. Independent review and final
+required CI gate its merge. #61 remains blocked pending its concrete contract
+and persistence decision, not by API path contention once this scope is narrowed.
+
+#81 offline ruling: restore the exact final manifest and source MIT notice,
+replace historical documentation to omit its personal contact and unverified
+claims, and add an explicitly scoped structural validator. This work needs no
+SEC identity or network. The [six-file plan](../superpowers/plans/2026-09-10-sec-fixture-offline-restoration.md)
+requires default full-acceptance failure, verified_feature_count=0 and honest
+labels for the seven historical assertions. Its focused unittest suite must
+run explicitly on the final head because current pytest discovery excludes
+this dataset path. Fresh byte/feature/excerpt/amendment and supplemental
+acceptance remains blocked separately; #81 stays open.
