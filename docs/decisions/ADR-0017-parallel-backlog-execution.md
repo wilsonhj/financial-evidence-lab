@@ -123,3 +123,8 @@ the backend router mount; keep strict parity tests. This is implementation
 status alignment under ADR-0024, not a new contract shape or version. The
 permissions projection is already frozen in #280. No provider, credential,
 financial semantics, live release gate or canonical checkbox changes here.
+
+Preserve the independent #64 model/scenario research as a non-binding note.
+Its scalar eligibility, unit/period, historical evidence and scenario-layer
+questions require resolution before that feature's contract freeze. Publication
+does not select those policies or clear #61/#62 prerequisites.

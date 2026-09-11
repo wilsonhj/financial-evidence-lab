@@ -111,6 +111,7 @@ packages:
       - docs/superpowers/plans/2026-09-11-extraction-event-ordering.md
       - docs/superpowers/plans/2026-09-11-extraction-review-backend.md
       - docs/superpowers/plans/2026-09-11-extraction-review-web.md
+      - docs/research/2026-09-11-model-scenario-design.md # Read-only future design findings; no #64 dispatch or domain-policy acceptance.
       - .github/required-checks.md # Reconcile verified September 10 protection settings only.
   - id: PLATFORM-NODE24
     issue: 249
