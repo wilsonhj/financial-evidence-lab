@@ -94,3 +94,12 @@ validator and tests. No contact identity, fetched filing, supplemental selection
 or verified feature is inferred. Default validation must report unavailable
 full acceptance; explicit structural mode never claims acceptance. The network
 phase depends on this restoration and retains its current-identity/evidence hold.
+
+#196 measured implementation ruling: the integration lead accepts the 615-line
+retrieval facade, above the plan's approximately 550-line estimate. Explicit
+compatibility exports and seven unchanged HTTP signatures retain the existing
+transaction, metering and lazy SSE patch boundaries; the four helper modules
+measure 243–417 lines. Further splitting would add indirection around those
+boundaries. This is a measured size exception only: unchanged tests, SQL,
+route signatures and runtime patch proofs remain required, together with
+independent review, explicit approval and final-head CI before merge.
