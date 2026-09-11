@@ -213,3 +213,18 @@ labels for the seven historical assertions. Its focused unittest suite must
 run explicitly on the final head because current pytest discovery excludes
 this dataset path. Fresh byte/feature/excerpt/amendment and supplemental
 acceptance remains blocked separately; #81 stays open.
+
+September 11 continuation: PR #279 merged at
+2541d66d2d7aa4ff8cca9628531191375da78340 after independent review,
+explicit approval, ten offline test methods and all required checks. It restores
+60 historical records covering 20 issuers, with seven asserted feature tags and
+zero freshly verified features. The full validator deliberately refuses to
+certify acceptance. Issue #81 remains open for current SEC identity and evidence.
+
+PR #281 merged at f16ea050f4172db1eff949f7377d5c3a0a6079af after independent
+approval of final head f30a5ad31031fdb634d3f21d2949f01955ef6477 and all seven
+required checks. The API split preserves 47 definition ASTs, 41 SQL constants,
+263 runtime bindings, full OpenAPI and all seven retrieval route dependencies.
+Independent verification passed 59 tests with one existing opt-in timing skip.
+ADR-0017 records the measured 615-line facade exception; four helpers remain
+243–417 lines. This completes the API portion retained after GitHub closed #196.
