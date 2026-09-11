@@ -420,16 +420,54 @@ packages:
       - docs/decisions/**
       - workers/src/fel_workers/extraction/**
       - workers/tests/**
+  - id: M3-REVIEW-CONTRACT
+    issue: 278
+    tasks: []
+    depends_on: [M3-EXTRACTION-CORE, ARCH-API-PAGINATION-READER, EXTRACTION-GUIDANCE-RANGE-POLICY, ARCH-COMPLEXITY-SPLIT]
+    team: integration
+    branch: agent/278-extraction-review-contract
+    status: active # Lead-approved ADR-0024 and concrete plan precede implementation; review/test/approval gates before merge.
+    allowed_paths:
+      - packages/contracts/openapi/openapi.yaml
+      - packages/contracts/package.json
+      - packages/contracts/src/index.ts
+      - packages/contracts/src/generated/api.ts
+      - packages/contracts/contracts.test.ts
+      - packages/contracts/extraction-review.test.ts
+      - packages/contracts/README.md
+      - packages/contracts/schemas/extraction-review-command.schema.json
+      - packages/contracts/schemas/extraction-review-result.schema.json
+      - packages/contracts/schemas/extraction-conflict.schema.json
+      - packages/contracts/schemas/extraction-validation-context.schema.json
+      - packages/contracts/schemas/extraction-event-page.schema.json
+      - packages/contracts/fixtures/extraction-review-command.json
+      - packages/contracts/fixtures/extraction-review-result.json
+      - packages/contracts/fixtures/extraction-conflict.json
+      - packages/contracts/fixtures/extraction-validation-context.json
+      - packages/contracts/fixtures/extraction-event-page.json
+      - packages/contracts/fixtures/extraction-review-cases.valid.json
+      - packages/contracts/fixtures/extraction-review-cases.invalid.json
+      - specs/003-agentic-extraction/contracts/extraction-api.yaml
+      - db/migrations/0011_extraction_review.sql
+      - db/migrations/tests/0011_extraction_review.test.sql
+      - db/migrations/README.md
+      - docs/decisions/ADR-0024-extraction-review-and-conflict-occurrences.md
+      - docs/superpowers/plans/2026-09-10-extraction-review.md
+      - docs/handoff/workstreams.yaml
+      - docs/handoff/CONTRACTS.md
+      - workers/src/fel_workers/extraction/persist.py
+      - workers/src/fel_workers/extraction/persist_conflicts.py
+      - workers/tests/extraction/test_conflict_occurrences.py
   - id: M3-REVIEW
     issue: 61
     # The Earnings Update Desk fixture preview is explicitly absorbed by this
     # workstream and issue. It is preparatory M3-REVIEW implementation, not a
     # separate package or competing owner; existing sequencing and holds remain.
     tasks: [T0308, T0309]
-    depends_on: [M3-EXTRACTION-CORE]
+    depends_on: [M3-REVIEW-CONTRACT]
     team: experience
     branch: agent/m3-review # not yet created
-    status: blocked # Historical producer holds cleared: ADR-0011 accepted, migration 0006 merged via #236, terminal-run semantics via #211. The API contention from #232/#241 also cleared when both merged on September 10 UTC. This explicit blocked dispatch key is retained pending a fresh lead dispatch with the issue's current dependencies and path ownership checked; documentation review does not silently activate implementation.
+    status: blocked # Await reviewed #278 contract/migration/compatible-worker merge, then register disjoint backend/web owners from the accepted plan.
     allowed_paths: [apps/web/**, apps/api/**]
   - id: M3-CONFIDENCE-GATE # confidence scoring + extraction quality gate
     issue: 62
@@ -789,7 +827,7 @@ packages:
     depends_on: [ARCH-API-PAGINATION-READER, ARCH-COMPLEXITY-SPLIT]
     team: platform
     branch: agent/196-api-complexity-split
-    status: ready # PR #272 merged; exact mechanical split plan registered. GitHub closed #196 on September 11, but the API portion remains in this execution scope.
+    status: active # PR #272 merged; exact mechanical split plan registered. GitHub closed #196 on September 11, but the API portion remains in this execution scope.
     allowed_paths:
       - apps/api/app/retrieval.py
       - apps/api/app/retrieval_queries.py
@@ -995,7 +1033,7 @@ packages:
     depends_on: []
     team: data
     branch: agent/81-sec-fixture-offline
-    status: ready # Local Git recovery and explicitly limited structural checks only; no SEC calls or full acceptance claim.
+    status: active # Local Git recovery and explicitly limited structural checks only; no SEC calls or full acceptance claim.
     allowed_paths:
       - evals/datasets/sec-fixtures/manifest.jsonl
       - evals/datasets/sec-fixtures/README.md
