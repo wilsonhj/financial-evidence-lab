@@ -175,3 +175,14 @@ Only the control owner runs generate/stages generated artifacts; consumers run c
 ## Source anchors for approved behavior
 
 `specs/003-agentic-extraction/spec.md:59`–`:60` (idempotent pinned run), `:70`–`:85` (review/atomicity/history/merge), `:95`–`:96` (conflicts), `:135`–`:140` (normalization and real citation slices), `:148`–`:162` (rerun/review/correction/audit/SSE/pagination); `data-model.md:31`/`:39`/`:47`/`:63`–`:69` (evidence/append-only decisions/versions/transactions); creation cutoff contract `specs/003-agentic-extraction/contracts/extraction-api.yaml:123`–`:128`; accepted ADR0022 `:21`–`:26` and `:50`–`:74`; current worker `normalize/payload.py:191`–`:203`, `validate/duplicates.py:58`–`:80`, `persist.py:330`–`:375`; OpenAPI0.7 `:1055` (opaque ETag), `:2213` (stored run.version); migration0004 `:426`–`:439` (immutable pins), migration0001 `:35`–`:45`/`:87`–`:95` (existing audit and receipt store). These references establish behavior without duplicating the canonical ledger.
+
+### Role-aware web bootstrap
+
+Before rendering controls, fetch the workspace-scoped extraction-permissions
+projection. Backend derives its closed allowed_actions list from current
+database membership and workspace visibility; web never decodes the configured
+bearer for role authority. Empty queues still expose permissions. Responses are
+no-store, independent of artifact ETags; every action rechecks authorization.
+Backend tests all four actual roles, forged token claims, hidden workspaces and
+revocation between permission read and mutation. Web tests reviewer/viewer
+controls and permission refresh without discarding a user's draft.

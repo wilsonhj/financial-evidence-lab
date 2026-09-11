@@ -141,3 +141,15 @@ The terminal conflict error retains its resolved/superseded status description.
 The lead also authorizes the shared-version assertion in
 `apps/api/tests/test_list_contract.py` to advance from 0.7.0 to 0.8.0 alongside
 this contract release. Its existing pagination and reader assertions are unchanged.
+
+### Workspace permissions projection
+
+The lead accepts a narrow planned workspace extraction-permissions read so the
+web UI can render role-appropriate controls even for an empty queue. Return only
+workspace_id and a closed allowed_actions list, derived from database-resolved
+membership and workspace visibility. Owners/editors receive all eight actions;
+reviewers receive accept/edit/reject/merge/correct; viewers receive none. All
+four roles may read. Reauthorize every mutation; use no-store and keep these
+mutable capabilities out of immutable artifact representations/ETags. No new
+authentication system or trust in token role claims is introduced. The handler
+and role matrix tests belong to the dependent #61 backend implementation.

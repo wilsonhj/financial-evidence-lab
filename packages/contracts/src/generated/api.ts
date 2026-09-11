@@ -365,6 +365,26 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/workspaces/{workspaceId}/extraction-permissions": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Read current extraction permissions for a visible workspace
+     * @description Derive actions from current database-resolved membership, never token role claims. Owners/editors receive all actions; reviewers receive accept/edit/reject/merge/correct; viewers receive an empty list. All four roles may read. Hidden workspaces return 404. UI guidance only: every mutation reauthorizes current membership independently. Return Cache-Control no-store; do not include permissions in immutable artifact ETags.
+     */
+    get: operations["getExtractionPermissions"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/v1/workspaces/{workspaceId}/extraction-runs": {
     parameters: {
       query?: never;
@@ -1178,6 +1198,13 @@ export interface components {
       /** @description Decimal USD. Request may only lower relative to active policy. Absolute M3 v0.4.0 schema ceiling equals ADR-0007 default 2.00. */
       max_cost_usd?: string;
       max_wall_seconds?: number;
+    };
+    ExtractionPermissions: {
+      /** Format: uuid */
+      workspace_id: string;
+      allowed_actions: (
+        "create" | "cancel" | "rerun" | "accept" | "edit" | "reject" | "merge" | "correct"
+      )[];
     };
     ExtractionRun: {
       /** Format: uuid */
@@ -2701,6 +2728,30 @@ export interface operations {
         content?: never;
       };
       429: components["responses"]["RateLimited"];
+      default: components["responses"]["Error"];
+    };
+  };
+  getExtractionPermissions: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        workspaceId: components["parameters"]["WorkspaceId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Current permitted extraction actions; never cached. */
+      200: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ExtractionPermissions"];
+        };
+      };
       default: components["responses"]["Error"];
     };
   };

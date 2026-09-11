@@ -4,6 +4,35 @@ info:
   version: 0.8.0
   description: ADR-0024 extraction reference; root OpenAPI is authoritative.
 paths:
+  /v1/workspaces/{workspaceId}/extraction-permissions:
+    x-fel-status: planned
+    get:
+      operationId: getExtractionPermissions
+      summary: Read current extraction permissions for a visible workspace
+      description: >-
+        Derive actions from current database-resolved membership, never token role claims.
+        Owners/editors receive all actions; reviewers receive accept/edit/reject/merge/correct;
+        viewers receive an empty list. All four roles may read. Hidden workspaces return 404.
+        UI guidance only: every mutation reauthorizes current membership independently.
+        Return Cache-Control no-store; do not include permissions in immutable artifact ETags.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/WorkspaceId"
+      responses:
+        "200":
+          description: Current permitted extraction actions; never cached.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                const: no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExtractionPermissions"
+        default:
+          $ref: "#/components/responses/Error"
   /v1/workspaces/{workspaceId}/extraction-runs:
     x-fel-status: planned
     post:
@@ -1214,6 +1243,21 @@ components:
           type: integer
           minimum: 1
           maximum: 600
+    ExtractionPermissions:
+      type: object
+      additionalProperties: false
+      required: [workspace_id, allowed_actions]
+      properties:
+        workspace_id:
+          type: string
+          format: uuid
+        allowed_actions:
+          type: array
+          maxItems: 8
+          uniqueItems: true
+          items:
+            type: string
+            enum: [create, cancel, rerun, accept, edit, reject, merge, correct]
     ExtractionRun:
       type: object
       additionalProperties: false
