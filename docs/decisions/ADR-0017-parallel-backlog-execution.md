@@ -75,3 +75,22 @@ changing metering expectations. Register #81 dataset-only recovery as blocked:
 its historical source is available, but fresh byte verification, original
 acceptance debt and fetched supplemental discovery remain. No SEC request uses
 the historical contact without a current approved FEL_SEC_USER_AGENT.
+
+
+Wave 8 ruling: PR #272 merged at fa4cfa2 after independent final-head approval,
+local PostgreSQL regressions and all required CI. Register #196's remaining API
+split in exactly retrieval.py and four named helper files. Preserve tests, SQL,
+route signatures and per-call patch lookups; no main, reader or pagination edits.
+GitHub closed #196 independently before this API work; retain the closure while
+finishing its recorded acceptance scope. The approximate 500-line target permits
+a small (~550-line) facade when another abstraction would reduce clarity.
+All PRs require independent review, tests and an explicit approval decision
+before merge, as reiterated by the owner on September 10 local time.
+
+Split #81's independently feasible offline restoration from its blocked SEC
+network phase. Authorize exactly six dataset files: original manifest and MIT
+notice, sanitized provisional documentation, a standard-library structural
+validator and tests. No contact identity, fetched filing, supplemental selection
+or verified feature is inferred. Default validation must report unavailable
+full acceptance; explicit structural mode never claims acceptance. The network
+phase depends on this restoration and retains its current-identity/evidence hold.
