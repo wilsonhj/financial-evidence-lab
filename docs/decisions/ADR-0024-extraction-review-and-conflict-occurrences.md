@@ -200,3 +200,14 @@ both runtime lanes. No migration, worker change, provider call or task completio
 is implied. Require invalid-value/empty-evidence fixtures, safe-number edge cases,
 control-field rejection, unchanged valid shape, strict mutation rejection,
 generation checks, independent review and all required CI before merge.
+
+The lead also authorizes a generation-only correction for the existing strict
+payload type: openapi-typescript currently emits schema `$defs` metadata as a
+required runtime intersection. Its supported `postTransform` hook may remove
+only that metadata member at the exact bundled extraction-payload component,
+retaining the original seven-member union. Guard the expected AST shape and fail
+on drift; share the generator between generation and drift checking. Keep all
+frozen financial schema bytes unchanged. Normal CI typechecking must compile
+actual strict KPI, review and correction inputs without casts or `$defs`, reject
+missing/wrongly typed fields, and compile the candidate wrapper. An AST regression
+must prove that unrelated generated types and the seven variants are unchanged.

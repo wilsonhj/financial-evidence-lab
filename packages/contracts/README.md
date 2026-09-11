@@ -17,6 +17,12 @@ Regenerate the client after any OpenAPI edit:
 pnpm --filter @fel/contracts generate
 ```
 
+Generation and drift checking share `generate.ts`. Its narrow post-transform
+removes only the synthetic `$defs` intersection from the bundled strict
+ExtractionPayload type, preserving its seven wire variants and all frozen schema
+bytes. Unexpected generator AST shapes fail explicitly. Compiler fixtures and an
+AST comparison cover the wire types and unchanged unrelated output.
+
 CI runs `check:generated` (drift fails the build) and the contract tests
 (`contracts.test.ts`, via the root vitest run).
 
