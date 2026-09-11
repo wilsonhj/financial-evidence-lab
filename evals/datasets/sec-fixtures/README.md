@@ -11,12 +11,12 @@ The manifest is copied byte-for-byte from final historical commit
 `d8fd80ea3ed0f09d981b5a072e18a099f3aedd51`, rather than merging its obsolete
 integration branch. That final revision removed 15 disputed multi-currency tags.
 
-| Material | Fingerprint |
-| --- | --- |
-| Manifest Git blob | `5a2662157357460f76c556507f50d5eb7b5132cb` |
-| Manifest bytes | 33,123 |
-| Manifest SHA-256 | `945d36c0c95993b03b54bd4a1af96b7d6c9412a74420cccef39b9687b2d897cc` |
-| Read-only cohort SHA-256 | `3fda084f60f4fd00225d36e0e6233ac03d0f2ff4420cad1b9d2ef95cf72e4b4c` |
+| Material                   | Fingerprint                                                        |
+| -------------------------- | ------------------------------------------------------------------ |
+| Manifest Git blob          | `5a2662157357460f76c556507f50d5eb7b5132cb`                         |
+| Manifest bytes             | 33,123                                                             |
+| Manifest SHA-256           | `945d36c0c95993b03b54bd4a1af96b7d6c9412a74420cccef39b9687b2d897cc` |
+| Read-only cohort SHA-256   | `3fda084f60f4fd00225d36e0e6233ac03d0f2ff4420cad1b9d2ef95cf72e4b4c` |
 | Source MIT license SHA-256 | `9df2530031b509fd7af008447f39b631abb2058c31cfe2febb49a3de3cea83a9` |
 
 These fingerprints establish recovery from Git, not correctness of the hashes
@@ -31,15 +31,15 @@ There are 60 distinct IDs/accessions/URLs/hash strings covering all 20 cohort
 CIK/ticker pairs. Stored forms comprise 20 10-K, 30 10-Q, six 10-K/A and four
 10-Q/A. The seven distinct **historical feature assertions** are:
 
-| Label | Records |
-| --- | ---: |
-| unusual_scale_markers | 52 |
-| ixbrl_continuation | 45 |
-| ixbrl_dimensional_facts | 43 |
-| legacy_html_no_ixbrl | 14 |
-| pre_2018_formatting | 14 |
-| amended_filing | 10 |
-| multi_currency | 2 |
+| Label                   | Records |
+| ----------------------- | ------: |
+| unusual_scale_markers   |      52 |
+| ixbrl_continuation      |      45 |
+| ixbrl_dimensional_facts |      43 |
+| legacy_html_no_ixbrl    |      14 |
+| pre_2018_formatting     |      14 |
+| amended_filing          |      10 |
+| multi_currency          |       2 |
 
 None of these feature types is freshly verified. The required full-acceptance
 gate remains at least eight verified feature types. Stored dates, forms and
