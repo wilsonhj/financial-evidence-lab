@@ -12,6 +12,7 @@ import psycopg
 
 from fel_workers.extraction.checkpoint import MemoryCheckpointStore
 from fel_workers.extraction.errors import LeaseLost
+from fel_workers.extraction.persist_events import _lock_event_run
 from fel_workers.extraction.types import StageRecord
 
 
@@ -287,6 +288,7 @@ class PostgresCheckpointStore:
         the ``record``, never here — see ``workflow._run_stage``.
         """
         with self.conn.transaction():
+            _lock_event_run(self.conn, org_id=org_id, run_id=run_id)
             self._insert_step_row(
                 run_id=run_id,
                 org_id=org_id,
