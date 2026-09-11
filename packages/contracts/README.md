@@ -45,8 +45,9 @@ closed structure and lengths. `contentMediaType` is descriptive, not an embedded
 JSON parser. Fixtures include literal large numbers, fractions, nulls and nested
 values as text; they do not certify runtime branch selection or browser rendering.
 
-`SCHEMA_IDS.extractionCandidateFields` registers the new standalone schema. Its
-references are internal, so no additional external-reference alias is needed.
+`SCHEMA_IDS.extractionCandidateFields` registers the new standalone schema. Field schemas
+are inline so generated wire types contain no schema-definition metadata; no
+additional reference alias is needed.
 
 ## Extraction review 0.8.0 (ADR-0024)
 

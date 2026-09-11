@@ -14,89 +14,129 @@
     "fields": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Only present public financial keys; missing keys remain absent and present JSON null is the string null. Unknown and internal control fields are omitted.",
+      "description": "Only present public financial keys; missing keys remain absent and present JSON null is the string null. Unknown and internal control fields are omitted. The persisted field JSON representation, including quotes for JSON strings. Overlong values produce a typed 413; never truncate.",
       "properties": {
         "category": {
-          "$ref": "#/$defs/jsonText"
+          "type": "string",
+          "maxLength": 65536,
+          "contentMediaType": "application/json"
         },
         "currency": {
-          "$ref": "#/$defs/jsonText"
+          "type": "string",
+          "maxLength": 65536,
+          "contentMediaType": "application/json"
         },
         "definition": {
-          "$ref": "#/$defs/jsonText"
+          "type": "string",
+          "maxLength": 65536,
+          "contentMediaType": "application/json"
         },
         "description": {
-          "$ref": "#/$defs/jsonText"
+          "type": "string",
+          "maxLength": 65536,
+          "contentMediaType": "application/json"
         },
         "dimensions": {
-          "$ref": "#/$defs/jsonText"
+          "type": "string",
+          "maxLength": 65536,
+          "contentMediaType": "application/json"
         },
         "direction": {
-          "$ref": "#/$defs/jsonText"
+          "type": "string",
+          "maxLength": 65536,
+          "contentMediaType": "application/json"
         },
         "entity_id": {
-          "$ref": "#/$defs/jsonText"
+          "type": "string",
+          "maxLength": 65536,
+          "contentMediaType": "application/json"
         },
         "high": {
-          "$ref": "#/$defs/jsonText"
+          "type": "string",
+          "maxLength": 65536,
+          "contentMediaType": "application/json"
         },
         "issuer_label": {
-          "$ref": "#/$defs/jsonText"
+          "type": "string",
+          "maxLength": 65536,
+          "contentMediaType": "application/json"
         },
         "kind": {
-          "$ref": "#/$defs/jsonText"
+          "type": "string",
+          "maxLength": 65536,
+          "contentMediaType": "application/json"
         },
         "low": {
-          "$ref": "#/$defs/jsonText"
+          "type": "string",
+          "maxLength": 65536,
+          "contentMediaType": "application/json"
         },
         "metric_id": {
-          "$ref": "#/$defs/jsonText"
+          "type": "string",
+          "maxLength": 65536,
+          "contentMediaType": "application/json"
         },
         "period": {
-          "$ref": "#/$defs/jsonText"
+          "type": "string",
+          "maxLength": 65536,
+          "contentMediaType": "application/json"
         },
         "qualifiers": {
-          "$ref": "#/$defs/jsonText"
+          "type": "string",
+          "maxLength": 65536,
+          "contentMediaType": "application/json"
         },
         "raw_value": {
-          "$ref": "#/$defs/jsonText"
+          "type": "string",
+          "maxLength": 65536,
+          "contentMediaType": "application/json"
         },
         "reported_or_derived": {
-          "$ref": "#/$defs/jsonText"
+          "type": "string",
+          "maxLength": 65536,
+          "contentMediaType": "application/json"
         },
         "scale": {
-          "$ref": "#/$defs/jsonText"
+          "type": "string",
+          "maxLength": 65536,
+          "contentMediaType": "application/json"
         },
         "schema_version": {
-          "$ref": "#/$defs/jsonText"
+          "type": "string",
+          "maxLength": 65536,
+          "contentMediaType": "application/json"
         },
         "shape": {
-          "$ref": "#/$defs/jsonText"
+          "type": "string",
+          "maxLength": 65536,
+          "contentMediaType": "application/json"
         },
         "sign": {
-          "$ref": "#/$defs/jsonText"
+          "type": "string",
+          "maxLength": 65536,
+          "contentMediaType": "application/json"
         },
         "target_metric_ids": {
-          "$ref": "#/$defs/jsonText"
+          "type": "string",
+          "maxLength": 65536,
+          "contentMediaType": "application/json"
         },
         "text": {
-          "$ref": "#/$defs/jsonText"
+          "type": "string",
+          "maxLength": 65536,
+          "contentMediaType": "application/json"
         },
         "unit": {
-          "$ref": "#/$defs/jsonText"
+          "type": "string",
+          "maxLength": 65536,
+          "contentMediaType": "application/json"
         },
         "value": {
-          "$ref": "#/$defs/jsonText"
+          "type": "string",
+          "maxLength": 65536,
+          "contentMediaType": "application/json"
         }
       }
-    }
-  },
-  "$defs": {
-    "jsonText": {
-      "type": "string",
-      "maxLength": 65536,
-      "contentMediaType": "application/json",
-      "description": "The persisted field JSON representation, including quotes for JSON strings. Overlong values produce a typed 413; never truncate."
     }
   }
 }

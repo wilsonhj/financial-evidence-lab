@@ -1857,8 +1857,6 @@ export interface components {
       | components["schemas"]["guidanceQualitative"]
       | components["schemas"]["revenueDriver"]
     );
-    /** @description The persisted field JSON representation, including quotes for JSON strings. Overlong values produce a typed 413; never truncate. */
-    jsonText: string;
     /**
      * ExtractionCandidateFields
      * @description Read-only public candidate fields as persisted PostgreSQL JSON text. Render strings verbatim; do not parse, use for financial hashing, infer approval, or convert automatically into mutation inputs. Embedded JSON syntax is guaranteed by the producer, not structural schema validation.
@@ -1866,36 +1864,32 @@ export interface components {
     "extraction-candidate-fields.schema": {
       /** @constant */
       schema_version: "extraction-candidate-fields/v1";
-      /** @description Only present public financial keys; missing keys remain absent and present JSON null is the string null. Unknown and internal control fields are omitted. */
+      /** @description Only present public financial keys; missing keys remain absent and present JSON null is the string null. Unknown and internal control fields are omitted. The persisted field JSON representation, including quotes for JSON strings. Overlong values produce a typed 413; never truncate. */
       fields: {
-        category?: components["schemas"]["jsonText"];
-        currency?: components["schemas"]["jsonText"];
-        definition?: components["schemas"]["jsonText"];
-        description?: components["schemas"]["jsonText"];
-        dimensions?: components["schemas"]["jsonText"];
-        direction?: components["schemas"]["jsonText"];
-        entity_id?: components["schemas"]["jsonText"];
-        high?: components["schemas"]["jsonText"];
-        issuer_label?: components["schemas"]["jsonText"];
-        kind?: components["schemas"]["jsonText"];
-        low?: components["schemas"]["jsonText"];
-        metric_id?: components["schemas"]["jsonText"];
-        period?: components["schemas"]["jsonText"];
-        qualifiers?: components["schemas"]["jsonText"];
-        raw_value?: components["schemas"]["jsonText"];
-        reported_or_derived?: components["schemas"]["jsonText"];
-        scale?: components["schemas"]["jsonText"];
-        schema_version?: components["schemas"]["jsonText"];
-        shape?: components["schemas"]["jsonText"];
-        sign?: components["schemas"]["jsonText"];
-        target_metric_ids?: components["schemas"]["jsonText"];
-        text?: components["schemas"]["jsonText"];
-        unit?: components["schemas"]["jsonText"];
-        value?: components["schemas"]["jsonText"];
-      };
-      $defs: {
-        /** @description The persisted field JSON representation, including quotes for JSON strings. Overlong values produce a typed 413; never truncate. */
-        jsonText: string;
+        category?: string;
+        currency?: string;
+        definition?: string;
+        description?: string;
+        dimensions?: string;
+        direction?: string;
+        entity_id?: string;
+        high?: string;
+        issuer_label?: string;
+        kind?: string;
+        low?: string;
+        metric_id?: string;
+        period?: string;
+        qualifiers?: string;
+        raw_value?: string;
+        reported_or_derived?: string;
+        scale?: string;
+        schema_version?: string;
+        shape?: string;
+        sign?: string;
+        target_metric_ids?: string;
+        text?: string;
+        unit?: string;
+        value?: string;
       };
     };
     /** @description ADR-0024. Exact selected/version/edit keys and complete membership are enforced transactionally (412); every acceptance revalidates real evidence/current financial rules. A reason never overrides a hard blocker. */

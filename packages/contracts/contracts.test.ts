@@ -10,6 +10,7 @@ import { format, resolveConfig } from "prettier";
 import { describe, expect, it } from "vitest";
 
 import { CONTRACT_VERSION, SCHEMA_IDS, SCHEMA_REFERENCE_ALIASES } from "./src/index";
+import type { components } from "./src/index";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const load = (rel: string) => JSON.parse(readFileSync(join(here, rel), "utf8"));
@@ -32,6 +33,16 @@ for (const [alias, target] of Object.entries(SCHEMA_REFERENCE_ALIASES)) {
 }
 
 describe("contract schemas", () => {
+  it("generated candidate fields need no schema metadata in the runtime object", () => {
+    const candidate: components["schemas"]["ExtractionCandidateFields"] = {
+      schema_version: "extraction-candidate-fields/v1",
+      fields: { value: '"invalid"', qualifiers: '{"count": 9007199254740993}' },
+    };
+    const validate = ajv.getSchema(SCHEMA_IDS.extractionCandidateFields)!;
+    expect(validate(candidate), JSON.stringify(validate.errors)).toBe(true);
+    expect(validate({ ...candidate, $defs: { jsonText: "not a runtime field" } })).toBe(false);
+  });
+
   it("every schema compiles and has a versioned $id", () => {
     for (const file of schemaFiles) {
       const schema = load(`schemas/${file}`);
