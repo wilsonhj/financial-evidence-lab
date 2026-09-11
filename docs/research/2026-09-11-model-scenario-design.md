@@ -75,3 +75,28 @@ This is a proposed narrow ownership map, not authorization to edit these paths. 
 5. **UI handoff to #65, not UI implementation here.** An API consumer can select an exact graph/scenario revision, distinguish base/bull/bear, show overridden assumptions and unchanged source-backed values, follow the approved version and pinned evidence links, navigate bounded history, and intentionally select/restore a revision without editing old history. Stale edits retain their draft and require deliberate resubmission. Missing/unsupported evidence and blocked confidence are visible states, not invented numbers or empty successful graphs. Forecast charts and forecasting operations remain #66/#65 work.
 
 Evidence sources: `docs/decisions/ADR-0023-model-and-forecast-storage-boundaries.md`; canonical implementation plan section 7; engine `snapshot.py`, `store.py`, `canonical.py`, `nodes.py`, `graph.py`, `scenario.py`, `periods.py`, `units.py` and `engine.py`; frozen extraction payload schema and worker `normalize/payload.py`; existing workspace API; ADR-0024 and `docs/superpowers/plans/2026-09-10-extraction-review.md` as the merged #278 contract and remaining #61 runtime dependency. No new canonical task checklist is created here.
+
+## Independent domain preflight, September 11
+
+These findings narrow the questions above; they do not authorize implementation
+or clear #61/#62. The source-backed node currently represents one reported scalar.
+Guidance and derived outputs must not be silently relabeled as reported facts.
+The owner has been asked whether the first import should cover reported scalar
+facts only or include additional node/provenance types; no answer is recorded.
+
+Most remaining mechanics are constrained by existing requirements. Apply scale
+once with checked Decimal precision; do not infer currency, FX or count dimensions.
+Use a verified issuer fiscal calendar for quarter/year mappings, with no implicit
+December year-end. Preserve every required evidence binding; a deterministic
+primary locator is a navigation choice, not permission to discard other citations.
+Source availability follows required source publication timestamps, while actual
+approval/correction timestamps remain audit history. This supports retrospective
+public-evidence reconstruction, not a claim about what the organization knew or
+had approved at that earlier date. Missing historical validation context must stay
+explicit rather than being manufactured.
+
+Sparse scenario revisions should be complete replacement override sets against
+one pinned base: omission returns that node to its base value. The empty base
+references the unchanged original snapshot; bull/bear revisions remain immutable.
+Workspace activation is an explicit existing ETag-protected mutation. These are
+proposals for the future contract review, not new automatic scenario behavior.

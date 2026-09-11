@@ -266,6 +266,26 @@ and calibrated 50/80/95% intervals. Test look-ahead leakage, empty/zero target
 denominators, deterministic repeat runs and non-default advanced models that
 fail the seasonal-naive gate.
 
+September 11 source preflight found only a forecasting placeholder, with no
+frozen forecast HTTP/storage interface. ADR-0023 therefore requires a separate
+lead-owned contract/API/migration prerequisite before #66's implementation;
+its current feature allowlist is not permission to edit those shared paths.
+Resolve and record these concrete domain choices at that freeze:
+
+- Pin the immutable truth/restatement vintage used for backtest labels separately
+  from training inputs, so reruns cannot silently acquire later corrections.
+- Specify interval calibration method, minimum samples and exact paired
+  median-MAE aggregation; retain existing release thresholds and short-history
+  abstention rather than selecting favorable samples after seeing results.
+- Map ARR explicitly: the ontology treats it as instant USD/year, so quarterly
+  forecast periods or annual rollups must not silently sum it like revenue.
+
+The current market adapter's day/adjustment fields do not supply an as-of vintage
+contract. Baselines need not acquire external features implicitly; any future
+feature requirements must specify point-in-time availability and its proof.
+These are unresolved design inputs, not authorization to extend the adapter,
+change financial semantics or bypass #64/#62 and live-release dependencies.
+
 #68 traverses source → approved extraction → model → forecast → export with
 hashes and versions intact. Generate Markdown/PDF, CSV/XLSX, JSON evidence and
 workspace manifests. Freeze/adjudicate >=300 questions, run every numeric gate
