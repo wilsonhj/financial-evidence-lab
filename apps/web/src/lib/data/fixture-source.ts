@@ -14,7 +14,17 @@ import {
   fixtureSections,
   fixtureSpans,
 } from "../fixtures/synthetic-filing";
-import type { EvidenceSource } from "./evidence-source";
+import type {
+  EvidenceSource,
+  PageOptions,
+  Page,
+  ReaderPageOptions,
+  EvidenceScope,
+  DocumentVersionReference,
+} from "./evidence-source";
+import { MOCK_CORPUS_VERSION_ID } from "../observatory/fixtures/synthetic-trace";
+import { fixturePage } from "./pagination";
+import { EvidenceContractError } from "./http-source";
 
 /**
  * Fixture-backed EvidenceSource serving the committed synthetic filing.
@@ -31,12 +41,51 @@ import type { EvidenceSource } from "./evidence-source";
  * them; the source serves them verbatim and never rewrites offsets.
  */
 export class FixtureEvidenceSource implements EvidenceSource {
-  listDocuments(): Promise<DocumentMeta[]> {
-    return Promise.resolve(fixtureDocuments.map((doc) => ({ ...doc })));
+  readonly entityIds = [...new Set(fixtureDocuments.map((doc) => doc.entity_id))];
+
+  listDocuments(entityId: string, options: PageOptions = {}): Promise<Page<DocumentMeta>> {
+    const documents = fixtureDocuments
+      .filter((doc) => doc.entity_id === entityId)
+      .map((doc) => ({ ...doc }))
+      .sort(
+        (a, b) =>
+          a.published_at.localeCompare(b.published_at) ||
+          a.accession.localeCompare(b.accession) ||
+          a.id.localeCompare(b.id),
+      );
+    return Promise.resolve(
+      fixturePage(documents, options, `documents:${entityId}`, EvidenceContractError),
+    );
   }
 
-  getDocument(documentId: string): Promise<DocumentMeta | null> {
-    const doc = fixtureDocuments.find((candidate) => candidate.id === documentId);
+  resolveDocumentVersions(
+    versionIds: readonly string[],
+    scope: EvidenceScope,
+  ): Promise<DocumentVersionReference[]> {
+    if (scope.corpusVersionId && scope.corpusVersionId !== MOCK_CORPUS_VERSION_ID)
+      return Promise.resolve([]);
+    const ids = [...new Set(versionIds)];
+    if (ids.length > 200) throw new EvidenceContractError("version resolution exceeds 200 ids");
+    return Promise.resolve(
+      fixtureDocuments
+        .filter(
+          (doc) =>
+            ids.includes(fixtureActiveVersionIdByDocumentId[doc.id]!) &&
+            (!scope.asOf || Date.parse(doc.published_at) <= Date.parse(scope.asOf)),
+        )
+        .map((doc) => ({
+          document_version_id: fixtureActiveVersionIdByDocumentId[doc.id]!,
+          document_id: doc.id,
+        })),
+    );
+  }
+
+  getDocument(documentId: string, scope: EvidenceScope = {}): Promise<DocumentMeta | null> {
+    const doc = fixtureDocuments.find(
+      (candidate) =>
+        candidate.id === documentId &&
+        (!scope.asOf || Date.parse(candidate.published_at) <= Date.parse(scope.asOf)),
+    );
     return Promise.resolve(doc ? { ...doc } : null);
   }
 
@@ -73,12 +122,25 @@ export class FixtureEvidenceSource implements EvidenceSource {
     );
   }
 
-  async getReader(documentId: string): Promise<ReaderResponse | null> {
+  async getReader(
+    documentId: string,
+    options: ReaderPageOptions = {},
+  ): Promise<ReaderResponse | null> {
+    if (options.corpusVersionId && options.corpusVersionId !== MOCK_CORPUS_VERSION_ID) return null;
+    if (
+      options.siblingLimit !== undefined &&
+      (!Number.isInteger(options.siblingLimit) ||
+        options.siblingLimit < 1 ||
+        options.siblingLimit > 20)
+    )
+      throw new EvidenceContractError("invalid sibling limit");
     const target = fixtureDocuments.find((document) => document.id === documentId);
     if (!target) return null;
 
     const versionId = fixtureActiveVersionIdByDocumentId[documentId];
-    if (!versionId) return null;
+    if (!versionId || (options.documentVersionId && options.documentVersionId !== versionId))
+      return null;
+    if (options.asOf && Date.parse(target.published_at) > Date.parse(options.asOf)) return null;
 
     const sections = fixtureSections.filter((section) => section.document_version_id === versionId);
     const byId = new Map(sections.map((section) => [section.id, section]));
@@ -117,8 +179,13 @@ export class FixtureEvidenceSource implements EvidenceSource {
         }));
     };
 
-    const siblings = fixtureDocuments
-      .filter((document) => document.id !== documentId && document.entity_id === target.entity_id)
+    const allSiblings = fixtureDocuments
+      .filter(
+        (document) =>
+          document.id !== documentId &&
+          document.entity_id === target.entity_id &&
+          (!options.asOf || Date.parse(document.published_at) <= Date.parse(options.asOf)),
+      )
       .flatMap((document) => {
         const siblingVersionId = fixtureActiveVersionIdByDocumentId[document.id];
         if (!siblingVersionId) return [];
@@ -132,10 +199,32 @@ export class FixtureEvidenceSource implements EvidenceSource {
         ];
       });
 
+    const asOf = options.asOf ?? "2026-12-31T23:59:59Z";
+    const pageMode =
+      options.includeSiblings === false ||
+      options.siblingLimit !== undefined ||
+      options.siblingCursor !== undefined ||
+      options.siblingOrder !== undefined;
+    const page = fixturePage(
+      allSiblings.sort(
+        (a, b) =>
+          a.meta.published_at.localeCompare(b.meta.published_at) ||
+          a.meta.accession.localeCompare(b.meta.accession) ||
+          a.meta.id.localeCompare(b.meta.id),
+      ),
+      {
+        limit: options.siblingLimit ?? (options.siblingCursor ? undefined : 10),
+        cursor: options.siblingCursor,
+        order: options.siblingOrder,
+      },
+      `reader:${documentId}:${versionId}:${asOf}:${options.corpusVersionId ?? ""}`,
+      EvidenceContractError,
+    );
+    const siblings = options.includeSiblings === false ? [] : pageMode ? page.items : allSiblings;
     return {
-      as_of: "2026-12-31T23:59:59Z",
-      corpus_version_id: null,
-      selection_policy: "latest_parsed",
+      as_of: asOf,
+      corpus_version_id: options.corpusVersionId ?? null,
+      selection_policy: options.corpusVersionId ? "corpus_pinned" : "latest_parsed",
       document: {
         meta: { ...target },
         document_version_id: versionId,
@@ -144,6 +233,19 @@ export class FixtureEvidenceSource implements EvidenceSource {
         facts: factsForVersion(versionId),
       },
       siblings,
+      ...(pageMode
+        ? {
+            sibling_page: {
+              scope: options.includeSiblings === false ? ("excluded" as const) : ("page" as const),
+              returned: siblings.length,
+              limit: page.limit,
+              complete:
+                options.includeSiblings !== false && !page.nextCursor && !page.previousCursor,
+              next_cursor: options.includeSiblings === false ? null : page.nextCursor,
+              previous_cursor: options.includeSiblings === false ? null : page.previousCursor,
+            },
+          }
+        : {}),
     };
   }
 }

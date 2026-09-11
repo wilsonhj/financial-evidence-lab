@@ -324,85 +324,34 @@ describe("HttpEvidenceSource composite reader", () => {
 });
 
 describe("HttpEvidenceSource document listing", () => {
-  it("sends bearer auth and as_of on every configured entity request", async () => {
-    const fetchImpl = vi.fn(async () => jsonResponse([]));
+  it("sends bearer auth and cutoff for only the selected configured entity", async () => {
+    const fetchImpl = vi.fn(
+      async () => new Response("[]", { headers: { "X-FEL-Page-Limit": "50" } }),
+    );
     await makeSource(fetchImpl as unknown as typeof fetch, {
       asOf: AS_OF,
       entityIds: [ENTITY_A, ENTITY_B],
-    }).listDocuments();
-
-    expect(fetchImpl).toHaveBeenCalledTimes(2);
-    for (const [url, init] of fetchImpl.mock.calls as unknown as Array<[string, RequestInit]>) {
-      expect(url).toContain(`?as_of=${encodeURIComponent(AS_OF)}`);
-      expect(init.cache).toBe("no-store");
-      expect((init.headers as Record<string, string>).Authorization).toBe("Bearer test-token");
+    }).listDocuments(ENTITY_B);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchImpl.mock.calls[0]! as unknown as [string, RequestInit];
+    expect(url).toContain(`/entities/${ENTITY_B}/documents?limit=50`);
+    expect(new URL(url).searchParams.get("as_of")).toBe(AS_OF);
+    expect((init.headers as Record<string, string>).Authorization).toBe("Bearer test-token");
+  });
+  it("rejects documents newer than the cutoff or belonging to a different entity", async () => {
+    for (const document of [
+      doc(DOCUMENT_ID, ENTITY_A, "2026-07-02T00:00:00Z"),
+      doc(DOCUMENT_ID, ENTITY_B, "2026-01-01T00:00:00Z"),
+    ]) {
+      const fetchImpl = vi.fn(async () => jsonResponse([document]));
+      await expect(
+        makeSource(fetchImpl as unknown as typeof fetch, { asOf: AS_OF }).listDocuments(ENTITY_A),
+      ).rejects.toBeInstanceOf(EvidenceContractError);
     }
   });
-
-  it("merges entity listings in deterministic published-then-id order", async () => {
-    const fetchImpl = vi.fn(async (url: string) =>
-      jsonResponse(
-        url.includes(ENTITY_A)
-          ? [doc("bbbbbbbb-0000-4000-8000-000000000002", ENTITY_A, "2026-05-01T00:00:00Z")]
-          : [
-              doc("bbbbbbbb-0000-4000-8000-000000000001", ENTITY_B, "2026-04-30T22:00:00+02:00"),
-              doc("bbbbbbbb-0000-4000-8000-000000000003", ENTITY_B, "2026-06-01T00:00:00Z"),
-            ],
-      ),
-    );
-    const documents = await makeSource(fetchImpl as unknown as typeof fetch, {
-      entityIds: [ENTITY_A, ENTITY_B],
-    }).listDocuments();
-    expect(documents.map((entry) => entry.id)).toEqual([
-      "bbbbbbbb-0000-4000-8000-000000000001",
-      "bbbbbbbb-0000-4000-8000-000000000002",
-      "bbbbbbbb-0000-4000-8000-000000000003",
-    ]);
-  });
-
-  it("rejects documents newer than the configured list cutoff", async () => {
-    const fetchImpl = vi.fn(async () =>
-      jsonResponse([doc("bbbbbbbb-0000-4000-8000-000000000004", ENTITY_A, "2026-07-02T00:00:00Z")]),
-    );
+  it("rejects missing pagination headers instead of accepting a silently partial array", async () => {
     await expect(
-      makeSource(fetchImpl as unknown as typeof fetch, { asOf: AS_OF }).listDocuments(),
+      makeSource(async () => jsonResponse([])).listDocuments(ENTITY_A),
     ).rejects.toBeInstanceOf(EvidenceContractError);
-  });
-
-  it("advertises only documents that resolve through the configured corpus pin", async () => {
-    const missing = doc(
-      "bbbbbbbb-0000-4000-8000-000000000404",
-      readerFixture.document.meta.entity_id,
-      "2026-06-01T00:00:00Z",
-    );
-    const pinned: ReaderResponse = {
-      ...structuredClone(readerFixture),
-      corpus_version_id: CORPUS_VERSION_ID,
-      selection_policy: "corpus_pinned",
-    };
-    const fetchImpl = vi.fn(async (url: string) => {
-      if (url.includes("/entities/")) {
-        return jsonResponse([readerFixture.document.meta, missing]);
-      }
-      if (url.includes(`/documents/${DOCUMENT_ID}/reader`)) return jsonResponse(pinned);
-      return jsonResponse(
-        { error: { code: "NOT_FOUND", message: "not pinned", request_id: "r-pin" } },
-        404,
-      );
-    });
-
-    const documents = await makeSource(fetchImpl as unknown as typeof fetch, {
-      asOf: AS_OF,
-      corpusVersionId: CORPUS_VERSION_ID,
-    }).listDocuments();
-
-    expect(documents.map((document) => document.id)).toEqual([DOCUMENT_ID]);
-    const compositeUrls = (fetchImpl.mock.calls as unknown as Array<[string]>)
-      .map(([url]) => url)
-      .filter((url) => url.includes("/reader"));
-    expect(compositeUrls).toHaveLength(2);
-    for (const url of compositeUrls) {
-      expect(url).toContain(`corpus_version_id=${CORPUS_VERSION_ID}`);
-    }
   });
 });

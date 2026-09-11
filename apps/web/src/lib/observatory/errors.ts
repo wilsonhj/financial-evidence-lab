@@ -10,7 +10,7 @@ export type ErrorEnvelope = components["schemas"]["Error"];
  * shared EvidenceFailureState component renders both surfaces identically.
  */
 export type ObservatoryFailureKind =
-  "authentication" | "forbidden" | "conflict" | "invalid_scope" | "unavailable";
+  "authentication" | "forbidden" | "conflict" | "invalid_scope" | "unavailable" | "too_large";
 
 export class ObservatoryApiError extends Error {
   readonly status: number;
@@ -49,6 +49,7 @@ export function observatoryFailureKind(status: number): ObservatoryFailureKind {
   if (status === 401) return "authentication";
   if (status === 403) return "forbidden";
   if (status === 409) return "conflict";
+  if (status === 413) return "too_large";
   if (status === 422) return "invalid_scope";
   return "unavailable";
 }

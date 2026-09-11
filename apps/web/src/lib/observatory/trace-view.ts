@@ -206,9 +206,17 @@ export function readerHref(
   candidate: Candidate,
   documentIdByVersionId: Readonly<Record<string, string>>,
   spanId: string = candidate.source_span_id,
+  plan?: Pick<QueryPlan, "effective_as_of" | "corpus_version_id">,
 ): string | null {
   const documentId = documentIdByVersionId[candidate.document_version_id];
   if (!documentId) return null;
-  const params = new URLSearchParams({ span: spanId });
+  const params = new URLSearchParams({
+    span: spanId,
+    document_version_id: candidate.document_version_id,
+  });
+  if (plan) {
+    params.set("as_of", plan.effective_as_of);
+    params.set("corpus_version_id", plan.corpus_version_id);
+  }
   return `/reader/${encodeURIComponent(documentId)}?${params.toString()}`;
 }

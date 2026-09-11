@@ -9,12 +9,20 @@ import type {
   ReaderResponse,
   SourceSpan,
 } from "../contracts";
-import type { EvidenceSource } from "./evidence-source";
+import type {
+  EvidenceSource,
+  Page,
+  PageOptions,
+  ReaderPageOptions,
+  EvidenceScope,
+  DocumentVersionReference,
+} from "./evidence-source";
+import { pageQuery, readPage } from "./pagination";
 import { matchesReaderResponseSchema } from "./reader-contract-validator";
 
 export type ErrorEnvelope = components["schemas"]["Error"];
 export type EvidenceFailureKind =
-  "authentication" | "forbidden" | "conflict" | "invalid_scope" | "unavailable";
+  "authentication" | "forbidden" | "conflict" | "invalid_scope" | "unavailable" | "too_large";
 
 /** Safe, UI-facing classification of an API or transport failure. */
 export class EvidenceApiError extends Error {
@@ -23,6 +31,7 @@ export class EvidenceApiError extends Error {
   readonly kind: EvidenceFailureKind;
   readonly code?: string;
   readonly requestId?: string;
+  readonly resourceDocumentId?: string;
 
   constructor(status: number, path: string, kind: EvidenceFailureKind, envelope?: ErrorEnvelope) {
     // Deliberately exclude upstream message/details and request headers. Those
@@ -34,6 +43,13 @@ export class EvidenceApiError extends Error {
     this.kind = kind;
     this.code = envelope?.error.code;
     this.requestId = envelope?.error.request_id;
+    const resource = envelope?.error.details?.resource;
+    if (
+      typeof resource === "string" &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(resource)
+    ) {
+      this.resourceDocumentId = resource;
+    }
   }
 }
 
@@ -60,6 +76,7 @@ function failureKind(status: number): EvidenceFailureKind {
   if (status === 401) return "authentication";
   if (status === 403) return "forbidden";
   if (status === 409) return "conflict";
+  if (status === 413) return "too_large";
   if (status === 422) return "invalid_scope";
   return "unavailable";
 }
@@ -358,7 +375,7 @@ function parseErrorEnvelope(value: unknown): ErrorEnvelope | undefined {
 
 export class HttpEvidenceSource implements EvidenceSource {
   private readonly baseUrl: string;
-  private readonly entityIds: readonly string[];
+  readonly entityIds: readonly string[];
   private readonly token: BearerTokenProvider;
   private readonly asOf?: string;
   private readonly corpusVersionId?: string;
@@ -408,68 +425,137 @@ export class HttpEvidenceSource implements EvidenceSource {
     }
   }
 
-  private async getJson(path: string): Promise<unknown> {
-    const response = await this.request(path);
-    if (!response.ok) throw await this.toApiError(response, path);
-    return this.json(response, path);
-  }
-
-  async listDocuments(): Promise<DocumentMeta[]> {
-    const query = this.asOf ? `?as_of=${encodeURIComponent(this.asOf)}` : "";
-    const perEntity = await Promise.all(
-      this.entityIds.map(async (entityId) => {
-        const path = `/v1/entities/${entityId}/documents${query}`;
-        const raw = array(await this.getJson(path), path);
-        return raw.map((value, index) => {
-          assertDocumentMeta(value, `${path}[${index}]`);
-          if (this.asOf && Date.parse(value.published_at) > Date.parse(this.asOf)) {
-            throw new EvidenceContractError(`${path}[${index}] is newer than the requested cutoff`);
-          }
-          return value;
-        });
-      }),
-    );
-    const candidates = perEntity
-      .flat()
-      .sort(
-        (a, b) =>
-          Date.parse(a.published_at) - Date.parse(b.published_at) || a.id.localeCompare(b.id),
-      );
-    const unique = [...new Map(candidates.map((document) => [document.id, document])).values()];
-    if (!this.corpusVersionId) return unique;
-
-    // Entity listings have no corpus-pin parameter in contract v0.2.0. Treat
-    // them as discovery only, then fail closed by resolving every advertised
-    // document through the pinned composite endpoint. A 404 means absent from
-    // the selected snapshot and is filtered; every other error aborts.
-    const pinned: DocumentMeta[] = [];
-    const concurrency = 6;
-    for (let offset = 0; offset < unique.length; offset += concurrency) {
-      const batch = unique.slice(offset, offset + concurrency);
-      const resolved = await Promise.all(batch.map((document) => this.getReader(document.id)));
-      for (const reader of resolved) {
-        if (reader) pinned.push(reader.document.meta);
-      }
-    }
-    return pinned.sort(
-      (a, b) => Date.parse(a.published_at) - Date.parse(b.published_at) || a.id.localeCompare(b.id),
-    );
-  }
-
-  async getReader(documentId: string): Promise<ReaderResponse | null> {
-    const query = new URLSearchParams();
+  async listDocuments(entityId: string, options: PageOptions = {}): Promise<Page<DocumentMeta>> {
+    if (!this.entityIds.includes(entityId))
+      throw new EvidenceContractError("entity is not configured");
+    const query = pageQuery(options, EvidenceContractError);
     if (this.asOf) query.set("as_of", this.asOf);
     if (this.corpusVersionId) query.set("corpus_version_id", this.corpusVersionId);
+    const path = `/v1/entities/${encodeURIComponent(entityId)}/documents?${query}`;
+    const response = await this.request(path);
+    if (!response.ok) throw await this.toApiError(response, path);
+    const ids = new Set<string>();
+    const items = array(await this.json(response, path), path).map((value, index) => {
+      assertDocumentMeta(value, `${path}[${index}]`);
+      if (
+        value.entity_id !== entityId ||
+        ids.has(value.id) ||
+        (this.asOf && Date.parse(value.published_at) > Date.parse(this.asOf))
+      ) {
+        throw new EvidenceContractError(
+          "document page violates entity, uniqueness or cutoff scope",
+        );
+      }
+      ids.add(value.id);
+      return value;
+    });
+    return readPage(items, response.headers, options, EvidenceContractError);
+  }
+
+  async resolveDocumentVersions(
+    versionIds: readonly string[],
+    scope: EvidenceScope,
+  ): Promise<DocumentVersionReference[]> {
+    const ids = [...new Set(versionIds)];
+    if (ids.length > 200) throw new EvidenceContractError("version resolution exceeds 200 ids");
+    if (!ids.length) return [];
+    const query = new URLSearchParams();
+    for (const id of ids) query.append("document_version_id", id);
+    if (scope.asOf) query.set("as_of", scope.asOf);
+    if (scope.corpusVersionId) query.set("corpus_version_id", scope.corpusVersionId);
+    const path = `/v1/document-versions/resolve?${query}`;
+    const response = await this.request(path);
+    if (!response.ok) throw await this.toApiError(response, path);
+    const seen = new Set<string>();
+    return array(await this.json(response, path), path).map((raw) => {
+      const row = object(raw, "version reference");
+      const versionId = string(row.document_version_id, "document_version_id");
+      const documentId = string(row.document_id, "document_id");
+      if (!ids.includes(versionId) || seen.has(versionId))
+        throw new EvidenceContractError("unexpected or repeated version reference");
+      seen.add(versionId);
+      return { document_version_id: versionId, document_id: documentId };
+    });
+  }
+
+  async getDocument(documentId: string, scope: EvidenceScope = {}): Promise<DocumentMeta | null> {
+    const path = `/v1/documents/${encodeURIComponent(documentId)}`;
+    const response = await this.request(path);
+    if (response.status === 404) return null;
+    if (!response.ok) throw await this.toApiError(response, path);
+    const meta = await this.json(response, path);
+    assertDocumentMeta(meta, "document metadata");
+    if (meta.id !== documentId) throw new EvidenceContractError("metadata document differs");
+    const cutoff = scope.asOf ?? this.asOf;
+    if (cutoff && Date.parse(meta.published_at) > Date.parse(cutoff)) return null;
+    return meta;
+  }
+
+  async getReader(
+    documentId: string,
+    options: ReaderPageOptions = {},
+  ): Promise<ReaderResponse | null> {
+    const query = new URLSearchParams();
+    const asOf = options.asOf ?? this.asOf;
+    const corpusVersionId =
+      (options.corpusVersionId === undefined ? this.corpusVersionId : options.corpusVersionId) ||
+      undefined;
+    if (asOf) query.set("as_of", asOf);
+    if (corpusVersionId) query.set("corpus_version_id", corpusVersionId);
+    if (options.includeSiblings === false) query.set("include_siblings", "false");
+    if (options.siblingLimit !== undefined)
+      query.set("sibling_limit", String(options.siblingLimit));
+    if (options.siblingCursor) query.set("sibling_cursor", options.siblingCursor);
+    if (options.siblingOrder) query.set("sibling_order", options.siblingOrder);
+    if (options.documentVersionId) query.set("document_version_id", options.documentVersionId);
     const suffix = query.size > 0 ? `?${query.toString()}` : "";
     const path = `/v1/documents/${encodeURIComponent(documentId)}/reader${suffix}`;
     const response = await this.request(path);
     if (response.status === 404) return null;
     if (!response.ok) throw await this.toApiError(response, path);
-    return validateReaderResponse(
+    const reader = validateReaderResponse(
       await this.json(response, path),
       documentId,
-      this.asOf,
-      this.corpusVersionId,
+      asOf,
+      corpusVersionId ?? undefined,
     );
+    if (
+      options.documentVersionId &&
+      reader.document.document_version_id !== options.documentVersionId
+    ) {
+      throw new EvidenceContractError("target version changed while browsing history");
+    }
+    const pageMode =
+      options.includeSiblings === false ||
+      options.siblingLimit !== undefined ||
+      options.siblingCursor !== undefined ||
+      options.siblingOrder !== undefined;
+    const page = reader.sibling_page;
+    if (pageMode && !page) throw new EvidenceContractError("missing sibling page metadata");
+    if (page) {
+      if (
+        page.returned !== reader.siblings.length ||
+        page.returned > page.limit ||
+        (options.siblingLimit !== undefined && page.limit !== options.siblingLimit) ||
+        (options.includeSiblings === false &&
+          (page.scope !== "excluded" ||
+            page.returned !== 0 ||
+            page.complete ||
+            page.next_cursor ||
+            page.previous_cursor)) ||
+        (options.includeSiblings !== false && page.scope !== "page") ||
+        (page.complete && (page.next_cursor || page.previous_cursor)) ||
+        (page.returned === 0 && (page.next_cursor || page.previous_cursor)) ||
+        [page.next_cursor, page.previous_cursor].some(
+          (cursor) =>
+            cursor !== null &&
+            (!cursor || cursor.length > 2048 || cursor === options.siblingCursor),
+        ) ||
+        (page.next_cursor !== null && page.next_cursor === page.previous_cursor)
+      ) {
+        throw new EvidenceContractError("invalid or non-progressing sibling page metadata");
+      }
+    }
+    return reader;
   }
 }

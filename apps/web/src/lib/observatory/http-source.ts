@@ -16,8 +16,12 @@ import type {
   ObservatoryQuerySource,
   QueryAccepted,
   QuerySnapshot,
+  QueryPage,
+  RetrievalEventPage,
   RetrievalTrace,
 } from "./query-source";
+import type { PageOptions } from "../data/evidence-source";
+import { pageQuery, readPage } from "../data/pagination";
 import type { RetrievalStreamOpener } from "./sse";
 import { LANES } from "./trace-view";
 import { recordError, recordTiming } from "../telemetry";
@@ -236,19 +240,60 @@ export class HttpObservatorySource implements ObservatoryQuerySource {
     return validateQueryAccepted(await this.json(response, path), path);
   }
 
-  async getQuery(queryId: string): Promise<QuerySnapshot> {
-    const path = `/v1/queries/${encodeURIComponent(queryId)}`;
+  async getQuery(queryId: string, options: PageOptions = {}): Promise<QueryPage> {
+    const path = `/v1/queries/${encodeURIComponent(queryId)}?${pageQuery(options, ObservatoryContractError)}`;
     const started = now();
     try {
       const response = await this.request(path, { method: "GET" });
       if (!response.ok) throw await this.toApiError(response, path);
       const snapshot = validateQuerySnapshot(await this.json(response, path), path);
+      if (snapshot.query_id !== queryId)
+        throw new ObservatoryContractError("query page resource differs");
       recordTiming("observatory.query.fetch", now() - started, { queryId });
-      return snapshot;
+      const runPage = readPage(snapshot.runs, response.headers, options, ObservatoryContractError);
+      if (new Set(snapshot.runs.map((run) => run.run_id)).size !== snapshot.runs.length)
+        throw new ObservatoryContractError("duplicate run id");
+      return { ...snapshot, runPage };
     } catch (error) {
       recordError("observatory.fetch.error", error, { queryId });
       throw error;
     }
+  }
+
+  async getEventHistory(runId: string, options: PageOptions = {}): Promise<RetrievalEventPage> {
+    const path = `/v1/retrieval-runs/${encodeURIComponent(runId)}/event-history?${pageQuery(options, ObservatoryContractError)}`;
+    const response = await this.request(path, { method: "GET" });
+    if (!response.ok) throw await this.toApiError(response, path);
+    const body = object(await this.json(response, path), path);
+    if (body.run_id !== runId) throw new ObservatoryContractError("event page run differs");
+    const items = array(body.items, "event items");
+    const seen = new Set<number>();
+    for (const raw of items) {
+      const event = object(raw, "event");
+      if (event.run_id !== runId || event.schema_version !== "retrieval-event/v1")
+        throw new ObservatoryContractError("event belongs to another run or schema");
+      const seq = number(event.seq, "event.seq");
+      if (!Number.isInteger(seq) || seq < 1 || seen.has(seq))
+        throw new ObservatoryContractError("invalid event sequence");
+      seen.add(seq);
+      string(event.type, "event.type");
+      string(event.occurred_at, "event.occurred_at");
+      object(event.payload, "event.payload");
+    }
+    const headers = new Headers(response.headers);
+    for (const [key, header] of [
+      ["next_cursor", "X-FEL-Next-Cursor"],
+      ["previous_cursor", "X-FEL-Previous-Cursor"],
+    ]) {
+      const value = body[key!];
+      if (value !== null && typeof value !== "string")
+        throw new ObservatoryContractError("invalid event cursor");
+      if (headers.has(header!) && headers.get(header!) !== value)
+        throw new ObservatoryContractError("conflicting event continuation metadata");
+      if (typeof value === "string") headers.set(header!, value);
+    }
+    readPage(items, headers, options, ObservatoryContractError);
+    return body as unknown as RetrievalEventPage;
   }
 
   async createRerun(queryId: string, idempotencyKey: string): Promise<QueryAccepted> {

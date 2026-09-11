@@ -161,6 +161,13 @@ def test_query_snapshot_keeps_every_run(
             (created.json()["run_id"],),
         )
     snapshot = client.get(f"/v1/queries/{created.json()['query_id']}", headers=_headers(*org))
+    assert snapshot.status_code == 409, snapshot.text
+    assert snapshot.json()["error"]["code"] == "PAGINATION_REQUIRED"
+    snapshot = client.get(
+        f"/v1/queries/{created.json()['query_id']}",
+        params={"limit": 200},
+        headers=_headers(*org),
+    )
     assert snapshot.status_code == 200, snapshot.text
     assert len(snapshot.json()["runs"]) == 51
 

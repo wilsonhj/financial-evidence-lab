@@ -1026,3 +1026,22 @@ def test_rls_cross_org_is_404(
         client.get(f"/v1/retrieval-runs/{created['run_id']}/events", headers=other).status_code
         == 404
     )
+
+
+def test_query_run_page_preserves_snapshot(client, org, seeded):
+    created = _create(client, org, seeded["workspace_id"])
+    rerun = client.post(
+        f"/v1/queries/{created['query_id']}/reruns",
+        json={"mode": "replay"},
+        headers={**_headers(*org), "Idempotency-Key": str(uuid.uuid4())},
+    )
+    assert rerun.status_code == 202, rerun.text
+    url = f"/v1/queries/{created['query_id']}"
+    page = client.get(url, params={"limit": 1}, headers=_headers(*org))
+    assert len(page.json()["runs"]) == 1
+    after = client.get(
+        url, params={"cursor": page.headers["X-FEL-Next-Cursor"]}, headers=_headers(*org)
+    )
+    assert after.json()["runs"][0]["run_id"] == rerun.json()["run_id"]
+    assert after.json()["question"] == page.json()["question"]
+    assert after.json()["plan"] == page.json()["plan"]

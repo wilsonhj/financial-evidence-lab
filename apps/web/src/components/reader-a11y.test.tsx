@@ -17,7 +17,7 @@ vi.mock("next/link", () => ({
 }));
 
 async function readyData(documentId: string): Promise<ReaderData> {
-  const result = await loadReaderData(fixtureEvidenceSource, documentId);
+  const result = await loadReaderData(fixtureEvidenceSource, documentId, { siblingLimit: 10 });
   if (result.kind !== "ready") throw new Error(`expected ready, got ${result.kind}`);
   return result.data;
 }

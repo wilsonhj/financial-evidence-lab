@@ -44,14 +44,16 @@ function citationBadgeClass(status: RetrievalCitation["status"]): string {
 function CandidateRef({
   candidate,
   documentIdByVersionId,
+  plan,
   spanId,
 }: {
   candidate: Candidate;
   documentIdByVersionId: Readonly<Record<string, string>>;
+  plan: RetrievalTrace["plan"];
   /** Span to deep-link; defaults to the candidate's own span. Citations pass their own span. */
   spanId?: string;
 }) {
-  const href = readerHref(candidate, documentIdByVersionId, spanId);
+  const href = readerHref(candidate, documentIdByVersionId, spanId, plan);
   const label = `${candidate.kind} ${candidate.item_id.slice(0, 8)}`;
   if (!href) {
     return (
@@ -215,6 +217,7 @@ function LaneSection({
                         <CandidateRef
                           candidate={row.candidate}
                           documentIdByVersionId={documentIdByVersionId}
+                          plan={trace.plan}
                         />
                       </td>
                     </tr>
@@ -303,6 +306,7 @@ function ClaimsSection({
                         <CandidateRef
                           candidate={candidate}
                           documentIdByVersionId={documentIdByVersionId}
+                          plan={trace.plan}
                           spanId={citation.source_span_id}
                         />
                       ) : (

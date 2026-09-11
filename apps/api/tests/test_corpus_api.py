@@ -289,12 +289,136 @@ def test_document_listing_keeps_new_filings_after_fifty(
             (ids["entity_id"], TEXT_HASH),
         )
     url = f"/v1/entities/{ids['entity_id']}/documents"
-    response = client.get(url, headers=_headers(org_fixture))
+    response = client.get(url, headers=_headers(org_fixture), params={"limit": 200})
     assert response.status_code == 200, response.text
     assert len(response.json()) == 52
     assert response.json()[-1]["id"] == ids["late_doc"]
     cutoff = client.get(
-        url, params={"as_of": "2026-06-01T00:00:00Z"}, headers=_headers(org_fixture)
+        url, params={"as_of": "2026-06-01T00:00:00Z", "limit": 200}, headers=_headers(org_fixture)
     )
     assert len(cutoff.json()) == 51
     assert cutoff.json()[-1]["id"] == ids["early_doc"]
+
+
+def test_document_pages_and_version_resolution(client, org_fixture, db_url):
+    ids = _seed_corpus(db_url)
+    url = f"/v1/entities/{ids['entity_id']}/documents"
+    first = client.get(url, headers=_headers(org_fixture), params={"limit": 1})
+    assert len(first.json()) == 1
+    cursor = first.headers["X-FEL-Next-Cursor"]
+    second = client.get(url, headers=_headers(org_fixture), params={"cursor": cursor})
+    assert [r["id"] for r in second.json()] == [ids["late_doc"]]
+    hidden = client.get(
+        "/v1/document-versions/resolve",
+        headers=_headers(org_fixture),
+        params=[
+            ("document_version_id", ids["version_id"]),
+            ("document_version_id", ids["late_version_id"]),
+            ("as_of", "2026-06-01T00:00:00Z"),
+        ],
+    )
+    assert hidden.status_code == 200, hidden.text
+    assert hidden.json() == [
+        {"document_version_id": ids["version_id"], "document_id": ids["early_doc"]}
+    ]
+    wrong = client.get(
+        url,
+        headers=_headers(org_fixture),
+        params={"cursor": cursor, "as_of": "2026-06-01T00:00:00Z"},
+    )
+    assert wrong.status_code == 422
+
+
+def test_large_document_history_filters_before_limit_and_reaches_both_ends(
+    client, org_fixture, db_url
+):
+    entity = str(uuid.uuid4())
+    prefix = uuid.uuid4().hex
+    pin = str(uuid.uuid4())
+    with psycopg.connect(db_url) as c:
+        c.execute(
+            "WITH added AS (INSERT INTO documents (id, entity_id, accession, source_url,"
+            " content_hash, storage_key, published_at) SELECT gen_random_uuid(), %s, "
+            "%s||lpad(n::text, 4, '0'), 'https://example.invalid', %s, 'raw', "
+            "'2026-01-01' FROM generate_series(1, 251) n RETURNING id) INSERT INTO "
+            "document_versions(id, document_id, parser_version, normalizer_version, "
+            "canonical_text_key) SELECT gen_random_uuid(), id, 'p', 'n', 'text' FROM "
+            "added",
+            (entity, prefix, TEXT_HASH),
+        )
+        c.execute(
+            "INSERT INTO documents (id, entity_id, accession, source_url, content_hash, "
+            "storage_key, published_at) SELECT gen_random_uuid(), %s, %s||n, "
+            "'https://example.invalid', %s, 'raw', '2020-01-01' FROM generate_series(1, "
+            "251) n",
+            (entity, prefix + "hidden-", TEXT_HASH),
+        )
+        expected = [
+            str(r[0])
+            for r in c.execute(
+                "SELECT d.id FROM documents d JOIN document_versions dv ON "
+                "dv.document_id=d.id WHERE d.entity_id=%s ORDER BY d.published_at, "
+                'd.accession COLLATE "C", d.id',
+                (entity,),
+            )
+        ]
+        vid = c.execute(
+            "SELECT id FROM document_versions WHERE document_id=%s", (expected[-1],)
+        ).fetchone()[0]
+        c.execute(
+            "INSERT INTO corpus_versions(id,label,status) VALUES (%s,%s,'superseded')", (pin, pin)
+        )
+        c.execute(
+            "INSERT INTO corpus_version_documents(corpus_version_id, "
+            "document_version_id) VALUES (%s, %s)",
+            (pin, vid),
+        )
+    url = f"/v1/entities/{entity}/documents"
+    headers = _headers(org_fixture)
+    assert client.get(url, headers=headers).status_code == 409
+    for order, wanted in [("asc", expected), ("desc", expected[::-1])]:
+        seen = []
+        cursor = None
+        while True:
+            params = {"limit": 50, "order": order}
+            if cursor:
+                params["cursor"] = cursor
+            response = client.get(url, params=params, headers=headers)
+            assert response.status_code == 200
+            seen.extend(r["id"] for r in response.json())
+            cursor = response.headers.get("X-FEL-Next-Cursor")
+            if not cursor:
+                break
+        assert seen == wanted
+    pinned = client.get(url, params={"limit": 1, "corpus_version_id": pin}, headers=headers)
+    assert [r["id"] for r in pinned.json()] == [expected[-1]]
+    assert "X-FEL-Next-Cursor" not in pinned.headers
+    resolved = client.get(
+        "/v1/document-versions/resolve",
+        params=[("document_version_id", str(vid)), ("corpus_version_id", pin)],
+        headers=headers,
+    )
+    assert resolved.json() == [{"document_version_id": str(vid), "document_id": expected[-1]}]
+    invalid = client.get(
+        "/v1/document-versions/resolve",
+        params=[("document_version_id", str(uuid.uuid4())) for _ in range(201)],
+        headers=headers,
+    )
+    assert invalid.status_code == 422
+
+
+@pytest.mark.parametrize(
+    "as_of", ["0001-01-01T00:00:00+01:00", "9999-12-31T23:59:59-01:00", "2026-06-01T00:00:00"]
+)
+def test_cutoff_outside_utc_range_is_422(client, org_fixture, db_url, as_of):
+    ids = _seed_corpus(db_url)
+    for url, params in [
+        (f"/v1/entities/{ids['entity_id']}/documents", {"limit": 1, "as_of": as_of}),
+        (
+            "/v1/document-versions/resolve",
+            {"document_version_id": ids["version_id"], "as_of": as_of},
+        ),
+    ]:
+        response = client.get(url, params=params, headers=_headers(org_fixture))
+        assert response.status_code == 422
+        assert response.json()["error"]["code"] == "VALIDATION_ERROR"

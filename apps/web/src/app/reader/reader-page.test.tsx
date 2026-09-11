@@ -6,9 +6,10 @@ import { EvidenceReader } from "../../components/EvidenceReader";
 import { DOC_10Q_ID, DOC_10QA_ID } from "../../lib/fixtures/synthetic-filing";
 
 async function renderPageElement(documentId: string): Promise<ReactElement> {
-  return (await ReaderPage({
+  const page = (await ReaderPage({
     params: Promise.resolve({ documentId }),
-  })) as ReactElement;
+  })) as ReactElement<{ children: ReactElement[] }>;
+  return page.props.children.find((child) => child?.type === EvidenceReader)!;
 }
 
 describe("ReaderPage", () => {

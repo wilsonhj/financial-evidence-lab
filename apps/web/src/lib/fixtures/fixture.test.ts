@@ -149,7 +149,7 @@ describe("synthetic filing fixture", () => {
 
 describe("FixtureEvidenceSource", () => {
   it("serves documents, sections, spans, and facts from the fixture", async () => {
-    expect(await fixtureEvidenceSource.listDocuments()).toEqual(fixtureDocuments);
+    expect((await fixtureEvidenceSource.listDocuments(ENTITY_ID)).items).toEqual(fixtureDocuments);
     expect((await fixtureEvidenceSource.getDocument(DOC_10QA_ID))?.form).toBe("10-Q/A");
     expect(await fixtureEvidenceSource.getDocument("aaaaaaaa-0000-4000-8000-00000000cafe")).toBe(
       null,
@@ -194,7 +194,7 @@ describe("FixtureEvidenceSource", () => {
   });
 
   it("returns defensive copies, never fixture references", async () => {
-    const documents = await fixtureEvidenceSource.listDocuments();
+    const documents = (await fixtureEvidenceSource.listDocuments(ENTITY_ID)).items;
     documents[0]!.accession = "mutated";
     const facts = await fixtureEvidenceSource.getFacts(ENTITY_ID);
     facts[0]!.fact.value = "999";

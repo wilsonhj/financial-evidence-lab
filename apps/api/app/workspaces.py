@@ -7,7 +7,7 @@ import json
 import uuid
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Header, Request, Response
+from fastapi import APIRouter, Depends, Header, Query, Request, Response
 from psycopg import sql
 from pydantic import AwareDatetime, BaseModel, Field
 
@@ -16,6 +16,7 @@ from app.db import tenant_connection
 from app.dependencies import get_tenant_context
 from app.errors import api_error
 from app.observability import record_audit_event
+from app.pagination import Order, page_headers, read_page, scope
 
 router = APIRouter(prefix="/v1/workspaces", tags=["workspaces"])
 
@@ -113,10 +114,24 @@ def create_workspace(
 
 @router.get("")
 def list_workspaces(
+    response: Response,
     ctx: Annotated[TenantContext, Depends(get_tenant_context)],
+    limit: Annotated[int | None, Query(ge=1, le=200)] = None,
+    cursor: Annotated[str | None, Query(max_length=2048)] = None,
+    order: Annotated[Order | None, Query()] = None,
 ) -> list[dict[str, Any]]:
     with tenant_connection(ctx) as conn:
-        rows = conn.execute("SELECT * FROM workspaces ORDER BY created_at").fetchall()
+        rows, page = read_page(
+            conn,
+            query="SELECT * FROM workspaces WHERE org_id = %s",
+            params=(ctx.org_id,),
+            keys=("created_at", "id"),
+            request_scope=scope("workspaces", ctx.org_id),
+            limit=limit,
+            token=cursor,
+            order=order,
+        )
+    page_headers(response, page)
     return [_row_to_body(r) for r in rows]
 
 

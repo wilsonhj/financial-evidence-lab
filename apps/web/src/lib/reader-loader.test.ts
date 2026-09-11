@@ -15,7 +15,11 @@ import {
 
 function sourceWithMutation(mutate: (response: ReaderResponse) => void): EvidenceSource {
   return {
-    listDocuments: () => fixtureEvidenceSource.listDocuments(),
+    entityIds: fixtureEvidenceSource.entityIds,
+    getDocument: fixtureEvidenceSource.getDocument.bind(fixtureEvidenceSource),
+    resolveDocumentVersions:
+      fixtureEvidenceSource.resolveDocumentVersions.bind(fixtureEvidenceSource),
+    listDocuments: fixtureEvidenceSource.listDocuments.bind(fixtureEvidenceSource),
     getReader: async (documentId) => {
       const response = await fixtureEvidenceSource.getReader(documentId);
       if (response) mutate(response);
@@ -34,7 +38,7 @@ describe("loadReaderData", () => {
   });
 
   it("assembles the target and siblings from one composite snapshot", async () => {
-    const result = await loadReaderData(fixtureEvidenceSource, DOC_10Q_ID);
+    const result = await loadReaderData(fixtureEvidenceSource, DOC_10Q_ID, { siblingLimit: 10 });
     expect(result.kind).toBe("ready");
     if (result.kind !== "ready") return;
     const { data } = result;
@@ -114,7 +118,10 @@ describe("loadReaderData", () => {
 
   it("propagates source failures instead of mapping them to not_found", async () => {
     const source: EvidenceSource = {
-      listDocuments: () => Promise.resolve([]),
+      entityIds: [],
+      getDocument: async () => null,
+      resolveDocumentVersions: async () => [],
+      listDocuments: async () => ({ items: [], limit: 50, nextCursor: null, previousCursor: null }),
       getReader: () => Promise.reject(new Error("api unavailable")),
     };
     await expect(loadReaderData(source, DOC_10Q_ID)).rejects.toThrow("api unavailable");

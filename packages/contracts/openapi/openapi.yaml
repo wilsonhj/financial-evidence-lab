@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Financial Evidence Lab API
-  version: 0.6.0
+  version: 0.7.0
   description: >-
     Frozen v1 contract surface (ADR-0001). This file seeds the M0 freeze:
     conventions (error envelope, idempotency, optimistic concurrency,
@@ -66,15 +66,30 @@ paths:
     get:
       operationId: listWorkspaces
       summary: List workspaces visible to the caller
+      parameters:
+        - $ref: "#/components/parameters/PageLimit"
+        - $ref: "#/components/parameters/PageCursor"
+        - $ref: "#/components/parameters/PageOrder"
       responses:
         "200":
           description: Workspaces.
+          headers:
+            X-FEL-Next-Cursor:
+              $ref: "#/components/headers/PageCursor"
+            X-FEL-Previous-Cursor:
+              $ref: "#/components/headers/PageCursor"
+            X-FEL-Page-Limit:
+              $ref: "#/components/headers/PageLimit"
           content:
             application/json:
               schema:
                 type: array
                 items:
                   $ref: "#/components/schemas/Workspace"
+        "409":
+          $ref: "#/components/responses/PaginationRequired"
+        "422":
+          $ref: "#/components/responses/Error"
         default:
           $ref: "#/components/responses/Error"
   /v1/workspaces/{workspaceId}:
@@ -170,6 +185,12 @@ paths:
       operationId: listEntityDocuments
       summary: List an entity's documents (point-in-time filtered)
       parameters:
+        - name: corpus_version_id
+          in: query
+          schema: { type: string, format: uuid }
+        - $ref: "#/components/parameters/PageLimit"
+        - $ref: "#/components/parameters/PageCursor"
+        - $ref: "#/components/parameters/PageOrder"
         - name: as_of
           in: query
           required: false
@@ -182,12 +203,23 @@ paths:
       responses:
         "200":
           description: Documents.
+          headers:
+            X-FEL-Next-Cursor:
+              $ref: "#/components/headers/PageCursor"
+            X-FEL-Previous-Cursor:
+              $ref: "#/components/headers/PageCursor"
+            X-FEL-Page-Limit:
+              $ref: "#/components/headers/PageLimit"
           content:
             application/json:
               schema:
                 type: array
                 items:
                   $ref: "#/components/schemas/DocumentMeta"
+        "409":
+          $ref: "#/components/responses/PaginationRequired"
+        "422":
+          $ref: "#/components/responses/Error"
         default:
           $ref: "#/components/responses/Error"
   /v1/documents/{documentId}:
@@ -234,6 +266,24 @@ paths:
       security:
         - bearerAuth: []
       parameters:
+        - name: document_version_id
+          in: query
+          description: Explicit parsed target version; must belong to target and agree with any corpus pin. Missing, foreign or excluded versions return uniform 404.
+          schema: { type: string, format: uuid }
+        - name: include_siblings
+          in: query
+          schema: { type: boolean, default: true }
+          description: False returns target-only evidence with explicit excluded coverage.
+        - name: sibling_limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 20 }
+          description: Opt into sibling page mode; default 10 within page mode.
+        - name: sibling_cursor
+          in: query
+          schema: { type: string, maxLength: 2048 }
+        - name: sibling_order
+          in: query
+          schema: { type: string, enum: [asc, desc] }
         - name: as_of
           in: query
           required: false
@@ -271,6 +321,10 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "409":
+          $ref: "#/components/responses/PaginationRequired"
+        "413":
+          $ref: "#/components/responses/ReaderTooLarge"
         default:
           $ref: "#/components/responses/Error"
   /v1/source-spans/{sourceSpanId}:
@@ -396,14 +450,29 @@ paths:
       summary: Fetch an immutable query snapshot and its run history
       security:
         - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PageLimit"
+        - $ref: "#/components/parameters/PageCursor"
+        - $ref: "#/components/parameters/PageOrder"
       responses:
         "200":
           description: Query snapshot.
+          headers:
+            X-FEL-Next-Cursor:
+              $ref: "#/components/headers/PageCursor"
+            X-FEL-Previous-Cursor:
+              $ref: "#/components/headers/PageCursor"
+            X-FEL-Page-Limit:
+              $ref: "#/components/headers/PageLimit"
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/QuerySnapshot"
         "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/PaginationRequired"
+        "422":
           $ref: "#/components/responses/Error"
         default:
           $ref: "#/components/responses/Error"
@@ -455,6 +524,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/RetrievalTrace"
+        "413":
+          $ref: "#/components/responses/TraceTooLarge"
         default:
           $ref: "#/components/responses/Error"
   /v1/retrieval-runs/{runId}/events:
@@ -491,6 +562,62 @@ paths:
           $ref: "#/components/responses/Error"
         "404":
           $ref: "#/components/responses/Error"
+        "413":
+          $ref: "#/components/responses/TraceTooLarge"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/document-versions/resolve:
+    get:
+      operationId: resolveDocumentVersions
+      summary: Resolve at most 200 visible parsed version IDs under a cutoff and corpus pin
+      parameters:
+        - name: document_version_id
+          in: query
+          required: true
+          schema:
+            type: array
+            minItems: 1
+            maxItems: 200
+            items: { type: string, format: uuid }
+        - name: as_of
+          in: query
+          schema: { type: string, format: date-time }
+        - name: corpus_version_id
+          in: query
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Visible references only; unknown or hidden versions do not resolve.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DocumentVersionReference"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/retrieval-runs/{runId}/event-history:
+    parameters:
+      - $ref: "#/components/parameters/RunId"
+    get:
+      operationId: getRetrievalEventHistory
+      summary: Bounded persisted event inspection, independent of complete trace limits
+      parameters:
+        - $ref: "#/components/parameters/PageLimit"
+        - $ref: "#/components/parameters/PageCursor"
+        - $ref: "#/components/parameters/PageOrder"
+      responses:
+        "200":
+          description: One event page.
+          headers:
+            X-FEL-Page-Limit:
+              $ref: "#/components/headers/PageLimit"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RetrievalEventPage"
+        "413":
+          $ref: "#/components/responses/TraceTooLarge"
         default:
           $ref: "#/components/responses/Error"
   /v1/retrieval-runs/{runId}/feedback:
@@ -898,6 +1025,20 @@ components:
       schema:
         type: string
         format: uuid
+    PageLimit:
+      name: limit
+      in: query
+      description: Explicit page mode; default 50 inside page mode. Without limit or cursor, complete legacy results up to 50, otherwise PAGINATION_REQUIRED. Cursor carries the original limit.
+      schema: { type: integer, minimum: 1, maximum: 200 }
+    PageCursor:
+      name: cursor
+      in: query
+      description: Opaque scope-bound continuation; reauthenticate every request. Not a cross-request MVCC snapshot.
+      schema: { type: string, maxLength: 2048 }
+    PageOrder:
+      name: order
+      in: query
+      schema: { type: string, enum: [asc, desc], default: asc }
     Cursor:
       name: cursor
       in: query
@@ -905,11 +1046,35 @@ components:
       schema:
         type: string
   headers:
+    PageCursor:
+      description: Continuation in the named direction; absent when no page exists.
+      schema: { type: string, maxLength: 2048 }
+    PageLimit:
+      description: Effective limit in explicit page mode.
+      schema: { type: integer, minimum: 1, maximum: 200 }
     ETag:
       description: Version tag for optimistic concurrency.
       schema:
         type: string
   responses:
+    PaginationRequired:
+      description: PAGINATION_REQUIRED. Complete legacy response exceeds the ceiling. Restart parameters appear in error.details.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    ReaderTooLarge:
+      description: READER_TOO_LARGE. Individual evidence or total response exceeds a fixed resource bound; error.details identifies resource, limit_kind and limit.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    TraceTooLarge:
+      description: TRACE_TOO_LARGE. Complete trace or indivisible event exceeds a fixed resource bound; no partial success.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
     Error:
       description: Error envelope (all non-2xx responses use this shape).
       content:
@@ -1189,8 +1354,7 @@ components:
         text; content is exactly canonical_text[start_char:end_char], so a
         span's section-local offset is span.start_char - section.start_char
         (ADR-0005 section 4).
-      required:
-        [id, document_version_id, heading, heading_path, ord, start_char, end_char, content]
+      required: [id, document_version_id, heading, heading_path, ord, start_char, end_char, content]
       properties:
         id:
           type: string
@@ -1301,6 +1465,34 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ReaderFactRecord"
+    ReaderSiblingPage:
+      type: object
+      additionalProperties: false
+      required: [scope, returned, limit, complete, next_cursor, previous_cursor]
+      properties:
+        scope: { type: string, enum: [page, excluded] }
+        returned: { type: integer, minimum: 0, maximum: 20 }
+        limit: { type: integer, minimum: 1, maximum: 20 }
+        complete:
+          type: boolean
+          description: True only when this response contains the entire eligible sibling set. Unpinned cross-page browsing is not immutable comparison coverage.
+        next_cursor: { type: [string, "null"], maxLength: 2048 }
+        previous_cursor: { type: [string, "null"], maxLength: 2048 }
+    DocumentVersionReference:
+      $ref: "../schemas/document-version-reference.schema.json"
+    RetrievalEventPage:
+      type: object
+      additionalProperties: false
+      required: [run_id, items, next_cursor, previous_cursor]
+      properties:
+        run_id: { type: string, format: uuid }
+        items:
+          type: array
+          maxItems: 200
+          items:
+            $ref: "#/components/schemas/RetrievalEvent"
+        next_cursor: { type: [string, "null"], maxLength: 2048 }
+        previous_cursor: { type: [string, "null"], maxLength: 2048 }
     ReaderResponse:
       type: object
       description: >-
@@ -1308,6 +1500,8 @@ components:
         Schema: https://contracts.fel.dev/schemas/reader-response/v1.
       required: [as_of, corpus_version_id, selection_policy, document, siblings]
       properties:
+        sibling_page:
+          $ref: "#/components/schemas/ReaderSiblingPage"
         as_of:
           type: string
           format: date-time
@@ -1606,14 +1800,7 @@ components:
           type: string
         status:
           type: string
-          enum:
-            [
-              supported,
-              partially_supported,
-              contradicted,
-              derived,
-              unsupported,
-            ]
+          enum: [supported, partially_supported, contradicted, derived, unsupported]
         citations:
           type: array
           items:

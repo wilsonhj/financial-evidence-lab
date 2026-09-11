@@ -1,8 +1,11 @@
-import { ObservatoryApiError } from "./errors";
+import type { PageOptions } from "../data/evidence-source";
+import { fixturePage } from "../data/pagination";
+import { ObservatoryApiError, ObservatoryContractError } from "./errors";
 import type {
   ObservatoryQuerySource,
   QueryAccepted,
-  QuerySnapshot,
+  QueryPage,
+  RetrievalEventPage,
   RetrievalTrace,
 } from "./query-source";
 import { serializeEventFrame, type RetrievalStreamOpener } from "./sse";
@@ -44,11 +47,36 @@ export class MockObservatorySource implements ObservatoryQuerySource {
     });
   }
 
-  getQuery(queryId: string): Promise<QuerySnapshot> {
+  getQuery(queryId: string, options: PageOptions = {}): Promise<QueryPage> {
     if (queryId !== MOCK_QUERY_ID) {
       return Promise.reject(new ObservatoryApiError(404, `/v1/queries/${queryId}`, "unavailable"));
     }
-    return Promise.resolve(structuredClone(MOCK_QUERY_SNAPSHOT));
+    const snapshot = structuredClone(MOCK_QUERY_SNAPSHOT);
+    const runPage = fixturePage(
+      snapshot.runs.sort(
+        (a, b) => a.created_at.localeCompare(b.created_at) || a.run_id.localeCompare(b.run_id),
+      ),
+      options,
+      `query:${queryId}`,
+      ObservatoryContractError,
+    );
+    return Promise.resolve({ ...snapshot, runs: runPage.items, runPage });
+  }
+
+  async getEventHistory(runId: string, options: PageOptions = {}): Promise<RetrievalEventPage> {
+    await this.getRun(runId);
+    const page = fixturePage(
+      [...this.events].sort((a, b) => a.seq - b.seq),
+      options,
+      `events:${runId}`,
+      ObservatoryContractError,
+    );
+    return {
+      run_id: runId,
+      items: structuredClone(page.items),
+      next_cursor: page.nextCursor,
+      previous_cursor: page.previousCursor,
+    };
   }
 
   createRerun(): Promise<QueryAccepted> {
