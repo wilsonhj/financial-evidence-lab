@@ -4,10 +4,13 @@ from __future__ import annotations
 
 import json
 import uuid
+from collections.abc import Callable
+from contextlib import AbstractContextManager
 from datetime import datetime
 from typing import Any
 
 import psycopg
+from fastapi import Response
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
 from app.auth import TenantContext
@@ -16,6 +19,8 @@ from app.costs import (
     reserve_query_cost,
 )
 from app.errors import api_error
+
+TenantConnection = Callable[..., AbstractContextManager[psycopg.Connection[dict[str, Any]]]]
 
 # Planner identity persisted on every query/run. Kept in one place so the query
 # guard's run<->query planner-pin agreement always holds.
@@ -191,3 +196,48 @@ def _accepted_body(query_id: str, run_id: str) -> dict[str, Any]:
         "run_id": run_id,
         "events_url": f"/v1/retrieval-runs/{run_id}/events",
     }
+
+
+def create_retrieval_feedback(
+    run_id: uuid.UUID,
+    body: EvidenceFeedback,
+    ctx: TenantContext,
+    idempotency_key: str,
+    *,
+    tenant_connection: TenantConnection,
+) -> Response:
+    if body.label not in _FEEDBACK_LABELS:
+        raise api_error(422, "INVALID_LABEL", "Unknown feedback label.")
+    with tenant_connection(ctx) as conn:
+        replay = _idempotent_replay(conn, ctx, "createRetrievalFeedback", idempotency_key)
+        if replay is not None:
+            return Response(status_code=201)
+        run = conn.execute("SELECT id FROM retrieval_runs WHERE id = %s", (str(run_id),)).fetchone()
+        if run is None:
+            raise api_error(404, "NOT_FOUND", "Retrieval run not found.")
+        try:
+            conn.execute(
+                "INSERT INTO retrieval_feedback ("
+                " id, org_id, run_id, retrieval_item_id, label, actor_user_id,"
+                " supersedes_feedback_id, reason"
+                ") VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+                (
+                    str(uuid.uuid4()),
+                    ctx.org_id,
+                    str(run_id),
+                    str(body.item_id),
+                    body.label,
+                    ctx.user_id,
+                    str(body.supersedes_feedback_id) if body.supersedes_feedback_id else None,
+                    body.reason,
+                ),
+            )
+        except (psycopg.errors.RaiseException, psycopg.errors.ForeignKeyViolation) as exc:
+            # The DB guard rejects an item that is not a candidate of this run
+            # (P0001), and an item that does not exist at all trips the item FK
+            # (23503); both are caller errors, not server faults.
+            raise api_error(
+                422, "INVALID_FEEDBACK_ITEM", "Feedback item must be a candidate of this run."
+            ) from exc
+        _idempotent_store(conn, ctx, "createRetrievalFeedback", idempotency_key, 201, {})
+    return Response(status_code=201)

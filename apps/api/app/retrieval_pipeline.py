@@ -1,4 +1,39 @@
-"""Pinned retrieval pipeline execution with explicit runtime call seams."""
+"""Observable hybrid retrieval API (M2-015 / T0206, ADR-0006).
+
+This module wires the frozen retrieval contract (openapi v0.3.0) to the pinned
+pipeline in ``fel_retrieval``: it captures an immutable query plan, executes the
+lanes -> fusion pipeline once, and persists the whole run as an ordered,
+replayable trace (events, per-lane candidate contributions, run timings and
+budget usage) inside a single tenant transaction.
+
+Persistence honours ``db/migrations/0003_retrieval_core.sql`` exactly:
+
+* All tenant writes go through ``tenant_connection`` (``fel_app`` + org claims)
+  so row-level security is active — a caller only ever sees its own org's
+  queries/runs/events/candidates, and a cross-org id is a natural 404.
+* Events carry a monotonic ``seq`` per run and are **committed before** any SSE
+  emission (emission happens in a separate GET request, after the create
+  transaction has committed), so a stream never shows an uncommitted event.
+* The run status walks the ADR-0006 machine
+  (``queued -> planning -> retrieving -> fusing -> generating -> verifying ->
+  succeeded``); the terminal transition is emitted as ``run_completed`` first so
+  the ``fel_guard_retrieval_run`` terminal-event check passes, and only the
+  column-scoped fields the migration grants (status, budget_usage, cost_usd,
+  timings_ms, finished_at, error) are ever updated.
+
+Lane reads run over the public corpus tables (``documents``/``retrieval_*`` carry
+no org_id and no RLS by design — see ``0002``/``0003``) on a dedicated read
+connection with a tuple row factory, because the lane SQL in ``fel_retrieval``
+consumes positional rows. Org isolation is unaffected: every org-scoped write
+stays on the RLS-bound tenant connection.
+
+Generation (M2-020) decomposes the selected context into atomic claims via the
+pinned structured provider; verification (M2-021) re-derives every citation edge
+from the evidence and persists claims with their edges before the run goes
+terminal. When no claim is supported (e.g. the provider refused), the run
+abstains — ``verifying -> abstained`` with a terminal ``run_abstained`` event —
+otherwise it succeeds (a contradicted claim is preserved and displayed, M2-022).
+"""
 
 from __future__ import annotations
 
