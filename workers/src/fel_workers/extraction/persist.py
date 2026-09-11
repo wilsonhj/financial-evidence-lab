@@ -16,6 +16,7 @@ from fel_workers.extraction.persist_checkpoint import (
 )
 from fel_workers.extraction.persist_conflicts import persist_conflicts as _persist_conflicts
 from fel_workers.extraction.persist_events import PostgresEventStore as PostgresEventStore
+from fel_workers.extraction.persist_events import _lock_event_run
 from fel_workers.extraction.persist_memory import MemoryPersistStore as MemoryPersistStore
 from fel_workers.extraction.persist_reads import load_run_pins, load_span_pins
 from fel_workers.extraction.persist_types import TERMINAL_RUN_STATUSES as TERMINAL_RUN_STATUSES
@@ -362,6 +363,7 @@ class PostgresPersistStore:
         is durable.
         """
         with self.conn.transaction():
+            _lock_event_run(self.conn, org_id=org_id, run_id=run_id)
             persisted = self.persist_proposals(
                 run_id=run_id, org_id=org_id, workspace_id=workspace_id, drafts=proposals
             )
