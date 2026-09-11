@@ -11,7 +11,7 @@ INSERT INTO workspaces (id,org_id,name,entity_id,base_currency,fiscal_calendar,a
  ('27800000-0000-4000-8000-000000000004','27800000-0000-4000-8000-000000000001',
   'Review','27800000-0000-4000-8000-000000000005','USD','calendar',now());
 INSERT INTO corpus_versions (id,label,status,is_active,published_at) VALUES
- ('27800000-0000-4000-8000-000000000006','Review corpus','active',false,now());
+ ('27800000-0000-4000-8000-000000000006','Review corpus','active',true,now());
 INSERT INTO extraction_policies (id,org_id,version,created_by) VALUES
  ('27800000-0000-4000-8000-000000000007','27800000-0000-4000-8000-000000000001',1,
   '27800000-0000-4000-8000-000000000003');
