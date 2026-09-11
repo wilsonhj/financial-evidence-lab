@@ -44,7 +44,7 @@ from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Annotated, Any
+from typing import Annotated, Any, cast
 
 import psycopg
 from fastapi import APIRouter, Depends, Header, Query, Response
@@ -1192,7 +1192,6 @@ def _event_body(row: dict[str, Any], run_id: str) -> dict[str, Any]:
 
 MAX_TRACE_BYTES = 16 * 1024 * 1024
 MAX_EVENT_BYTES = 256 * 1024
-EVENT_BATCH_SIZE = 200
 
 
 def _trace_too_large(kind: str, limit: int) -> Exception:
@@ -1223,13 +1222,32 @@ def _trace_rows(
         ).format(bounded),
         (*params, cap + 1),
     ).fetchone()
-    assert probe is not None
+    probe = cast(dict[str, Any], probe)
     if probe["n"] > cap:
         raise _trace_too_large(kind, cap)
     budget[0] += int(probe["bytes"])
     if budget[0] > MAX_TRACE_BYTES:
         raise _trace_too_large("serialized_bytes", MAX_TRACE_BYTES)
     return conn.execute(bounded, (*params, cap)).fetchall()
+
+
+def _check_candidate_counts(conn: psycopg.Connection[dict[str, Any]], run_id: str) -> None:
+    rows = conn.execute(
+        "SELECT retrieval_item_id FROM retrieval_candidates WHERE run_id = %s LIMIT 32001",
+        (run_id,),
+    ).fetchall()
+    if len(rows) > 32000:
+        raise _trace_too_large("candidate_contributions", 32000)
+    if len({row["retrieval_item_id"] for row in rows}) > 2000:
+        raise _trace_too_large("candidates", 2000)
+
+
+def _check_citation_count(conn: psycopg.Connection[dict[str, Any]], run_id: str) -> None:
+    rows = conn.execute(
+        "SELECT id FROM citations WHERE run_id = %s LIMIT 16001", (run_id,)
+    ).fetchall()
+    if len(rows) > 16000:
+        raise _trace_too_large("citations", 16000)
 
 
 def _event_rows(
@@ -1301,13 +1319,7 @@ def get_retrieval_run(
                     raise _trace_too_large("serialized_bytes", MAX_TRACE_BYTES)
                 event_rows.append(row)
             after = batch[-1]["seq"]
-        distinct_candidates = conn.execute(
-            "SELECT DISTINCT retrieval_item_id FROM retrieval_candidates"
-            " WHERE run_id = %s LIMIT 2001",
-            (str(run_id),),
-        ).fetchall()
-        if len(distinct_candidates) > 2000:
-            raise _trace_too_large("candidates", 2000)
+        _check_candidate_counts(conn, str(run_id))
         candidate_rows = _trace_rows(
             conn,
             "SELECT rc.retrieval_item_id, rc.lane, rc.variant_index, rc.lane_rank,"
@@ -1333,6 +1345,7 @@ def get_retrieval_run(
             "claims",
             budget,
         )
+        _check_citation_count(conn, str(run_id))
         citation_rows = _trace_rows(
             conn,
             "SELECT claim_id, retrieval_item_id, source_span_id, status, numeric_checks"
@@ -1472,7 +1485,7 @@ def _sse_stream(
                 "SELECT coalesce(max(seq),0) AS seq FROM retrieval_events" " WHERE run_id = %s",
                 (run_id,),
             ).fetchone()
-            assert high_row is not None
+            high_row = cast(dict[str, Any], high_row)
             high = high_row["seq"]
             rows = _event_rows(conn, run_id, last_event_id, high)
     else:
@@ -1508,7 +1521,7 @@ def stream_retrieval_run_events(
             "SELECT coalesce(max(seq),0) AS seq FROM retrieval_events" " WHERE run_id = %s",
             (run_id,),
         ).fetchone()
-        assert high_row is not None
+        high_row = cast(dict[str, Any], high_row)
         high = high_row["seq"]
         first = _event_rows(conn, str(run_id), last_event_id or 0, high)
     return StreamingResponse(
@@ -1550,7 +1563,7 @@ def get_retrieval_event_history(
                 or len(_event_json(row, str(run_id)).encode()) > MAX_EVENT_BYTES
             ):
                 raise _trace_too_large("event_bytes", MAX_EVENT_BYTES)
-    assert page is not None
+    page = cast(dict[str, Any], page)
     page_headers(response, page)
     return {
         "run_id": str(run_id),

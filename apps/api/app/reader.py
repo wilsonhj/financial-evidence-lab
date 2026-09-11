@@ -13,7 +13,7 @@ import json
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, cast
 
 from fastapi import APIRouter, Depends, Query
 from psycopg import Connection
@@ -322,7 +322,7 @@ def _evidence_rows(
         ).format(sql.SQL(query)),
         params,
     ).fetchone()
-    assert probe is not None
+    probe = cast(dict[str, Any], probe)
     _bound(probe["n"], cap, resource, kind)
     budget[0] += int(probe["bytes"])
     _bound(budget[0], MAX_RESPONSE_BYTES, resource, "metadata_bytes")

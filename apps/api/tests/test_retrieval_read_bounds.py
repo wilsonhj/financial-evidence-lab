@@ -105,7 +105,19 @@ def _running_run(conn, original):
 
 
 @pytest.mark.parametrize("kind", ["events", "claims", "citations", "serialized_bytes"])
-def test_full_trace_rejects_collection_or_byte_overflow(client, org, seeded, db_url, kind):
+def test_full_trace_rejects_collection_or_byte_overflow(
+    client, org, seeded, db_url, kind, monkeypatch
+):
+    from app import retrieval
+
+    materialized = []
+    original_rows = retrieval._trace_rows
+
+    def traced_rows(*args):
+        materialized.append(args[4])
+        return original_rows(*args)
+
+    monkeypatch.setattr(retrieval, "_trace_rows", traced_rows)
     created = _create(client, org, seeded["workspace_id"])
     with psycopg.connect(db_url) as c:
         run_id = _running_run(c, created["run_id"])
@@ -146,12 +158,22 @@ def test_full_trace_rejects_collection_or_byte_overflow(client, org, seeded, db_
                     "rc.retrieval_item_id, ri.source_span_id, 'entailed' FROM claims cl "
                     "JOIN retrieval_candidates rc ON rc.run_id=cl.run_id JOIN "
                     "retrieval_items ri ON ri.id=rc.retrieval_item_id CROSS JOIN "
-                    "generate_series(1, 16001) WHERE cl.run_id=%s",
+                    "generate_series(1, 16000) WHERE cl.run_id=%s",
+                    (run_id,),
+                )
+                retrieval._check_citation_count(c, run_id)
+                c.execute(
+                    "INSERT INTO citations (id, org_id, run_id, claim_id, retrieval_item_id,"
+                    " source_span_id, status) SELECT gen_random_uuid(), org_id, run_id,"
+                    " claim_id, retrieval_item_id, source_span_id, status FROM citations"
+                    " WHERE run_id=%s LIMIT 1",
                     (run_id,),
                 )
     response = client.get(f"/v1/retrieval-runs/{run_id}", headers=_headers(*org))
     assert response.status_code == 413
     assert response.json()["error"]["details"]["limit_kind"] == kind
+    if kind == "citations":
+        assert "citations" not in materialized
 
 
 def test_sse_closes_connections_before_yield_and_stops_at_cancellation(
@@ -341,3 +363,88 @@ def test_trace_plan_bytes_are_checked_before_payload_transfer(
     assert not called
 
     assert not transferred
+
+
+def test_contribution_ceiling_is_checked_before_distinct_aggregation(client, org, seeded, db_url):
+    """32,000 valid lane contributions pass the row probe; row 32,001 fails first."""
+    from psycopg.rows import dict_row
+
+    from app import retrieval
+
+    created = _create(client, org, seeded["workspace_id"])
+    index_id, query_id, run_id = [str(uuid.uuid4()) for _ in range(3)]
+    with psycopg.connect(db_url, row_factory=dict_row) as conn:
+        conn.execute(
+            "INSERT INTO retrieval_index_versions (id, corpus_version_id, "
+            "chunker_version, chunker_config, config_hash, embedding_provider, "
+            "embedding_model) SELECT %s, corpus_version_id, chunker_version, "
+            "chunker_config, 'sha256:'||%s, embedding_provider, embedding_model FROM "
+            "retrieval_index_versions WHERE id=%s",
+            (index_id, uuid.uuid4().hex * 2, seeded["index_version_id"]),
+        )
+        conn.execute(
+            "UPDATE retrieval_index_versions SET status='building' WHERE id=%s", (index_id,)
+        )
+        template = conn.execute(
+            "SELECT * FROM retrieval_items WHERE index_version_id=%s AND kind='passage' LIMIT 1",
+            (seeded["index_version_id"],),
+        ).fetchone()
+        spans = conn.execute(
+            "INSERT INTO source_spans (id, document_version_id, section_id, start_char, "
+            "end_char, text_hash) SELECT gen_random_uuid(), document_version_id, "
+            "section_id, start_char, end_char, text_hash FROM source_spans CROSS JOIN "
+            "generate_series(1, 2001) WHERE id=%s RETURNING id",
+            (template["source_span_id"],),
+        ).fetchall()
+        conn.execute(
+            "INSERT INTO retrieval_items (id, index_version_id, kind, entity_id, "
+            "document_id, document_version_id, section_id, source_span_id, content, "
+            "content_sha256, start_char, end_char, token_count) SELECT "
+            "gen_random_uuid(), %s, 'passage', ri.entity_id, ri.document_id, "
+            "ri.document_version_id, ri.section_id, ss.id, ri.content, "
+            "ri.content_sha256, ri.start_char, ri.end_char, ri.token_count FROM "
+            "retrieval_items ri CROSS JOIN source_spans ss WHERE ri.id=%s AND "
+            "ss.id=ANY(%s)",
+            (index_id, template["id"], [row["id"] for row in spans]),
+        )
+        conn.execute(
+            "UPDATE retrieval_index_versions SET status='ready',published_at=now() WHERE id=%s",
+            (index_id,),
+        )
+        conn.execute(
+            "INSERT INTO queries (id, org_id, workspace_id, question, effective_as_of, "
+            "plan, corpus_version_id, index_version_id, planner_version, created_by) "
+            "SELECT %s, org_id, workspace_id, question, effective_as_of, plan, "
+            "corpus_version_id, %s, planner_version, created_by FROM queries WHERE id=%s",
+            (query_id, index_id, created["query_id"]),
+        )
+        conn.execute(
+            "INSERT INTO retrieval_runs (id, org_id, query_id, mode, status, "
+            "config_hash, embedding_provider, embedding_model, generation_provider, "
+            "generation_model, planner_version) SELECT %s, org_id, %s, mode, 'queued', "
+            "config_hash, embedding_provider, embedding_model, generation_provider, "
+            "generation_model, planner_version FROM retrieval_runs WHERE id=%s",
+            (run_id, query_id, created["run_id"]),
+        )
+        conn.execute(
+            "INSERT INTO retrieval_candidates (id, org_id, run_id, retrieval_item_id, "
+            "lane, variant_index, lane_rank, raw_score, rrf_contribution, fused_score, "
+            "accepted, timing_ms) SELECT gen_random_uuid(), %s, %s, ri.id, lane.name, "
+            "v.n, 1, '1', '0', '0', false, 0 FROM (SELECT id FROM retrieval_items WHERE "
+            "index_version_id=%s ORDER BY id LIMIT 2000) ri CROSS JOIN (VALUES "
+            "('dense'), ('lexical'), ('facts'), ('tables')) lane(name) CROSS JOIN "
+            "generate_series(0, 3) v(n)",
+            (org[0], run_id, index_id),
+        )
+        retrieval._check_candidate_counts(conn, run_id)
+        conn.execute(
+            "INSERT INTO retrieval_candidates (id, org_id, run_id, retrieval_item_id, "
+            "lane, variant_index, lane_rank, raw_score, rrf_contribution, fused_score, "
+            "accepted, timing_ms) SELECT gen_random_uuid(), %s, %s, id, 'dense', 0, 1, "
+            "'1', '0', '0', false, 0 FROM retrieval_items WHERE index_version_id=%s "
+            "ORDER BY id DESC LIMIT 1",
+            (org[0], run_id, index_id),
+        )
+    response = client.get(f"/v1/retrieval-runs/{run_id}", headers=_headers(*org))
+    assert response.status_code == 413
+    assert response.json()["error"]["details"]["limit_kind"] == "candidate_contributions"

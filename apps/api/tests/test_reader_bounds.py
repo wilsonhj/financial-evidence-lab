@@ -343,3 +343,25 @@ def test_large_synthetic_filing_fits_all_document_row_caps(
     assert body["sections"][-1]["end_char"] == 2000 * 1024
     assert body["spans"][-1]["span"]["text_hash"] == _hash("x" * 100)
     assert len(response.content) <= 32 * 1024 * 1024
+
+
+def test_oversized_sibling_identifies_its_own_original_metadata(
+    client, org_fixture, db_url, tmp_path, monkeypatch
+):
+    monkeypatch.setenv("FEL_STORAGE_DIR", str(tmp_path))
+    ids = _seed_reader(db_url, tmp_path)
+    with psycopg.connect(db_url) as conn:
+        key = conn.execute(
+            "SELECT canonical_text_key FROM document_versions WHERE id=%s",
+            (ids["sibling_version"],),
+        ).fetchone()[0]
+    (tmp_path / key).write_bytes(b"x" * (16 * 1024 * 1024 + 1))
+    url = f"/v1/documents/{ids['target_id']}/reader"
+    target = client.get(url, params={"include_siblings": "false"}, headers=_headers(org_fixture))
+    assert target.status_code == 200
+    response = client.get(url, params={"sibling_limit": 1}, headers=_headers(org_fixture))
+    assert response.status_code == 413
+    details = response.json()["error"]["details"]
+    assert details["resource"] == ids["sibling_id"]
+    assert details["metadata_url"] == f"/v1/documents/{ids['sibling_id']}"
+    assert ids["target_id"] not in details["metadata_url"]
