@@ -2,6 +2,11 @@ export type { components, paths, operations } from "./generated/api";
 
 /** Frozen schema registry: name -> versioned $id (see VERSIONING.md). */
 export const SCHEMA_IDS = {
+  extractionReviewCommand: "https://contracts.fel.dev/schemas/extraction-review-command/v1",
+  extractionReviewResult: "https://contracts.fel.dev/schemas/extraction-review-result/v1",
+  extractionConflict: "https://contracts.fel.dev/schemas/extraction-conflict/v1",
+  extractionValidationContext: "https://contracts.fel.dev/schemas/extraction-validation-context/v1",
+  extractionEventPage: "https://contracts.fel.dev/schemas/extraction-event-page/v1",
   retrievalEventPage: "https://contracts.fel.dev/schemas/retrieval-event-page/v1",
   documentVersionReference: "https://contracts.fel.dev/schemas/document-version-reference/v1",
   sourceSpan: "https://contracts.fel.dev/schemas/source-span/v1",
@@ -21,4 +26,14 @@ export const SCHEMA_IDS = {
   extractionPayload: "https://contracts.fel.dev/schemas/extraction-payload/v1",
 } as const;
 
-export const CONTRACT_VERSION = "0.7.0" as const;
+export const CONTRACT_VERSION = "0.8.0" as const;
+
+/** Relative file references resolved against canonical $id values (ADR-0024).
+ * Register these aliases alongside SCHEMA_IDS for offline JSON Schema validation.
+ */
+export const SCHEMA_REFERENCE_ALIASES = {
+  "https://contracts.fel.dev/schemas/extraction-review-command/extraction-payload.schema.json":
+    SCHEMA_IDS.extractionPayload,
+  "https://contracts.fel.dev/schemas/extraction-event-page/extraction-event.schema.json":
+    SCHEMA_IDS.extractionEvent,
+} as const;

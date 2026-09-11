@@ -1,0 +1,18 @@
+{
+  "schema_version": "extraction-validation-context/v1",
+  "workflow_version": "extraction-workflow/v3",
+  "normalizer_version": "normalize/v2",
+  "validator_version": "validate/v3",
+  "unit_policy_version": "unit-comparison/v1",
+  "range_policy_version": "guidance-range-order/v1",
+  "source_runs": [
+    {
+      "run_id": "00000000-0000-4000-8000-000000000003",
+      "as_of": "2026-07-01T00:00:00Z",
+      "corpus_version_id": "00000000-0000-4000-8000-000000000001",
+      "ontology_version": "saas-metrics/v1",
+      "workflow_version": "extraction-workflow/v3",
+      "policy_id": "00000000-0000-4000-8000-000000000002"
+    }
+  ]
+}
