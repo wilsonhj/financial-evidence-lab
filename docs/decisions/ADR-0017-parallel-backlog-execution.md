@@ -103,3 +103,28 @@ measure 243–417 lines. Further splitting would add indirection around those
 boundaries. This is a measured size exception only: unchanged tests, SQL,
 route signatures and runtime patch proofs remain required, together with
 independent review, explicit approval and final-head CI before merge.
+
+Wave 9 ruling: PR #280 supplies accepted ADR-0024, contract 0.8.0 and migration
+0011 at c105f1b. Close its prerequisite issue only; preserve all #61/#135 and
+live acceptance work. A concrete event-store race allocates a lower event ID
+in an uncommitted checkpoint transaction while a later standalone run-start
+event commits. An ID-based reconnect can then miss the lower event. Register
+a narrow #135 writer-ordering prerequisite before backend/web dispatch. Acquire
+the per-run transaction lock before identity allocation and before earlier
+child writes in the two atomic persistence methods; avoid SHARE-to-exclusive
+lock upgrades and keep locks out of model execution. Preserve event IDs, schema,
+financial hashes and existing terminal guards. Test real PostgreSQL concurrency.
+
+Split #61 implementation into disjoint API and web child packages after that
+prerequisite merges. The existing M3-REVIEW entry retains canonical task IDs and
+becomes combined acceptance only, with no overlapping implementation paths.
+Authorize only extraction planned-marker removal in root/reference OpenAPI with
+the backend router mount; keep strict parity tests. This is implementation
+status alignment under ADR-0024, not a new contract shape or version. The
+permissions projection is already frozen in #280. No provider, credential,
+financial semantics, live release gate or canonical checkbox changes here.
+
+Preserve the independent #64 model/scenario research as a non-binding note.
+Its scalar eligibility, unit/period, historical evidence and scenario-layer
+questions require resolution before that feature's contract freeze. Publication
+does not select those policies or clear #61/#62 prerequisites.

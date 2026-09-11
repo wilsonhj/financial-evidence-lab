@@ -213,3 +213,37 @@ labels for the seven historical assertions. Its focused unittest suite must
 run explicitly on the final head because current pytest discovery excludes
 this dataset path. Fresh byte/feature/excerpt/amendment and supplemental
 acceptance remains blocked separately; #81 stays open.
+
+September 11 continuation: PR #279 merged at
+2541d66d2d7aa4ff8cca9628531191375da78340 after independent review,
+explicit approval, ten offline test methods and all required checks. It restores
+60 historical records covering 20 issuers, with seven asserted feature tags and
+zero freshly verified features. The full validator deliberately refuses to
+certify acceptance. Issue #81 remains open for current SEC identity and evidence.
+
+PR #281 merged at f16ea050f4172db1eff949f7377d5c3a0a6079af after independent
+approval of final head f30a5ad31031fdb634d3f21d2949f01955ef6477 and all seven
+required checks. The API split preserves 47 definition ASTs, 41 SQL constants,
+263 runtime bindings, full OpenAPI and all seven retrieval route dependencies.
+Independent verification passed 59 tests with one existing opt-in timing skip.
+ADR-0017 records the measured 615-line facade exception; four helpers remain
+243–417 lines. This completes the API portion retained after GitHub closed #196.
+
+PR #280 merged at c105f1b594097dbb4da0123134eff853cb8850d1 after independent
+approval of final head 0bb237bc03ea6505708e27c3998173ad3c340736 and all seven
+required checks. The reviewer verified 60 PostgreSQL tests, 41 contract tests
+and 13 permissions schema cases. Lead checks include 736 extraction/ontology
+tests, fresh migration installation, a legacy-row-preserving 0010 upgrade and
+backup/restore with SQL guards. Earlier full CI measured 1,922 Python passes,
+three existing skips and 90.07% coverage; final contract-only delta passed the
+same required CI. Issue #278 is closed; no #61/#135 or live completion is inferred.
+
+The next control wave registers the independently reproduced #135 event
+commit-order gap as a four-file worker/test prerequisite. A checkpoint event
+can receive an ID before commit while a later standalone event commits; a
+reader resuming after the larger ID then misses the earlier one. Run locks
+must precede event allocation and earlier child writes in atomic transactions.
+Independent PostgreSQL probes reproduced the late lock-upgrade deadlock and
+verified early locking. This does not claim to solve broader worker lease or
+terminal lifecycle questions. The bounded plan and disjoint #61 API/web plans
+govern subsequent dispatch; canonical tasks and live gates remain unchanged.
