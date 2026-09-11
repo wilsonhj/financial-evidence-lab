@@ -64,3 +64,14 @@ The existing 510-line accounting validator is within the issue's approximate
 #191 merges and the lead registers that portion. This split alone cannot close
 #196. The lead may publish its bounded plan and reconcile verified branch
 protection settings in .github/required-checks.md within the control PR.
+
+
+Wave 7 ruling: #196's extraction portion is verified and merged; register its
+remaining API portion separately, blocked until #191 merges and a concrete
+split design narrows ownership. #197's hygiene/design issue is closed after
+PR #275; feature-owned table implementation remains #64/#66/#68. Authorize the
+single #191 legacy-51-run regression update in test_retrieval_costs.py without
+changing metering expectations. Register #81 dataset-only recovery as blocked:
+its historical source is available, but fresh byte verification, original
+acceptance debt and fetched supplemental discovery remain. No SEC request uses
+the historical contact without a current approved FEL_SEC_USER_AGENT.

@@ -97,8 +97,8 @@ packages:
     tasks: []
     depends_on: []
     team: integration
-    branch: agent/188-execution-wave6
-    status: merged # PR #273 @ a94d14c; wave 6 dispatch/evidence verified.
+    branch: agent/188-execution-wave7
+    status: active # Wave 7 reconciles merged extraction/design portions and one #191 regression-test path.
     allowed_paths:
       - specs/001-financial-evidence-lab/tasks.md # Lead-only verified checkbox/annotation updates.
       - docs/handoff/execution-2026-09-09.md
@@ -638,7 +638,7 @@ packages:
     depends_on: [ARCH-QUEUE-DURABILITY] # serialized: same db/migrations/** and consumer.py surface; 0008 follows 0007
     team: platform
     branch: cherry/190-worker-role
-    status: merged # PR #238 @ cf532cb (2026-09-05). Creates fel_worker with per-table grants and RLS policies instead of the blanket bypass migration 0001 had always described but never created. RESIDUAL, deliberate: it is opt-in — unset FEL_WORKER_DB_ROLE leaves the pre-existing behaviour, so workers still connect as the migration owner until a deploy sets it. The WORKER-ROLE-ROLLOUT package owns committed startup selection; hosted verification remains a lead action. Issue #190 still OPEN.
+    status: merged # PR #238 @ cf532cb (2026-09-05). Creates fel_worker with per-table grants and RLS policies instead of the blanket bypass migration 0001 had always described but never created. RESIDUAL, deliberate: it is opt-in — unset FEL_WORKER_DB_ROLE leaves the pre-existing behaviour, so workers still connect as the migration owner until a deploy sets it. The WORKER-ROLE-ROLLOUT package owns committed startup selection; hosted verification remains a lead action. Issue #190 is closed in GitHub; hosted verification remains a live-cutover check.
     allowed_paths:
       - db/migrations/**
       - workers/src/fel_workers/**
@@ -698,6 +698,7 @@ packages:
       - apps/api/tests/test_reader_bounds.py
       - apps/api/tests/test_retrieval_api.py
       - apps/api/tests/test_retrieval_read_bounds.py
+      - apps/api/tests/test_retrieval_costs.py # Only legacy-51-runs expectation plus explicit-page request; preserve all metering assertions.
       - apps/api/tests/test_openapi_parity.py
       - apps/api/HARDENING.md
       - apps/web/src/**
@@ -757,7 +758,7 @@ packages:
     depends_on: [EXTRACTION-GUIDANCE-RANGE-POLICY]
     team: extraction
     branch: agent/arch-complexity-split
-    status: active # Mechanical split preserving unchanged tests/goldens and all checkpoint/ownership patch seams.
+    status: merged # PR #274 @ 5e0bf99; 1112 full worker/ontology/provider tests, independent 208 PostgreSQL tests and 64 global bindings verified; all CI passed. Extraction portion only.
     allowed_paths:
       - workers/src/fel_workers/extraction/workflow.py
       - workers/src/fel_workers/extraction/persist.py
@@ -780,13 +781,22 @@ packages:
       - workers/src/fel_workers/extraction/persist_reads.py
     # No API edits until #191 merges and the lead registers the API portion.
     # Tests and financial/hash/version modules remain byte-identical.
+  - id: ARCH-API-COMPLEXITY-SPLIT # Remaining API portion of #196.
+    issue: 196
+    tasks: []
+    depends_on: [ARCH-API-PAGINATION-READER, ARCH-COMPLEXITY-SPLIT]
+    team: platform
+    branch: agent/196-api-complexity-split
+    status: blocked # Await #191 merge and a concrete final-source split design. Do not dispatch this broad ownership alongside #61.
+    allowed_paths:
+      - apps/api/**
   - id: ARCH-SCHEMA-HYGIENE # Existing 0009 hygiene plus the missing M4/M5 design.
     issue: 197
     tasks: []
     depends_on: [ARCH-DB-WORKER-ROLE]
     team: integration
     branch: agent/197-data-model-design
-    status: active # ADR-0023 completes the late design sketch; #64/#66/#68 own future table contracts, not this design PR.
+    status: merged # PR #275 @ 05d85d8; existing 0009 harness and independent engine/design review passed, final CI passed; #197 closed. #64/#66/#68 retain their table implementations.
     allowed_paths:
       - specs/001-financial-evidence-lab/plan.md # Section 7 only; no task ledger changes.
       - docs/decisions/ADR-0023-model-and-forecast-storage-boundaries.md
@@ -972,3 +982,17 @@ packages:
       - apps/api/tests/test_retrieval_api.py
       - apps/api/tests/test_query_performance_contract.py
       - apps/api/PERFORMANCE.md
+
+  - id: SEC-FIXTURE-RECOVERY-SUPPLEMENT
+    issue: 81
+    tasks: []
+    depends_on: []
+    team: data
+    branch: agent/81-sec-fixture-recovery
+    status: blocked # Historical blobs recovered in read-only research, not newly byte-verified. Approved FEL_SEC_USER_AGENT and fresh SEC evidence remain missing.
+    allowed_paths:
+      - evals/datasets/sec-fixtures/**
+    # Restore only final d8fd80e blobs, not the retired integration/m0 branch.
+    # Old #76 validator/excerpt/amendment acceptance debt precedes supplements.
+    # Keep 20-issuer cohort read-only and >=8 actual byte-verified features;
+    # 3-6 supplemental issuers must come from fetched SEC discovery evidence.
