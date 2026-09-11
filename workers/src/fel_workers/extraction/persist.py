@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import uuid
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any
@@ -15,6 +14,7 @@ from fel_workers.extraction.hashing import proposal_id_for
 from fel_workers.extraction.persist_checkpoint import (
     PostgresCheckpointStore as PostgresCheckpointStore,
 )
+from fel_workers.extraction.persist_conflicts import persist_conflicts as _persist_conflicts
 from fel_workers.extraction.persist_events import PostgresEventStore as PostgresEventStore
 from fel_workers.extraction.persist_memory import MemoryPersistStore as MemoryPersistStore
 from fel_workers.extraction.persist_reads import load_run_pins, load_span_pins
@@ -317,65 +317,9 @@ class PostgresPersistStore:
         drafts: list[ConflictDraft],
     ) -> list[ConflictDraft]:
         assert_workspace_ownership(self.conn, org_id=org_id, workspace_id=workspace_id)
-        out: list[ConflictDraft] = []
-        for draft in drafts:
-            if len(draft.member_proposal_ids) < 2:
-                raise ValueError("conflict groups require at least two members")
-            cid = draft.id or str(uuid.uuid4())
-            self.conn.execute(
-                """
-                INSERT INTO extraction_conflicts (
-                    id, org_id, workspace_id, conflict_key, reason_codes, status
-                ) VALUES (%s, %s, %s, %s, %s, 'open')
-                ON CONFLICT (org_id, workspace_id, conflict_key) DO NOTHING
-                """,
-                (cid, org_id, workspace_id, draft.conflict_key, draft.reason_codes),
-            )
-            # ON CONFLICT DO NOTHING may skip insert — resolve the real row id
-            # before writing members (members require org_id + conflict_id).
-            row = self.conn.execute(
-                """
-                SELECT id, status FROM extraction_conflicts
-                 WHERE org_id = %s AND workspace_id = %s AND conflict_key = %s
-                """,
-                (org_id, workspace_id, draft.conflict_key),
-            ).fetchone()
-            if row is None:
-                raise StepFailed(
-                    f"conflict row missing after upsert for key {draft.conflict_key}",
-                    code="conflict_upsert",
-                )
-            real_cid = str(row[0])
-            existing_status = str(row[1])
-            if existing_status != "open":
-                # conflict_key carries no run scope, so a rerun of the same
-                # disagreement resolves to the EARLIER row. Attaching this run's
-                # unreviewed proposals would silently reuse a human's
-                # adjudication, and 0004 forbids DELETE on extraction_conflicts
-                # and grants no DELETE on its members — the record could never be
-                # unwritten. Reopening is possible but the status CHECK would
-                # force clearing resolved_by/resolved_at, destroying the audit of
-                # who adjudicated it. Fail closed until the identity scope is
-                # decided (needs contract-change + ADR).
-                raise StepFailed(
-                    f"conflict {draft.conflict_key} already exists as "
-                    f"{existing_status!r}; refusing to attach unreviewed proposals "
-                    "to an adjudicated group",
-                    code="conflict_terminal",
-                )
-            draft.id = real_cid
-            for proposal_id in draft.member_proposal_ids:
-                self.conn.execute(
-                    """
-                    INSERT INTO extraction_conflict_members
-                        (conflict_id, proposal_id, org_id)
-                    VALUES (%s, %s, %s)
-                    ON CONFLICT DO NOTHING
-                    """,
-                    (real_cid, proposal_id, org_id),
-                )
-            out.append(draft)
-        return out
+        return _persist_conflicts(
+            self.conn, org_id=org_id, workspace_id=workspace_id, drafts=drafts
+        )
 
     def persist_outputs_atomic(
         self,

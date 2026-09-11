@@ -180,3 +180,19 @@ Reaping is no longer unconditional. `queue.reap_stale` requeues a stale
 claim only while `attempts < max_attempts` and otherwise parks it as
 `failed` with a `REAPED_EXHAUSTED` error envelope — before this, a job that
 reliably killed its worker was reaped, re-claimed and killed again forever.
+
+
+### 0011: extraction review and conflict occurrences (ADR-0024)
+
+Adds a run cancellation marker, immutable approval validation context and an
+optional same-tenant/workspace conflict occurrence run. Existing NULL occurrences
+retain their keys and history. The worker-aware member guard takes run locks
+before group locks and prevents new members entering adjudicated groups.
+
+Drain/stop old extraction workers before applying this migration: their old
+three-column ON CONFLICT target is incompatible with the new four-column unique
+constraint. Deploy the compatible worker before enabling new API producers.
+This is a coordinated rollout requirement, not a zero-downtime migration.
+Rollback stops producers and preserves migrated history; do not downgrade data.
+The 0011 SQL harness and worker occurrence tests cover local acceptance. No
+hosted rollout is certified by merging this migration.

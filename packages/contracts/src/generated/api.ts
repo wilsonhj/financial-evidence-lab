@@ -365,6 +365,26 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/workspaces/{workspaceId}/extraction-permissions": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Read current extraction permissions for a visible workspace
+     * @description Derive actions from current database-resolved membership, never token role claims. Owners/editors receive all actions; reviewers receive accept/edit/reject/merge/correct; viewers receive an empty list. All four roles may read. Hidden workspaces return 404. UI guidance only: every mutation reauthorizes current membership independently. Return Cache-Control no-store; do not include permissions in immutable artifact ETags.
+     */
+    get: operations["getExtractionPermissions"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/v1/workspaces/{workspaceId}/extraction-runs": {
     parameters: {
       query?: never;
@@ -372,10 +392,16 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** List extraction runs for a workspace */
+    /**
+     * List extraction runs for a workspace
+     * @description Explicit bounded page. Cursor binds endpoint, tenant, resource, cutoff/corpus and filters; reauthorize every page. Deterministic before/after order is not a cross-request MVCC snapshot.
+     */
     get: operations["listExtractionRuns"];
     put?: never;
-    /** Create a bounded extraction run */
+    /**
+     * Create a bounded extraction run
+     * @description Owner/editor only. Body at most 1 MiB; at most 200 source IDs and 8 MiB verified evidence. Resolve every source/corpus/version and cutoff, pin existing policy/budgets and producer-set conflict_occurrence_policy=run/v1; commit queued run, tenant-bound job, event, audit and exact receipt atomically. Manifest never contains source text.
+     */
     post: operations["createExtractionRun"];
     delete?: never;
     options?: never;
@@ -392,11 +418,17 @@ export interface paths {
       };
       cookie?: never;
     };
-    /** Read one extraction run */
+    /**
+     * Read one extraction run
+     * @description ETag is an opaque strong digest of the complete deterministic run representation, including status, usage and cancellation. Old frozen source/cutoff remains authoritative.
+     */
     get: operations["getExtractionRun"];
     put?: never;
     post?: never;
-    /** Cancel an extraction run */
+    /**
+     * Cancel an extraction run
+     * @description Owner/editor only. Lock run and compare representation If-Match. Atomically mark run+bound job for cooperative queued/running cancellation. Waiting_review appends cancellation event before terminal state; preserve proposal history. Fresh terminal cancellation is 409. Identical successful idempotency replay returns prior body/status/ETag before stale checks.
+     */
     delete: operations["cancelExtractionRun"];
     options?: never;
     head?: never;
@@ -414,7 +446,7 @@ export interface paths {
     };
     /**
      * Stream one run's persisted events; Last-Event-ID resumes
-     * @description text/event-stream. Each SSE `data:` payload is JSON ExtractionEvent (schema_version extraction-event/v1). Events are committed before emission. Heartbeat every 15–30s. Last-Event-ID resumes after that identity id.
+     * @description Metadata-only extraction-event/v1. Authenticate before stream and recheck on bounded fetches; release connections between batches. Resume strictly after Last-Event-ID, batch<=200, frame<=64KiB, comment heartbeat15–30s. No checkpoints/source/provider output. waiting_review is nonterminal; run_succeeded/run_failed/run_cancelled terminate. Invalid or unsafe (>2^53-1) resume IDs fail closed, never round.
      */
     get: operations["streamExtractionRunEvents"];
     put?: never;
@@ -434,7 +466,10 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /** Create a child extraction run from a parent */
+    /**
+     * Create a child extraction run from a parent
+     * @description Owner/editor only. Create linked child, preserving source/corpus and using min(parent cutoff,current workspace cutoff); reject ineligible unchanged sources before enqueue. Pin producer-set conflict_occurrence_policy=run/v1 in hashed immutable manifest; create independent open occurrences even after parent adjudication. Never mutate parent or inherit human decisions.
+     */
     post: operations["rerunExtraction"];
     delete?: never;
     options?: never;
@@ -449,7 +484,10 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** List extraction proposals for a workspace */
+    /**
+     * List extraction proposals for a workspace
+     * @description Explicit bounded page. Cursor binds endpoint, tenant, resource, cutoff/corpus and filters; reauthorize every page. Deterministic before/after order is not a cross-request MVCC snapshot.
+     */
     get: operations["listExtractions"];
     put?: never;
     post?: never;
@@ -487,7 +525,10 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /** Apply an atomic review command */
+    /**
+     * Apply an atomic review command
+     * @description Owner/editor/reviewer only. At most 100 selected proposals, exact expected_versions, typed action patch and complete conflict membership+ETag. Any stale proposal/group aborts the entire transaction with 412. Resolve only explicit groups/winners; unselected states stay unchanged, later contradictory acceptance is blocked. Revalidate actual source bytes and current deterministic rules; reason cannot override financial/citation/temporal blockers. Merge copies payload_source_id and verified evidence union, never aggregates. Same key/different canonical actor/resource/action/body/preconditions is 409; successful same-key replay returns exact prior semantic body/status/ETag before stale checks. Store immutable review, approved versions, audit, states and receipt in one transaction.
+     */
     post: operations["reviewExtractions"];
     delete?: never;
     options?: never;
@@ -519,7 +560,10 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** List immutable approved extraction versions */
+    /**
+     * List immutable approved extraction versions
+     * @description Explicit bounded page. Cursor binds endpoint, tenant, resource, cutoff/corpus and filters; reauthorize every page. Deterministic before/after order is not a cross-request MVCC snapshot.
+     */
     get: operations["listApprovedExtractionVersions"];
     put?: never;
     post?: never;
@@ -538,8 +582,96 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /** Append an immutable corrected approved version */
+    /**
+     * Append an immutable corrected approved version
+     * @description Full replacement at frozen source/cutoff; repeat real-byte and current deterministic validation. Append immutable child version, audit and exact receipt; never rewrite prior versions or invent a proposal-review action. Lock head and compare If-Match (412 on stale). Same-key successful replay returns original response even after later versions; changed request reusing key is 409.
+     */
     post: operations["correctApprovedExtraction"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/extraction-runs/{runId}/steps": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** listExtractionSteps */
+    get: operations["listExtractionSteps"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/extraction-runs/{runId}/event-history": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** listExtractionEvents */
+    get: operations["listExtractionEvents"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/workspaces/{workspaceId}/extraction-conflicts": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** listExtractionConflicts */
+    get: operations["listExtractionConflicts"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/extraction-conflicts/{conflictId}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** getExtractionConflict */
+    get: operations["getExtractionConflict"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/approved-extractions/{recordId}/versions/{versionId}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** getApprovedExtractionVersion */
+    get: operations["getApprovedExtractionVersion"];
+    put?: never;
+    post?: never;
     delete?: never;
     options?: never;
     head?: never;
@@ -1067,6 +1199,13 @@ export interface components {
       max_cost_usd?: string;
       max_wall_seconds?: number;
     };
+    ExtractionPermissions: {
+      /** Format: uuid */
+      workspace_id: string;
+      allowed_actions: (
+        "create" | "cancel" | "rerun" | "accept" | "edit" | "reject" | "merge" | "correct"
+      )[];
+    };
     ExtractionRun: {
       /** Format: uuid */
       id: string;
@@ -1093,10 +1232,16 @@ export interface components {
         output_tokens: number;
         cost_usd: string;
       };
+      /** @description Stored metadata, not the run ETag; ETag digests the complete deterministic representation. */
       version: number;
       error?: components["schemas"]["Error"] | null;
       /** Format: date-time */
       created_at: string;
+      /**
+       * Format: date-time
+       * @description Durable request acknowledgement; queued/running cancellation completes cooperatively.
+       */
+      cancel_requested_at: string | null;
     };
     /** @description Persisted extraction run event; SSE `data:` payload. Schema: https://contracts.fel.dev/schemas/extraction-event/v1. */
     ExtractionEvent: {
@@ -1138,7 +1283,8 @@ export interface components {
       metric_id: string;
       payload: components["schemas"]["extraction-payload.schema"];
       evidence: components["schemas"]["EvidenceEdge"][];
-      record_confidence: string;
+      /** @description Null means uncalibrated; never convert to zero or invent a score. */
+      record_confidence: string | null;
       field_confidences: {
         [key: string]: string;
       };
@@ -1154,6 +1300,7 @@ export interface components {
       /** @enum {string} */
       review_priority: "normal" | "high";
       version: number;
+      conflict_ids: string[];
     };
     EvidenceEdge: {
       /** Format: uuid */
@@ -1165,31 +1312,9 @@ export interface components {
       /** @enum {string} */
       citation_status: "verified" | "partial" | "contradictory" | "invalid";
     };
-    ReviewCommand: {
-      /** @enum {string} */
-      action: "accept" | "edit" | "reject" | "merge";
-      extraction_ids: string[];
-      /** @description Must contain exactly one key for every extraction_id; any mismatch fails the entire transaction with 412. */
-      expected_versions: {
-        [key: string]: number;
-      };
-      reason: string;
-      patch?: {
-        [key: string]: unknown;
-      } | null;
-      conflict_resolution?: {
-        [key: string]: unknown;
-      } | null;
-    };
-    ReviewResult: {
-      /** Format: uuid */
-      review_id: string;
-      action: string;
-      proposal_states: {
-        [key: string]: components["schemas"]["ProposalState"];
-      };
-      approved_record_ids: string[];
-    };
+    ReviewCommand: components["schemas"]["extraction-review-command.schema"];
+    ReviewResult: components["schemas"]["extraction-review-result.schema"];
+    /** @description Full replacement at frozen source/cutoff; repeat real-byte and current deterministic validation. Append immutable child version, audit and exact receipt; never rewrite prior versions or invent a proposal-review action. */
     CorrectionCommand: {
       reason: string;
       payload: components["schemas"]["extraction-payload.schema"];
@@ -1214,6 +1339,62 @@ export interface components {
       approved_by: string;
       /** Format: date-time */
       created_at: string;
+      approval_reason: string;
+      normalizer_version: string;
+      validator_version: string;
+      /** @description Historical null is unknown provenance; new approved versions require complete context. */
+      validation_context: components["schemas"]["extraction-validation-context.schema"] | null;
+    };
+    ExtractionConflict: components["schemas"]["extraction-conflict.schema"];
+    ExtractionValidationContext: components["schemas"]["extraction-validation-context.schema"];
+    ExtractionEventPage: components["schemas"]["extraction-event-page.schema"];
+    ExtractionStepSummary: {
+      /** Format: uuid */
+      id: string;
+      step_name: string;
+      attempt: number;
+      /** @enum {unknown} */
+      status: "pending" | "running" | "succeeded" | "failed" | "skipped" | "cancelled";
+      input_hash: string;
+      output_hash: string | null;
+      /** Format: date-time */
+      started_at: string | null;
+      /** Format: date-time */
+      finished_at: string | null;
+      input_tokens?: number;
+      output_tokens?: number;
+      cost_usd?: string;
+      error?: components["schemas"]["Error"] | null;
+    };
+    ExtractionRunPage: {
+      items: components["schemas"]["ExtractionRun"][];
+      next_cursor: string | null;
+      previous_cursor: string | null;
+      limit: number;
+    };
+    ExtractionProposalPage: {
+      items: components["schemas"]["ExtractionProposal"][];
+      next_cursor: string | null;
+      previous_cursor: string | null;
+      limit: number;
+    };
+    ApprovedExtractionPage: {
+      items: components["schemas"]["ApprovedExtraction"][];
+      next_cursor: string | null;
+      previous_cursor: string | null;
+      limit: number;
+    };
+    ExtractionConflictPage: {
+      items: components["schemas"]["extraction-conflict.schema"][];
+      next_cursor: string | null;
+      previous_cursor: string | null;
+      limit: number;
+    };
+    ExtractionStepPage: {
+      items: components["schemas"]["ExtractionStepSummary"][];
+      next_cursor: string | null;
+      previous_cursor: string | null;
+      limit: number;
     };
     /**
      * NormalizedFinancialFact
@@ -1672,6 +1853,179 @@ export interface components {
       | components["schemas"]["guidanceQualitative"]
       | components["schemas"]["revenueDriver"]
     );
+    /** @description ADR-0024. Exact selected/version/edit keys and complete membership are enforced transactionally (412); every acceptance revalidates real evidence/current financial rules. A reason never overrides a hard blocker. */
+    "extraction-review-command.schema": {
+      /** @enum {unknown} */
+      action: "accept" | "edit" | "reject" | "merge";
+      extraction_ids: string[];
+      expected_versions: {
+        [key: string]: number;
+      };
+      reason: string;
+      patch?: unknown;
+      conflict_resolution?: {
+        /** Format: uuid */
+        conflict_id: string;
+        expected_etag: string;
+        member_versions: {
+          [key: string]: number;
+        };
+        selected_winner_ids: string[];
+        reason: string;
+      }[];
+    } & (
+      | {
+          /** @constant */
+          action?: "accept";
+          patch?: never;
+        }
+      | {
+          /** @constant */
+          action?: "reject";
+          patch?: never;
+        }
+      | {
+          /** @constant */
+          action?: "edit";
+          patch: {
+            /** Format: uuid */
+            extraction_id: string;
+            payload: components["schemas"]["extraction-payload.schema"];
+            evidence: {
+              /** Format: uuid */
+              source_span_id: string;
+              /** Format: uuid */
+              document_version_id: string;
+              /** @enum {unknown} */
+              role: "supports" | "definition" | "conflicts" | "derivation_input";
+              /** @enum {unknown} */
+              citation_status: "verified" | "partial" | "contradictory" | "invalid";
+            }[];
+          }[];
+        }
+      | {
+          /** @constant */
+          action?: "merge";
+          extraction_ids?: unknown;
+          patch: {
+            /** Format: uuid */
+            payload_source_id: string;
+          };
+        }
+    );
+    "extraction-review-result.schema": {
+      /** Format: uuid */
+      review_id: string;
+      /** @enum {unknown} */
+      action: "accept" | "edit" | "reject" | "merge";
+      proposal_states: {
+        [key: string]: "proposed" | "needs_review" | "accepted" | "rejected" | "superseded";
+      };
+      proposal_versions: {
+        [key: string]: number;
+      };
+      approved_record_ids: string[];
+      approved_versions: {
+        /** Format: uuid */
+        record_id: string;
+        /** Format: uuid */
+        version_id: string;
+        version: number;
+        etag: string;
+      }[];
+      resolved_conflicts: {
+        /** Format: uuid */
+        conflict_id: string;
+        etag: string;
+      }[];
+    };
+    "extraction-validation-context.schema": {
+      /** @constant */
+      schema_version: "extraction-validation-context/v1";
+      workflow_version: string;
+      normalizer_version: string;
+      validator_version: string;
+      unit_policy_version: string;
+      range_policy_version: string;
+      source_runs: {
+        /** Format: uuid */
+        run_id: string;
+        /** Format: date-time */
+        as_of: string;
+        /** Format: uuid */
+        corpus_version_id: string;
+        ontology_version: string;
+        workflow_version: string;
+        /** Format: uuid */
+        policy_id: string;
+      }[];
+    };
+    /**
+     * ExtractionEvent
+     * @description Persisted extraction run event; SSE data payload (ADR-0007). Event id is the table identity; Last-Event-ID resumes after that id.
+     */
+    "extraction-event.schema": {
+      /** @constant */
+      schema_version: "extraction-event/v1";
+      id: number;
+      /** Format: uuid */
+      run_id: string;
+      /** @enum {string} */
+      type:
+        | "run_queued"
+        | "run_started"
+        | "step_started"
+        | "step_completed"
+        | "step_failed"
+        | "budget_updated"
+        | "proposals_persisted"
+        | "review_waiting"
+        | "review_completed"
+        | "run_succeeded"
+        | "run_failed"
+        | "run_cancelled"
+        | "heartbeat";
+      /** Format: date-time */
+      occurred_at: string;
+      /** @description IDs, counts, states and redacted errors only; no source or prompt text */
+      payload: {
+        [key: string]: unknown;
+      };
+    };
+    "extraction-event-page.schema": {
+      /** Format: uuid */
+      run_id: string;
+      items: components["schemas"]["extraction-event.schema"][];
+      next_cursor: string | null;
+      previous_cursor: string | null;
+      limit: number;
+    };
+    /** @description Complete bounded membership, never a partial page. Legacy adjudication may have null resolution when no immutable review receipt exists; do not invent historical winner metadata. */
+    "extraction-conflict.schema": {
+      /** Format: uuid */
+      id: string;
+      conflict_key: string;
+      /** Format: uuid */
+      occurrence_run_id: string | null;
+      /** @enum {unknown} */
+      status: "open" | "resolved" | "superseded";
+      reason_codes: string[];
+      member_versions: {
+        [key: string]: number;
+      };
+      etag: string;
+      resolution: {
+        /** Format: uuid */
+        review_id: string;
+        selected_winner_ids: string[];
+        approved_record_ids: string[];
+        reason: string;
+        /** Format: uuid */
+        actor_user_id: string;
+        /** Format: date-time */
+        resolved_at: string;
+      } | null;
+    };
   };
   responses: {
     /** @description PAGINATION_REQUIRED. Complete legacy response exceeds the ceiling. Restart parameters appear in error.details. */
@@ -2377,10 +2731,37 @@ export interface operations {
       default: components["responses"]["Error"];
     };
   };
+  getExtractionPermissions: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        workspaceId: components["parameters"]["WorkspaceId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Current permitted extraction actions; never cached. */
+      200: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ExtractionPermissions"];
+        };
+      };
+      default: components["responses"]["Error"];
+    };
+  };
   listExtractionRuns: {
     parameters: {
       query?: {
-        cursor?: components["parameters"]["Cursor"];
+        limit?: number;
+        /** @description Opaque scope-bound continuation; reauthenticate every request. Not a cross-request MVCC snapshot. */
+        cursor?: components["parameters"]["PageCursor"];
+        order?: components["parameters"]["PageOrder"];
       };
       header?: never;
       path: {
@@ -2396,10 +2777,43 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": {
-            items: components["schemas"]["ExtractionRun"][];
-            next_cursor?: string | null;
-          };
+          "application/json": components["schemas"]["ExtractionRunPage"];
+        };
+      };
+      /** @description CONFLICT: incompatible merge, terminal action, contradictory resolved alternative or IDEMPOTENCY_KEY_REUSED. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description PRECONDITION_FAILED: selected proposal, approved head or complete conflict membership/ETag changed. */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description EXTRACTION_TOO_LARGE: bounded request/evidence/group/event ceiling; safe resource details, no partial validation. */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description VALIDATION_ERROR: malformed closed input/cursor, blocked financial/citation/temporal validation or unavailable validation policy. */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
         };
       };
       default: components["responses"]["Error"];
@@ -2433,6 +2847,42 @@ export interface operations {
           "application/json": components["schemas"]["ExtractionRun"];
         };
       };
+      /** @description CONFLICT: incompatible merge, terminal action, contradictory resolved alternative or IDEMPOTENCY_KEY_REUSED. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description PRECONDITION_FAILED: selected proposal, approved head or complete conflict membership/ETag changed. */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description EXTRACTION_TOO_LARGE: bounded request/evidence/group/event ceiling; safe resource details, no partial validation. */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description VALIDATION_ERROR: malformed closed input/cursor, blocked financial/citation/temporal validation or unavailable validation policy. */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
       default: components["responses"]["Error"];
     };
   };
@@ -2457,6 +2907,42 @@ export interface operations {
           "application/json": components["schemas"]["ExtractionRun"];
         };
       };
+      /** @description CONFLICT: incompatible merge, terminal action, contradictory resolved alternative or IDEMPOTENCY_KEY_REUSED. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description PRECONDITION_FAILED: selected proposal, approved head or complete conflict membership/ETag changed. */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description EXTRACTION_TOO_LARGE: bounded request/evidence/group/event ceiling; safe resource details, no partial validation. */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description VALIDATION_ERROR: malformed closed input/cursor, blocked financial/citation/temporal validation or unavailable validation policy. */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
       default: components["responses"]["Error"];
     };
   };
@@ -2479,10 +2965,47 @@ export interface operations {
       /** @description Cancel requested. */
       200: {
         headers: {
+          ETag: components["headers"]["ETag"];
           [name: string]: unknown;
         };
         content: {
           "application/json": components["schemas"]["ExtractionRun"];
+        };
+      };
+      /** @description CONFLICT: incompatible merge, terminal action, contradictory resolved alternative or IDEMPOTENCY_KEY_REUSED. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description PRECONDITION_FAILED: selected proposal, approved head or complete conflict membership/ETag changed. */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description EXTRACTION_TOO_LARGE: bounded request/evidence/group/event ceiling; safe resource details, no partial validation. */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description VALIDATION_ERROR: malformed closed input/cursor, blocked financial/citation/temporal validation or unavailable validation policy. */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
         };
       };
       default: components["responses"]["Error"];
@@ -2513,6 +3036,42 @@ export interface operations {
       401: components["responses"]["Error"];
       403: components["responses"]["Error"];
       404: components["responses"]["Error"];
+      /** @description CONFLICT: incompatible merge, terminal action, contradictory resolved alternative or IDEMPOTENCY_KEY_REUSED. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description PRECONDITION_FAILED: selected proposal, approved head or complete conflict membership/ETag changed. */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description EXTRACTION_TOO_LARGE: bounded request/evidence/group/event ceiling; safe resource details, no partial validation. */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description VALIDATION_ERROR: malformed closed input/cursor, blocked financial/citation/temporal validation or unavailable validation policy. */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
       default: components["responses"]["Error"];
     };
   };
@@ -2539,10 +3098,47 @@ export interface operations {
       /** @description Child run accepted. */
       202: {
         headers: {
+          ETag: components["headers"]["ETag"];
           [name: string]: unknown;
         };
         content: {
           "application/json": components["schemas"]["ExtractionRun"];
+        };
+      };
+      /** @description CONFLICT: incompatible merge, terminal action, contradictory resolved alternative or IDEMPOTENCY_KEY_REUSED. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description PRECONDITION_FAILED: selected proposal, approved head or complete conflict membership/ETag changed. */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description EXTRACTION_TOO_LARGE: bounded request/evidence/group/event ceiling; safe resource details, no partial validation. */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description VALIDATION_ERROR: malformed closed input/cursor, blocked financial/citation/temporal validation or unavailable validation policy. */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
         };
       };
       default: components["responses"]["Error"];
@@ -2551,8 +3147,11 @@ export interface operations {
   listExtractions: {
     parameters: {
       query?: {
-        cursor?: components["parameters"]["Cursor"];
         state?: components["schemas"]["ProposalState"];
+        limit?: number;
+        /** @description Opaque scope-bound continuation; reauthenticate every request. Not a cross-request MVCC snapshot. */
+        cursor?: components["parameters"]["PageCursor"];
+        order?: components["parameters"]["PageOrder"];
       };
       header?: never;
       path: {
@@ -2568,10 +3167,43 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": {
-            items: components["schemas"]["ExtractionProposal"][];
-            next_cursor?: string | null;
-          };
+          "application/json": components["schemas"]["ExtractionProposalPage"];
+        };
+      };
+      /** @description CONFLICT: incompatible merge, terminal action, contradictory resolved alternative or IDEMPOTENCY_KEY_REUSED. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description PRECONDITION_FAILED: selected proposal, approved head or complete conflict membership/ETag changed. */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description EXTRACTION_TOO_LARGE: bounded request/evidence/group/event ceiling; safe resource details, no partial validation. */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description VALIDATION_ERROR: malformed closed input/cursor, blocked financial/citation/temporal validation or unavailable validation policy. */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
         };
       };
       default: components["responses"]["Error"];
@@ -2598,6 +3230,42 @@ export interface operations {
           "application/json": components["schemas"]["ExtractionProposal"];
         };
       };
+      /** @description CONFLICT: incompatible merge, terminal action, contradictory resolved alternative or IDEMPOTENCY_KEY_REUSED. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description PRECONDITION_FAILED: selected proposal, approved head or complete conflict membership/ETag changed. */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description EXTRACTION_TOO_LARGE: bounded request/evidence/group/event ceiling; safe resource details, no partial validation. */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description VALIDATION_ERROR: malformed closed input/cursor, blocked financial/citation/temporal validation or unavailable validation policy. */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
       default: components["responses"]["Error"];
     };
   };
@@ -2613,7 +3281,7 @@ export interface operations {
     };
     requestBody: {
       content: {
-        "application/json": components["schemas"]["ReviewCommand"];
+        "application/json": components["schemas"]["extraction-review-command.schema"];
       };
     };
     responses: {
@@ -2623,7 +3291,43 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": components["schemas"]["ReviewResult"];
+          "application/json": components["schemas"]["extraction-review-result.schema"];
+        };
+      };
+      /** @description CONFLICT: incompatible merge, terminal action, contradictory resolved alternative or IDEMPOTENCY_KEY_REUSED. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description PRECONDITION_FAILED: selected proposal, approved head or complete conflict membership/ETag changed. */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description EXTRACTION_TOO_LARGE: bounded request/evidence/group/event ceiling; safe resource details, no partial validation. */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description VALIDATION_ERROR: malformed closed input/cursor, blocked financial/citation/temporal validation or unavailable validation policy. */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
         };
       };
       default: components["responses"]["Error"];
@@ -2643,10 +3347,47 @@ export interface operations {
       /** @description Current approved version. */
       200: {
         headers: {
+          ETag: components["headers"]["ETag"];
           [name: string]: unknown;
         };
         content: {
           "application/json": components["schemas"]["ApprovedExtraction"];
+        };
+      };
+      /** @description CONFLICT: incompatible merge, terminal action, contradictory resolved alternative or IDEMPOTENCY_KEY_REUSED. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description PRECONDITION_FAILED: selected proposal, approved head or complete conflict membership/ETag changed. */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description EXTRACTION_TOO_LARGE: bounded request/evidence/group/event ceiling; safe resource details, no partial validation. */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description VALIDATION_ERROR: malformed closed input/cursor, blocked financial/citation/temporal validation or unavailable validation policy. */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
         };
       };
       default: components["responses"]["Error"];
@@ -2655,7 +3396,10 @@ export interface operations {
   listApprovedExtractionVersions: {
     parameters: {
       query?: {
-        cursor?: components["parameters"]["Cursor"];
+        limit?: number;
+        /** @description Opaque scope-bound continuation; reauthenticate every request. Not a cross-request MVCC snapshot. */
+        cursor?: components["parameters"]["PageCursor"];
+        order?: components["parameters"]["PageOrder"];
       };
       header?: never;
       path: {
@@ -2671,7 +3415,43 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": components["schemas"]["ApprovedExtraction"][];
+          "application/json": components["schemas"]["ApprovedExtractionPage"];
+        };
+      };
+      /** @description CONFLICT: incompatible merge, terminal action, contradictory resolved alternative or IDEMPOTENCY_KEY_REUSED. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description PRECONDITION_FAILED: selected proposal, approved head or complete conflict membership/ETag changed. */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description EXTRACTION_TOO_LARGE: bounded request/evidence/group/event ceiling; safe resource details, no partial validation. */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description VALIDATION_ERROR: malformed closed input/cursor, blocked financial/citation/temporal validation or unavailable validation policy. */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
         };
       };
       default: components["responses"]["Error"];
@@ -2705,6 +3485,356 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["ApprovedExtraction"];
+        };
+      };
+      /** @description CONFLICT: incompatible merge, terminal action, contradictory resolved alternative or IDEMPOTENCY_KEY_REUSED. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description PRECONDITION_FAILED: selected proposal, approved head or complete conflict membership/ETag changed. */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description EXTRACTION_TOO_LARGE: bounded request/evidence/group/event ceiling; safe resource details, no partial validation. */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description VALIDATION_ERROR: malformed closed input/cursor, blocked financial/citation/temporal validation or unavailable validation policy. */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      default: components["responses"]["Error"];
+    };
+  };
+  listExtractionSteps: {
+    parameters: {
+      query?: {
+        limit?: number;
+        /** @description Opaque scope-bound continuation; reauthenticate every request. Not a cross-request MVCC snapshot. */
+        cursor?: components["parameters"]["PageCursor"];
+        order?: components["parameters"]["PageOrder"];
+      };
+      header?: never;
+      path: {
+        runId: components["parameters"]["RunId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Bounded extraction resource. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ExtractionStepPage"];
+        };
+      };
+      /** @description CONFLICT: incompatible merge, terminal action, contradictory resolved alternative or IDEMPOTENCY_KEY_REUSED. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description PRECONDITION_FAILED: selected proposal, approved head or complete conflict membership/ETag changed. */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description EXTRACTION_TOO_LARGE: bounded request/evidence/group/event ceiling; safe resource details, no partial validation. */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description VALIDATION_ERROR: malformed closed input/cursor, blocked financial/citation/temporal validation or unavailable validation policy. */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      default: components["responses"]["Error"];
+    };
+  };
+  listExtractionEvents: {
+    parameters: {
+      query?: {
+        limit?: number;
+        /** @description Opaque scope-bound continuation; reauthenticate every request. Not a cross-request MVCC snapshot. */
+        cursor?: components["parameters"]["PageCursor"];
+        order?: components["parameters"]["PageOrder"];
+      };
+      header?: never;
+      path: {
+        runId: components["parameters"]["RunId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Bounded extraction resource. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["extraction-event-page.schema"];
+        };
+      };
+      /** @description CONFLICT: incompatible merge, terminal action, contradictory resolved alternative or IDEMPOTENCY_KEY_REUSED. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description PRECONDITION_FAILED: selected proposal, approved head or complete conflict membership/ETag changed. */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description EXTRACTION_TOO_LARGE: bounded request/evidence/group/event ceiling; safe resource details, no partial validation. */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description VALIDATION_ERROR: malformed closed input/cursor, blocked financial/citation/temporal validation or unavailable validation policy. */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      default: components["responses"]["Error"];
+    };
+  };
+  listExtractionConflicts: {
+    parameters: {
+      query?: {
+        status?: "open" | "resolved" | "superseded";
+        limit?: number;
+        /** @description Opaque scope-bound continuation; reauthenticate every request. Not a cross-request MVCC snapshot. */
+        cursor?: components["parameters"]["PageCursor"];
+        order?: components["parameters"]["PageOrder"];
+      };
+      header?: never;
+      path: {
+        workspaceId: components["parameters"]["WorkspaceId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Bounded extraction resource. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ExtractionConflictPage"];
+        };
+      };
+      /** @description CONFLICT: incompatible merge, terminal action, contradictory resolved alternative or IDEMPOTENCY_KEY_REUSED. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description PRECONDITION_FAILED: selected proposal, approved head or complete conflict membership/ETag changed. */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description EXTRACTION_TOO_LARGE: bounded request/evidence/group/event ceiling; safe resource details, no partial validation. */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description VALIDATION_ERROR: malformed closed input/cursor, blocked financial/citation/temporal validation or unavailable validation policy. */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      default: components["responses"]["Error"];
+    };
+  };
+  getExtractionConflict: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        conflictId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Bounded extraction resource. */
+      200: {
+        headers: {
+          ETag: components["headers"]["ETag"];
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["extraction-conflict.schema"];
+        };
+      };
+      /** @description CONFLICT: incompatible merge, terminal action, contradictory resolved alternative or IDEMPOTENCY_KEY_REUSED. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description PRECONDITION_FAILED: selected proposal, approved head or complete conflict membership/ETag changed. */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description EXTRACTION_TOO_LARGE: bounded request/evidence/group/event ceiling; safe resource details, no partial validation. */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description VALIDATION_ERROR: malformed closed input/cursor, blocked financial/citation/temporal validation or unavailable validation policy. */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      default: components["responses"]["Error"];
+    };
+  };
+  getApprovedExtractionVersion: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        recordId: string;
+        versionId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Bounded extraction resource. */
+      200: {
+        headers: {
+          ETag: components["headers"]["ETag"];
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApprovedExtraction"];
+        };
+      };
+      /** @description CONFLICT: incompatible merge, terminal action, contradictory resolved alternative or IDEMPOTENCY_KEY_REUSED. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description PRECONDITION_FAILED: selected proposal, approved head or complete conflict membership/ETag changed. */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description EXTRACTION_TOO_LARGE: bounded request/evidence/group/event ceiling; safe resource details, no partial validation. */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description VALIDATION_ERROR: malformed closed input/cursor, blocked financial/citation/temporal validation or unavailable validation policy. */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
         };
       };
       default: components["responses"]["Error"];

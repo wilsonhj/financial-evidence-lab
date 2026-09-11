@@ -23,3 +23,26 @@ CI runs `check:generated` (drift fails the build) and the contract tests
 Consumers: FastAPI models must round-trip these schemas (contract tests on
 the Python side arrive with M0-PLATFORM); the web app imports types from
 `@fel/contracts`.
+
+
+## Extraction review 0.8.0 (ADR-0024)
+
+Issue #278 adds typed review commands/results, conflict occurrences, validation
+provenance and bounded event-history schemas. Individual new schemas start at
+1.0.0; financial payload/event schemas remain unchanged. API/UI implementation
+is a separate dependent package (#61/#135).
+
+New schemas use local file references so OpenAPI generation is offline. JSON
+Schema validators resolve those references against each canonical `$id`, rather
+than the physical file path. Register every schema by its `$id`, then register
+`SCHEMA_REFERENCE_ALIASES` exported from `src/index.ts`. Each alias is a schema
+`{ "$id": alias, "$ref": target }`; no network retrieval is needed. Other runtime
+registries must register the same two mappings:
+
+| Alias URI | Canonical target URI |
+| --- | --- |
+| `https://contracts.fel.dev/schemas/extraction-review-command/extraction-payload.schema.json` | `https://contracts.fel.dev/schemas/extraction-payload/v1` |
+| `https://contracts.fel.dev/schemas/extraction-event-page/extraction-event.schema.json` | `https://contracts.fel.dev/schemas/extraction-event/v1` |
+
+The shared contract tests use that exported mapping. The IDs identify schemas;
+they do not require an HTTP server. This follows [Ajv's reference resolution](https://ajv.js.org/guide/combining-schemas.html).

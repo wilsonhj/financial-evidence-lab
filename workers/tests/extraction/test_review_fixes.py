@@ -94,6 +94,13 @@ def test_conflict_members_insert_includes_org_id() -> None:
             executed.append((sql, params))
 
             class _Result:
+                def fetchall(self_inner) -> list[tuple[str, str, dict[str, Any]]]:  # noqa: N805
+                    if "FROM extraction_proposals p" in sql:
+                        return [
+                            (pid, "00000000-0000-0000-0000-000000000001", {}) for pid in params[0]
+                        ]
+                    return []
+
                 def fetchone(self_inner) -> tuple[str, str] | None:  # noqa: N805
                     if "FROM extraction_conflicts" in sql:
                         # persist_conflicts now selects (id, status): an existing

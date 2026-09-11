@@ -1,0 +1,138 @@
+[
+  {
+    "name": "accept",
+    "command": {
+      "action": "accept",
+      "extraction_ids": ["00000000-0000-4000-8000-000000000001"],
+      "expected_versions": {
+        "00000000-0000-4000-8000-000000000001": 1
+      },
+      "reason": "Checked cited source and financial validations."
+    }
+  },
+  {
+    "name": "reject",
+    "command": {
+      "action": "reject",
+      "extraction_ids": ["00000000-0000-4000-8000-000000000001"],
+      "expected_versions": {
+        "00000000-0000-4000-8000-000000000001": 1
+      },
+      "reason": "Checked cited source and financial validations."
+    }
+  },
+  {
+    "name": "edit",
+    "command": {
+      "action": "edit",
+      "extraction_ids": ["00000000-0000-4000-8000-000000000001"],
+      "expected_versions": {
+        "00000000-0000-4000-8000-000000000001": 1
+      },
+      "reason": "Checked cited source and financial validations.",
+      "patch": [
+        {
+          "extraction_id": "00000000-0000-4000-8000-000000000001",
+          "payload": {
+            "schema_version": "extraction-payload/v1",
+            "kind": "kpi",
+            "entity_id": "11111111-1111-4111-8111-111111111111",
+            "issuer_label": "Example SaaS",
+            "metric_id": "arr",
+            "raw_value": "$100 million",
+            "value": "100",
+            "unit": "USD",
+            "currency": "USD",
+            "scale": 6,
+            "sign": "positive",
+            "period": {
+              "type": "instant",
+              "instant": "2026-06-30",
+              "fiscal_period": "FY2026-Q2"
+            },
+            "dimensions": {},
+            "definition": "Annual recurring revenue",
+            "qualifiers": {},
+            "reported_or_derived": "reported"
+          },
+          "evidence": [
+            {
+              "source_span_id": "00000000-0000-4000-8000-000000000001",
+              "document_version_id": "00000000-0000-4000-8000-000000000002",
+              "role": "supports",
+              "citation_status": "verified"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "merge",
+    "command": {
+      "action": "merge",
+      "extraction_ids": [
+        "00000000-0000-4000-8000-000000000001",
+        "00000000-0000-4000-8000-000000000002"
+      ],
+      "expected_versions": {
+        "00000000-0000-4000-8000-000000000001": 1,
+        "00000000-0000-4000-8000-000000000002": 1
+      },
+      "reason": "Checked cited source and financial validations.",
+      "patch": {
+        "payload_source_id": "00000000-0000-4000-8000-000000000001"
+      }
+    }
+  },
+  {
+    "name": "explicit winner",
+    "command": {
+      "action": "accept",
+      "extraction_ids": ["00000000-0000-4000-8000-000000000001"],
+      "expected_versions": {
+        "00000000-0000-4000-8000-000000000001": 1
+      },
+      "reason": "Checked cited source and financial validations.",
+      "conflict_resolution": [
+        {
+          "conflict_id": "00000000-0000-4000-8000-000000000004",
+          "expected_etag": "\"group-v1\"",
+          "member_versions": {
+            "00000000-0000-4000-8000-000000000001": 1,
+            "00000000-0000-4000-8000-000000000002": 1
+          },
+          "selected_winner_ids": ["00000000-0000-4000-8000-000000000001"],
+          "reason": "Selected the cited disclosure."
+        }
+      ]
+    }
+  },
+  {
+    "name": "final rejection no winner",
+    "command": {
+      "action": "reject",
+      "extraction_ids": [
+        "00000000-0000-4000-8000-000000000001",
+        "00000000-0000-4000-8000-000000000002"
+      ],
+      "expected_versions": {
+        "00000000-0000-4000-8000-000000000001": 1,
+        "00000000-0000-4000-8000-000000000002": 1
+      },
+      "reason": "Checked cited source and financial validations.",
+      "conflict_resolution": [
+        {
+          "conflict_id": "00000000-0000-4000-8000-000000000004",
+          "expected_etag": "\"group-v1\"",
+          "member_versions": {
+            "00000000-0000-4000-8000-000000000001": 1,
+            "00000000-0000-4000-8000-000000000002": 1
+          },
+          "selected_winner_ids": [],
+          "reason": "Selected the cited disclosure."
+        }
+      ]
+    }
+  }
+]
