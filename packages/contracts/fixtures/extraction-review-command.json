@@ -1,0 +1,8 @@
+{
+  "action": "accept",
+  "extraction_ids": ["00000000-0000-4000-8000-000000000001"],
+  "expected_versions": {
+    "00000000-0000-4000-8000-000000000001": 1
+  },
+  "reason": "Checked cited source and financial validations."
+}

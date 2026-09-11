@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.fel.dev/schemas/extraction-review-result/v1",
+  "x-fel-version": "1.0.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "review_id",
+    "action",
+    "proposal_states",
+    "proposal_versions",
+    "approved_record_ids",
+    "approved_versions",
+    "resolved_conflicts"
+  ],
+  "properties": {
+    "review_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "action": {
+      "enum": ["accept", "edit", "reject", "merge"]
+    },
+    "proposal_states": {
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 100,
+      "propertyNames": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "additionalProperties": {
+        "enum": ["proposed", "needs_review", "accepted", "rejected", "superseded"]
+      }
+    },
+    "proposal_versions": {
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 100,
+      "propertyNames": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 1
+      }
+    },
+    "approved_record_ids": {
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 100,
+      "items": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "uniqueItems": true
+    },
+    "approved_versions": {
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 100,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["record_id", "version_id", "version", "etag"],
+        "properties": {
+          "record_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "version_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "etag": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^\"[^\"\\r\\n]+\"$"
+          }
+        }
+      }
+    },
+    "resolved_conflicts": {
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 100,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["conflict_id", "etag"],
+        "properties": {
+          "conflict_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "etag": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^\"[^\"\\r\\n]+\"$"
+          }
+        }
+      }
+    }
+  }
+}

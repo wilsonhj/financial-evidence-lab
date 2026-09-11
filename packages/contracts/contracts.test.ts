@@ -9,7 +9,7 @@ import openapiTS, { astToString } from "openapi-typescript";
 import { format, resolveConfig } from "prettier";
 import { describe, expect, it } from "vitest";
 
-import { CONTRACT_VERSION, SCHEMA_IDS } from "./src/index";
+import { CONTRACT_VERSION, SCHEMA_IDS, SCHEMA_REFERENCE_ALIASES } from "./src/index";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const load = (rel: string) => JSON.parse(readFileSync(join(here, rel), "utf8"));
@@ -24,6 +24,11 @@ const schemaFiles = readdirSync(join(here, "schemas")).filter((f) => f.endsWith(
 // order must not matter.
 for (const file of schemaFiles) {
   ajv.addSchema(load(`schemas/${file}`));
+}
+
+// The exported aliases are part of the consumer contract, not a test-only resolver.
+for (const [alias, target] of Object.entries(SCHEMA_REFERENCE_ALIASES)) {
+  ajv.addSchema({ $id: alias, $ref: target });
 }
 
 describe("contract schemas", () => {
@@ -83,11 +88,11 @@ describe("contract schemas", () => {
 });
 
 describe("contract version identity (VERSIONING.md)", () => {
-  it("openapi, package, and CONTRACT_VERSION agree on the 0.7.0 minor bump", () => {
+  it("openapi, package, and CONTRACT_VERSION agree on the 0.8.0 minor bump", () => {
     const yaml = readFileSync(join(here, "openapi/openapi.yaml"), "utf8");
     const infoVersion = /^ {2}version: (\d+\.\d+\.\d+)$/m.exec(yaml)?.[1];
     expect(infoVersion).toBe(CONTRACT_VERSION);
-    expect(CONTRACT_VERSION).toBe("0.7.0");
+    expect(CONTRACT_VERSION).toBe("0.8.0");
     expect(load("package.json").version).toBe(CONTRACT_VERSION);
   });
 

@@ -162,6 +162,25 @@ _SCHEMA_PROBES: tuple[str, ...] = (
      WHERE attrelid = 'public.extraction_proposals'::regclass
        AND attname = 'record_confidence'
     """,
+    # 0011: compatible persistence requires both the column and NULL-safe key.
+    """
+    SELECT EXISTS (SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'extraction_conflicts'
+          AND column_name = 'occurrence_run_id')
+    """,
+    """
+    SELECT EXISTS (
+        SELECT 1 FROM pg_constraint c JOIN pg_index i ON i.indexrelid = c.conindid
+        WHERE c.conrelid = 'extraction_conflicts'::regclass
+          AND c.conname = 'extraction_conflicts_occurrence_key'
+          AND c.contype = 'u' AND i.indnullsnotdistinct
+          AND ARRAY(SELECT a.attname::text FROM unnest(c.conkey)
+                    WITH ORDINALITY AS k(num, ord)
+                    JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = k.num
+                    ORDER BY k.ord)
+              = ARRAY['org_id', 'workspace_id', 'conflict_key', 'occurrence_run_id']
+    )
+    """,
 )
 
 

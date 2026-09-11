@@ -423,7 +423,13 @@ packages:
   - id: M3-REVIEW-CONTRACT
     issue: 278
     tasks: []
-    depends_on: [M3-EXTRACTION-CORE, ARCH-API-PAGINATION-READER, EXTRACTION-GUIDANCE-RANGE-POLICY, ARCH-COMPLEXITY-SPLIT]
+    depends_on:
+      [
+        M3-EXTRACTION-CORE,
+        ARCH-API-PAGINATION-READER,
+        EXTRACTION-GUIDANCE-RANGE-POLICY,
+        ARCH-COMPLEXITY-SPLIT,
+      ]
     team: integration
     branch: agent/278-extraction-review-contract
     status: active # Lead-approved ADR-0024 and concrete plan precede implementation; review/test/approval gates before merge.
@@ -458,6 +464,9 @@ packages:
       - workers/src/fel_workers/extraction/persist.py
       - workers/src/fel_workers/extraction/persist_conflicts.py
       - workers/tests/extraction/test_conflict_occurrences.py
+      - workers/tests/extraction/test_conflict_resolution_reuse.py # Only fake lookup rows; preserve assertions.
+      - workers/tests/extraction/test_review_fixes.py # Only fake lookup rows; preserve assertions.
+      - workers/tests/extraction/test_postgres_crash_resume.py # Only _SCHEMA_PROBES additions for 0011 column/unique identity.
   - id: M3-REVIEW
     issue: 61
     # The Earnings Update Desk fixture preview is explicitly absorbed by this
@@ -827,13 +836,14 @@ packages:
     depends_on: [ARCH-API-PAGINATION-READER, ARCH-COMPLEXITY-SPLIT]
     team: platform
     branch: agent/196-api-complexity-split
-    status: active # PR #272 merged; exact mechanical split plan registered. GitHub closed #196 on September 11, but the API portion remains in this execution scope.
+    status: merged # PR #281, f16ea050; independent final review and seven required checks passed. Accepted 615-line facade exception recorded in ADR-0017.
     allowed_paths:
       - apps/api/app/retrieval.py
       - apps/api/app/retrieval_queries.py
       - apps/api/app/retrieval_run_store.py
       - apps/api/app/retrieval_pipeline.py
       - apps/api/app/retrieval_reads.py
+      - docs/decisions/ADR-0017-parallel-backlog-execution.md # Lead-authorized measured retrieval facade exception only.
   - id: ARCH-SCHEMA-HYGIENE # Existing 0009 hygiene plus the missing M4/M5 design.
     issue: 197
     tasks: []
@@ -1033,7 +1043,7 @@ packages:
     depends_on: []
     team: data
     branch: agent/81-sec-fixture-offline
-    status: active # Local Git recovery and explicitly limited structural checks only; no SEC calls or full acceptance claim.
+    status: merged # PR #279, 2541d66d; historical manifest restored and offline checks verified. Issue #81 remains open for fresh SEC evidence and the eight-feature gate.
     allowed_paths:
       - evals/datasets/sec-fixtures/manifest.jsonl
       - evals/datasets/sec-fixtures/README.md

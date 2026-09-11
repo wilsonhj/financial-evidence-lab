@@ -1,0 +1,194 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.fel.dev/schemas/extraction-review-command/v1",
+  "x-fel-version": "1.0.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["action", "extraction_ids", "expected_versions", "reason"],
+  "properties": {
+    "action": {
+      "enum": ["accept", "edit", "reject", "merge"]
+    },
+    "extraction_ids": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 100,
+      "items": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "uniqueItems": true
+    },
+    "expected_versions": {
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 100,
+      "propertyNames": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 1
+      }
+    },
+    "reason": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000,
+      "pattern": "\\S"
+    },
+    "patch": {},
+    "conflict_resolution": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 100,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "conflict_id",
+          "expected_etag",
+          "member_versions",
+          "selected_winner_ids",
+          "reason"
+        ],
+        "properties": {
+          "conflict_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "expected_etag": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^\"[^\"\\r\\n]+\"$"
+          },
+          "member_versions": {
+            "type": "object",
+            "minProperties": 2,
+            "maxProperties": 200,
+            "propertyNames": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "additionalProperties": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "selected_winner_ids": {
+            "type": "array",
+            "minItems": 0,
+            "maxItems": 100,
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "uniqueItems": true
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000,
+            "pattern": "\\S"
+          }
+        }
+      }
+    }
+  },
+  "description": "ADR-0024. Exact selected/version/edit keys and complete membership are enforced transactionally (412); every acceptance revalidates real evidence/current financial rules. A reason never overrides a hard blocker.",
+  "oneOf": [
+    {
+      "properties": {
+        "action": {
+          "const": "accept"
+        },
+        "patch": false
+      }
+    },
+    {
+      "properties": {
+        "action": {
+          "const": "reject"
+        },
+        "patch": false
+      }
+    },
+    {
+      "required": ["patch"],
+      "properties": {
+        "action": {
+          "const": "edit"
+        },
+        "patch": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 100,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["extraction_id", "payload", "evidence"],
+            "properties": {
+              "extraction_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "payload": {
+                "$ref": "./extraction-payload.schema.json"
+              },
+              "evidence": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 200,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["source_span_id", "document_version_id", "role", "citation_status"],
+                  "properties": {
+                    "source_span_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "document_version_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "role": {
+                      "enum": ["supports", "definition", "conflicts", "derivation_input"]
+                    },
+                    "citation_status": {
+                      "enum": ["verified", "partial", "contradictory", "invalid"]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "required": ["patch"],
+      "properties": {
+        "action": {
+          "const": "merge"
+        },
+        "extraction_ids": {
+          "minItems": 2
+        },
+        "patch": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["payload_source_id"],
+          "properties": {
+            "payload_source_id": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

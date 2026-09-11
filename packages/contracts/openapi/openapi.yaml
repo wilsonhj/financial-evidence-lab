@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Financial Evidence Lab API
-  version: 0.7.0
+  version: 0.8.0
   description: >-
     Frozen v1 contract surface (ADR-0001). This file seeds the M0 freeze:
     conventions (error envelope, idempotency, optimistic concurrency,
@@ -671,6 +671,43 @@ paths:
                 $ref: "#/components/schemas/ExtractionRun"
         default:
           $ref: "#/components/responses/Error"
+        "409":
+          description:
+            "CONFLICT: incompatible merge, terminal action, contradictory resolved alternative
+            or IDEMPOTENCY_KEY_REUSED."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "412":
+          description:
+            "PRECONDITION_FAILED: selected proposal, approved head or complete conflict membership/ETag
+            changed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "413":
+          description:
+            "EXTRACTION_TOO_LARGE: bounded request/evidence/group/event ceiling; safe resource
+            details, no partial validation."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description:
+            "VALIDATION_ERROR: malformed closed input/cursor, blocked financial/citation/temporal
+            validation or unavailable validation policy."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      description:
+        Owner/editor only. Body at most 1 MiB; at most 200 source IDs and 8 MiB verified evidence.
+        Resolve every source/corpus/version and cutoff, pin existing policy/budgets and producer-set conflict_occurrence_policy=run/v1;
+        commit queued run, tenant-bound job, event, audit and exact receipt atomically. Manifest never contains
+        source text.
     get:
       operationId: listExtractionRuns
       summary: List extraction runs for a workspace
@@ -678,24 +715,59 @@ paths:
         - bearerAuth: []
       parameters:
         - $ref: "#/components/parameters/WorkspaceId"
-        - $ref: "#/components/parameters/Cursor"
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - $ref: "#/components/parameters/PageCursor"
+        - $ref: "#/components/parameters/PageOrder"
       responses:
         "200":
           description: Extraction runs.
           content:
             application/json:
               schema:
-                type: object
-                required: [items]
-                properties:
-                  items:
-                    type: array
-                    items:
-                      $ref: "#/components/schemas/ExtractionRun"
-                  next_cursor:
-                    type: ["string", "null"]
+                $ref: "#/components/schemas/ExtractionRunPage"
         default:
           $ref: "#/components/responses/Error"
+        "409":
+          description:
+            "CONFLICT: incompatible merge, terminal action, contradictory resolved alternative
+            or IDEMPOTENCY_KEY_REUSED."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "412":
+          description:
+            "PRECONDITION_FAILED: selected proposal, approved head or complete conflict membership/ETag
+            changed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "413":
+          description:
+            "EXTRACTION_TOO_LARGE: bounded request/evidence/group/event ceiling; safe resource
+            details, no partial validation."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description:
+            "VALIDATION_ERROR: malformed closed input/cursor, blocked financial/citation/temporal
+            validation or unavailable validation policy."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      description:
+        Explicit bounded page. Cursor binds endpoint, tenant, resource, cutoff/corpus and filters;
+        reauthorize every page. Deterministic before/after order is not a cross-request MVCC snapshot.
   /v1/extraction-runs/{runId}:
     x-fel-status: planned
     parameters:
@@ -717,6 +789,41 @@ paths:
                 $ref: "#/components/schemas/ExtractionRun"
         default:
           $ref: "#/components/responses/Error"
+        "409":
+          description:
+            "CONFLICT: incompatible merge, terminal action, contradictory resolved alternative
+            or IDEMPOTENCY_KEY_REUSED."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "412":
+          description:
+            "PRECONDITION_FAILED: selected proposal, approved head or complete conflict membership/ETag
+            changed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "413":
+          description:
+            "EXTRACTION_TOO_LARGE: bounded request/evidence/group/event ceiling; safe resource
+            details, no partial validation."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description:
+            "VALIDATION_ERROR: malformed closed input/cursor, blocked financial/citation/temporal
+            validation or unavailable validation policy."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      description:
+        ETag is an opaque strong digest of the complete deterministic run representation, including
+        status, usage and cancellation. Old frozen source/cutoff remains authoritative.
     delete:
       operationId: cancelExtractionRun
       summary: Cancel an extraction run
@@ -732,8 +839,48 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ExtractionRun"
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
         default:
           $ref: "#/components/responses/Error"
+        "409":
+          description:
+            "CONFLICT: incompatible merge, terminal action, contradictory resolved alternative
+            or IDEMPOTENCY_KEY_REUSED."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "412":
+          description:
+            "PRECONDITION_FAILED: selected proposal, approved head or complete conflict membership/ETag
+            changed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "413":
+          description:
+            "EXTRACTION_TOO_LARGE: bounded request/evidence/group/event ceiling; safe resource
+            details, no partial validation."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description:
+            "VALIDATION_ERROR: malformed closed input/cursor, blocked financial/citation/temporal
+            validation or unavailable validation policy."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      description:
+        Owner/editor only. Lock run and compare representation If-Match. Atomically mark run+bound
+        job for cooperative queued/running cancellation. Waiting_review appends cancellation event before
+        terminal state; preserve proposal history. Fresh terminal cancellation is 409. Identical successful
+        idempotency replay returns prior body/status/ETag before stale checks.
   /v1/extraction-runs/{runId}/events:
     x-fel-status: planned
     parameters:
@@ -741,11 +888,11 @@ paths:
     get:
       operationId: streamExtractionRunEvents
       summary: Stream one run's persisted events; Last-Event-ID resumes
-      description: >-
-        text/event-stream. Each SSE `data:` payload is JSON ExtractionEvent
-        (schema_version extraction-event/v1). Events are committed before
-        emission. Heartbeat every 15–30s. Last-Event-ID resumes after that
-        identity id.
+      description:
+        Metadata-only extraction-event/v1. Authenticate before stream and recheck on bounded
+        fetches; release connections between batches. Resume strictly after Last-Event-ID, batch<=200, frame<=64KiB,
+        comment heartbeat15–30s. No checkpoints/source/provider output. waiting_review is nonterminal; run_succeeded/run_failed/run_cancelled
+        terminate. Invalid or unsafe (>2^53-1) resume IDs fail closed, never round.
       security:
         - bearerAuth: []
       parameters:
@@ -755,10 +902,10 @@ paths:
           schema:
             type: integer
             minimum: 0
+            maximum: 9007199254740991
       responses:
         "200":
-          description: >-
-            text/event-stream of ExtractionEvent JSON payloads.
+          description: text/event-stream of ExtractionEvent JSON payloads.
           content:
             text/event-stream:
               schema:
@@ -771,6 +918,38 @@ paths:
           $ref: "#/components/responses/Error"
         default:
           $ref: "#/components/responses/Error"
+        "409":
+          description:
+            "CONFLICT: incompatible merge, terminal action, contradictory resolved alternative
+            or IDEMPOTENCY_KEY_REUSED."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "412":
+          description:
+            "PRECONDITION_FAILED: selected proposal, approved head or complete conflict membership/ETag
+            changed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "413":
+          description:
+            "EXTRACTION_TOO_LARGE: bounded request/evidence/group/event ceiling; safe resource
+            details, no partial validation."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description:
+            "VALIDATION_ERROR: malformed closed input/cursor, blocked financial/citation/temporal
+            validation or unavailable validation policy."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /v1/extraction-runs/{runId}/rerun:
     x-fel-status: planned
     post:
@@ -788,7 +967,8 @@ paths:
             schema:
               type: object
               additionalProperties: false
-              required: [reason]
+              required:
+                - reason
               properties:
                 reason:
                   type: string
@@ -800,8 +980,48 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ExtractionRun"
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
         default:
           $ref: "#/components/responses/Error"
+        "409":
+          description:
+            "CONFLICT: incompatible merge, terminal action, contradictory resolved alternative
+            or IDEMPOTENCY_KEY_REUSED."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "412":
+          description:
+            "PRECONDITION_FAILED: selected proposal, approved head or complete conflict membership/ETag
+            changed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "413":
+          description:
+            "EXTRACTION_TOO_LARGE: bounded request/evidence/group/event ceiling; safe resource
+            details, no partial validation."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description:
+            "VALIDATION_ERROR: malformed closed input/cursor, blocked financial/citation/temporal
+            validation or unavailable validation policy."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      description:
+        Owner/editor only. Create linked child, preserving source/corpus and using min(parent
+        cutoff,current workspace cutoff); reject ineligible unchanged sources before enqueue. Pin producer-set
+        conflict_occurrence_policy=run/v1 in hashed immutable manifest; create independent open occurrences
+        even after parent adjudication. Never mutate parent or inherit human decisions.
   /v1/workspaces/{workspaceId}/extractions:
     x-fel-status: planned
     get:
@@ -811,28 +1031,63 @@ paths:
         - bearerAuth: []
       parameters:
         - $ref: "#/components/parameters/WorkspaceId"
-        - $ref: "#/components/parameters/Cursor"
         - name: state
           in: query
           schema:
             $ref: "#/components/schemas/ProposalState"
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - $ref: "#/components/parameters/PageCursor"
+        - $ref: "#/components/parameters/PageOrder"
       responses:
         "200":
           description: Extraction proposals.
           content:
             application/json:
               schema:
-                type: object
-                required: [items]
-                properties:
-                  items:
-                    type: array
-                    items:
-                      $ref: "#/components/schemas/ExtractionProposal"
-                  next_cursor:
-                    type: ["string", "null"]
+                $ref: "#/components/schemas/ExtractionProposalPage"
         default:
           $ref: "#/components/responses/Error"
+        "409":
+          description:
+            "CONFLICT: incompatible merge, terminal action, contradictory resolved alternative
+            or IDEMPOTENCY_KEY_REUSED."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "412":
+          description:
+            "PRECONDITION_FAILED: selected proposal, approved head or complete conflict membership/ETag
+            changed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "413":
+          description:
+            "EXTRACTION_TOO_LARGE: bounded request/evidence/group/event ceiling; safe resource
+            details, no partial validation."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description:
+            "VALIDATION_ERROR: malformed closed input/cursor, blocked financial/citation/temporal
+            validation or unavailable validation policy."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      description:
+        Explicit bounded page. Cursor binds endpoint, tenant, resource, cutoff/corpus and filters;
+        reauthorize every page. Deterministic before/after order is not a cross-request MVCC snapshot.
   /v1/extractions/{extractionId}:
     x-fel-status: planned
     parameters:
@@ -854,6 +1109,38 @@ paths:
                 $ref: "#/components/schemas/ExtractionProposal"
         default:
           $ref: "#/components/responses/Error"
+        "409":
+          description:
+            "CONFLICT: incompatible merge, terminal action, contradictory resolved alternative
+            or IDEMPOTENCY_KEY_REUSED."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "412":
+          description:
+            "PRECONDITION_FAILED: selected proposal, approved head or complete conflict membership/ETag
+            changed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "413":
+          description:
+            "EXTRACTION_TOO_LARGE: bounded request/evidence/group/event ceiling; safe resource
+            details, no partial validation."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description:
+            "VALIDATION_ERROR: malformed closed input/cursor, blocked financial/citation/temporal
+            validation or unavailable validation policy."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /v1/extractions/review:
     x-fel-status: planned
     post:
@@ -878,6 +1165,47 @@ paths:
                 $ref: "#/components/schemas/ReviewResult"
         default:
           $ref: "#/components/responses/Error"
+        "409":
+          description:
+            "CONFLICT: incompatible merge, terminal action, contradictory resolved alternative
+            or IDEMPOTENCY_KEY_REUSED."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "412":
+          description:
+            "PRECONDITION_FAILED: selected proposal, approved head or complete conflict membership/ETag
+            changed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "413":
+          description:
+            "EXTRACTION_TOO_LARGE: bounded request/evidence/group/event ceiling; safe resource
+            details, no partial validation."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description:
+            "VALIDATION_ERROR: malformed closed input/cursor, blocked financial/citation/temporal
+            validation or unavailable validation policy."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      description:
+        Owner/editor/reviewer only. At most 100 selected proposals, exact expected_versions,
+        typed action patch and complete conflict membership+ETag. Any stale proposal/group aborts the entire
+        transaction with 412. Resolve only explicit groups/winners; unselected states stay unchanged, later
+        contradictory acceptance is blocked. Revalidate actual source bytes and current deterministic rules;
+        reason cannot override financial/citation/temporal blockers. Merge copies payload_source_id and
+        verified evidence union, never aggregates. Same key/different canonical actor/resource/action/body/preconditions
+        is 409; successful same-key replay returns exact prior semantic body/status/ETag before stale checks.
+        Store immutable review, approved versions, audit, states and receipt in one transaction.
   /v1/approved-extractions/{recordId}:
     x-fel-status: planned
     get:
@@ -899,8 +1227,43 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApprovedExtraction"
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
         default:
           $ref: "#/components/responses/Error"
+        "409":
+          description:
+            "CONFLICT: incompatible merge, terminal action, contradictory resolved alternative
+            or IDEMPOTENCY_KEY_REUSED."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "412":
+          description:
+            "PRECONDITION_FAILED: selected proposal, approved head or complete conflict membership/ETag
+            changed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "413":
+          description:
+            "EXTRACTION_TOO_LARGE: bounded request/evidence/group/event ceiling; safe resource
+            details, no partial validation."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description:
+            "VALIDATION_ERROR: malformed closed input/cursor, blocked financial/citation/temporal
+            validation or unavailable validation policy."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /v1/approved-extractions/{recordId}/versions:
     x-fel-status: planned
     get:
@@ -915,18 +1278,59 @@ paths:
           schema:
             type: string
             format: uuid
-        - $ref: "#/components/parameters/Cursor"
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - $ref: "#/components/parameters/PageCursor"
+        - $ref: "#/components/parameters/PageOrder"
       responses:
         "200":
           description: Immutable history.
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/ApprovedExtraction"
+                $ref: "#/components/schemas/ApprovedExtractionPage"
         default:
           $ref: "#/components/responses/Error"
+        "409":
+          description:
+            "CONFLICT: incompatible merge, terminal action, contradictory resolved alternative
+            or IDEMPOTENCY_KEY_REUSED."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "412":
+          description:
+            "PRECONDITION_FAILED: selected proposal, approved head or complete conflict membership/ETag
+            changed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "413":
+          description:
+            "EXTRACTION_TOO_LARGE: bounded request/evidence/group/event ceiling; safe resource
+            details, no partial validation."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description:
+            "VALIDATION_ERROR: malformed closed input/cursor, blocked financial/citation/temporal
+            validation or unavailable validation policy."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      description:
+        Explicit bounded page. Cursor binds endpoint, tenant, resource, cutoff/corpus and filters;
+        reauthorize every page. Deterministic before/after order is not a cross-request MVCC snapshot.
   /v1/approved-extractions/{recordId}/corrections:
     x-fel-status: planned
     post:
@@ -961,7 +1365,349 @@ paths:
                 $ref: "#/components/schemas/ApprovedExtraction"
         default:
           $ref: "#/components/responses/Error"
-
+        "409":
+          description:
+            "CONFLICT: incompatible merge, terminal action, contradictory resolved alternative
+            or IDEMPOTENCY_KEY_REUSED."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "412":
+          description:
+            "PRECONDITION_FAILED: selected proposal, approved head or complete conflict membership/ETag
+            changed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "413":
+          description:
+            "EXTRACTION_TOO_LARGE: bounded request/evidence/group/event ceiling; safe resource
+            details, no partial validation."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description:
+            "VALIDATION_ERROR: malformed closed input/cursor, blocked financial/citation/temporal
+            validation or unavailable validation policy."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      description:
+        Full replacement at frozen source/cutoff; repeat real-byte and current deterministic
+        validation. Append immutable child version, audit and exact receipt; never rewrite prior versions
+        or invent a proposal-review action. Lock head and compare If-Match (412 on stale). Same-key successful
+        replay returns original response even after later versions; changed request reusing key is 409.
+  /v1/extraction-runs/{runId}/steps:
+    x-fel-status: planned
+    get:
+      operationId: listExtractionSteps
+      summary: listExtractionSteps
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - $ref: "#/components/parameters/PageCursor"
+        - $ref: "#/components/parameters/PageOrder"
+      responses:
+        "200":
+          description: Bounded extraction resource.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExtractionStepPage"
+        default:
+          $ref: "#/components/responses/Error"
+        "409":
+          description:
+            "CONFLICT: incompatible merge, terminal action, contradictory resolved alternative
+            or IDEMPOTENCY_KEY_REUSED."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "412":
+          description:
+            "PRECONDITION_FAILED: selected proposal, approved head or complete conflict membership/ETag
+            changed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "413":
+          description:
+            "EXTRACTION_TOO_LARGE: bounded request/evidence/group/event ceiling; safe resource
+            details, no partial validation."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description:
+            "VALIDATION_ERROR: malformed closed input/cursor, blocked financial/citation/temporal
+            validation or unavailable validation policy."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /v1/extraction-runs/{runId}/event-history:
+    x-fel-status: planned
+    get:
+      operationId: listExtractionEvents
+      summary: listExtractionEvents
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - $ref: "#/components/parameters/PageCursor"
+        - $ref: "#/components/parameters/PageOrder"
+      responses:
+        "200":
+          description: Bounded extraction resource.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExtractionEventPage"
+        default:
+          $ref: "#/components/responses/Error"
+        "409":
+          description:
+            "CONFLICT: incompatible merge, terminal action, contradictory resolved alternative
+            or IDEMPOTENCY_KEY_REUSED."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "412":
+          description:
+            "PRECONDITION_FAILED: selected proposal, approved head or complete conflict membership/ETag
+            changed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "413":
+          description:
+            "EXTRACTION_TOO_LARGE: bounded request/evidence/group/event ceiling; safe resource
+            details, no partial validation."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description:
+            "VALIDATION_ERROR: malformed closed input/cursor, blocked financial/citation/temporal
+            validation or unavailable validation policy."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /v1/workspaces/{workspaceId}/extraction-conflicts:
+    x-fel-status: planned
+    get:
+      operationId: listExtractionConflicts
+      summary: listExtractionConflicts
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/WorkspaceId"
+        - name: status
+          in: query
+          schema:
+            enum:
+              - open
+              - resolved
+              - superseded
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - $ref: "#/components/parameters/PageCursor"
+        - $ref: "#/components/parameters/PageOrder"
+      responses:
+        "200":
+          description: Bounded extraction resource.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExtractionConflictPage"
+        default:
+          $ref: "#/components/responses/Error"
+        "409":
+          description:
+            "CONFLICT: incompatible merge, terminal action, contradictory resolved alternative
+            or IDEMPOTENCY_KEY_REUSED."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "412":
+          description:
+            "PRECONDITION_FAILED: selected proposal, approved head or complete conflict membership/ETag
+            changed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "413":
+          description:
+            "EXTRACTION_TOO_LARGE: bounded request/evidence/group/event ceiling; safe resource
+            details, no partial validation."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description:
+            "VALIDATION_ERROR: malformed closed input/cursor, blocked financial/citation/temporal
+            validation or unavailable validation policy."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /v1/extraction-conflicts/{conflictId}:
+    x-fel-status: planned
+    get:
+      operationId: getExtractionConflict
+      summary: getExtractionConflict
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: conflictId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Bounded extraction resource.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExtractionConflict"
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+        default:
+          $ref: "#/components/responses/Error"
+        "409":
+          description:
+            "CONFLICT: incompatible merge, terminal action, contradictory resolved alternative
+            or IDEMPOTENCY_KEY_REUSED."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "412":
+          description:
+            "PRECONDITION_FAILED: selected proposal, approved head or complete conflict membership/ETag
+            changed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "413":
+          description:
+            "EXTRACTION_TOO_LARGE: bounded request/evidence/group/event ceiling; safe resource
+            details, no partial validation."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description:
+            "VALIDATION_ERROR: malformed closed input/cursor, blocked financial/citation/temporal
+            validation or unavailable validation policy."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /v1/approved-extractions/{recordId}/versions/{versionId}:
+    x-fel-status: planned
+    get:
+      operationId: getApprovedExtractionVersion
+      summary: getApprovedExtractionVersion
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: recordId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: versionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Bounded extraction resource.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApprovedExtraction"
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+        default:
+          $ref: "#/components/responses/Error"
+        "409":
+          description:
+            "CONFLICT: incompatible merge, terminal action, contradictory resolved alternative
+            or IDEMPOTENCY_KEY_REUSED."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "412":
+          description:
+            "PRECONDITION_FAILED: selected proposal, approved head or complete conflict membership/ETag
+            changed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "413":
+          description:
+            "EXTRACTION_TOO_LARGE: bounded request/evidence/group/event ceiling; safe resource
+            details, no partial validation."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description:
+            "VALIDATION_ERROR: malformed closed input/cursor, blocked financial/citation/temporal
+            validation or unavailable validation policy."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 components:
   securitySchemes:
     bearerAuth:
@@ -2068,16 +2814,31 @@ components:
 
     RunStatus:
       type: string
-      enum: [queued, running, waiting_review, succeeded, failed, cancelled]
+      enum:
+        - queued
+        - running
+        - waiting_review
+        - succeeded
+        - failed
+        - cancelled
       x-fel-open-enum: false
     ProposalState:
       type: string
-      enum: [proposed, needs_review, accepted, rejected, superseded]
+      enum:
+        - proposed
+        - needs_review
+        - accepted
+        - rejected
+        - superseded
       x-fel-open-enum: false
     ExtractionRunCreate:
       type: object
       additionalProperties: false
-      required: [entity_id, as_of, modes, source_span_ids]
+      required:
+        - entity_id
+        - as_of
+        - modes
+        - source_span_ids
       properties:
         entity_id:
           type: string
@@ -2085,16 +2846,19 @@ components:
         as_of:
           type: string
           format: date-time
-          description: >-
-            Run cutoff. Effective cutoff is min(workspace.as_of, requested as_of);
-            request cannot widen workspace scope.
+          description:
+            Run cutoff. Effective cutoff is min(workspace.as_of, requested as_of); request cannot
+            widen workspace scope.
         modes:
           type: array
           minItems: 1
           uniqueItems: true
           items:
             type: string
-            enum: [kpi, guidance, revenue_driver]
+            enum:
+              - kpi
+              - guidance
+              - revenue_driver
         source_span_ids:
           type: array
           minItems: 1
@@ -2102,14 +2866,18 @@ components:
           items:
             type: string
             format: uuid
+          maxItems: 200
         claim_ids:
           type: array
           uniqueItems: true
           items:
             type: string
             format: uuid
+          maxItems: 200
         corpus_version_id:
-          type: ["string", "null"]
+          type:
+            - string
+            - "null"
           format: uuid
         limits:
           $ref: "#/components/schemas/RunLimits"
@@ -2131,10 +2899,10 @@ components:
           maximum: 20000
         max_cost_usd:
           type: string
-          pattern: "^(0(\\.\\d{1,6})?|1(\\.\\d{1,6})?|2(\\.0{1,6})?)$"
-          description: >-
-            Decimal USD. Request may only lower relative to active policy.
-            Absolute M3 v0.4.0 schema ceiling equals ADR-0007 default 2.00.
+          pattern: ^(0(\.\d{1,6})?|1(\.\d{1,6})?|2(\.0{1,6})?)$
+          description:
+            Decimal USD. Request may only lower relative to active policy. Absolute M3 v0.4.0 schema
+            ceiling equals ADR-0007 default 2.00.
         max_wall_seconds:
           type: integer
           minimum: 1
@@ -2158,6 +2926,7 @@ components:
           usage,
           version,
           created_at,
+          cancel_requested_at,
         ]
       properties:
         id:
@@ -2170,7 +2939,9 @@ components:
           type: string
           format: uuid
         parent_run_id:
-          type: ["string", "null"]
+          type:
+            - string
+            - "null"
           format: uuid
         status:
           $ref: "#/components/schemas/RunStatus"
@@ -2180,7 +2951,10 @@ components:
           uniqueItems: true
           items:
             type: string
-            enum: [kpi, guidance, revenue_driver]
+            enum:
+              - kpi
+              - guidance
+              - revenue_driver
         as_of:
           type: string
           format: date-time
@@ -2200,7 +2974,11 @@ components:
         usage:
           type: object
           additionalProperties: false
-          required: [calls, input_tokens, output_tokens, cost_usd]
+          required:
+            - calls
+            - input_tokens
+            - output_tokens
+            - cost_usd
           properties:
             calls:
               type: integer
@@ -2213,6 +2991,7 @@ components:
         version:
           type: integer
           minimum: 1
+          description: Stored metadata, not the run ETag; ETag digests the complete deterministic representation.
         error:
           anyOf:
             - $ref: "#/components/schemas/Error"
@@ -2220,13 +2999,23 @@ components:
         created_at:
           type: string
           format: date-time
+        cancel_requested_at:
+          type:
+            - string
+            - "null"
+          format: date-time
+          description: Durable request acknowledgement; queued/running cancellation completes cooperatively.
     ExtractionEvent:
       type: object
       additionalProperties: false
-      description: >-
-        Persisted extraction run event; SSE `data:` payload. Schema:
-        https://contracts.fel.dev/schemas/extraction-event/v1.
-      required: [schema_version, id, run_id, type, occurred_at, payload]
+      description: "Persisted extraction run event; SSE `data:` payload. Schema: https://contracts.fel.dev/schemas/extraction-event/v1."
+      required:
+        - schema_version
+        - id
+        - run_id
+        - type
+        - occurred_at
+        - payload
       properties:
         schema_version:
           const: extraction-event/v1
@@ -2239,21 +3028,19 @@ components:
         type:
           type: string
           enum:
-            [
-              run_queued,
-              run_started,
-              step_started,
-              step_completed,
-              step_failed,
-              budget_updated,
-              proposals_persisted,
-              review_waiting,
-              review_completed,
-              run_succeeded,
-              run_failed,
-              run_cancelled,
-              heartbeat,
-            ]
+            - run_queued
+            - run_started
+            - step_started
+            - step_completed
+            - step_failed
+            - budget_updated
+            - proposals_persisted
+            - review_waiting
+            - review_completed
+            - run_succeeded
+            - run_failed
+            - run_cancelled
+            - heartbeat
           x-fel-open-enum: false
         occurred_at:
           type: string
@@ -2261,30 +3048,26 @@ components:
         payload:
           type: object
           additionalProperties: true
-          description: >-
-            IDs, counts, states and redacted errors only; no source or prompt text.
+          description: IDs, counts, states and redacted errors only; no source or prompt text.
     ExtractionPayload:
-      # Single source of truth: the frozen extraction-payload/v1 JSON Schema.
-      # direction is required on revenue_driver as the design schema specifies.
-      $ref: "../schemas/extraction-payload.schema.json"
+      $ref: ../schemas/extraction-payload.schema.json
     ExtractionProposal:
       type: object
       additionalProperties: false
       required:
-        [
-          id,
-          run_id,
-          kind,
-          metric_id,
-          payload,
-          evidence,
-          record_confidence,
-          field_confidences,
-          validations,
-          state,
-          review_priority,
-          version,
-        ]
+        - id
+        - run_id
+        - kind
+        - metric_id
+        - payload
+        - evidence
+        - record_confidence
+        - field_confidences
+        - validations
+        - state
+        - review_priority
+        - version
+        - conflict_ids
       properties:
         id:
           type: string
@@ -2294,7 +3077,10 @@ components:
           format: uuid
         kind:
           type: string
-          enum: [kpi, guidance, revenue_driver]
+          enum:
+            - kpi
+            - guidance
+            - revenue_driver
         metric_id:
           type: string
         payload:
@@ -2305,8 +3091,11 @@ components:
           items:
             $ref: "#/components/schemas/EvidenceEdge"
         record_confidence:
-          type: string
-          pattern: "^(0(\\.\\d{1,3})?|1(\\.0{1,3})?)$"
+          type:
+            - string
+            - "null"
+          pattern: ^(0(\.\d{1,3})?|1(\.0{1,3})?)$
+          description: Null means uncalibrated; never convert to zero or invent a score.
         field_confidences:
           type: object
           additionalProperties:
@@ -2315,13 +3104,18 @@ components:
           type: array
           items:
             type: object
-            required: [code, status]
+            required:
+              - code
+              - status
             properties:
               code:
                 type: string
               status:
                 type: string
-                enum: [pass, warning, fail]
+                enum:
+                  - pass
+                  - warning
+                  - fail
               detail:
                 type: object
                 additionalProperties: true
@@ -2329,14 +3123,27 @@ components:
           $ref: "#/components/schemas/ProposalState"
         review_priority:
           type: string
-          enum: [normal, high]
+          enum:
+            - normal
+            - high
         version:
           type: integer
           minimum: 1
+        conflict_ids:
+          type: array
+          maxItems: 100
+          uniqueItems: true
+          items:
+            type: string
+            format: uuid
     EvidenceEdge:
       type: object
       additionalProperties: false
-      required: [source_span_id, document_version_id, role, citation_status]
+      required:
+        - source_span_id
+        - document_version_id
+        - role
+        - citation_status
       properties:
         source_span_id:
           type: string
@@ -2346,68 +3153,29 @@ components:
           format: uuid
         role:
           type: string
-          enum: [supports, definition, conflicts, derivation_input]
+          enum:
+            - supports
+            - definition
+            - conflicts
+            - derivation_input
         citation_status:
           type: string
-          enum: [verified, partial, contradictory, invalid]
+          enum:
+            - verified
+            - partial
+            - contradictory
+            - invalid
     ReviewCommand:
-      type: object
-      additionalProperties: false
-      required: [action, extraction_ids, expected_versions, reason]
-      properties:
-        action:
-          type: string
-          enum: [accept, edit, reject, merge]
-        extraction_ids:
-          type: array
-          minItems: 1
-          uniqueItems: true
-          items:
-            type: string
-            format: uuid
-        expected_versions:
-          type: object
-          minProperties: 1
-          propertyNames:
-            format: uuid
-          additionalProperties:
-            type: integer
-            minimum: 1
-          description: >-
-            Must contain exactly one key for every extraction_id; any mismatch
-            fails the entire transaction with 412.
-        reason:
-          type: string
-          minLength: 1
-          maxLength: 2000
-        patch:
-          type: ["object", "null"]
-          additionalProperties: true
-        conflict_resolution:
-          type: ["object", "null"]
-          additionalProperties: true
+      $ref: ../schemas/extraction-review-command.schema.json
     ReviewResult:
-      type: object
-      required: [review_id, action, proposal_states, approved_record_ids]
-      properties:
-        review_id:
-          type: string
-          format: uuid
-        action:
-          type: string
-        proposal_states:
-          type: object
-          additionalProperties:
-            $ref: "#/components/schemas/ProposalState"
-        approved_record_ids:
-          type: array
-          items:
-            type: string
-            format: uuid
+      $ref: ../schemas/extraction-review-result.schema.json
     CorrectionCommand:
       type: object
       additionalProperties: false
-      required: [reason, payload, evidence]
+      required:
+        - reason
+        - payload
+        - evidence
       properties:
         reason:
           type: string
@@ -2420,23 +3188,30 @@ components:
           minItems: 1
           items:
             $ref: "#/components/schemas/EvidenceEdge"
+          maxItems: 200
+      description:
+        Full replacement at frozen source/cutoff; repeat real-byte and current deterministic validation.
+        Append immutable child version, audit and exact receipt; never rewrite prior versions or invent a
+        proposal-review action.
     ApprovedExtraction:
       type: object
       additionalProperties: false
       required:
-        [
-          record_id,
-          version_id,
-          version,
-          kind,
-          metric_id,
-          payload,
-          evidence,
-          evidence_manifest_hash,
-          ontology_version,
-          approved_by,
-          created_at,
-        ]
+        - record_id
+        - version_id
+        - version
+        - kind
+        - metric_id
+        - payload
+        - evidence
+        - evidence_manifest_hash
+        - ontology_version
+        - approved_by
+        - created_at
+        - approval_reason
+        - normalizer_version
+        - validator_version
+        - validation_context
       properties:
         record_id:
           type: string
@@ -2445,14 +3220,19 @@ components:
           type: string
           format: uuid
         parent_version_id:
-          type: ["string", "null"]
+          type:
+            - string
+            - "null"
           format: uuid
         version:
           type: integer
           minimum: 1
         kind:
           type: string
-          enum: [kpi, guidance, revenue_driver]
+          enum:
+            - kpi
+            - guidance
+            - revenue_driver
         metric_id:
           type: string
         payload:
@@ -2464,7 +3244,7 @@ components:
             $ref: "#/components/schemas/EvidenceEdge"
         evidence_manifest_hash:
           type: string
-          pattern: "^sha256:[0-9a-f]{64}$"
+          pattern: ^sha256:[0-9a-f]{64}$
         ontology_version:
           type: string
         approved_by:
@@ -2473,3 +3253,217 @@ components:
         created_at:
           type: string
           format: date-time
+        approval_reason:
+          type: string
+        normalizer_version:
+          type: string
+        validator_version:
+          type: string
+        validation_context:
+          anyOf:
+            - $ref: "#/components/schemas/ExtractionValidationContext"
+            - type: "null"
+          description: Historical null is unknown provenance; new approved versions require complete context.
+    ExtractionConflict:
+      $ref: ../schemas/extraction-conflict.schema.json
+    ExtractionValidationContext:
+      $ref: ../schemas/extraction-validation-context.schema.json
+    ExtractionEventPage:
+      $ref: ../schemas/extraction-event-page.schema.json
+    ExtractionStepSummary:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - step_name
+        - attempt
+        - status
+        - input_hash
+        - output_hash
+        - started_at
+        - finished_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        step_name:
+          type: string
+        attempt:
+          type: integer
+          minimum: 1
+        status:
+          enum:
+            - pending
+            - running
+            - succeeded
+            - failed
+            - skipped
+            - cancelled
+        input_hash:
+          type: string
+        output_hash:
+          type:
+            - string
+            - "null"
+        started_at:
+          type:
+            - string
+            - "null"
+          format: date-time
+        finished_at:
+          type:
+            - string
+            - "null"
+          format: date-time
+        input_tokens:
+          type: integer
+          minimum: 0
+        output_tokens:
+          type: integer
+          minimum: 0
+        cost_usd:
+          type: string
+        error:
+          anyOf:
+            - $ref: "#/components/schemas/Error"
+            - type: "null"
+    ExtractionRunPage:
+      type: object
+      additionalProperties: false
+      required:
+        - items
+        - next_cursor
+        - previous_cursor
+        - limit
+      properties:
+        items:
+          type: array
+          maxItems: 200
+          items:
+            $ref: "#/components/schemas/ExtractionRun"
+        next_cursor:
+          type:
+            - string
+            - "null"
+          maxLength: 2048
+        previous_cursor:
+          type:
+            - string
+            - "null"
+          maxLength: 2048
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 200
+    ExtractionProposalPage:
+      type: object
+      additionalProperties: false
+      required:
+        - items
+        - next_cursor
+        - previous_cursor
+        - limit
+      properties:
+        items:
+          type: array
+          maxItems: 200
+          items:
+            $ref: "#/components/schemas/ExtractionProposal"
+        next_cursor:
+          type:
+            - string
+            - "null"
+          maxLength: 2048
+        previous_cursor:
+          type:
+            - string
+            - "null"
+          maxLength: 2048
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 200
+    ApprovedExtractionPage:
+      type: object
+      additionalProperties: false
+      required:
+        - items
+        - next_cursor
+        - previous_cursor
+        - limit
+      properties:
+        items:
+          type: array
+          maxItems: 200
+          items:
+            $ref: "#/components/schemas/ApprovedExtraction"
+        next_cursor:
+          type:
+            - string
+            - "null"
+          maxLength: 2048
+        previous_cursor:
+          type:
+            - string
+            - "null"
+          maxLength: 2048
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 200
+    ExtractionConflictPage:
+      type: object
+      additionalProperties: false
+      required:
+        - items
+        - next_cursor
+        - previous_cursor
+        - limit
+      properties:
+        items:
+          type: array
+          maxItems: 200
+          items:
+            $ref: "#/components/schemas/ExtractionConflict"
+        next_cursor:
+          type:
+            - string
+            - "null"
+          maxLength: 2048
+        previous_cursor:
+          type:
+            - string
+            - "null"
+          maxLength: 2048
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 200
+    ExtractionStepPage:
+      type: object
+      additionalProperties: false
+      required:
+        - items
+        - next_cursor
+        - previous_cursor
+        - limit
+      properties:
+        items:
+          type: array
+          maxItems: 200
+          items:
+            $ref: "#/components/schemas/ExtractionStepSummary"
+        next_cursor:
+          type:
+            - string
+            - "null"
+          maxLength: 2048
+        previous_cursor:
+          type:
+            - string
+            - "null"
+          maxLength: 2048
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 200

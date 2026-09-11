@@ -72,8 +72,9 @@ closed. A retry reuses its occurrence; a child run gets an independent group
 with no inherited approval. This is explicit persistence identity, not a change
 to the financial hash function or workflow/normalizer/validator v3/v2/v3 pins.
 
-A worker-aware member-insert guard locks the group and rechecks its open state,
-tenant/workspace, occurrence and open-run constraints. It closes the race between
+A worker-aware member-insert guard first locks/asserts the member run, then locks
+the group, matching review's run-before-group order. It rechecks open state,
+tenant/workspace and occurrence constraints. It closes the race between
 worker status reads and a reviewer resolving the group. Exact existing-member
 retry may remain an ON CONFLICT no-op without adding or rewriting history.
 Occurrence identity and resolved adjudication are immutable.
@@ -122,3 +123,17 @@ and invalid fixtures, full required CI and independent final-head approval gate
 merge. The API/UI then prove real-byte validation, atomic review/correction,
 exact replay, cutoff/tenant behavior and incremental browser SSE before #61/#135
 acceptance. Live provider, calibration and release evidence remain separate.
+
+### Test migration compatibility authorization
+
+The integration lead authorizes only `_SCHEMA_PROBES` additions in
+`workers/tests/extraction/test_postgres_crash_resume.py` for the 0011 occurrence
+column and four-column NULLS NOT DISTINCT unique identity. Existing sibling
+databases must fail the current-schema probe until upgraded/rebuilt. Helper
+behavior, existing financial assertions and goldens remain unchanged.
+
+The full regression suite requires two existing SQL fakes to return authoritative
+proposal/run manifest rows for the new occurrence lookup. The lead authorizes
+only those fake-result additions in test_conflict_resolution_reuse.py and
+test_review_fixes.py; their existing assertions and financial tests are preserved.
+The terminal conflict error retains its resolved/superseded status description.

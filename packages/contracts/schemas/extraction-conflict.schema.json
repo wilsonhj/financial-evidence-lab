@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.fel.dev/schemas/extraction-conflict/v1",
+  "x-fel-version": "1.0.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "conflict_key",
+    "occurrence_run_id",
+    "status",
+    "reason_codes",
+    "member_versions",
+    "etag",
+    "resolution"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "conflict_key": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "occurrence_run_id": {
+      "type": ["string", "null"],
+      "format": "uuid"
+    },
+    "status": {
+      "enum": ["open", "resolved", "superseded"]
+    },
+    "reason_codes": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 20,
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "member_versions": {
+      "type": "object",
+      "minProperties": 2,
+      "maxProperties": 200,
+      "propertyNames": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 1
+      }
+    },
+    "etag": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^\"[^\"\\r\\n]+\"$"
+    },
+    "resolution": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "review_id",
+            "selected_winner_ids",
+            "approved_record_ids",
+            "reason",
+            "actor_user_id",
+            "resolved_at"
+          ],
+          "properties": {
+            "review_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "selected_winner_ids": {
+              "type": "array",
+              "minItems": 0,
+              "maxItems": 100,
+              "items": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "uniqueItems": true
+            },
+            "approved_record_ids": {
+              "type": "array",
+              "minItems": 0,
+              "maxItems": 100,
+              "items": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "uniqueItems": true
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2000,
+              "pattern": "\\S"
+            },
+            "actor_user_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "resolved_at": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "description": "Complete bounded membership, never a partial page. Legacy adjudication may have null resolution when no immutable review receipt exists; do not invent historical winner metadata."
+}

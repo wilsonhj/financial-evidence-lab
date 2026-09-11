@@ -1,0 +1,13 @@
+{
+  "id": "00000000-0000-4000-8000-000000000004",
+  "conflict_key": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "occurrence_run_id": "00000000-0000-4000-8000-000000000003",
+  "status": "open",
+  "reason_codes": ["value_disagreement"],
+  "member_versions": {
+    "00000000-0000-4000-8000-000000000001": 1,
+    "00000000-0000-4000-8000-000000000002": 1
+  },
+  "etag": "\"group-v1\"",
+  "resolution": null
+}

@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.fel.dev/schemas/extraction-event-page/v1",
+  "x-fel-version": "1.0.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["run_id", "items", "next_cursor", "previous_cursor", "limit"],
+  "properties": {
+    "run_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "items": {
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 200,
+      "items": {
+        "$ref": "./extraction-event.schema.json"
+      }
+    },
+    "next_cursor": {
+      "type": ["string", "null"],
+      "maxLength": 2048
+    },
+    "previous_cursor": {
+      "type": ["string", "null"],
+      "maxLength": 2048
+    },
+    "limit": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 200
+    }
+  }
+}
