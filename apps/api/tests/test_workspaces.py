@@ -170,3 +170,46 @@ def test_workspace_pages_reach_all_history_and_legacy_fails_closed(client, org_f
             if not cursor:
                 break
         assert seen == expected
+
+
+def test_workspace_high_water_and_cross_tenant_cursor(client, org_fixture, db_url):
+    with psycopg.connect(db_url) as conn:
+        conn.execute(
+            "INSERT INTO workspaces (id, org_id, name, entity_id, base_currency, "
+            "fiscal_calendar, as_of, created_at) SELECT gen_random_uuid(), %s, 'water', "
+            "gen_random_uuid(), 'USD', 'FY', now(), '2020-01-01' FROM generate_series(1,"
+            " 3)",
+            (org_fixture[0],),
+        )
+    first = client.get("/v1/workspaces", params={"limit": 2}, headers=_headers(org_fixture))
+    cursor = first.headers["X-FEL-Next-Cursor"]
+    with psycopg.connect(db_url) as conn:
+        added = str(uuid.uuid4())
+        conn.execute(
+            "INSERT INTO workspaces (id, org_id, name, entity_id, base_currency, "
+            "fiscal_calendar, as_of, created_at) VALUES (%s, %s, 'append', %s, 'USD', "
+            "'FY', now(), '2030-01-01')",
+            (added, org_fixture[0], uuid.uuid4()),
+        )
+        other = str(uuid.uuid4())
+        conn.execute("INSERT INTO organizations(id,name) VALUES (%s,%s)", (other, other))
+        conn.execute(
+            "INSERT INTO memberships(org_id,user_id,role) VALUES (%s,%s,'owner')",
+            (other, org_fixture[1]),
+        )
+    page = client.get("/v1/workspaces", params={"cursor": cursor}, headers=_headers(org_fixture))
+    assert len(page.json()) == 1
+    refresh = client.get(
+        "/v1/workspaces", params={"limit": 2, "order": "desc"}, headers=_headers(org_fixture)
+    )
+    assert refresh.json()[0]["id"] == added
+    swapped = client.get(
+        "/v1/workspaces", params={"cursor": cursor}, headers=_headers((other, org_fixture[1]))
+    )
+    assert swapped.status_code == 422
+    assert added not in swapped.text
+    for params in [{"cursor": cursor, "limit": 1}, {"cursor": cursor, "order": "desc"}]:
+        assert (
+            client.get("/v1/workspaces", params=params, headers=_headers(org_fixture)).status_code
+            == 422
+        )

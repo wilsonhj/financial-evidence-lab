@@ -1232,7 +1232,9 @@ def _trace_rows(
     return conn.execute(bounded, (*params, cap)).fetchall()
 
 
-def _event_rows(conn: psycopg.Connection[dict[str, Any]], run_id: str, after: int, high_water: int) -> list[dict[str, Any]]:
+def _event_rows(
+    conn: psycopg.Connection[dict[str, Any]], run_id: str, after: int, high_water: int
+) -> list[dict[str, Any]]:
     # The SQL CASE prevents oversized JSON payloads crossing the DB boundary.
     rows = conn.execute(
         "SELECT seq, event_type, created_at, octet_length(payload::text) AS payload_bytes,"
@@ -1262,7 +1264,9 @@ def get_retrieval_run(
 ) -> Response:
     """Return the immutable trace, serialized byte-stably (same bytes each read)."""
     with tenant_connection(ctx, snapshot_read=True) as conn:
-        run = conn.execute(
+        budget = [0]
+        run_rows = _trace_rows(
+            conn,
             "SELECT r.id, r.query_id, r.parent_run_id, r.status, r.config_hash,"
             " r.embedding_provider, r.embedding_model, r.generation_provider,"
             " r.generation_model, r.planner_version, r.budget_usage, r.cost_usd,"
@@ -1271,10 +1275,13 @@ def get_retrieval_run(
             " FROM retrieval_runs r JOIN queries q ON q.id = r.query_id AND q.org_id = r.org_id"
             " WHERE r.id = %s",
             (str(run_id),),
-        ).fetchone()
-        if run is None:
+            1,
+            "run",
+            budget,
+        )
+        if not run_rows:
             raise api_error(404, "NOT_FOUND", "Retrieval run not found.")
-        budget = [len(json.dumps(run, default=str).encode())]
+        run = run_rows[0]
         event_probe = conn.execute(
             "SELECT seq FROM retrieval_events WHERE run_id = %s ORDER BY seq LIMIT 10001",
             (str(run_id),),

@@ -23,7 +23,13 @@ DATASET_DIR = pathlib.Path(__file__).resolve().parent.parent / "datasets" / "rea
 FIXTURES_DIR = DATASET_DIR / "fixtures"
 
 EvidenceFailureKind = Literal[
-    "authentication", "forbidden", "conflict", "invalid_scope", "unavailable", "not_found"
+    "authentication",
+    "forbidden",
+    "conflict",
+    "invalid_scope",
+    "unavailable",
+    "not_found",
+    "too_large",
 ]
 
 
@@ -215,6 +221,8 @@ def classify_http_failure(status: int) -> EvidenceFailureKind:
         return "not_found"
     if status == 409:
         return "conflict"
+    if status == 413:
+        return "too_large"
     if status == 422:
         return "invalid_scope"
     return "unavailable"
@@ -430,7 +438,27 @@ def assert_http_mode_no_fixture_fallback() -> None:
         raise ReaderCrossStackError(f"missing stack route must fail closed, returned {leaked!r}")
 
 
+def reader_history_complete(body: dict[str, Any]) -> bool:
+    """Only whole-response coverage supports authoritative amendment conclusions."""
+    page = body.get("sibling_page")
+    if page is None:
+        return True
+    if (
+        page.get("scope") not in {"excluded", "page"}
+        or type(page.get("complete")) is not bool
+        or type(page.get("limit")) is not int
+        or not 1 <= page["limit"] <= 20
+        or page.get("returned") != len(body.get("siblings", []))
+        or page["returned"] > page["limit"]
+        or (page["scope"] == "excluded" and (page["complete"] or page["returned"]))
+        or (page["complete"] and (page.get("next_cursor") or page.get("previous_cursor")))
+    ):
+        raise ReaderCrossStackError("invalid sibling coverage")
+    return bool(page["complete"])
+
+
 def assert_reader_response_invariants(body: dict[str, Any]) -> None:
+    reader_history_complete(body)
     assert_document_id_differs_from_version(body)
     assert_selection_policy(body)
     assert_cutoff_scope(body)

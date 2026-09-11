@@ -24,6 +24,8 @@ def _invalid() -> Any:
 
 
 def _timestamp(value: str) -> str:
+    if not isinstance(value, str):
+        raise ValueError("timestamp")
     parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
     if parsed.tzinfo is None:
         raise ValueError("timezone required")
@@ -81,7 +83,7 @@ def _key(value: Any, endpoint: str) -> Key:
     if not isinstance(value, list):
         raise ValueError("key")
     if endpoint == "events":
-        if len(value) != 1 or type(value[0]) is not int or value[0] < 0:
+        if len(value) != 1 or type(value[0]) is not int or not 0 <= value[0] <= 2**63 - 1:
             raise ValueError("sequence")
         return value
     count = 3 if endpoint in {"documents", "siblings"} else 2
@@ -145,7 +147,15 @@ def decode_cursor(token: str, expected_scope: dict[str, Any] | None = None) -> C
         for field in ("high_water", "anchor"):
             data[field] = _key(data[field], data["scope"]["endpoint"])
         return Cursor(**data)
-    except (ValueError, TypeError, KeyError, UnicodeError, binascii.Error, RecursionError):
+    except (
+        ValueError,
+        TypeError,
+        KeyError,
+        UnicodeError,
+        binascii.Error,
+        RecursionError,
+        OverflowError,
+    ):
         raise _invalid() from None
 
 

@@ -561,3 +561,25 @@ def test_stack_corrupt_span_hash_returns_integrity_error_not_404(
     assert response.status_code == 500
     assert response.json()["error"]["code"] == "INTEGRITY_ERROR"
     assert response.status_code != 404
+
+
+def test_reader_page_coverage_never_claims_unloaded_history():
+    body = rcs.load_json("latest_parsed_ok.json")
+    body["siblings"] = []
+    body["sibling_page"] = {
+        "scope": "excluded",
+        "returned": 0,
+        "limit": 10,
+        "complete": False,
+        "next_cursor": None,
+        "previous_cursor": None,
+    }
+    assert rcs.reader_history_complete(body) is False
+    rcs.assert_reader_response_invariants(body)
+    body["sibling_page"]["complete"] = True
+    with pytest.raises(rcs.ReaderCrossStackError, match="coverage"):
+        rcs.assert_reader_response_invariants(body)
+
+
+def test_reader_413_is_explicit_size_failure():
+    assert rcs.classify_http_failure(413) == "too_large"

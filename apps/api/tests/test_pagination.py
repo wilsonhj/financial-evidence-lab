@@ -6,6 +6,7 @@ import json
 import pytest
 
 from app import pagination
+from tests.conftest import requires_db
 
 SCOPE = {
     "endpoint": "documents",
@@ -79,3 +80,69 @@ def test_malformed_and_duplicate_fields(raw):
     with pytest.raises(Exception) as err:
         pagination.decode_cursor(raw, SCOPE)
     assert err.value.detail["code"] == "INVALID_CURSOR"
+
+
+@pytest.mark.parametrize("value", [5, True, [], {}])
+def test_scope_timestamp_is_strictly_typed(value):
+    from fastapi import HTTPException
+
+    with pytest.raises(HTTPException) as err:
+        pagination.decode_cursor(token(scope={**SCOPE, "as_of": value}), SCOPE)
+    assert err.value.status_code == 422
+
+
+def test_equivalent_scope_uuid_and_timestamp_normalize():
+    expected = {**SCOPE, "as_of": "2026-09-10T00:00:00Z"}
+    alternate = {
+        **SCOPE,
+        "as_of": "2026-09-09T17:00:00-07:00",
+        "org_id": SCOPE["org_id"].replace("-", ""),
+    }
+    c = pagination.decode_cursor(token(scope=alternate), expected)
+    assert c.scope["org_id"] == SCOPE["org_id"]
+    assert c.scope["as_of"] == "2026-09-10T00:00:00+00:00"
+
+
+@requires_db
+def test_workspace_keyset_uses_bounded_index_plan(db_url, org_fixture):
+    import uuid
+
+    import psycopg
+
+    with psycopg.connect(db_url) as conn:
+        conn.execute(
+            "INSERT INTO workspaces (id, org_id, name, entity_id, base_currency, "
+            "fiscal_calendar, as_of) SELECT gen_random_uuid(), %s, 'index-test', %s, "
+            "'USD', 'FY', now() FROM generate_series(1, 10000)",
+            (org_fixture[0], uuid.uuid4()),
+        )
+        conn.execute("ANALYZE workspaces")
+        plan = conn.execute(
+            "EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) SELECT * FROM workspaces WHERE "
+            "org_id=%s ORDER BY created_at, id LIMIT 51",
+            (org_fixture[0],),
+        ).fetchone()[0][0]["Plan"]
+        assert plan["Actual Rows"] == 51
+        assert plan["Plans"][0]["Node Type"] == "Index Scan"
+        assert plan["Plans"][0]["Index Name"] == "workspaces_org_created_id_page_idx"
+        assert plan["Plans"][0]["Actual Rows"] == 51
+
+
+@pytest.mark.parametrize("timestamp", ["0001-01-01T00:00:00+01:00", "9999-12-31T23:59:59-01:00"])
+def test_cursor_rejects_timestamp_utc_overflow(timestamp):
+    from fastapi import HTTPException
+
+    with pytest.raises(HTTPException) as err:
+        pagination.decode_cursor(token(anchor=[timestamp, *KEY[1:]]), SCOPE)
+    assert err.value.status_code == 422
+
+
+def test_event_cursor_rejects_sequence_outside_postgres_integer_range():
+    from fastapi import HTTPException
+
+    event_scope = {**SCOPE, "endpoint": "events"}
+    with pytest.raises(HTTPException) as err:
+        pagination.decode_cursor(
+            token(scope=event_scope, anchor=[2**63], high_water=[2**63]), event_scope
+        )
+    assert err.value.status_code == 422

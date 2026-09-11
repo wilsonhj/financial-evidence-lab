@@ -79,7 +79,7 @@ _LATEST_PARSED_SQL = """
     ORDER BY created_at DESC,
              parser_version COLLATE "C" DESC,
              normalizer_version COLLATE "C" DESC,
-             id::text COLLATE "C" DESC
+             id DESC
     LIMIT 1
 """
 
@@ -91,7 +91,7 @@ _PINNED_PARSED_SQL = """
     WHERE cvd.corpus_version_id = %s
       AND dv.document_id = %s
       AND dv.status = 'parsed'
-    ORDER BY dv.id::text COLLATE "C"
+    ORDER BY dv.id
     LIMIT 2
 """
 
@@ -100,7 +100,7 @@ _SECTIONS_SQL = """
            start_char, end_char
     FROM sections
     WHERE document_version_id = %s
-    ORDER BY ord, id::text COLLATE "C"
+    ORDER BY ord, id
     LIMIT 2001
 """
 
@@ -109,7 +109,7 @@ _ALL_SPANS_SQL = """
            text_hash
     FROM source_spans
     WHERE document_version_id = %s
-    ORDER BY start_char, end_char, id::text COLLATE "C"
+    ORDER BY start_char, end_char, id
     LIMIT 10001
 """
 
@@ -124,7 +124,7 @@ _REFERENCED_SPANS_SQL = """
           WHERE ff.document_version_id = %s
             AND ff.source_span_id = ss.id
       )
-    ORDER BY ss.start_char, ss.end_char, ss.id::text COLLATE "C"
+    ORDER BY ss.start_char, ss.end_char, ss.id
     LIMIT 10001
 """
 
@@ -135,7 +135,7 @@ _FACTS_SQL = """
            duplicate_of, restates
     FROM financial_facts
     WHERE document_version_id = %s
-    ORDER BY id::text COLLATE "C"
+    ORDER BY id
     LIMIT 10001
 """
 
@@ -184,7 +184,7 @@ def _json_bytes(body: Any, resource: str, budget: int = MAX_RESPONSE_BYTES) -> i
     return total
 
 
-def _read_canonical_text(key: str) -> str:
+def _read_canonical_text(key: str, resource: str = "canonical_object") -> str:
     """Read one immutable canonical object without allowing path traversal."""
     configured_root = settings().storage_dir
     if not configured_root:
@@ -196,7 +196,7 @@ def _read_canonical_text(key: str) -> str:
     try:
         with candidate.open("rb") as source:
             raw = source.read(MAX_CANONICAL_BYTES + 1)
-        _bound(len(raw), MAX_CANONICAL_BYTES, "canonical_object", "canonical_bytes")
+        _bound(len(raw), MAX_CANONICAL_BYTES, resource, "canonical_bytes")
         return raw.decode("utf-8")
     except (OSError, UnicodeDecodeError) as exc:
         raise _integrity_error("canonical_text_unavailable") from exc
@@ -303,6 +303,44 @@ def _fact_body(
     return body
 
 
+def _evidence_rows(
+    conn: Connection[dict[str, Any]],
+    query: str,
+    params: tuple[Any, ...],
+    cap: int,
+    resource: str,
+    kind: str,
+    budget: list[int],
+) -> list[dict[str, Any]]:
+    """Each query already has cap+1; inspect size before transferring text/JSON."""
+    from psycopg import sql
+
+    probe = conn.execute(
+        sql.SQL(
+            "SELECT count(*) AS n, coalesce(sum(octet_length(to_jsonb(t)::text)),0) AS bytes"
+            " FROM ({}) t"
+        ).format(sql.SQL(query)),
+        params,
+    ).fetchone()
+    assert probe is not None
+    _bound(probe["n"], cap, resource, kind)
+    budget[0] += int(probe["bytes"])
+    _bound(budget[0], MAX_RESPONSE_BYTES, resource, "metadata_bytes")
+    return conn.execute(query, params).fetchall()
+
+
+def _slice_bytes(
+    text: str, rows: list[dict[str, Any]], resource: str, kind: str, limit: int
+) -> None:
+    # Reject character amplification before any potentially large section slice.
+    _bound(sum(max(0, r["end_char"] - r["start_char"]) for r in rows), limit, resource, kind)
+    total = 0
+    for row in rows:
+        for offset in range(max(0, row["start_char"]), min(len(text), row["end_char"]), 65536):
+            total += len(text[offset : min(offset + 65536, row["end_char"])].encode())
+            _bound(total, limit, resource, kind)
+
+
 def _build_document_block(
     conn: Connection[dict[str, Any]],
     document_row: dict[str, Any],
@@ -313,17 +351,29 @@ def _build_document_block(
     version_id = str(version_row["id"])
     entity_id = str(document_row["entity_id"])
     resource = str(document_row["id"])
-    section_rows = conn.execute(_SECTIONS_SQL, (version_row["id"],)).fetchall()
-    _bound(len(section_rows), MAX_SECTIONS, resource, "sections")
-    canonical_text = _read_canonical_text(version_row["canonical_text_key"])
-    # Character count is a lower bound for UTF-8; reject repeated section
-    # amplification before allocating any section-sized slices.
-    _bound(
-        sum(max(0, r["end_char"] - r["start_char"]) for r in section_rows),
-        MAX_RESPONSE_BYTES,
+    metadata_budget = [0]
+    section_rows = _evidence_rows(
+        conn,
+        _SECTIONS_SQL,
+        (version_row["id"],),
+        MAX_SECTIONS,
         resource,
-        "section_bytes",
+        "sections",
+        metadata_budget,
     )
+    span_query = _ALL_SPANS_SQL if include_sections else _REFERENCED_SPANS_SQL
+    span_params = (
+        (version_row["id"],) if include_sections else (version_row["id"], version_row["id"])
+    )
+    span_rows = _evidence_rows(
+        conn, span_query, span_params, MAX_SPANS, resource, "spans", metadata_budget
+    )
+    fact_rows = _evidence_rows(
+        conn, _FACTS_SQL, (version_row["id"],), MAX_FACTS, resource, "facts", metadata_budget
+    )
+    canonical_text = _read_canonical_text(version_row["canonical_text_key"], resource)
+    _slice_bytes(canonical_text, section_rows, resource, "section_bytes", MAX_RESPONSE_BYTES)
+    _slice_bytes(canonical_text, span_rows, resource, "verification_bytes", MAX_VERIFIED_BYTES)
     if any(str(row["document_version_id"]) != version_id for row in section_rows):
         raise _integrity_error("section_crosses_selected_version")
     section_ids = {str(row["id"]) for row in section_rows}
@@ -332,38 +382,8 @@ def _build_document_block(
         for row in section_rows
     ):
         raise _integrity_error("section_parent_missing")
-    section_bytes = 0
-    section_bodies = []
-    for row in section_rows:
-        section = _section_body(row, canonical_text)
-        section_bytes += len(section["content"].encode("utf-8"))
-        _bound(section_bytes, MAX_RESPONSE_BYTES, resource, "section_bytes")
-        section_bodies.append(section)
+    section_bodies = [_section_body(row, canonical_text) for row in section_rows]
     sections_by_id = {section["id"]: section for section in section_bodies}
-
-    if include_sections:
-        span_rows = conn.execute(_ALL_SPANS_SQL, (version_row["id"],)).fetchall()
-    else:
-        span_rows = conn.execute(
-            _REFERENCED_SPANS_SQL, (version_row["id"], version_row["id"])
-        ).fetchall()
-    _bound(len(span_rows), MAX_SPANS, resource, "spans")
-    _bound(
-        sum(max(0, r["end_char"] - r["start_char"]) for r in span_rows),
-        MAX_VERIFIED_BYTES,
-        resource,
-        "verification_bytes",
-    )
-    verified_bytes = 0
-    for row in span_rows:
-        # At most 64 KiB chars are materialized before checking each increment.
-        for offset in range(
-            max(0, row["start_char"]), min(len(canonical_text), row["end_char"]), 65536
-        ):
-            verified_bytes += len(
-                canonical_text[offset : min(offset + 65536, row["end_char"])].encode()
-            )
-            _bound(verified_bytes, MAX_VERIFIED_BYTES, resource, "verification_bytes")
     spans = [
         _span_body(
             row,
@@ -374,8 +394,6 @@ def _build_document_block(
         for row in span_rows
     ]
     span_ids = {span["id"] for span in spans}
-    fact_rows = conn.execute(_FACTS_SQL, (version_row["id"],)).fetchall()
-    _bound(len(fact_rows), MAX_FACTS, resource, "facts")
     facts = [
         _fact_body(row, version_id=version_id, entity_id=entity_id, span_ids=span_ids)
         for row in fact_rows
