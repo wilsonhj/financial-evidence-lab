@@ -365,3 +365,41 @@ def test_oversized_sibling_identifies_its_own_original_metadata(
     assert details["resource"] == ids["sibling_id"]
     assert details["metadata_url"] == f"/v1/documents/{ids['sibling_id']}"
     assert ids["target_id"] not in details["metadata_url"]
+
+
+@pytest.mark.parametrize(
+    "as_of", ["0001-01-01T00:00:00+01:00", "9999-12-31T23:59:59-01:00", "2026-06-01T00:00:00"]
+)
+def test_reader_cutoff_outside_utc_range_is_422(
+    client, org_fixture, db_url, tmp_path, monkeypatch, as_of
+):
+    monkeypatch.setenv("FEL_STORAGE_DIR", str(tmp_path))
+    ids = _seed_reader(db_url, tmp_path)
+    response = client.get(
+        f"/v1/documents/{ids['target_id']}/reader",
+        params={"include_siblings": "false", "as_of": as_of},
+        headers=_headers(org_fixture),
+    )
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "VALIDATION_ERROR"
+
+
+def test_equivalent_offset_cutoffs_preserve_page_and_reader_evidence(
+    client, org_fixture, db_url, tmp_path, monkeypatch
+):
+    monkeypatch.setenv("FEL_STORAGE_DIR", str(tmp_path))
+    ids = _seed_reader(db_url, tmp_path)
+    for url, params in [
+        (f"/v1/entities/{ids['entity_id']}/documents", {"limit": 1}),
+        ("/v1/document-versions/resolve", {"document_version_id": ids["selected_version"]}),
+        (f"/v1/documents/{ids['target_id']}/reader", {"sibling_limit": 1}),
+    ]:
+        responses = [
+            client.get(url, params={**params, "as_of": cutoff}, headers=_headers(org_fixture))
+            for cutoff in ["2026-05-07T00:00:00Z", "2026-05-06T17:00:00-07:00"]
+        ]
+        assert all(response.status_code == 200 for response in responses)
+        assert responses[0].json() == responses[1].json()
+        assert responses[0].headers.get("X-FEL-Next-Cursor") == responses[1].headers.get(
+            "X-FEL-Next-Cursor"
+        )

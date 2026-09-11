@@ -36,7 +36,7 @@ from app.auth import TenantContext
 from app.db import tenant_connection
 from app.dependencies import get_tenant_context
 from app.errors import api_error
-from app.pagination import Order, page_headers, read_page, scope
+from app.pagination import Order, page_headers, read_page, scope, utc_cutoff
 from app.serializers import document_body
 
 router = APIRouter(prefix="/v1", tags=["corpus"])
@@ -91,6 +91,7 @@ def list_entity_documents(
     order: Annotated[Order | None, Query()] = None,
 ) -> list[dict[str, Any]]:
     """Complete legacy listing or explicit cutoff/pin-filtered keyset page."""
+    as_of = utc_cutoff(as_of) if as_of else None
     with tenant_connection(ctx, snapshot_read=True) as conn:
         require_corpus(conn, corpus_version_id)
         rows, page = read_page(
@@ -115,6 +116,7 @@ def resolve_document_versions(
     corpus_version_id: Annotated[uuid.UUID | None, Query()] = None,
 ) -> list[dict[str, str]]:
     """Resolve only requested visible parsed references, never scan the corpus."""
+    as_of = utc_cutoff(as_of) if as_of else None
     with tenant_connection(ctx, snapshot_read=True) as conn:
         require_corpus(conn, corpus_version_id)
         rows = conn.execute(

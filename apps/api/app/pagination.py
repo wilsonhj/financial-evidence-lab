@@ -32,6 +32,17 @@ def _timestamp(value: str) -> str:
     return parsed.astimezone(UTC).isoformat()
 
 
+def utc_cutoff(value: datetime) -> datetime:
+    try:
+        if value.tzinfo is None:
+            raise ValueError("timezone required")
+        return value.astimezone(UTC)
+    except (OverflowError, ValueError):
+        raise api_error(
+            422, "VALIDATION_ERROR", "as_of must have a timezone and a representable UTC value."
+        ) from None
+
+
 def scope(
     endpoint: str,
     org_id: uuid.UUID | str,
@@ -44,7 +55,7 @@ def scope(
         "endpoint": endpoint,
         "org_id": str(org_id),
         "resource_id": str(resource_id) if resource_id else None,
-        "as_of": as_of.astimezone(UTC).isoformat() if as_of else None,
+        "as_of": utc_cutoff(as_of).isoformat() if as_of else None,
         "corpus_version_id": str(corpus_version_id) if corpus_version_id else None,
     }
     if endpoint == "siblings":

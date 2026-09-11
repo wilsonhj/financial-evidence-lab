@@ -405,3 +405,20 @@ def test_large_document_history_filters_before_limit_and_reaches_both_ends(
         headers=headers,
     )
     assert invalid.status_code == 422
+
+
+@pytest.mark.parametrize(
+    "as_of", ["0001-01-01T00:00:00+01:00", "9999-12-31T23:59:59-01:00", "2026-06-01T00:00:00"]
+)
+def test_cutoff_outside_utc_range_is_422(client, org_fixture, db_url, as_of):
+    ids = _seed_corpus(db_url)
+    for url, params in [
+        (f"/v1/entities/{ids['entity_id']}/documents", {"limit": 1, "as_of": as_of}),
+        (
+            "/v1/document-versions/resolve",
+            {"document_version_id": ids["version_id"], "as_of": as_of},
+        ),
+    ]:
+        response = client.get(url, params=params, headers=_headers(org_fixture))
+        assert response.status_code == 422
+        assert response.json()["error"]["code"] == "VALIDATION_ERROR"

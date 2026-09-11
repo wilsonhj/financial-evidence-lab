@@ -25,7 +25,7 @@ from app.corpus import require_corpus
 from app.db import tenant_connection
 from app.dependencies import get_tenant_context
 from app.errors import api_error
-from app.pagination import Order, decode_cursor, read_page, scope
+from app.pagination import Order, decode_cursor, read_page, scope, utc_cutoff
 from app.serializers import document_body
 
 router = APIRouter(prefix="/v1", tags=["corpus"])
@@ -445,7 +445,7 @@ def get_document_reader(
             document_version_id = uuid.UUID(continuation.scope["target_version_id"])
         if as_of is None:
             as_of = datetime.fromisoformat(continuation.scope["as_of"])
-    effective_as_of = (as_of or datetime.now(UTC)).astimezone(UTC)
+    effective_as_of = utc_cutoff(as_of or datetime.now(UTC))
     with tenant_connection(ctx, snapshot_read=True) as conn:
         require_corpus(conn, corpus_version_id)
         target = conn.execute(_TARGET_DOCUMENT_SQL, (document_id, effective_as_of)).fetchone()
