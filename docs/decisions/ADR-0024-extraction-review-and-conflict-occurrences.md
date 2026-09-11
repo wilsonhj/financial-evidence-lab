@@ -137,3 +137,7 @@ proposal/run manifest rows for the new occurrence lookup. The lead authorizes
 only those fake-result additions in test_conflict_resolution_reuse.py and
 test_review_fixes.py; their existing assertions and financial tests are preserved.
 The terminal conflict error retains its resolved/superseded status description.
+
+The lead also authorizes the shared-version assertion in
+`apps/api/tests/test_list_contract.py` to advance from 0.7.0 to 0.8.0 alongside
+this contract release. Its existing pagination and reader assertions are unchanged.

@@ -434,6 +434,7 @@ packages:
     branch: agent/278-extraction-review-contract
     status: active # Lead-approved ADR-0024 and concrete plan precede implementation; review/test/approval gates before merge.
     allowed_paths:
+      - apps/api/tests/test_list_contract.py # Only shared contract version assertion, 0.7.0 to 0.8.0.
       - packages/contracts/openapi/openapi.yaml
       - packages/contracts/package.json
       - packages/contracts/src/index.ts
