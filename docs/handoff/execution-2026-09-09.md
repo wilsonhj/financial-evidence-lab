@@ -275,3 +275,23 @@ name main rather than retired integration history, and #56 clarifies #177's sole
 live-ingestion ownership. #191/#201 distinguish merged bounded API/mock gate code
 from outstanding real-provider billing and passing live benchmark acceptance.
 No canonical task completion or live threshold changed in this reconciliation.
+
+PR #285 merged at f8731e69a1a98a2fe49435effccaeff6fd50e10f after independent
+approval of final head 80b9422d5d960455d8c35620991ccda1274cebef and all seven
+required checks (CI 34656860298, Shared paths 34656860240). Contract 0.9.0 adds
+the read-only candidate-fields projection and permits zero proposal evidence.
+The original contract RED had 18 failures; final 66 contract tests and 488 full
+JavaScript tests pass with coverage floors intact. Four API version/parity tests
+also pass. Independent compiler review exposed required `$defs` metadata in both
+candidate and existing financial payload types; actual typed fixture probes now
+pass after the narrow generator correction. Its AST regression preserves every
+unrelated type and all seven financial variants. Frozen financial schemas,
+worker code and migrations are unchanged. Issue #284 is closed; runtime SQL
+projection, safe browser rendering and #61/#135 acceptance remain outstanding.
+
+Both registered #61 implementation children are now ready on the merged contract
+and event-ordering baseline. The root dispatches API and web work separately,
+preserving independent review and final-head CI for each. The parent keeps its
+canonical task ownership and waits for combined acceptance. The pending owner
+inputs for live credentials/environment/spend, SEC identity and second CODEOWNER
+remain unresolved; no paid/provider/hosted request is implied by this dispatch.

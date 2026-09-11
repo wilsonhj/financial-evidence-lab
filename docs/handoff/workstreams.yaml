@@ -97,8 +97,8 @@ packages:
     tasks: []
     depends_on: []
     team: integration
-    branch: agent/188-execution-wave9
-    status: active # Reconcile verified merges and prepare disjoint #61 dispatch after the reviewed #278 prerequisite merges.
+    branch: agent/188-execution-wave10
+    status: active # Reconcile verified prerequisites and coordinate disjoint #61 implementation under ADR-0024.
     allowed_paths:
       - specs/001-financial-evidence-lab/tasks.md # Lead-only verified checkbox/annotation updates.
       - docs/handoff/execution-2026-09-09.md
@@ -501,7 +501,7 @@ packages:
     depends_on: [EXTRACTION-EVENT-ORDERING]
     team: integration
     branch: agent/284-invalid-proposal-contract
-    status: active # ADR-0024 Amendment 1; preserve malformed candidate display without weakening approval inputs.
+    status: merged # PR #285 @ f8731e6; independent final-head approval, 66 contract/488 JS tests and all seven required checks passed.
     allowed_paths:
       - packages/contracts/**
       - specs/003-agentic-extraction/contracts/extraction-api.yaml
@@ -517,7 +517,7 @@ packages:
     depends_on: [M3-REVIEW-CANDIDATE-CONTRACT]
     team: platform
     branch: agent/61-extraction-review-api
-    status: blocked # Dispatch after #284's readable candidate contract; event-ordering prerequisite is merged.
+    status: ready # Contract/event prerequisites merged; root dispatches the backend plan in a dedicated worktree and database.
     allowed_paths:
       - apps/api/app/extraction/**
       - apps/api/tests/extraction/**
@@ -532,7 +532,7 @@ packages:
     depends_on: [M3-REVIEW-CANDIDATE-CONTRACT]
     team: experience
     branch: agent/61-extraction-review-web
-    status: blocked # Dispatch alongside backend after #284; HTTP integration must pass before #61/#135 acceptance.
+    status: ready # Dispatch alongside backend under the published disjoint web plan; actual HTTP streaming still requires proof.
     allowed_paths:
       - apps/web/src/lib/extraction/**
       - apps/web/src/components/extraction/**
