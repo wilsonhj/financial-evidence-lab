@@ -489,19 +489,35 @@ packages:
     depends_on: [M3-REVIEW-CONTRACT]
     team: platform
     branch: agent/135-extraction-event-ordering
-    status: ready # Proven event ID/commit inversion; acquire ordered run locks before event allocation and earlier atomic child writes.
+    status: merged # PR #283 @ 2e3f92b; real replay regression, independent 103 PG tests and all seven required checks passed.
     allowed_paths:
       - workers/src/fel_workers/extraction/persist_events.py
       - workers/src/fel_workers/extraction/persist_checkpoint.py
       - workers/src/fel_workers/extraction/persist.py
       - workers/tests/extraction/test_event_commit_order.py
+  - id: M3-REVIEW-CANDIDATE-CONTRACT
+    issue: 284
+    tasks: []
+    depends_on: [EXTRACTION-EVENT-ORDERING]
+    team: integration
+    branch: agent/284-invalid-proposal-contract
+    status: active # ADR-0024 Amendment 1; preserve malformed candidate display without weakening approval inputs.
+    allowed_paths:
+      - packages/contracts/**
+      - specs/003-agentic-extraction/contracts/extraction-api.yaml
+      - apps/api/tests/test_list_contract.py # Shared version assertion only.
+      - docs/decisions/ADR-0024-extraction-review-and-conflict-occurrences.md
+      - docs/decisions/ADR-0017-parallel-backlog-execution.md
+      - docs/handoff/workstreams.yaml
+      - docs/superpowers/plans/2026-09-11-extraction-review-backend.md
+      - docs/superpowers/plans/2026-09-11-extraction-review-web.md
   - id: M3-REVIEW-API
     issue: 61
     tasks: []
-    depends_on: [EXTRACTION-EVENT-ORDERING]
+    depends_on: [M3-REVIEW-CANDIDATE-CONTRACT]
     team: platform
     branch: agent/61-extraction-review-api
-    status: blocked # Dispatch after the event-ordering prerequisite merges; use accepted ADR-0024 contract and concrete backend plan.
+    status: blocked # Dispatch after #284's readable candidate contract; event-ordering prerequisite is merged.
     allowed_paths:
       - apps/api/app/extraction/**
       - apps/api/tests/extraction/**
@@ -513,10 +529,10 @@ packages:
   - id: M3-REVIEW-WEB
     issue: 61
     tasks: []
-    depends_on: [EXTRACTION-EVENT-ORDERING]
+    depends_on: [M3-REVIEW-CANDIDATE-CONTRACT]
     team: experience
     branch: agent/61-extraction-review-web
-    status: blocked # Dispatch alongside backend only after event-ordering merge; HTTP integration must pass before #61/#135 acceptance.
+    status: blocked # Dispatch alongside backend after #284; HTTP integration must pass before #61/#135 acceptance.
     allowed_paths:
       - apps/web/src/lib/extraction/**
       - apps/web/src/components/extraction/**

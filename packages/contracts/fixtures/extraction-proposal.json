@@ -1,0 +1,18 @@
+{
+  "id": "00000000-0000-4000-8000-000000000001",
+  "run_id": "00000000-0000-4000-8000-000000000002",
+  "kind": "kpi",
+  "metric_id": "arr",
+  "payload": {
+    "schema_version": "extraction-candidate-fields/v1",
+    "fields": { "value": "\"not-a-number\"", "dimensions": "null" }
+  },
+  "evidence": [],
+  "record_confidence": null,
+  "field_confidences": {},
+  "validations": [{ "code": "numeric_invalid", "status": "fail" }],
+  "state": "needs_review",
+  "review_priority": "high",
+  "version": 1,
+  "conflict_ids": []
+}

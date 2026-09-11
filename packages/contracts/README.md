@@ -17,6 +17,12 @@ Regenerate the client after any OpenAPI edit:
 pnpm --filter @fel/contracts generate
 ```
 
+Generation and drift checking share `generate.ts`. Its narrow post-transform
+removes only the synthetic `$defs` intersection from the bundled strict
+ExtractionPayload type, preserving its seven wire variants and all frozen schema
+bytes. Unexpected generator AST shapes fail explicitly. Compiler fixtures and an
+AST comparison cover the wire types and unchanged unrelated output.
+
 CI runs `check:generated` (drift fails the build) and the contract tests
 (`contracts.test.ts`, via the root vitest run).
 
@@ -24,6 +30,30 @@ Consumers: FastAPI models must round-trip these schemas (contract tests on
 the Python side arrive with M0-PLATFORM); the web app imports types from
 `@fel/contracts`.
 
+## Readable candidates 0.9.0 (ADR-0024 Amendment 1)
+
+Only proposal reads add `ExtractionCandidateFields`, an individually versioned
+`extraction-candidate-fields/v1` wrapper, and allow empty evidence. Its closed
+24-key public financial map contains bounded JSON-text strings, preserving the
+persisted value/type when the ordinary payload cannot be displayed safely.
+Missing keys stay absent; JSON null is the string `null`. This display alternative
+does not determine approval or financial validity. Existing strict payloads,
+approved versions and all mutation inputs keep their schemas and evidence rules.
+
+The future backend selects this branch for schema-invalid candidates or any
+fractional/unsafe numeric leaf, and obtains each present field from PostgreSQL
+`(payload -> key)::text` before ordinary numeric decoding. It bounds fields to
+65,536 characters and preflights payload bytes at 1 MiB, returning 413 rather
+than truncating. Consumers render strings verbatim, without parsing, HTML
+interpretation or automatic edit conversion. These producer/renderer behaviors
+remain the dependent runtime lanes' responsibility; this package validates the
+closed structure and lengths. `contentMediaType` is descriptive, not an embedded
+JSON parser. Fixtures include literal large numbers, fractions, nulls and nested
+values as text; they do not certify runtime branch selection or browser rendering.
+
+`SCHEMA_IDS.extractionCandidateFields` registers the new standalone schema. Field schemas
+are inline so generated wire types contain no schema-definition metadata; no
+additional reference alias is needed.
 
 ## Extraction review 0.8.0 (ADR-0024)
 

@@ -32,7 +32,7 @@ def test_pagination_contract_is_explicit_and_preserves_arrays() -> None:
 
 def test_bounded_evidence_contracts_are_declared() -> None:
     spec = yaml.safe_load(CONTRACT.read_text())
-    assert spec["info"]["version"] == "0.8.0"
+    assert spec["info"]["version"] == "0.9.0"
     assert "/v1/document-versions/resolve" in spec["paths"]
     assert "/v1/retrieval-runs/{runId}/event-history" in spec["paths"]
     reader = spec["paths"]["/v1/documents/{documentId}/reader"]["get"]

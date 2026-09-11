@@ -1,0 +1,33 @@
+[
+  { "name": "malformed numeric string", "fields": { "value": "\"not-a-number\"" } },
+  {
+    "name": "numeric-looking strings retain quotes",
+    "fields": { "value": "\"9007199254740993.123456789\"" }
+  },
+  { "name": "wrong dimensions type", "fields": { "dimensions": "[\"unexpected\", 17]" } },
+  {
+    "name": "malformed entity and metric",
+    "fields": { "entity_id": "{\"invalid\": true}", "metric_id": "null" }
+  },
+  { "name": "missing fields remain absent", "fields": {} },
+  { "name": "explicit null remains text", "fields": { "value": "null" } },
+  { "name": "positive safe integer edge", "fields": { "scale": "9007199254740991" } },
+  { "name": "negative safe integer edge", "fields": { "scale": "-9007199254740991" } },
+  { "name": "positive unsafe integer", "fields": { "scale": "9007199254740992" } },
+  { "name": "negative unsafe integer", "fields": { "scale": "-9007199254740992" } },
+  { "name": "integer not representable in JavaScript", "fields": { "scale": "9007199254740993" } },
+  { "name": "fractional number", "fields": { "qualifiers": "{\"ratio\": 0.1234567890123456789}" } },
+  {
+    "name": "nested unsafe number",
+    "fields": { "qualifiers": "{\"nested\": [{\"count\": 9007199254740993}]}" }
+  },
+  {
+    "name": "nested booleans and numeric strings",
+    "fields": { "qualifiers": "{\"active\": true, \"count\": \"9007199254740993\"}" }
+  },
+  { "name": "malformed range", "fields": { "low": "false", "high": "[1, 2]" } },
+  {
+    "name": "quoted control characters and markup remain text",
+    "fields": { "description": "\"<script>alert(1)</script>\\n\\t\\u0000\"" }
+  }
+]

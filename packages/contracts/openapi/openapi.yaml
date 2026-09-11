@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Financial Evidence Lab API
-  version: 0.8.0
+  version: 0.9.0
   description: >-
     Frozen v1 contract surface (ADR-0001). This file seeds the M0 freeze:
     conventions (error envelope, idempotency, optimistic concurrency,
@@ -3093,6 +3093,8 @@ components:
           type: object
           additionalProperties: true
           description: IDs, counts, states and redacted errors only; no source or prompt text.
+    ExtractionCandidateFields:
+      $ref: ../schemas/extraction-candidate-fields.schema.json
     ExtractionPayload:
       $ref: ../schemas/extraction-payload.schema.json
     ExtractionProposal:
@@ -3128,10 +3130,18 @@ components:
         metric_id:
           type: string
         payload:
-          $ref: "#/components/schemas/ExtractionPayload"
+          oneOf:
+            - $ref: "#/components/schemas/ExtractionPayload"
+            - $ref: "#/components/schemas/ExtractionCandidateFields"
+          description: >-
+            Ordinary schema-valid, display-safe payloads keep their strict shape. Otherwise return
+            the read-only candidate fields projection, including for fractional or unsafe JSON
+            numeric leaves (recursively excluding booleans and numeric strings). This alternative
+            implies no financial validity or approval. Preflight stored payload bytes at 1 MiB;
+            overflow returns a typed 413 with the safe resource ID, never a truncated candidate.
         evidence:
           type: array
-          minItems: 1
+          minItems: 0
           items:
             $ref: "#/components/schemas/EvidenceEdge"
         record_confidence:

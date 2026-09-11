@@ -1272,6 +1272,7 @@ export interface components {
         [key: string]: unknown;
       };
     };
+    ExtractionCandidateFields: components["schemas"]["extraction-candidate-fields.schema"];
     ExtractionPayload: components["schemas"]["extraction-payload.schema"];
     ExtractionProposal: {
       /** Format: uuid */
@@ -1281,7 +1282,10 @@ export interface components {
       /** @enum {string} */
       kind: "kpi" | "guidance" | "revenue_driver";
       metric_id: string;
-      payload: components["schemas"]["extraction-payload.schema"];
+      /** @description Ordinary schema-valid, display-safe payloads keep their strict shape. Otherwise return the read-only candidate fields projection, including for fractional or unsafe JSON numeric leaves (recursively excluding booleans and numeric strings). This alternative implies no financial validity or approval. Preflight stored payload bytes at 1 MiB; overflow returns a typed 413 with the safe resource ID, never a truncated candidate. */
+      payload:
+        | components["schemas"]["extraction-payload.schema"]
+        | components["schemas"]["extraction-candidate-fields.schema"];
       evidence: components["schemas"]["EvidenceEdge"][];
       /** @description Null means uncalibrated; never convert to zero or invent a score. */
       record_confidence: string | null;
@@ -1634,225 +1638,49 @@ export interface components {
       reported_or_derived: "management_assertion";
     };
     /** ExtractionPayload */
-    "extraction-payload.schema": {
-      $defs: {
-        period: {
-          /** @enum {unknown} */
-          type: "instant" | "duration" | "trailing_window" | "forecast";
-          /** Format: date */
-          instant?: string;
-          /** Format: date */
-          start?: string;
-          /** Format: date */
-          end?: string;
-          fiscal_period?: string | null;
-        };
-        numericFields: {
-          unit: string;
-          currency?: string | null;
-          scale: number;
-          /** @enum {unknown} */
-          sign: "positive" | "negative" | "zero";
-        };
-        commonProperties: unknown;
-        kpi: {
-          /** @constant */
-          schema_version: "extraction-payload/v1";
-          /** @constant */
-          kind: "kpi";
-          /** Format: uuid */
-          entity_id: string;
-          issuer_label: string;
-          metric_id: string;
-          raw_value: string;
-          value: string;
-          unit: string;
-          currency?: string | null;
-          scale: number;
-          /** @enum {unknown} */
-          sign: "positive" | "negative" | "zero";
-          period: components["schemas"]["period"];
-          dimensions: {
-            [key: string]: string;
-          };
-          definition?: string | null;
-          qualifiers: {
-            [key: string]: unknown;
-          };
-          /** @enum {unknown} */
-          reported_or_derived: "reported" | "derived";
-        };
-        guidanceBase: {
-          /** @constant */
-          schema_version: "extraction-payload/v1";
-          /** @constant */
-          kind: "guidance";
-          /** Format: uuid */
-          entity_id: string;
-          issuer_label: string;
-          metric_id: string;
-          raw_value: string;
-          unit?: string;
-          currency?: string | null;
-          scale?: number;
-          /** @enum {unknown} */
-          sign?: "positive" | "negative" | "zero";
-          period: components["schemas"]["period"];
-          dimensions: {
-            [key: string]: string;
-          };
-          definition?: string | null;
-          qualifiers: {
-            [key: string]: unknown;
-          };
-          /** @constant */
-          reported_or_derived: "management_assertion";
-        };
-        guidancePoint: components["schemas"]["guidanceBase"] & {
-          schema_version?: unknown;
-          kind?: unknown;
-          entity_id?: unknown;
-          issuer_label?: unknown;
-          metric_id?: unknown;
-          raw_value?: unknown;
-          /** @constant */
-          shape?: "point";
-          value: string;
-          unit: unknown;
-          currency?: unknown;
-          scale: unknown;
-          sign: unknown;
-          period?: unknown;
-          dimensions?: unknown;
-          definition?: unknown;
-          qualifiers?: unknown;
-          reported_or_derived?: unknown;
-        };
-        guidanceRange: components["schemas"]["guidanceBase"] & {
-          schema_version?: unknown;
-          kind?: unknown;
-          entity_id?: unknown;
-          issuer_label?: unknown;
-          metric_id?: unknown;
-          raw_value?: unknown;
-          /** @constant */
-          shape?: "range";
-          low: string;
-          high: string;
-          unit: unknown;
-          currency?: unknown;
-          scale: unknown;
-          sign: unknown;
-          period?: unknown;
-          dimensions?: unknown;
-          definition?: unknown;
-          qualifiers?: unknown;
-          reported_or_derived?: unknown;
-        };
-        guidanceFloor: components["schemas"]["guidanceBase"] & {
-          schema_version?: unknown;
-          kind?: unknown;
-          entity_id?: unknown;
-          issuer_label?: unknown;
-          metric_id?: unknown;
-          raw_value?: unknown;
-          /** @constant */
-          shape?: "floor";
-          low: string;
-          unit: unknown;
-          currency?: unknown;
-          scale: unknown;
-          sign: unknown;
-          period?: unknown;
-          dimensions?: unknown;
-          definition?: unknown;
-          qualifiers?: unknown;
-          reported_or_derived?: unknown;
-        };
-        guidanceCeiling: components["schemas"]["guidanceBase"] & {
-          schema_version?: unknown;
-          kind?: unknown;
-          entity_id?: unknown;
-          issuer_label?: unknown;
-          metric_id?: unknown;
-          raw_value?: unknown;
-          /** @constant */
-          shape?: "ceiling";
-          high: string;
-          unit: unknown;
-          currency?: unknown;
-          scale: unknown;
-          sign: unknown;
-          period?: unknown;
-          dimensions?: unknown;
-          definition?: unknown;
-          qualifiers?: unknown;
-          reported_or_derived?: unknown;
-        };
-        guidanceQualitative: components["schemas"]["guidanceBase"] & {
-          schema_version?: unknown;
-          kind?: unknown;
-          entity_id?: unknown;
-          issuer_label?: unknown;
-          metric_id?: unknown;
-          raw_value?: unknown;
-          /** @constant */
-          shape?: "qualitative";
-          text: string;
-          period?: unknown;
-          dimensions?: unknown;
-          definition?: unknown;
-          qualifiers?: unknown;
-          reported_or_derived?: unknown;
-        };
-        revenueDriver: {
-          /** @constant */
-          schema_version: "extraction-payload/v1";
-          /** @constant */
-          kind: "revenue_driver";
-          /** Format: uuid */
-          entity_id: string;
-          issuer_label: string;
-          metric_id: string;
-          raw_value: string;
-          /** @enum {string} */
-          category:
-            | "price"
-            | "volume"
-            | "mix"
-            | "acquisition"
-            | "retention"
-            | "usage"
-            | "seats"
-            | "fx"
-            | "services"
-            | "cost"
-            | "other";
-          description: string;
-          /** @enum {unknown} */
-          direction: "positive" | "negative" | "mixed" | "unknown";
-          target_metric_ids: string[];
-          period: components["schemas"]["period"];
-          dimensions: {
-            [key: string]: string;
-          };
-          definition?: string | null;
-          qualifiers: {
-            [key: string]: unknown;
-          };
-          /** @constant */
-          reported_or_derived: "management_assertion";
-        };
-      };
-    } & (
+    "extraction-payload.schema":
       | components["schemas"]["kpi"]
       | components["schemas"]["guidancePoint"]
       | components["schemas"]["guidanceRange"]
       | components["schemas"]["guidanceFloor"]
       | components["schemas"]["guidanceCeiling"]
       | components["schemas"]["guidanceQualitative"]
-      | components["schemas"]["revenueDriver"]
-    );
+      | components["schemas"]["revenueDriver"];
+    /**
+     * ExtractionCandidateFields
+     * @description Read-only public candidate fields as persisted PostgreSQL JSON text. Render strings verbatim; do not parse, use for financial hashing, infer approval, or convert automatically into mutation inputs. Embedded JSON syntax is guaranteed by the producer, not structural schema validation.
+     */
+    "extraction-candidate-fields.schema": {
+      /** @constant */
+      schema_version: "extraction-candidate-fields/v1";
+      /** @description Only present public financial keys; missing keys remain absent and present JSON null is the string null. Unknown and internal control fields are omitted. The persisted field JSON representation, including quotes for JSON strings. Overlong values produce a typed 413; never truncate. */
+      fields: {
+        category?: string;
+        currency?: string;
+        definition?: string;
+        description?: string;
+        dimensions?: string;
+        direction?: string;
+        entity_id?: string;
+        high?: string;
+        issuer_label?: string;
+        kind?: string;
+        low?: string;
+        metric_id?: string;
+        period?: string;
+        qualifiers?: string;
+        raw_value?: string;
+        reported_or_derived?: string;
+        scale?: string;
+        schema_version?: string;
+        shape?: string;
+        sign?: string;
+        target_metric_ids?: string;
+        text?: string;
+        unit?: string;
+        value?: string;
+      };
+    };
     /** @description ADR-0024. Exact selected/version/edit keys and complete membership are enforced transactionally (412); every acceptance revalidates real evidence/current financial rules. A reason never overrides a hard blocker. */
     "extraction-review-command.schema": {
       /** @enum {unknown} */
