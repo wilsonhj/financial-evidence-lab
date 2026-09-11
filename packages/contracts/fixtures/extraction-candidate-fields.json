@@ -1,0 +1,10 @@
+{
+  "schema_version": "extraction-candidate-fields/v1",
+  "fields": {
+    "kind": "\"kpi\"",
+    "metric_id": "\"arr\"",
+    "value": "\"not-a-number\"",
+    "dimensions": "null",
+    "qualifiers": "{\"reported_count\": 9007199254740993}"
+  }
+}
