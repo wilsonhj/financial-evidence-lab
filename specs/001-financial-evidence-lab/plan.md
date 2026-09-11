@@ -116,3 +116,122 @@ Platform/contracts
 ```
 
 Work may proceed in parallel inside a milestone when contracts are stable, but no downstream milestone may bypass the preceding exit gate.
+
+## 7. M4/M5 storage sketch and delivery ownership
+
+Accepted design: [ADR-0023](../../docs/decisions/ADR-0023-model-and-forecast-storage-boundaries.md).
+This is the missing #197 sketch, added after #63 merged; the requested
+pre-#63 sequencing was missed. Existing migration 0009 already validates the
+organization references on audit events, usage events and jobs and documents
+`workspaces.active_scenario_id` as reserved. Future tables below are planned,
+not present. Feature-owned contract slices add them without rewriting applied
+migrations or bypassing the dependencies in section 6.
+
+### 7.1 Identities, tenancy and immutable model snapshots — #64
+
+| Entity | Responsibility and references |
+|---|---|
+| `model_graphs` | Stable graph identity in one organization/workspace; entity and analysis context. Any mutable current-version pointer must reference that same graph/workspace/organization. |
+| `model_graph_versions` | Immutable snapshot: graph, parent version, engine snapshot ID/schema, exact canonical snapshot bytes, calculation version, cutoff, corpus/input pins, author and creation time. Maps the specification's logical `model_versions` entity to one table. |
+| `model_nodes` | Version-scoped node ID and typed node payload, unit, period and provenance. A source-fact node references an immutable approved extraction version supplied by #61, never an unreviewed proposal or a mutable latest-record lookup. |
+| `model_edges` | Version-scoped source/target node references plus role and operand order from `Node.inputs()`. Both endpoints must belong to the same graph version. |
+| `scenarios` | Immutable scenario revision in one graph/workspace, with base graph version, label, scenario identity, as-of and optional parent scenario revision. Bull/base/bear are labels over the shared base, not three copied reported histories. |
+| `scenario_overrides` | Sparse, scenario-revision-scoped target node and finite Decimal override with assumption provenance. Targets must exist in the scenario's base graph version and be eligible assumptions/drivers under the existing engine policy. |
+
+Each table is organization-owned. Database UUIDs identify records; they do not
+replace the engine's existing snapshot/result content hashes or node slugs.
+Use composite unique/reference keys carrying `org_id` and the relevant
+workspace/graph/version identity. Tenant checks alone are insufficient when
+two workspaces belong to the same organization. Parent references must stay
+inside the same graph. Source version/evidence relationships must also pass the
+existing publication cutoff and corpus-pin checks.
+
+Persist the exact engine canonical serialization, including Decimal encoding,
+AST and iteration policies. Do not hash a JSONB reserialization or invent a
+second calculator. Node/edge projections are generated from, and inserted
+atomically with, the verified canonical snapshot. Loading must verify the
+snapshot hash and reject inconsistent projections; relational indexes are for
+lookup, not an independent editable source of truth.
+
+A parent may have multiple children. Engine version numbers express ancestry
+depth, so do not impose uniqueness on `(graph_id, version_number)`. Restoring
+an older model derives a new child of the current version with the selected
+historical content and records the restored-from version in its audit event;
+it never mutates history or rewinds the audit chain. Reuse existing engine
+rules for retained/replaced iteration groups and scenario lineage.
+
+The base scenario references the unchanged base snapshot and has no override
+rows; do not pass an empty override set to the engine's non-empty `Scenario`
+constructor. An edit to a non-base scenario creates a new immutable revision
+and derived graph snapshot. Reported/source fact nodes remain immutable and
+cannot be overridden, irrespective of UI state.
+
+The migration creating `scenarios` must also constrain
+`workspaces.active_scenario_id` to a scenario in that same workspace and
+organization, through a composite key such as `(active_scenario_id, id, org_id)`
+referencing `(scenario_id, workspace_id, org_id)`. Preflight every existing
+non-null value; invalid values stop migration with a report for an explicit
+repair decision. Do not silently clear or fabricate scenario rows. Update the
+reserved-column comment in this new migration, leaving 0009 unchanged.
+
+### 7.2 Frozen forecast requests and results — #66, #67
+
+| Entity | Responsibility and references |
+|---|---|
+| `forecast_runs` | Immutable admitted request: organization/workspace, exact model/scenario revision, target/unit, fiscal horizon, cutoff, dataset/corpus versions, training window, feature vintages, algorithm/configuration version, input hash and approved budget reference. |
+| `forecast_results` | One append-only completion per run with success/abstention/failure, reason, output hash, registered model version and evaluation/calibration provenance. Mutable job/lease state stays in the queue, outside the immutable request/result records. |
+| `forecast_points` | Immutable result-scoped fiscal-quarter/horizon points with reported/modeled/assumed provenance, finite Decimal values and interval bounds/levels. A failed or abstained result cannot appear as a successful partial forecast. |
+
+Freeze exact physical columns and HTTP/job contracts with #66 before code
+consumes these tables. Result plus points publish atomically and retries use
+request identity/idempotency without replacing committed outcomes. Different
+provider/algorithm/input pins produce a distinct run, not an overwrite.
+
+Targets, one-to-eight-quarter horizons, short-history disclosure, baseline
+comparison and interval requirements remain those in spec section 8.6. #67's
+rolling-origin runs must freeze the actually available vintage at each origin;
+no later corrected value may enter an earlier training set. Store metrics and
+50/80/95% interval calibration with their target/horizon, evaluation dataset and
+method versions. A confidence/calibration claim cannot be inferred from a
+point forecast. Advanced-model default eligibility remains the existing
+seasonal-naive gate, not a database default.
+
+### 7.3 Immutable export evidence — #68
+
+`export_bundles` identifies an organization/workspace-owned immutable manifest
+with exact model/scenario/forecast/extraction versions, cutoff, format, renderer
+version, object keys and artifact hashes. Generation publishes the manifest
+only after all referenced bytes and hashes verify. Regeneration creates a new
+bundle. Objects and all typed provenance references must resolve within the
+authorized tenant/context; possession of a content hash is not authorization.
+
+Preserve the source → approved extraction → model → forecast → export chain
+with versioned typed references, including assumptions and calculation
+provenance. A missing required edge fails export acceptance. Store references
+and integrity metadata in PostgreSQL and artifact bytes in existing private
+object storage; do not copy credentials or unbounded binary content into rows.
+
+### 7.4 Access, migrations and verification
+
+Use explicit least-privilege grants plus RLS under the existing `fel_app` and
+`fel_worker` role/organization-claim model. Enable and force RLS for these tenant
+tables; define SELECT/INSERT and any justified pointer-UPDATE policies with
+both row eligibility and new-row checks. Revoke inherited public/client grants
+where those roles exist; no direct browser Data API access is introduced.
+Immutable records reject UPDATE/DELETE at the database boundary, not only in
+application code. Organization/history references use restrictive deletion,
+not cascading removal. Administrative threshold changes remain audited under
+#62; this sketch grants no new user powers.
+
+Each owning contract slice must demonstrate migration/restore, allowed role
+operations, denied cross-tenant and same-tenant cross-workspace references,
+invalid active-scenario preflight, immutable record enforcement, concurrent
+idempotency, and atomic publication/rollback. #64 also proves engine round-trip
+hash identity (v1 and v2), valid branching/restore and scenario non-mutation;
+#66/#67 prove vintage cutoff and failure/abstention isolation; #68 proves every
+artifact hash and required provenance edge. Runtime lists/readers follow the
+bounded request rules established by #191.
+
+No M4 or M5 feature is marked complete by this sketch. #64's model storage,
+#66's forecast storage and #68's export storage each need a separately reviewed
+migration/contract dispatch and their original milestone exit evidence.

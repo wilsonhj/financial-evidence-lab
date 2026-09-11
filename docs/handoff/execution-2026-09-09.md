@@ -9,7 +9,7 @@ merged the owner-preserving checkpoint repair at 6c409e8; external PR #260
 then removed the unreachable tool layer and corrected the worker-role note at
 c16955c. PR #261 merged claims provenance at 29c241c and PR #259 merged
 locked runtime installation and heartbeat recovery at 7a69133. The latter
-retains hosted restart acceptance under #200. All remote commits are preserved.
+retains hosted restart verification under live cutover; #200 was subsequently closed in GitHub. All remote commits are preserved.
 
 Starting revision: a184374. Starting live inventory: 37 issues, zero PRs.
 Owner requested implementation of all open issues with parallel agents.
@@ -26,10 +26,12 @@ ADR-0017 records the initial dispatch and scope narrowing.
 | #194 | claude/close-trailing-acceptance-gaps | Remove unreachable extraction tool layer | merged, PR #260 @ c16955c | Independent code review and full PostgreSQL extraction suite passed; worker-role adoption remains #190 |
 | #153 | agent/153-unit-policy | Ontology-owned comparison policy and extraction checks | merged, PR #264 @ 54cad9a | Independent 657 PostgreSQL-enabled tests, wheel import and SIX vocabulary verified; final CI passed |
 | #190 | agent/190-worker-role-rollout | Committed Railway role selection | code merged, PR #265 @ 65f7159 | Independent 47 PostgreSQL tests and exact restricted-login startup checks passed; hosted verification pending |
-| #203 | agent/203-ci-observability | Coverage floors, required checks, browser cache, deployed Sentry package | dispatched | Measure current source coverage before setting floors; real reviewer staffing and hosted telemetry remain explicit |
+| #203 | agent/203-ci-observability | Coverage floors, required checks, browser cache, deployed Sentry package | merged, PR #269 @ c7b2d0c | 1778 Python tests and 419 JS tests passed; negative coverage probes fail; SDK privacy verified; seven strict admin-enforced required checks applied and read back; real reviewer staffing and hosted telemetry remain |
 | #266 | agent/266-terminal-schedule-test | Test database-clock invariant | merged, PR #267 @ 41857d2 | Independent 17 PostgreSQL tests, regression mutation and final CI passed |
-| #154 | agent/154-guidance-range-ordering | Signed guidance ordering and universal range validation | dispatched | ADR-0022; preserve invalid positive/mixed/zero inversions; new workflow/conflict namespace |
-| #188 | agent/188-execution-wave5 | Execution plan and ownership | coordinating | Initial control PR #254 merged @ 2b15032; subsequent paths checked |
+| #154 | agent/154-guidance-range-ordering | Signed guidance ordering and universal range validation | merged, PR #270 @ 3fbc8ac | 720 PostgreSQL-enabled source tests; independent 141 tests, 1681 endpoint combinations, final CI passed; issue closed |
+| #191 | agent/191-pagination-reader | Bounded API reads and coordinated web consumers | active, PR #272 | Backend and web agents share one worktree with disjoint file ownership; adversarial and integration checks pending |
+| #196 | agent/arch-complexity-split | Extraction control/stages/checkpoints/stores | dispatched | Mechanical split only; unchanged tests/goldens; API portion waits for #191 |
+| #188 | agent/188-execution-wave6 | Execution plan and ownership | coordinating | Initial control PR #254 merged @ 2b15032; subsequent paths checked |
 
 Ruling: narrow #230 and #221 test ownership — their original workers/tests/**
 globs overlapped, while the required implementation is separable — any shared
@@ -142,3 +144,25 @@ comparison is distinguished from mutable browsing. API observability source
 and tests remain owned by #203; reuse existing request telemetry. Reserve only
 index migration 0010 under this ADR, retaining only indexes supported by query
 plans. Provider metering remains explicitly tracked under #195.
+
+
+September 10 reconciliation: GitHub shows #190 and #200 closed at 22:52 UTC.
+Their code and local acceptance were verified; no hosted adoption or restart is
+inferred from their closure. Keep those operational checks in #177/#108's live
+cutover, which still requires the approved environment. The current inventory
+after #270 is 27 open issues and PR #272.
+
+#196 extraction ruling: dispatch the [mechanical split plan](../superpowers/plans/2026-09-10-extraction-complexity-split.md)
+from merged #154. Retain workflow's hash construction and runtime patch lookups,
+and persist's ownership lookup. Bound both workflow.py and persist.py; leave
+tests, financial modules, versions, SQL and event order unchanged. The existing
+510-line accounting validator satisfies the approximate 500-line target and
+stays untouched. API retrieval is explicitly excluded until #191 merges; this
+portion alone cannot close #196.
+
+#195 remains held at the installed OpenAI credential skill's mandatory initial
+key decision. No key was found in process/conventional environment locations;
+reuse/provision versus secure creation was requested, with no answer yet. No
+API-dependent design, code or smoke test has been undertaken after this gate.
+Second CODEOWNER identity and approved live environment/spend cap also remain
+unanswered. Independent offline work continues.
