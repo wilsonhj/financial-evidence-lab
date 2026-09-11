@@ -435,7 +435,7 @@ def get_document_reader(
     continuation = decode_cursor(sibling_cursor) if sibling_cursor is not None else None
     if continuation and (
         continuation.scope["endpoint"] != "siblings"
-        or continuation.scope["org_id"] != str(ctx.org_id)
+        or continuation.scope["org_id"] != str(uuid.UUID(ctx.org_id))
         or continuation.scope["resource_id"] != str(document_id)
     ):
         raise api_error(422, "INVALID_CURSOR", "Invalid continuation for this request.")

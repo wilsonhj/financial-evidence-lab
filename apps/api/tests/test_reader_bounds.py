@@ -403,3 +403,19 @@ def test_equivalent_offset_cutoffs_preserve_page_and_reader_evidence(
         assert responses[0].headers.get("X-FEL-Next-Cursor") == responses[1].headers.get(
             "X-FEL-Next-Cursor"
         )
+
+
+def test_sibling_cursor_accepts_equivalent_uppercase_tenant_uuid(
+    client, org_fixture, db_url, tmp_path, monkeypatch
+):
+    monkeypatch.setenv("FEL_STORAGE_DIR", str(tmp_path))
+    ids = _seed_reader(db_url, tmp_path)
+    headers = _headers((org_fixture[0].upper(), org_fixture[1]))
+    url = f"/v1/documents/{ids['target_id']}/reader"
+    first = client.get(url, params={"sibling_limit": 1}, headers=headers)
+    assert first.status_code == 200
+    cursor = first.json()["sibling_page"]["next_cursor"]
+    assert cursor
+    second = client.get(url, params={"sibling_cursor": cursor}, headers=headers)
+    assert second.status_code == 200
+    assert first.json()["siblings"][0]["meta"]["id"] != second.json()["siblings"][0]["meta"]["id"]
