@@ -1,55 +1,20 @@
-"""Observable hybrid retrieval API (M2-015 / T0206, ADR-0006).
+"""Retrieval routes and runtime patch boundaries (M2-015 / T0206, ADR-0006).
 
-This module wires the frozen retrieval contract (openapi v0.3.0) to the pinned
-pipeline in ``fel_retrieval``: it captures an immutable query plan, executes the
-lanes -> fusion pipeline once, and persists the whole run as an ordered,
-replayable trace (events, per-lane candidate contributions, run timings and
-budget usage) inside a single tenant transaction.
-
-Persistence honours ``db/migrations/0003_retrieval_core.sql`` exactly:
-
-* All tenant writes go through ``tenant_connection`` (``fel_app`` + org claims)
-  so row-level security is active — a caller only ever sees its own org's
-  queries/runs/events/candidates, and a cross-org id is a natural 404.
-* Events carry a monotonic ``seq`` per run and are **committed before** any SSE
-  emission (emission happens in a separate GET request, after the create
-  transaction has committed), so a stream never shows an uncommitted event.
-* The run status walks the ADR-0006 machine
-  (``queued -> planning -> retrieving -> fusing -> generating -> verifying ->
-  succeeded``); the terminal transition is emitted as ``run_completed`` first so
-  the ``fel_guard_retrieval_run`` terminal-event check passes, and only the
-  column-scoped fields the migration grants (status, budget_usage, cost_usd,
-  timings_ms, finished_at, error) are ever updated.
-
-Lane reads run over the public corpus tables (``documents``/``retrieval_*`` carry
-no org_id and no RLS by design — see ``0002``/``0003``) on a dedicated read
-connection with a tuple row factory, because the lane SQL in ``fel_retrieval``
-consumes positional rows. Org isolation is unaffected: every org-scoped write
-stays on the RLS-bound tenant connection.
-
-Generation (M2-020) decomposes the selected context into atomic claims via the
-pinned structured provider; verification (M2-021) re-derives every citation edge
-from the evidence and persists claims with their edges before the run goes
-terminal. When no claim is supported (e.g. the provider refused), the run
-abstains — ``verifying -> abstained`` with a terminal ``run_abstained`` event —
-otherwise it succeeds (a contradicted claim is preserved and displayed, M2-022).
+Admission, metering/failure control and lazy SSE replay stay together here.
+Storage, pinned execution and complete bounded reads have explicit helper modules.
 """
 
 from __future__ import annotations
 
-import json
 import time
 import uuid
-from collections.abc import Callable, Iterator, Mapping
-from dataclasses import dataclass
-from datetime import UTC, datetime
+from collections.abc import Callable, Iterator
 from decimal import Decimal
 from typing import Annotated, Any, cast
 
 import psycopg
 from fastapi import APIRouter, Depends, Header, Query, Response
 from fastapi.responses import StreamingResponse
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
 from app.auth import TenantContext
 from app.config import settings
@@ -57,19 +22,63 @@ from app.costs import (
     enforce_ceilings,
     lock_query_budget,
     record_usage,
-    reserve_query_cost,
-    token_cost_usd,
 )
 from app.db import tenant_connection
 from app.dependencies import get_tenant_context
 from app.errors import api_error
-from app.pagination import Order, page_headers, read_page, scope
+from app.pagination import Order
 from app.ratelimit import rate_limit
+from app.retrieval_pipeline import PipelineDependencies, _lane_query, _RunUsage
+from app.retrieval_pipeline import _decision_dict as _decision_dict
+from app.retrieval_pipeline import _execute_pipeline as _execute_pipeline_impl
+from app.retrieval_pipeline import _parse_iso as _parse_iso
+from app.retrieval_queries import _FEEDBACK_LABELS as _FEEDBACK_LABELS
+from app.retrieval_queries import GENERATION_MODEL as GENERATION_MODEL
+from app.retrieval_queries import GENERATION_PROVIDER as GENERATION_PROVIDER
+from app.retrieval_queries import PLANNER_VERSION as PLANNER_VERSION
+from app.retrieval_queries import (
+    CreateQuery,
+    EvidenceFeedback,
+    _accepted_body,
+    _idempotent_replay,
+    _idempotent_store,
+    _insert_query,
+    _insert_run,
+    _resolve_index,
+)
+from app.retrieval_queries import create_retrieval_feedback as _create_retrieval_feedback_impl
+from app.retrieval_reads import EVENT_SCHEMA_VERSION as EVENT_SCHEMA_VERSION
+from app.retrieval_reads import MAX_EVENT_BYTES as MAX_EVENT_BYTES
+from app.retrieval_reads import MAX_TRACE_BYTES as MAX_TRACE_BYTES
+from app.retrieval_reads import (
+    TraceReadDependencies,
+    _event_json,
+    _event_rows,
+    _group_candidates,
+    _trace_rows,
+)
+from app.retrieval_reads import _check_candidate_counts as _check_candidate_counts
+from app.retrieval_reads import _check_citation_count as _check_citation_count
+from app.retrieval_reads import _event_body as _event_body
+from app.retrieval_reads import _format_cost as _format_cost
+from app.retrieval_reads import _group_claims as _group_claims
+from app.retrieval_reads import _trace_too_large as _trace_too_large
+from app.retrieval_reads import get_query as _get_query_impl
+from app.retrieval_reads import get_retrieval_event_history as _get_retrieval_event_history_impl
+from app.retrieval_reads import get_retrieval_run as _get_retrieval_run_impl
+from app.retrieval_run_store import (
+    _context_tokens,
+    _load_context_items,
+    _persist_candidates,
+    _persist_claims,
+    _RunWriter,
+)
+from app.retrieval_run_store import _numeric_from_fact_row as _numeric_from_fact_row
 from fel_providers import EmbeddingProvider, MockEmbeddingProvider
 from fel_providers.interfaces import StructuredLLMProvider
 from fel_providers.mocks import MockStructuredLLMProvider
+from fel_retrieval import LANE_ORDER as LANE_ORDER
 from fel_retrieval import (
-    LANE_ORDER,
     LaneCall,
     LaneExecutionError,
     LaneQuery,
@@ -83,34 +92,19 @@ from fel_retrieval import (
     plan_query,
     tables_lane,
 )
-from fel_retrieval.generation import (
-    ContextItem,
-    GeneratedClaim,
-    GenerationContractError,
-    NumericTuple,
-    StructuredClaimGenerator,
-)
+from fel_retrieval.generation import ContextItem as ContextItem
+from fel_retrieval.generation import GeneratedClaim as GeneratedClaim
+from fel_retrieval.generation import GenerationContractError as GenerationContractError
+from fel_retrieval.generation import NumericTuple as NumericTuple
+from fel_retrieval.generation import StructuredClaimGenerator as StructuredClaimGenerator
 from fel_retrieval.lanes import LaneCandidate
-from fel_retrieval.verification import (
-    CitationIntegrityError,
-    MockCitationVerifier,
-    should_abstain,
-    verify_claims,
-)
+from fel_retrieval.verification import CitationIntegrityError
+from fel_retrieval.verification import MockCitationVerifier as MockCitationVerifier
+from fel_retrieval.verification import should_abstain as should_abstain
+from fel_retrieval.verification import verify_claims as verify_claims
 
 router = APIRouter(prefix="/v1", tags=["retrieval"])
 
-# Planner identity persisted on every query/run. Kept in one place so the query
-# guard's run<->query planner-pin agreement always holds.
-PLANNER_VERSION = "synonym-planner/v1"
-
-# Generation identity persisted on every run (immutable lineage). Only the
-# deterministic mock structured provider is wired; any other pin fails closed at
-# generation time, so the persisted pin is always load-bearing.
-GENERATION_PROVIDER = "mock"
-GENERATION_MODEL = "mock-structured-v1"
-
-EVENT_SCHEMA_VERSION = "retrieval-event/v1"
 
 # Lanes are executed and emitted in the shared fusion order (``LANE_ORDER``) so
 # a trace is deterministic.
@@ -175,172 +169,7 @@ def _resolve_generation_provider(provider: str, model: str) -> StructuredLLMProv
     raise UnsupportedGenerationProvider(provider, model)
 
 
-class CreateQuery(BaseModel):
-    """Request body for creating an immutable query (contract CreateQuery)."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    question: str = Field(min_length=1, max_length=4000)
-    parent_query_id: uuid.UUID | None = None
-    as_of: AwareDatetime | None = None
-    corpus_version_id: uuid.UUID | None = None
-    index_version_id: uuid.UUID | None = None
-    lanes: list[str] | None = Field(default=None, max_length=4)
-    top_k: int | None = Field(default=None, ge=1, le=100)
-    forms: list[str] | None = Field(default=None, max_length=20)
-    periods: list[str] | None = Field(default=None, max_length=20)
-
-
-class EvidenceFeedback(BaseModel):
-    """Request body for append-only evidence feedback (contract EvidenceFeedback)."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    item_id: uuid.UUID
-    label: str
-    reason: str | None = Field(default=None, max_length=2000)
-    supersedes_feedback_id: uuid.UUID | None = None
-
-
-_FEEDBACK_LABELS = frozenset({"relevant", "irrelevant", "duplicate", "temporally_invalid"})
-
-
-# --- Idempotency ------------------------------------------------------------
-def _idempotent_replay(
-    conn: psycopg.Connection[Any], ctx: TenantContext, endpoint: str, key: str
-) -> dict[str, Any] | None:
-    row = conn.execute(
-        "SELECT response_body FROM idempotency_keys"
-        " WHERE key = %s AND org_id = %s AND endpoint = %s",
-        (key, ctx.org_id, endpoint),
-    ).fetchone()
-    return dict(row["response_body"]) if row else None
-
-
-def _idempotent_store(
-    conn: psycopg.Connection[Any],
-    ctx: TenantContext,
-    endpoint: str,
-    key: str,
-    status: int,
-    body: dict[str, Any],
-) -> None:
-    conn.execute(
-        "INSERT INTO idempotency_keys (key, org_id, endpoint, response_status, response_body)"
-        " VALUES (%s, %s, %s, %s, %s)",
-        (key, ctx.org_id, endpoint, status, json.dumps(body)),
-    )
-
-
 # --- Pipeline execution + persistence --------------------------------------
-def _parse_iso(value: str) -> datetime:
-    text = value[:-1] + "+00:00" if value.endswith("Z") else value
-    return datetime.fromisoformat(text)
-
-
-class _RunWriter:
-    """Persists one run's ordered trace on the tenant connection.
-
-    Owns the monotonic ``seq`` allocation (matching the DB's own
-    ``fel_guard_retrieval_event`` expectation) and every column-scoped run
-    UPDATE, so the ADR-0006 status machine and append-only invariants are
-    expressed in one place.
-    """
-
-    def __init__(self, conn: psycopg.Connection[Any], *, run_id: str, org_id: str) -> None:
-        self._conn = conn
-        self._run_id = run_id
-        self._org_id = org_id
-        self._seq = 0
-
-    def emit(self, event_type: str, payload: dict[str, Any]) -> None:
-        self._seq += 1
-        self._conn.execute(
-            "INSERT INTO retrieval_events (run_id, org_id, seq, event_type, payload)"
-            " VALUES (%s, %s, %s, %s, %s::jsonb)",
-            (self._run_id, self._org_id, self._seq, event_type, json.dumps(payload)),
-        )
-
-    def set_status(self, status: str) -> None:
-        self._conn.execute(
-            "UPDATE retrieval_runs SET status = %s WHERE id = %s",
-            (status, self._run_id),
-        )
-
-    def finish_succeeded(
-        self,
-        *,
-        budget_usage: dict[str, int],
-        timings_ms: dict[str, int],
-        cost_usd: Decimal,
-    ) -> None:
-        # Single terminal UPDATE: all columns are within the migration's
-        # column-scoped grant, and run_completed is already the latest event.
-        self._conn.execute(
-            "UPDATE retrieval_runs SET status = 'succeeded', finished_at = now(),"
-            " budget_usage = %s::jsonb, timings_ms = %s::jsonb, cost_usd = %s WHERE id = %s",
-            (json.dumps(budget_usage), json.dumps(timings_ms), cost_usd, self._run_id),
-        )
-
-    def finish_abstained(
-        self,
-        *,
-        budget_usage: dict[str, int],
-        timings_ms: dict[str, int],
-        cost_usd: Decimal,
-    ) -> None:
-        # verifying -> abstained; run_abstained is already the latest event so the
-        # terminal-event guard passes. Only column-scoped grant fields are written.
-        # An abstention still consumed provider tokens, so it still carries a cost.
-        self._conn.execute(
-            "UPDATE retrieval_runs SET status = 'abstained', finished_at = now(),"
-            " budget_usage = %s::jsonb, timings_ms = %s::jsonb, cost_usd = %s WHERE id = %s",
-            (json.dumps(budget_usage), json.dumps(timings_ms), cost_usd, self._run_id),
-        )
-
-    def fail(
-        self,
-        error: dict[str, str],
-        *,
-        cost_usd: Decimal = Decimal("0"),
-        generation: dict[str, str | None] | None = None,
-    ) -> None:
-        # Append the terminal ``run_failed`` event, then move the run to the
-        # terminal ``failed`` status. ``fel_guard_retrieval_run`` allows a
-        # transition to ``failed`` from any open status once ``run_failed`` is the
-        # latest event; only column-scoped grant fields are written.
-        payload: dict[str, Any] = {"error": error}
-        if generation is not None:
-            payload["generation"] = generation
-        self.emit("run_failed", payload)
-        self._conn.execute(
-            "UPDATE retrieval_runs SET status = 'failed', finished_at = now(),"
-            " error = %s::jsonb, cost_usd = %s WHERE id = %s",
-            (json.dumps(error), cost_usd, self._run_id),
-        )
-
-
-def _lane_query(
-    plan: dict[str, Any], *, embedder: EmbeddingProvider, effective_as_of: datetime
-) -> LaneQuery:
-    filters = plan.get("filters", {})
-    forms = filters.get("forms") or None
-    periods = filters.get("periods") or None
-    query_text = plan["variants"][0]
-    query_vector = None
-    if "dense" in plan["lanes"]:
-        query_vector = embedder.embed([query_text])[0]
-    return LaneQuery(
-        index_version_id=plan["index_version_id"],
-        as_of=effective_as_of,
-        query_text=query_text,
-        query_vector=query_vector,
-        entity_id=plan["entity_ids"][0],
-        forms=tuple(forms) if forms else None,
-        periods=tuple(periods) if periods else None,
-        corpus_version_id=plan["corpus_version_id"],
-        top_k=plan["budgets"]["lane_top_k"],
-    )
 
 
 def _lane_call(lane: str, lane_query: LaneQuery, timings: dict[str, int]) -> LaneCall:
@@ -361,14 +190,6 @@ def _lane_call(lane: str, lane_query: LaneQuery, timings: dict[str, int]) -> Lan
     return _call
 
 
-@dataclass
-class _RunUsage:
-    """Keep provider usage available even if subsequent persistence fails."""
-
-    cost_usd: Decimal = Decimal("0")
-    generation: dict[str, str | None] | None = None
-
-
 def _execute_pipeline(
     conn: psycopg.Connection[Any],
     *,
@@ -380,379 +201,31 @@ def _execute_pipeline(
     embedding_model: str,
     usage: _RunUsage,
 ) -> tuple[dict[str, int], Decimal]:
-    """Run lanes -> fusion once and persist the full ordered trace.
-
-    Returns the run's budget usage and its metered cost so the caller can write
-    the ``usage_events`` row against the same numbers the trace records.
-
-    All writes are on ``conn`` (tenant/RLS); each lane SELECTs over its own
-    dedicated public-corpus connection via ``execute_lanes``. Everything runs
-    inside the caller's single transaction, so the run either materialises fully
-    succeeded or not at all — a raised ``UnsupportedEmbeddingProvider`` or
-    ``LaneExecutionError`` propagates to the failure path, which records a
-    ``failed`` run in a fresh transaction.
-    """
-    writer = _RunWriter(conn, run_id=run_id, org_id=org_id)
-    embedder = _resolve_embedding_provider(embedding_provider, embedding_model)
-    effective_as_of = _parse_iso(plan["effective_as_of"])
-    budgets = plan["budgets"]
-    lanes = [lane for lane in LANE_ORDER if lane in plan["lanes"]]
-
-    writer.set_status("planning")
-    t0 = time.monotonic()
-    writer.emit("run_started", {"mode": mode})
-    writer.emit(
-        "plan_ready",
-        {"intent": plan["intent"], "lanes": list(plan["lanes"]), "variants": len(plan["variants"])},
-    )
-    planning_ms = int((time.monotonic() - t0) * 1000)
-
-    writer.set_status("retrieving")
-    t0 = time.monotonic()
-    lane_query = _lane_query(plan, embedder=embedder, effective_as_of=effective_as_of)
-    for lane in lanes:
-        writer.emit("lane_started", {"lane": lane})
-    # Fixed-order timings dict, pre-populated so concurrent writes only touch
-    # existing keys. execute_lanes fails closed (LaneExecutionError) on any lane.
-    lane_timings: dict[str, int] = {lane: 0 for lane in lanes}
-    lane_results = execute_lanes(
-        [(lane, _lane_call(lane, lane_query, lane_timings)) for lane in lanes]
-    )
-    for lane in lanes:
-        writer.emit(
-            "lane_completed",
-            {
-                "lane": lane,
-                "candidates": len(lane_results[lane]),
-                "timing_ms": lane_timings[lane],
-            },
-        )
-    retrieving_ms = int((time.monotonic() - t0) * 1000)
-
-    writer.set_status("fusing")
-    t0 = time.monotonic()
-    fusion = fuse(lane_results, fused_top_k=budgets["fused_top_k"])
-    context_items = budgets["context_items"]
-    accepted = [c.item_id for c in fusion.candidates[:context_items]]
-    accepted_set = set(accepted)
-    stamp = datetime.now(UTC).isoformat()
-
-    fusion_decisions = [
-        _decision_dict(d, stamp) for d in fusion.decisions if d.stage in {"dedupe", "fusion"}
-    ]
-    rerank_decisions = [_decision_dict(d, stamp) for d in fusion.decisions if d.stage == "rerank"]
-    writer.emit(
-        "fusion_completed",
-        {"fused_count": len(fusion.candidates), "decisions": fusion_decisions},
-    )
-    writer.emit("rerank_completed", {"reranker": "noop", "decisions": rerank_decisions})
-
-    _persist_candidates(
+    """Use the current public call seams for one transactional pipeline execution."""
+    return _execute_pipeline_impl(
         conn,
         run_id=run_id,
         org_id=org_id,
-        candidates=fusion.candidates,
-        accepted=accepted_set,
-        lane_timings=lane_timings,
+        plan=plan,
+        mode=mode,
+        embedding_provider=embedding_provider,
+        embedding_model=embedding_model,
+        usage=usage,
+        deps=PipelineDependencies(
+            run_writer=_RunWriter,
+            resolve_embedding_provider=_resolve_embedding_provider,
+            resolve_generation_provider=_resolve_generation_provider,
+            lane_query=_lane_query,
+            lane_call=_lane_call,
+            execute_lanes=execute_lanes,
+            fuse=fuse,
+            persist_candidates=_persist_candidates,
+            load_context_items=_load_context_items,
+            context_tokens=_context_tokens,
+            persist_claims=_persist_claims,
+            settings=settings,
+        ),
     )
-    writer.emit(
-        "context_selected",
-        {
-            "context_items": len(accepted),
-            "accepted": accepted,
-            "decisions": [
-                {
-                    "stage": "context",
-                    "code": "accepted_top_k",
-                    "item_ids": accepted,
-                    "detail": {"context_items": context_items},
-                    "occurred_at": stamp,
-                }
-            ],
-        },
-    )
-    fusing_ms = int((time.monotonic() - t0) * 1000)
-
-    writer.set_status("generating")
-    t0 = time.monotonic()
-    context = _load_context_items(conn, accepted)
-    generator = StructuredClaimGenerator(
-        _resolve_generation_provider(GENERATION_PROVIDER, GENERATION_MODEL)
-    )
-    generation_rejection_code: str | None = None
-    try:
-        generation = generator.generate(plan["variants"][0], context, as_of=plan["effective_as_of"])
-    except GenerationContractError as exc:
-        # The provider already performed the generation: retain its usage and
-        # the selected evidence even though none of its claims can be admitted.
-        # Missing usage denotes a failure outside that completed-call seam.
-        if exc.usage is None:
-            raise
-        generation = exc.usage
-        generation_rejection_code = exc.code
-    # Capture reported usage before verification or database writes can fail.
-    usage.cost_usd = token_cost_usd(
-        settings(),
-        input_tokens=generation.input_tokens,
-        output_tokens=generation.output_tokens,
-    )
-    generation_audit: dict[str, str | None] = {
-        "provider": generation.provider,
-        "model": generation.model,
-        "response_id": generation.response_id,
-        "estimated_cost_usd": str(generation.estimated_cost_usd),
-    }
-    usage.generation = generation_audit
-    for claim in generation.claims:
-        writer.emit(
-            "claim_generated",
-            {"ord": claim.ord, "citations": len(claim.citations)},
-        )
-    generating_ms = int((time.monotonic() - t0) * 1000)
-
-    writer.set_status("verifying")
-    t0 = time.monotonic()
-    # Re-derive every citation edge and support status from the evidence; a
-    # dangling/cross-version citation raises CitationIntegrityError (fail closed).
-    claims = verify_claims(generation.claims, context, MockCitationVerifier())
-    for claim in claims:
-        for citation in claim.citations:
-            writer.emit(
-                "citation_verified",
-                {
-                    "claim_ord": claim.ord,
-                    "item_id": citation.item_id,
-                    "status": citation.status,
-                    "numeric_checks": citation.numeric_checks,
-                },
-            )
-    _persist_claims(conn, run_id=run_id, org_id=org_id, claims=claims)
-    verifying_ms = int((time.monotonic() - t0) * 1000)
-
-    context_tokens = _context_tokens(conn, accepted)
-    budget_usage = {
-        "context_items": len(accepted),
-        "context_tokens": context_tokens,
-        "input_tokens": generation.input_tokens,
-        "output_tokens": generation.output_tokens,
-    }
-    timings_ms = {
-        "planning": planning_ms,
-        "retrieving": retrieving_ms,
-        "fusing": fusing_ms,
-        "generating": generating_ms,
-        "verifying": verifying_ms,
-        "total": planning_ms + retrieving_ms + fusing_ms + generating_ms + verifying_ms,
-    }
-    cost_usd = usage.cost_usd
-    # Missing supporting evidence yields abstention; a contradicted claim is
-    # preserved and displayed (the run still succeeds).
-    if should_abstain(claims):
-        abstention: dict[str, Any] = {"reason": "insufficient_evidence"}
-        if generation_rejection_code is not None:
-            abstention = {
-                "reason": "generation_contract_invalid",
-                "code": generation_rejection_code,
-            }
-        elif generation.refused:
-            abstention = {"reason": "provider_refused"}
-        elif generation.abstained:
-            # The model's free-form reason may contain source/model text. Only
-            # the typed disposition belongs in the persisted trace event.
-            abstention = {"reason": "model_abstained"}
-        abstention["generation"] = generation_audit
-        writer.emit("run_abstained", abstention)
-        writer.finish_abstained(budget_usage=budget_usage, timings_ms=timings_ms, cost_usd=cost_usd)
-    else:
-        writer.emit("run_completed", {"status": "succeeded", "generation": generation_audit})
-        writer.finish_succeeded(budget_usage=budget_usage, timings_ms=timings_ms, cost_usd=cost_usd)
-    return budget_usage, cost_usd
-
-
-def _decision_dict(decision: Any, stamp: str) -> dict[str, Any]:
-    body: dict[str, Any] = decision.to_dict()
-    body["occurred_at"] = stamp
-    return body
-
-
-def _persist_candidates(
-    conn: psycopg.Connection[Any],
-    *,
-    run_id: str,
-    org_id: str,
-    candidates: tuple[Any, ...],
-    accepted: set[str],
-    lane_timings: dict[str, int],
-) -> None:
-    for candidate in candidates:
-        is_accepted = candidate.item_id in accepted
-        rejection = None if is_accepted else "beyond_context_budget"
-        for contribution in candidate.contributions:
-            conn.execute(
-                "INSERT INTO retrieval_candidates ("
-                " id, org_id, run_id, retrieval_item_id, lane, variant_index, lane_rank,"
-                " raw_score, rrf_contribution, fused_score, fused_rank, accepted,"
-                " rejection_code, timing_ms"
-                ") VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
-                (
-                    str(uuid.uuid4()),
-                    org_id,
-                    run_id,
-                    candidate.item_id,
-                    contribution.lane,
-                    contribution.variant_index,
-                    contribution.lane_rank,
-                    contribution.raw_score,
-                    contribution.rrf_contribution,
-                    candidate.fused_score,
-                    candidate.fused_rank,
-                    is_accepted,
-                    rejection,
-                    lane_timings[contribution.lane],
-                ),
-            )
-
-
-def _context_tokens(conn: psycopg.Connection[Any], item_ids: list[str]) -> int:
-    if not item_ids:
-        return 0
-    row = conn.execute(
-        "SELECT COALESCE(SUM(token_count), 0) AS tokens FROM retrieval_items"
-        " WHERE id = ANY(%s::uuid[])",
-        (item_ids,),
-    ).fetchone()
-    return int(row["tokens"]) if row else 0
-
-
-def _load_context_items(conn: psycopg.Connection[Any], accepted: list[str]) -> list[ContextItem]:
-    """Load the accepted context items (rank-ordered) for claim generation.
-
-    Fact-kind items carry a checkable numeric tuple: ``value`` / ``unit`` /
-    ``scale`` from ``financial_facts``, and ``period`` from the denormalized
-    ``retrieval_items.period`` filter column (corpus period label; the facts
-    table stores period as typed date columns, not a text label). An incomplete
-    provenance tuple fails closed — never coerce NULL scale→0, drop numeric, or
-    invent empty unit/period.
-    """
-    if not accepted:
-        return []
-    rows = conn.execute(
-        "SELECT ri.id, ri.kind, ri.content, ri.source_span_id, ri.document_version_id,"
-        " ri.financial_fact_id, ri.period AS period, ff.value, ff.unit, ff.scale"
-        " FROM retrieval_items ri"
-        " LEFT JOIN financial_facts ff ON ff.id = ri.financial_fact_id"
-        " WHERE ri.id = ANY(%s::uuid[])",
-        (accepted,),
-    ).fetchall()
-    by_id = {str(row["id"]): row for row in rows}
-    items: list[ContextItem] = []
-    for item_id in accepted:
-        row = by_id.get(item_id)
-        if row is None:  # pragma: no cover - accepted ids are always persisted items
-            continue
-        numeric = _numeric_from_fact_row(row)
-        items.append(
-            ContextItem(
-                item_id=item_id,
-                kind=row["kind"],
-                text=row["content"],
-                source_span_id=str(row["source_span_id"]),
-                document_version_id=str(row["document_version_id"]),
-                financial_fact_id=(
-                    str(row["financial_fact_id"]) if row["financial_fact_id"] else None
-                ),
-                numeric=numeric,
-            )
-        )
-    return items
-
-
-def _numeric_from_fact_row(row: Mapping[str, Any]) -> NumericTuple | None:
-    """Build a NumericTuple from a joined retrieval_items/financial_facts row.
-
-    Returns ``None`` for non-fact items. Raises when a fact link is present but
-    any provenance field is missing — silent coercion is a fail-open hazard.
-    """
-    if row["financial_fact_id"] is None:
-        return None
-    value = row["value"]
-    unit = row["unit"]
-    period = row["period"]
-    scale = row["scale"]
-    missing = [
-        name
-        for name, raw in (
-            ("value", value),
-            ("unit", unit),
-            ("period", period),
-            ("scale", scale),
-        )
-        if raw is None or (isinstance(raw, str) and not raw)
-    ]
-    if missing:
-        raise ValueError(
-            f"incomplete fact provenance for item {row['id']}: missing {', '.join(missing)}"
-        )
-    return NumericTuple(
-        value=Decimal(value),
-        unit=str(unit),
-        period=str(period),
-        scale=int(scale),
-    )
-
-
-def _persist_claims(
-    conn: psycopg.Connection[Any],
-    *,
-    run_id: str,
-    org_id: str,
-    claims: tuple[GeneratedClaim, ...],
-) -> None:
-    """Persist claims and their citations while the run is still open.
-
-    Honours the 0003 guards: claims are run-children inserted before the terminal
-    status, and each citation targets an accepted candidate of the same run
-    (``fel_guard_citation``). Confidence is stored as a decimal string.
-    """
-    for claim in claims:
-        claim_id = str(uuid.uuid4())
-        confidence = f"{claim.confidence:f}" if claim.confidence is not None else None
-        conn.execute(
-            "INSERT INTO claims ("
-            " id, org_id, run_id, ord, text, status, confidence, calculation_lineage"
-            ") VALUES (%s, %s, %s, %s, %s, %s, %s, %s::jsonb)",
-            (
-                claim_id,
-                org_id,
-                run_id,
-                claim.ord,
-                claim.text,
-                claim.status,
-                confidence,
-                json.dumps(claim.calculation_lineage),
-            ),
-        )
-        for citation in claim.citations:
-            conn.execute(
-                "INSERT INTO citations ("
-                " id, org_id, run_id, claim_id, retrieval_item_id, source_span_id,"
-                " status, verifier, model, version, numeric_checks, rationale"
-                ") VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s)",
-                (
-                    str(uuid.uuid4()),
-                    org_id,
-                    run_id,
-                    claim_id,
-                    citation.item_id,
-                    citation.source_span_id,
-                    citation.status,
-                    citation.verifier,
-                    citation.model,
-                    citation.version,
-                    json.dumps(citation.numeric_checks),
-                    citation.rationale,
-                ),
-            )
 
 
 def _corpus_read_connection() -> psycopg.Connection[Any]:
@@ -768,116 +241,6 @@ def _corpus_read_connection() -> psycopg.Connection[Any]:
     conn = psycopg.connect(url, autocommit=True)
     conn.execute("SELECT set_config('statement_timeout', %s, false)", (_STATEMENT_TIMEOUT,))
     return conn
-
-
-# --- Query / run resolution -------------------------------------------------
-def _resolve_index(conn: psycopg.Connection[Any], body: CreateQuery) -> dict[str, Any]:
-    """Resolve the pinned index version (explicit pin or workspace active default)."""
-    if body.index_version_id is not None:
-        row = conn.execute(
-            "SELECT id, corpus_version_id, config_hash, status, published_at,"
-            " embedding_provider, embedding_model"
-            " FROM retrieval_index_versions WHERE id = %s",
-            (str(body.index_version_id),),
-        ).fetchone()
-        if (
-            row is None
-            or row["status"] not in {"ready", "superseded"}
-            or row["published_at"] is None
-        ):
-            raise api_error(
-                422, "INDEX_NOT_PUBLISHED", "index_version_id must be a published index."
-            )
-    else:
-        row = conn.execute(
-            "SELECT id, corpus_version_id, config_hash, status, published_at,"
-            " embedding_provider, embedding_model"
-            " FROM retrieval_index_versions WHERE is_active AND status = 'ready'"
-        ).fetchone()
-        if row is None:
-            raise api_error(409, "NO_ACTIVE_INDEX", "No active retrieval index is available.")
-    if body.corpus_version_id is not None and str(body.corpus_version_id) != str(
-        row["corpus_version_id"]
-    ):
-        raise api_error(
-            422, "CORPUS_INDEX_MISMATCH", "corpus_version_id does not match the pinned index."
-        )
-    return dict(row)
-
-
-def _insert_query(
-    conn: psycopg.Connection[Any],
-    ctx: TenantContext,
-    *,
-    workspace_id: str,
-    body: CreateQuery,
-    index: dict[str, Any],
-    plan_dict: dict[str, Any],
-    effective_as_of: datetime,
-) -> str:
-    query_id = str(uuid.uuid4())
-    conn.execute(
-        "INSERT INTO queries ("
-        " id, org_id, workspace_id, created_by, question, effective_as_of,"
-        " corpus_version_id, index_version_id, plan, planner_version, parent_query_id"
-        ") VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s)",
-        (
-            query_id,
-            ctx.org_id,
-            workspace_id,
-            ctx.user_id,
-            body.question,
-            effective_as_of,
-            str(index["corpus_version_id"]),
-            str(index["id"]),
-            json.dumps(plan_dict),
-            PLANNER_VERSION,
-            str(body.parent_query_id) if body.parent_query_id else None,
-        ),
-    )
-    return query_id
-
-
-def _insert_run(
-    conn: psycopg.Connection[Any],
-    ctx: TenantContext,
-    *,
-    query_id: str,
-    index: dict[str, Any],
-    mode: str,
-    parent_run_id: str | None,
-) -> str:
-    run_id = str(uuid.uuid4())
-    conn.execute(
-        "INSERT INTO retrieval_runs ("
-        " id, org_id, query_id, parent_run_id, mode, config_hash,"
-        " embedding_provider, embedding_model, generation_provider, generation_model,"
-        " planner_version"
-        ") VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
-        (
-            run_id,
-            ctx.org_id,
-            query_id,
-            parent_run_id,
-            mode,
-            index["config_hash"],
-            index["embedding_provider"],
-            index["embedding_model"],
-            GENERATION_PROVIDER,
-            GENERATION_MODEL,
-            PLANNER_VERSION,
-        ),
-    )
-    reserve_query_cost(conn, ctx, run_id, settings().research_query_cost_usd)
-    return run_id
-
-
-def _accepted_body(query_id: str, run_id: str) -> dict[str, Any]:
-    return {
-        "query_id": query_id,
-        "run_id": run_id,
-        "events_url": f"/v1/retrieval-runs/{run_id}/events",
-    }
 
 
 def _failure_envelope(exc: Exception) -> dict[str, str]:
@@ -1141,137 +504,8 @@ def get_query(
     order: Annotated[Order | None, Query()] = None,
 ) -> dict[str, Any]:
     """Return the complete immutable query snapshot and run history."""
-    with tenant_connection(ctx, snapshot_read=True) as conn:
-        query = conn.execute(
-            "SELECT id, parent_query_id, question, plan, created_at FROM queries WHERE id = %s",
-            (str(query_id),),
-        ).fetchone()
-        if query is None:
-            raise api_error(404, "NOT_FOUND", "Query not found.")
-        runs, page = read_page(
-            conn,
-            query="SELECT id, parent_run_id, status, mode, started_at FROM retrieval_runs"
-            " WHERE query_id = %s AND org_id = %s",
-            params=(query_id, ctx.org_id),
-            keys=("started_at", "id"),
-            request_scope=scope("runs", ctx.org_id, query_id),
-            limit=limit,
-            token=cursor,
-            order=order,
-        )
-    page_headers(response, page)
-    return {
-        "query_id": str(query["id"]),
-        "parent_query_id": str(query["parent_query_id"]) if query["parent_query_id"] else None,
-        "question": query["question"],
-        "plan": query["plan"],
-        "runs": [
-            {
-                "run_id": str(run["id"]),
-                "parent_run_id": str(run["parent_run_id"]) if run["parent_run_id"] else None,
-                "status": run["status"],
-                "mode": run["mode"],
-                "created_at": run["started_at"].isoformat(),
-            }
-            for run in runs
-        ],
-        "created_at": query["created_at"].isoformat(),
-    }
-
-
-def _event_body(row: dict[str, Any], run_id: str) -> dict[str, Any]:
-    return {
-        "schema_version": EVENT_SCHEMA_VERSION,
-        "run_id": run_id,
-        "seq": int(row["seq"]),
-        "type": row["event_type"],
-        "occurred_at": row["created_at"].isoformat(),
-        "payload": row["payload"],
-    }
-
-
-MAX_TRACE_BYTES = 16 * 1024 * 1024
-MAX_EVENT_BYTES = 256 * 1024
-
-
-def _trace_too_large(kind: str, limit: int) -> Exception:
-    return api_error(
-        413,
-        "TRACE_TOO_LARGE",
-        "Retrieval evidence exceeds a resource limit.",
-        {"resource": "retrieval_trace", "limit_kind": kind, "limit": limit},
-    )
-
-
-def _trace_rows(
-    conn: psycopg.Connection[dict[str, Any]],
-    query: str,
-    params: tuple[Any, ...],
-    cap: int,
-    kind: str,
-    budget: list[int],
-) -> list[dict[str, Any]]:
-    """Probe bounded count/serialized size before transferring any large payload."""
-    from psycopg import sql
-
-    bounded = sql.SQL(query) + sql.SQL(" LIMIT %s")
-    probe = conn.execute(
-        sql.SQL(
-            "SELECT count(*) AS n, coalesce(sum(octet_length(to_jsonb(t)::text)),0) AS bytes"
-            " FROM ({}) t"
-        ).format(bounded),
-        (*params, cap + 1),
-    ).fetchone()
-    probe = cast(dict[str, Any], probe)
-    if probe["n"] > cap:
-        raise _trace_too_large(kind, cap)
-    budget[0] += int(probe["bytes"])
-    if budget[0] > MAX_TRACE_BYTES:
-        raise _trace_too_large("serialized_bytes", MAX_TRACE_BYTES)
-    return conn.execute(bounded, (*params, cap)).fetchall()
-
-
-def _check_candidate_counts(conn: psycopg.Connection[dict[str, Any]], run_id: str) -> None:
-    rows = conn.execute(
-        "SELECT retrieval_item_id FROM retrieval_candidates WHERE run_id = %s LIMIT 32001",
-        (run_id,),
-    ).fetchall()
-    if len(rows) > 32000:
-        raise _trace_too_large("candidate_contributions", 32000)
-    if len({row["retrieval_item_id"] for row in rows}) > 2000:
-        raise _trace_too_large("candidates", 2000)
-
-
-def _check_citation_count(conn: psycopg.Connection[dict[str, Any]], run_id: str) -> None:
-    rows = conn.execute(
-        "SELECT id FROM citations WHERE run_id = %s LIMIT 16001", (run_id,)
-    ).fetchall()
-    if len(rows) > 16000:
-        raise _trace_too_large("citations", 16000)
-
-
-def _event_rows(
-    conn: psycopg.Connection[dict[str, Any]], run_id: str, after: int, high_water: int
-) -> list[dict[str, Any]]:
-    # The SQL CASE prevents oversized JSON payloads crossing the DB boundary.
-    rows = conn.execute(
-        "SELECT seq, event_type, created_at, octet_length(payload::text) AS payload_bytes,"
-        " CASE WHEN octet_length(payload::text) <= %s THEN payload ELSE NULL END AS payload"
-        " FROM retrieval_events WHERE run_id = %s AND seq > %s AND seq <= %s"
-        " ORDER BY seq LIMIT 200",
-        (MAX_EVENT_BYTES, run_id, after, high_water),
-    ).fetchall()
-    for row in rows:
-        if row["payload_bytes"] > MAX_EVENT_BYTES:
-            raise _trace_too_large("event_bytes", MAX_EVENT_BYTES)
-        if len(_event_json(row, run_id).encode()) > MAX_EVENT_BYTES:
-            raise _trace_too_large("event_bytes", MAX_EVENT_BYTES)
-    return rows
-
-
-def _event_json(row: dict[str, Any], run_id: str) -> str:
-    return json.dumps(
-        _event_body(row, run_id), sort_keys=True, separators=(",", ":"), ensure_ascii=True
+    return _get_query_impl(
+        query_id, response, ctx, limit, cursor, order, tenant_connection=tenant_connection
     )
 
 
@@ -1281,195 +515,16 @@ def get_retrieval_run(
     ctx: Annotated[TenantContext, Depends(get_tenant_context)],
 ) -> Response:
     """Return the immutable trace, serialized byte-stably (same bytes each read)."""
-    with tenant_connection(ctx, snapshot_read=True) as conn:
-        budget = [0]
-        run_rows = _trace_rows(
-            conn,
-            "SELECT r.id, r.query_id, r.parent_run_id, r.status, r.config_hash,"
-            " r.embedding_provider, r.embedding_model, r.generation_provider,"
-            " r.generation_model, r.planner_version, r.budget_usage, r.cost_usd,"
-            " r.timings_ms, r.started_at, r.finished_at,"
-            " q.plan, q.corpus_version_id, q.index_version_id"
-            " FROM retrieval_runs r JOIN queries q ON q.id = r.query_id AND q.org_id = r.org_id"
-            " WHERE r.id = %s",
-            (str(run_id),),
-            1,
-            "run",
-            budget,
-        )
-        if not run_rows:
-            raise api_error(404, "NOT_FOUND", "Retrieval run not found.")
-        run = run_rows[0]
-        event_probe = conn.execute(
-            "SELECT seq FROM retrieval_events WHERE run_id = %s ORDER BY seq LIMIT 10001",
-            (str(run_id),),
-        ).fetchall()
-        if len(event_probe) > 10000:
-            raise _trace_too_large("events", 10000)
-        high_water = event_probe[-1]["seq"] if event_probe else 0
-        event_rows = []
-        after = 0
-        while after < high_water:
-            batch = _event_rows(conn, str(run_id), after, high_water)
-            if not batch:
-                break
-            for row in batch:
-                budget[0] += len(_event_json(row, str(run_id)).encode())
-                if budget[0] > MAX_TRACE_BYTES:
-                    raise _trace_too_large("serialized_bytes", MAX_TRACE_BYTES)
-                event_rows.append(row)
-            after = batch[-1]["seq"]
-        _check_candidate_counts(conn, str(run_id))
-        candidate_rows = _trace_rows(
-            conn,
-            "SELECT rc.retrieval_item_id, rc.lane, rc.variant_index, rc.lane_rank,"
-            " rc.raw_score, rc.normalized_score, rc.rrf_contribution, rc.fused_score,"
-            " rc.rerank_score, rc.fused_rank, rc.rerank_rank, rc.accepted,"
-            " rc.rejection_code, rc.decision_detail, rc.timing_ms,"
-            " ri.kind, ri.source_span_id, ri.document_version_id, d.published_at"
-            " FROM retrieval_candidates rc"
-            " JOIN retrieval_items ri ON ri.id = rc.retrieval_item_id"
-            " JOIN documents d ON d.id = ri.document_id"
-            " WHERE rc.run_id = %s"
-            " ORDER BY rc.fused_rank, rc.retrieval_item_id::text",
-            (str(run_id),),
-            32000,
-            "candidate_contributions",
-            budget,
-        )
-        claim_rows = _trace_rows(
-            conn,
-            "SELECT id, ord, text, status FROM claims WHERE run_id = %s ORDER BY ord",
-            (str(run_id),),
-            1000,
-            "claims",
-            budget,
-        )
-        _check_citation_count(conn, str(run_id))
-        citation_rows = _trace_rows(
-            conn,
-            "SELECT claim_id, retrieval_item_id, source_span_id, status, numeric_checks"
-            " FROM citations WHERE run_id = %s"
-            " ORDER BY claim_id::text, retrieval_item_id::text, source_span_id::text",
-            (str(run_id),),
-            16000,
-            "citations",
-            budget,
-        )
-
-    events = [_event_body(row, str(run_id)) for row in event_rows]
-    decisions: list[dict[str, Any]] = []
-    for row in event_rows:
-        for decision in (row["payload"] or {}).get("decisions", []):
-            decisions.append(decision)
-
-    trace = {
-        "run_id": str(run["id"]),
-        "query_id": str(run["query_id"]),
-        "parent_run_id": str(run["parent_run_id"]) if run["parent_run_id"] else None,
-        "status": run["status"],
-        "plan": run["plan"],
-        "lineage": {
-            "corpus_version_id": str(run["corpus_version_id"]),
-            "index_version_id": str(run["index_version_id"]),
-            "planner_version": run["planner_version"],
-            "config_hash": run["config_hash"],
-            "embedding_provider": run["embedding_provider"],
-            "embedding_model": run["embedding_model"],
-            "generation_provider": run["generation_provider"],
-            "generation_model": run["generation_model"],
-        },
-        "events": events,
-        "candidates": _group_candidates(candidate_rows),
-        "decisions": decisions,
-        "claims": _group_claims(claim_rows, citation_rows),
-        "timings_ms": run["timings_ms"],
-        "budget_usage": run["budget_usage"],
-        "cost_usd": _format_cost(run["cost_usd"]),
-        "started_at": run["started_at"].isoformat(),
-        "finished_at": run["finished_at"].isoformat() if run["finished_at"] else None,
-    }
-    canonical = json.dumps(trace, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
-    if len(canonical.encode()) > MAX_TRACE_BYTES:
-        raise _trace_too_large("serialized_bytes", MAX_TRACE_BYTES)
-    return Response(content=canonical, media_type="application/json")
-
-
-def _format_cost(value: Any) -> str:
-    return f"{value:.6f}"
-
-
-def _group_candidates(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Group per-lane candidate rows into Candidate objects, order preserved."""
-    order: list[str] = []
-    grouped: dict[str, dict[str, Any]] = {}
-    for row in rows:
-        item_id = str(row["retrieval_item_id"])
-        if item_id not in grouped:
-            order.append(item_id)
-            grouped[item_id] = {
-                "item_id": item_id,
-                "kind": row["kind"],
-                "contributions": [],
-                "fused_score": row["fused_score"],
-                "fused_rank": row["fused_rank"],
-                "rerank_score": row["rerank_score"],
-                "rerank_rank": row["rerank_rank"],
-                "accepted": row["accepted"],
-                "rejection_code": row["rejection_code"],
-                "decision_detail": row["decision_detail"],
-                "source_span_id": str(row["source_span_id"]),
-                "document_version_id": str(row["document_version_id"]),
-                "published_at": row["published_at"].isoformat(),
-            }
-        grouped[item_id]["contributions"].append(
-            {
-                "lane": row["lane"],
-                "variant_index": row["variant_index"],
-                "lane_rank": row["lane_rank"],
-                "raw_score": row["raw_score"],
-                "normalized_score": row["normalized_score"],
-                "rrf_contribution": row["rrf_contribution"],
-                "timing_ms": row["timing_ms"],
-            }
-        )
-    for candidate in grouped.values():
-        candidate["contributions"].sort(
-            key=lambda c: (
-                LANE_ORDER.index(c["lane"]) if c["lane"] in LANE_ORDER else 99,
-                c["variant_index"],
-            )
-        )
-    return [grouped[item_id] for item_id in order]
-
-
-def _group_claims(
-    claim_rows: list[dict[str, Any]], citation_rows: list[dict[str, Any]]
-) -> list[dict[str, Any]]:
-    """Assemble the trace's retrievalClaim list (claims + their citation edges).
-
-    Ordered by claim ``ord`` with citations in a stable id order so the trace is
-    byte-stable across reads.
-    """
-    citations_by_claim: dict[str, list[dict[str, Any]]] = {}
-    for row in citation_rows:
-        citations_by_claim.setdefault(str(row["claim_id"]), []).append(
-            {
-                "item_id": str(row["retrieval_item_id"]),
-                "source_span_id": str(row["source_span_id"]),
-                "status": row["status"],
-                "numeric_checks": row["numeric_checks"] or {},
-            }
-        )
-    return [
-        {
-            "id": str(row["id"]),
-            "text": row["text"],
-            "status": row["status"],
-            "citations": citations_by_claim.get(str(row["id"]), []),
-        }
-        for row in claim_rows
-    ]
+    return _get_retrieval_run_impl(
+        run_id,
+        ctx,
+        deps=TraceReadDependencies(
+            tenant_connection=tenant_connection,
+            trace_rows=_trace_rows,
+            event_rows=_event_rows,
+            group_candidates=_group_candidates,
+        ),
+    )
 
 
 def _sse_stream(
@@ -1539,38 +594,9 @@ def get_retrieval_event_history(
     cursor: Annotated[str | None, Query(max_length=2048)] = None,
     order: Annotated[Order | None, Query()] = None,
 ) -> dict[str, Any]:
-    with tenant_connection(ctx, snapshot_read=True) as conn:
-        run = conn.execute("SELECT id FROM retrieval_runs WHERE id = %s", (run_id,)).fetchone()
-        if run is None:
-            raise api_error(404, "NOT_FOUND", "Retrieval run not found.")
-        rows, page = read_page(
-            conn,
-            query="SELECT seq, event_type, created_at,"
-            " octet_length(payload::text) AS payload_bytes,"
-            " CASE WHEN octet_length(payload::text) <= %s THEN payload ELSE NULL END AS payload"
-            " FROM retrieval_events WHERE run_id = %s",
-            params=(MAX_EVENT_BYTES, run_id),
-            keys=("seq",),
-            request_scope=scope("events", ctx.org_id, run_id),
-            limit=limit,
-            token=cursor,
-            order=order,
-            force_page=True,
-        )
-        for row in rows:
-            if (
-                row["payload_bytes"] > MAX_EVENT_BYTES
-                or len(_event_json(row, str(run_id)).encode()) > MAX_EVENT_BYTES
-            ):
-                raise _trace_too_large("event_bytes", MAX_EVENT_BYTES)
-    page = cast(dict[str, Any], page)
-    page_headers(response, page)
-    return {
-        "run_id": str(run_id),
-        "items": [_event_body(row, str(run_id)) for row in rows],
-        "next_cursor": page["next_cursor"],
-        "previous_cursor": page["previous_cursor"],
-    }
+    return _get_retrieval_event_history_impl(
+        run_id, response, ctx, limit, cursor, order, tenant_connection=tenant_connection
+    )
 
 
 @router.post(
@@ -1584,38 +610,6 @@ def create_retrieval_feedback(
     ctx: Annotated[TenantContext, Depends(get_tenant_context)],
     idempotency_key: Annotated[str, Header(alias="Idempotency-Key", min_length=8, max_length=128)],
 ) -> Response:
-    if body.label not in _FEEDBACK_LABELS:
-        raise api_error(422, "INVALID_LABEL", "Unknown feedback label.")
-    with tenant_connection(ctx) as conn:
-        replay = _idempotent_replay(conn, ctx, "createRetrievalFeedback", idempotency_key)
-        if replay is not None:
-            return Response(status_code=201)
-        run = conn.execute("SELECT id FROM retrieval_runs WHERE id = %s", (str(run_id),)).fetchone()
-        if run is None:
-            raise api_error(404, "NOT_FOUND", "Retrieval run not found.")
-        try:
-            conn.execute(
-                "INSERT INTO retrieval_feedback ("
-                " id, org_id, run_id, retrieval_item_id, label, actor_user_id,"
-                " supersedes_feedback_id, reason"
-                ") VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
-                (
-                    str(uuid.uuid4()),
-                    ctx.org_id,
-                    str(run_id),
-                    str(body.item_id),
-                    body.label,
-                    ctx.user_id,
-                    str(body.supersedes_feedback_id) if body.supersedes_feedback_id else None,
-                    body.reason,
-                ),
-            )
-        except (psycopg.errors.RaiseException, psycopg.errors.ForeignKeyViolation) as exc:
-            # The DB guard rejects an item that is not a candidate of this run
-            # (P0001), and an item that does not exist at all trips the item FK
-            # (23503); both are caller errors, not server faults.
-            raise api_error(
-                422, "INVALID_FEEDBACK_ITEM", "Feedback item must be a candidate of this run."
-            ) from exc
-        _idempotent_store(conn, ctx, "createRetrievalFeedback", idempotency_key, 201, {})
-    return Response(status_code=201)
+    return _create_retrieval_feedback_impl(
+        run_id, body, ctx, idempotency_key, tenant_connection=tenant_connection
+    )
