@@ -142,3 +142,32 @@ def source_fixture(extraction_url, extraction_tenant, tmp_path, monkeypatch):
             (ids["corpus"], ids["version"]),
         )
     return {**ids, "text": text, "hash": digest, "path": path}
+
+
+@pytest.fixture
+def waiting_review_fixture(extraction_client, extraction_tenant, extraction_url, source_fixture):
+    from psycopg.rows import dict_row
+
+    from fel_workers.extraction.handler import handle_extraction_run
+    from tests.extraction.test_mock_lifecycle import ScopedMock
+    from tests.extraction.test_run_creation import _create
+
+    response = _create(extraction_client, extraction_tenant, source_fixture)
+    assert response.status_code == 202, response.text
+    run_id = response.json()["id"]
+    with psycopg.connect(extraction_url, row_factory=dict_row) as conn:
+        job = conn.execute("SELECT org_id,payload FROM jobs WHERE id=%s", (run_id,)).fetchone()
+    with psycopg.connect(extraction_url, autocommit=True) as conn:
+        conn.execute("SET ROLE fel_worker")
+        state = handle_extraction_run(
+            conn,
+            ScopedMock(extraction_tenant, source_fixture),
+            job["payload"],
+            job_org_id=str(job["org_id"]),
+        )
+    assert state.status == "waiting_review"
+    with psycopg.connect(extraction_url, row_factory=dict_row) as conn:
+        proposal = conn.execute(
+            "SELECT id,payload FROM extraction_proposals WHERE run_id=%s", (run_id,)
+        ).fetchone()
+    return {"run": run_id, "proposal": str(proposal["id"]), "payload": proposal["payload"]}

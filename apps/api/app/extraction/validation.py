@@ -151,7 +151,12 @@ def evaluate(
         # have no old summary and are independently validated above.
         blockers = list(draft.validation_summary["blockers"])
         for blocker in carried:
-            if blocker != "duplicate_candidate" and blocker not in blockers:
+            irreversible = isinstance(blocker, str) and (
+                blocker == "dimensions_non_string"
+                or blocker.startswith("sign contradicts value:")
+                or blocker.startswith("sign must be positive/negative/zero:")
+            )
+            if irreversible and blocker not in blockers:
                 blockers.append(blocker)
         draft.validation_summary["blockers"] = blockers
         draft.validation_summary["ok"] = not blockers

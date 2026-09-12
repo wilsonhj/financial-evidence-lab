@@ -1,5 +1,6 @@
 """Exact extraction receipts in the existing tenant transaction and table."""
 
+import json
 from dataclasses import dataclass
 from typing import Any
 
@@ -7,7 +8,7 @@ import psycopg
 from psycopg.types.json import Jsonb
 
 from app.errors import api_error
-from fel_workers.extraction.hashing import hash_json
+from fel_workers.extraction.hashing import canonical_json, hash_json
 
 
 @dataclass(frozen=True)
@@ -42,7 +43,11 @@ def begin(
         raise api_error(
             409, "IDEMPOTENCY_KEY_REUSED", "Idempotency key belongs to another request."
         )
-    return Receipt(row["response_status"], envelope["body"], envelope["response_headers"])
+    return Receipt(
+        row["response_status"],
+        json.loads(canonical_json(envelope["body"])),
+        envelope["response_headers"],
+    )
 
 
 def save(
@@ -67,4 +72,4 @@ def save(
         "VALUES (%s,%s,%s,%s,%s)",
         (key, org_id, endpoint, status, Jsonb(envelope)),
     )
-    return Receipt(status, body, headers)
+    return Receipt(status, json.loads(canonical_json(body)), headers)
