@@ -4,11 +4,7 @@ export function pageQuery(
 ): URLSearchParams {
   const query = new URLSearchParams();
   for (const [key, value] of Object.entries(values)) {
-    if (
-      !value ||
-      Array.isArray(value) ||
-      !["cursor", "limit", "state", "run_id", "status"].includes(key)
-    )
+    if (!value || Array.isArray(value) || !["cursor", "limit", "state", "status"].includes(key))
       throw new Error("Invalid page query");
     if (key === "cursor" && !cursor(value)) throw new Error("Invalid cursor");
     query.set(key, value);

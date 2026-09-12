@@ -38,6 +38,14 @@ const pages = [
 beforeEach(() => vi.stubEnv("FEL_EVIDENCE_SOURCE", "fixture"));
 afterEach(() => vi.unstubAllEnvs());
 describe("mounted extraction pages", () => {
+  it("links a run to the bounded workspace queue using the published contract", async () => {
+    const html = renderToStaticMarkup(
+      await Run({ params: Promise.resolve({ runId: FIXTURE_RUN }) }),
+    );
+    expect(html).toContain('href="/extractions"');
+    expect(html).toContain("Browse workspace review queue");
+    expect(html).not.toContain("?run_id=");
+  });
   it.each([LoadingQueue, LoadingRuns, LoadingApproved])(
     "announces pending navigation",
     (Loading) => {

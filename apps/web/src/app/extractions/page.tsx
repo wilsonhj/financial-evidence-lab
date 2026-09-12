@@ -17,6 +17,7 @@ export default async function ExtractionsPage({
   try {
     const source = getExtractionSource(),
       query = pageQuery(await searchParams);
+    if (!query.has("state")) query.set("state", "needs_review");
     const [page, permissions] = await Promise.all([
       source.read("proposals", guards.proposals, query),
       source.read("permissions", guards.permissions),

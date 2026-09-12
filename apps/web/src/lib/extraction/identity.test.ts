@@ -25,10 +25,10 @@ describe("extraction response identity", () => {
     const version = initialFixture().versions[0]!;
     expect((await read(`approved/${fixtureId(99)}/versions`, page([version]))).status).toBe(502);
   });
-  it("rejects a different run or state in a filtered proposal page", async () => {
+  it("rejects undocumented run filters and mismatched proposal states", async () => {
     const proposal = initialFixture().proposals[0]!;
     expect((await read("proposals", page([proposal]), `?run_id=${fixtureId(99)}`)).status).toBe(
-      502,
+      422,
     );
     expect((await read("proposals", page([proposal]), "?state=accepted")).status).toBe(502);
   });

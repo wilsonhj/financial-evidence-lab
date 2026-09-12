@@ -179,11 +179,7 @@ export function fixtureFetch(state: FixtureState): typeof fetch {
       if (path === `${workspace}/extractions`)
         return json(
           page(
-            state.proposals.filter(
-              (p) =>
-                (!query.has("run_id") || p.run_id === query.get("run_id")) &&
-                (!query.has("state") || p.state === query.get("state")),
-            ),
+            state.proposals.filter((p) => !query.has("state") || p.state === query.get("state")),
             query,
             "proposals",
           ),
@@ -191,11 +187,7 @@ export function fixtureFetch(state: FixtureState): typeof fetch {
       if (path === `${workspace}/extraction-conflicts`)
         return json(
           page(
-            state.conflicts.filter(
-              (c) =>
-                (!query.has("run_id") || c.occurrence_run_id === query.get("run_id")) &&
-                (!query.has("status") || c.status === query.get("status")),
-            ),
+            state.conflicts.filter((c) => !query.has("status") || c.status === query.get("status")),
             query,
             "conflicts",
           ),

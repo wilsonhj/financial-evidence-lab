@@ -155,6 +155,7 @@ export function ReviewQueue({
               <th>Select</th>
               <th>Metric</th>
               <th>Kind</th>
+              <th>Source run</th>
               <th>State</th>
               <th>Confidence</th>
               <th>Blockers</th>
@@ -185,6 +186,9 @@ export function ReviewQueue({
                   <Link href={`/extractions/${p.id}`}>{p.metric_id}</Link>
                 </td>
                 <td>{p.kind}</td>
+                <td>
+                  <Link href={`/extraction-runs/${p.run_id}`}>Run {p.run_id}</Link>
+                </td>
                 <td>
                   {p.state} (v{p.version})
                 </td>

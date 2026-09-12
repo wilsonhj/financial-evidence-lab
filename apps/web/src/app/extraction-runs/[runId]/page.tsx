@@ -45,7 +45,7 @@ export default async function RunPage({
           <Link href={`/extraction-runs/${r.parent_run_id}`}>Original parent run</Link>
         )}
         <p>
-          <Link href={`/extractions?run_id=${r.id}`}>Review this run's proposals</Link>
+          <Link href="/extractions">Browse workspace review queue</Link>
           {" · "}
           <Link href={`/extraction-runs/${r.id}/events`}>Stored event history</Link>
         </p>
