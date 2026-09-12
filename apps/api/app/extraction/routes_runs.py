@@ -1,19 +1,70 @@
 """Authenticated extraction permissions and run transport."""
 
+import json
 from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, Response
+from fastapi import APIRouter, Depends, Header, Query, Request, Response
+from fastapi.responses import JSONResponse
+from pydantic import ValidationError
 
 from app.auth import TenantContext
 from app.db import tenant_connection
 from app.dependencies import get_tenant_context
-from app.extraction import reads, serializers
-from app.extraction.models import Action, ExtractionPermissions, ProposalState
+from app.errors import api_error
+from app.extraction import reads, runs, serializers
+from app.extraction.models import Action, ExtractionPermissions, ProposalState, RunCreate
 from app.pagination import Order
 
 router = APIRouter(prefix="/v1", tags=["extraction"])
 Tenant = Annotated[TenantContext, Depends(get_tenant_context)]
+
+
+async def command_body(request: Request, resource_id: UUID | str) -> Any:
+    if request.headers.get("content-type", "").split(";")[0].strip().lower() != "application/json":
+        raise api_error(415, "UNSUPPORTED_MEDIA_TYPE", "Expected application/json.")
+    raw = bytearray()
+    async for chunk in request.stream():
+        if len(raw) + len(chunk) > 1024 * 1024:
+            raise reads.too_large(resource_id)
+        raw.extend(chunk)
+
+    def pairs(items: list[tuple[str, Any]]) -> dict[str, Any]:
+        result: dict[str, Any] = {}
+        for key, value in items:
+            if key in result:
+                raise ValueError("Duplicate JSON key.")
+            result[key] = value
+        return result
+
+    try:
+        return json.loads(raw, object_pairs_hook=pairs)
+    except (ValueError, UnicodeError, RecursionError):
+        raise api_error(422, "VALIDATION_ERROR", "Request failed validation.") from None
+
+
+@router.post("/workspaces/{workspaceId}/extraction-runs", status_code=202)
+async def create_run(
+    workspaceId: UUID,
+    request: Request,
+    ctx: Tenant,
+    idempotency_key: Annotated[str, Header(alias="Idempotency-Key", min_length=8, max_length=128)],
+) -> JSONResponse:
+    try:
+        body = RunCreate.model_validate(await command_body(request, workspaceId))
+    except ValidationError:
+        raise api_error(422, "VALIDATION_ERROR", "Request failed validation.") from None
+    from starlette.concurrency import run_in_threadpool
+
+    result = await run_in_threadpool(
+        runs.create,
+        ctx,
+        workspaceId,
+        body,
+        idempotency_key,
+        getattr(request.state, "request_id", "unknown"),
+    )
+    return JSONResponse(result.body, status_code=result.status, headers=result.headers)
 
 
 @router.get("/workspaces/{workspaceId}/extraction-permissions")

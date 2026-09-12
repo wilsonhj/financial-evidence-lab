@@ -284,3 +284,46 @@ ReviewCommand = Annotated[
     AcceptCommand | RejectCommand | EditCommand | MergeCommand, Field(discriminator="action")
 ]
 REVIEW_ADAPTER: TypeAdapter[ReviewCommand] = TypeAdapter(ReviewCommand)
+
+
+class RequestedLimits(ClosedModel):
+    max_calls: Annotated[StrictInt, Field(ge=1, le=10)] | None = None
+    max_input_tokens: Annotated[StrictInt, Field(ge=1, le=100000)] | None = None
+    max_output_tokens: Annotated[StrictInt, Field(ge=1, le=20000)] | None = None
+    max_cost_usd: (
+        Annotated[StrictStr, Field(pattern=r"^(0(\.\d{1,6})?|1(\.\d{1,6})?|2(\.0{1,6})?)$")] | None
+    ) = None
+    max_wall_seconds: Annotated[StrictInt, Field(ge=1, le=600)] | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def no_null_limits(cls, value: Any) -> Any:
+        if isinstance(value, dict) and any(item is None for item in value.values()):
+            raise ValueError("A supplied limit cannot be null.")
+        return value
+
+
+class RunCreate(ClosedModel):
+    entity_id: UUID
+    as_of: AwareDatetime
+    modes: list[Mode] = Field(min_length=1)
+    source_span_ids: list[UUID] = Field(min_length=1, max_length=200)
+    claim_ids: list[UUID] | None = Field(default=None, max_length=200)
+    corpus_version_id: UUID | None = None
+    limits: RequestedLimits | None = None
+
+    @field_validator("modes", "source_span_ids", "claim_ids")
+    @classmethod
+    def distinct_selections(cls, value: Any) -> Any:
+        if value is not None and len(value) != len(set(value)):
+            raise ValueError("Selection must be unique.")
+        return value
+
+    @model_validator(mode="before")
+    @classmethod
+    def no_null_selections(cls, value: Any) -> Any:
+        if isinstance(value, dict):
+            for key in ("claim_ids", "limits"):
+                if key in value and value[key] is None:
+                    raise ValueError("A supplied selection or limits cannot be null.")
+        return value

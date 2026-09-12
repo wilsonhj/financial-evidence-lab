@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import os
 import uuid
 from typing import Any
@@ -93,3 +94,51 @@ def seeded_runs(extraction_url: str, extraction_tenant: dict[str, Any]) -> list[
                 ),
             )
     return ids
+
+
+@pytest.fixture
+def source_fixture(extraction_url, extraction_tenant, tmp_path, monkeypatch):
+    tenant = extraction_tenant
+    ids = {name: str(uuid.uuid4()) for name in ("document", "version", "section", "span", "corpus")}
+    text = "Annual recurring revenue was $100 million at December 31, 2025."
+    digest = "sha256:" + hashlib.sha256(text.encode()).hexdigest()
+    storage_key = "canonical/" + ids["version"]
+    path = tmp_path / storage_key
+    path.parent.mkdir(parents=True)
+    path.write_text(text)
+    monkeypatch.setenv("FEL_STORAGE_DIR", str(tmp_path))
+    monkeypatch.setenv("FEL_ALLOW_MOCK_LLM", "1")
+    with psycopg.connect(extraction_url) as conn:
+        conn.execute(
+            "INSERT INTO documents(id,entity_id,accession,form,source_url,content_hash,storage_key,"
+            "published_at,filed_at) VALUES (%s,%s,%s,'10-K','https://example.invalid/filing',%s,%s,"
+            "'2026-02-01Z','2026-02-01Z')",
+            (ids["document"], tenant["entity"], ids["document"], digest, storage_key),
+        )
+        conn.execute(
+            "INSERT INTO document_versions(id,document_id,parser_version,normalizer_version,status,"
+            "canonical_text_key) VALUES (%s,%s,'parser/v1','normalizer/v1','parsed',%s)",
+            (ids["version"], ids["document"], storage_key),
+        )
+        conn.execute(
+            "INSERT INTO sections(id,document_version_id,heading,heading_path,ord,"
+            "start_char,end_char)"
+            " VALUES (%s,%s,'Results',ARRAY['Results'],0,0,%s)",
+            (ids["section"], ids["version"], len(text)),
+        )
+        conn.execute(
+            "INSERT INTO source_spans(id,document_version_id,section_id,start_char,"
+            "end_char,text_hash)"
+            " VALUES (%s,%s,%s,0,%s,%s)",
+            (ids["span"], ids["version"], ids["section"], len(text), digest),
+        )
+        conn.execute(
+            "INSERT INTO corpus_versions(id,label,status) VALUES (%s,'Sources','superseded')",
+            (ids["corpus"],),
+        )
+        conn.execute(
+            "INSERT INTO corpus_version_documents(corpus_version_id,document_version_id) "
+            "VALUES (%s,%s)",
+            (ids["corpus"], ids["version"]),
+        )
+    return {**ids, "text": text, "hash": digest, "path": path}
