@@ -196,3 +196,91 @@ Payload = (
     | DriverPayload
 )
 PAYLOAD_ADAPTER: TypeAdapter[Payload] = TypeAdapter(Payload)
+
+Reason = Annotated[StrictStr, Field(min_length=1, max_length=2000, pattern=r"\S")]
+ExpectedVersion = Annotated[StrictInt, Field(ge=1)]
+ETag = Annotated[StrictStr, Field(min_length=1, max_length=128, pattern=r'^"[^"\r\n]+"$')]
+
+
+class EvidenceEdge(ClosedModel):
+    source_span_id: UUID
+    document_version_id: UUID
+    role: Literal["supports", "definition", "conflicts", "derivation_input"]
+    citation_status: Literal["verified", "partial", "contradictory", "invalid"]
+
+
+class ConflictDecision(ClosedModel):
+    conflict_id: UUID
+    expected_etag: ETag
+    member_versions: dict[UUID, ExpectedVersion] = Field(min_length=2, max_length=200)
+    selected_winner_ids: list[UUID] = Field(max_length=100)
+    reason: Reason
+
+    @field_validator("selected_winner_ids")
+    @classmethod
+    def unique_winners(cls, values: list[UUID]) -> list[UUID]:
+        if len(values) != len(set(values)):
+            raise ValueError("Winner IDs must be unique.")
+        return values
+
+
+class ReviewBase(ClosedModel):
+    extraction_ids: list[UUID] = Field(min_length=1, max_length=100)
+    expected_versions: dict[UUID, ExpectedVersion] = Field(min_length=1, max_length=100)
+    reason: Reason
+    conflict_resolution: list[ConflictDecision] | None = Field(
+        default=None, min_length=1, max_length=100
+    )
+
+    @field_validator("extraction_ids")
+    @classmethod
+    def unique_ids(cls, values: list[UUID]) -> list[UUID]:
+        if len(values) != len(set(values)):
+            raise ValueError("Extraction IDs must be unique.")
+        return values
+
+    @model_validator(mode="before")
+    @classmethod
+    def absent_or_decisions(cls, value: Any) -> Any:
+        if (
+            isinstance(value, dict)
+            and "conflict_resolution" in value
+            and value["conflict_resolution"] is None
+        ):
+            raise ValueError("Conflict resolution must be a nonempty array when provided.")
+        return value
+
+
+class AcceptCommand(ReviewBase):
+    action: Literal["accept"]
+
+
+class RejectCommand(ReviewBase):
+    action: Literal["reject"]
+
+
+class Replacement(ClosedModel):
+    extraction_id: UUID
+    payload: Payload
+    evidence: list[EvidenceEdge] = Field(min_length=1, max_length=200)
+
+
+class EditCommand(ReviewBase):
+    action: Literal["edit"]
+    patch: list[Replacement] = Field(min_length=1, max_length=100)
+
+
+class MergePatch(ClosedModel):
+    payload_source_id: UUID
+
+
+class MergeCommand(ReviewBase):
+    action: Literal["merge"]
+    extraction_ids: list[UUID] = Field(min_length=2, max_length=100)
+    patch: MergePatch
+
+
+ReviewCommand = Annotated[
+    AcceptCommand | RejectCommand | EditCommand | MergeCommand, Field(discriminator="action")
+]
+REVIEW_ADAPTER: TypeAdapter[ReviewCommand] = TypeAdapter(ReviewCommand)
