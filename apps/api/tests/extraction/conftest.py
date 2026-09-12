@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import os
 import uuid
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
@@ -16,6 +17,71 @@ from fastapi.testclient import TestClient
 from app.auth import make_mock_token
 from app.main import app as main_app
 
+_REPO_ROOT = Path(__file__).resolve().parents[4]
+
+# Current-schema probes, not a first-migration marker. A pre-0011 sibling
+# would otherwise look "already migrated" and hide review-column gaps.
+_SCHEMA_PROBES: tuple[str, ...] = (
+    "SELECT to_regclass('public.extraction_runs') IS NOT NULL",
+    """
+    SELECT EXISTS (
+        SELECT 1 FROM information_schema.columns
+         WHERE table_schema = 'public' AND table_name = 'extraction_conflicts'
+           AND column_name = 'occurrence_run_id'
+    )
+    """,
+    """
+    SELECT EXISTS (
+        SELECT 1 FROM information_schema.columns
+         WHERE table_schema = 'public' AND table_name = 'approved_extraction_versions'
+           AND column_name = 'validation_context'
+    )
+    """,
+)
+
+
+def _schema_is_current(extraction_url: str) -> bool:
+    """True when the sibling exists and every probe passes."""
+    try:
+        with psycopg.connect(extraction_url, autocommit=True) as conn:
+            for probe in _SCHEMA_PROBES:
+                row = conn.execute(probe).fetchone()
+                if row is None or row[0] is not True:
+                    return False
+    except psycopg.OperationalError:
+        return False
+    return True
+
+
+def ensure_extraction_database(base_url: str) -> str:
+    """Create and migrate ``<db>_extraction``; return its URL.
+
+    CI applies ``db/migrations`` only to ``fel_test``. Extraction suites
+    cannot share that database: durable ``extraction_runs`` rows block later
+    ``corpus_versions`` cleanup. Path-rewriting the URL without CREATE
+    DATABASE is the CI failure (``fel_test_extraction`` does not exist).
+
+    Idempotent against the current schema. A stale sibling is dropped and
+    rebuilt because migrations are not individually idempotent.
+    """
+    parsed = urlsplit(base_url)
+    extraction_db = parsed.path.lstrip("/") + "_extraction"
+    extraction_url = urlunsplit(parsed._replace(path="/" + extraction_db))
+
+    if _schema_is_current(extraction_url):
+        return extraction_url
+
+    with psycopg.connect(base_url, autocommit=True) as conn:
+        conn.execute(f'DROP DATABASE IF EXISTS "{extraction_db}" WITH (FORCE)')  # noqa: S608
+        conn.execute(f'CREATE DATABASE "{extraction_db}"')  # noqa: S608 — derived name
+
+    with psycopg.connect(extraction_url, autocommit=True) as conn:
+        for path in sorted(_REPO_ROOT.glob("db/migrations/*.sql")):
+            conn.execute(path.read_text())
+    if not _schema_is_current(extraction_url):  # pragma: no cover — defensive
+        raise RuntimeError(f"{extraction_db} is still behind db/migrations after applying them")
+    return extraction_url
+
 
 @pytest.fixture
 def extraction_client() -> TestClient:
@@ -26,16 +92,19 @@ def extraction_client() -> TestClient:
     return TestClient(app)
 
 
-@pytest.fixture
-def extraction_url(monkeypatch: pytest.MonkeyPatch) -> str:
+@pytest.fixture(scope="session")
+def extraction_database_url() -> str:
     base = os.environ.get("TEST_DATABASE_URL")
     if not base:
         pytest.skip("TEST_DATABASE_URL not configured")
-    parsed = urlsplit(base)
-    url = urlunsplit(parsed._replace(path=parsed.path + "_extraction"))
-    monkeypatch.setenv("FEL_DATABASE_URL", url)
+    return ensure_extraction_database(base)
+
+
+@pytest.fixture
+def extraction_url(extraction_database_url: str, monkeypatch: pytest.MonkeyPatch) -> str:
+    monkeypatch.setenv("FEL_DATABASE_URL", extraction_database_url)
     monkeypatch.setenv("FEL_AUTH_MODE", "mock")
-    return url
+    return extraction_database_url
 
 
 @pytest.fixture
