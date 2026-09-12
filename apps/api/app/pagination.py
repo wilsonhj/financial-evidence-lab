@@ -81,6 +81,8 @@ def _scope(value: Any) -> dict[str, Any]:
         "extraction_proposals",
         "extraction_conflicts",
         "extraction_steps",
+        "approved_versions",
+        "extraction_events",
     }:
         raise ValueError("endpoint")
     if endpoint == "siblings":
@@ -115,10 +117,14 @@ def _scope(value: Any) -> dict[str, Any]:
 def _key(value: Any, endpoint: str) -> Key:
     if not isinstance(value, list):
         raise ValueError("key")
-    if endpoint == "events":
+    if endpoint in {"events", "extraction_events"}:
         if len(value) != 1 or type(value[0]) is not int or not 0 <= value[0] <= 2**63 - 1:
             raise ValueError("sequence")
         return value
+    if endpoint == "approved_versions":
+        if len(value) != 2 or type(value[0]) is not int or not 1 <= value[0] <= 2**31 - 1:
+            raise ValueError("version")
+        return [value[0], str(uuid.UUID(value[1]))]
     count = 3 if endpoint in {"documents", "siblings"} else 2
     if len(value) != count or any(not isinstance(v, str) for v in value):
         raise ValueError("key fields")

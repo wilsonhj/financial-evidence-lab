@@ -331,3 +331,9 @@ class RunCreate(ClosedModel):
 
 class RerunCommand(ClosedModel):
     reason: NonemptyString
+
+
+class CorrectionCommand(ClosedModel):
+    reason: Annotated[StrictStr, Field(min_length=1, max_length=2000)]
+    payload: Payload
+    evidence: list[EvidenceEdge] = Field(min_length=1, max_length=200)

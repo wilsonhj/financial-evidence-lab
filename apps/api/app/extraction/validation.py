@@ -74,44 +74,19 @@ def evaluate(
     """Rows are the complete locked comparison set; IDs remain source-row identities."""
     if len(rows) > 200 or len(runs) > 100:
         raise reads.too_large(rows[0]["id"])
-    pinned: dict[str, dict[str, Any]] = {}
+    scopes, pinned = _verified_scopes(conn, rows, runs)
     payloads = []
     for row in rows:
         resource = str(row["id"])
         run = runs[str(row["run_id"])]
-        manifest = run["input_manifest"]
-        if (
-            run["workflow_version"] != WORKFLOW_VERSION
-            or run["ontology_version"] != load_saas_metrics().schema_version
-            or not isinstance(manifest, dict)
-            or hash_json(manifest) != run["input_hash"]
-        ):
-            invalid(resource)
-        pins = manifest.get("evidence")
-        if not isinstance(pins, list) or not all(isinstance(pin, dict) for pin in pins):
-            invalid(resource)
-        pin_map = {str(pin.get("source_span_id")): pin for pin in pins}
-        edges = row["evidence"]
-        if not edges or len(edges) > 200:
-            invalid(resource)
-        span_ids = sorted({str(edge["source_span_id"]) for edge in edges})
-        if not set(span_ids) <= pin_map.keys():
-            invalid(resource)
-        blocks = evidence.verify_spans(
-            conn, span_ids, str(run["entity_id"]), str(run["corpus_version_id"]), run["as_of"]
-        )
-        local = {block["source_span_id"]: block for block in blocks}
-        for block in blocks:
-            pin = pin_map[block["source_span_id"]]
-            if any(
-                pin.get(field) != block[field] for field in ("document_version_id", "text_hash")
-            ):
-                invalid(resource)
+        run_ids = row.get("source_run_ids") or [str(row["run_id"])]
+        local = {span: block for rid in run_ids for span, block in scopes[rid].items()}
         verified = []
-        for edge in edges:
-            block = local[str(edge["source_span_id"])]
-            if str(edge["document_version_id"]) != block["document_version_id"]:
+        for edge in row["evidence"]:
+            block = local.get(str(edge["source_span_id"]))
+            if block is None or str(edge["document_version_id"]) != block["document_version_id"]:
                 invalid(resource)
+            assert block is not None
             verified.append(
                 {
                     "source_span_id": block["source_span_id"],
@@ -139,7 +114,6 @@ def evaluate(
                 *blockers,
             ]
         payloads.append(normalized)
-        pinned.update(local)
     result = validate_proposals(run_id="review", payloads=payloads, evidence_by_span=pinned)
     if len(result.proposals) != len(rows):
         invalid(str(rows[0]["id"]))
@@ -163,3 +137,66 @@ def evaluate(
         draft.id = str(row["id"])
         drafts[draft.id] = draft
     return Evaluated(drafts, detect_conflicts(list(drafts.values())), source_context(runs))
+
+
+def _verified_scopes(
+    conn: psycopg.Connection[dict[str, Any]],
+    rows: list[dict[str, Any]],
+    runs: dict[str, dict[str, Any]],
+) -> tuple[dict[str, dict[str, Any]], dict[str, Any]]:
+    """One bounded real-byte verification per immutable run scope, shared by its rows."""
+    scopes: dict[str, dict[str, Any]] = {}
+    pinned: dict[str, Any] = {}
+    for rid, run in sorted(runs.items()):
+        manifest = run["input_manifest"]
+        if (
+            run["workflow_version"] != WORKFLOW_VERSION
+            or run["ontology_version"] != load_saas_metrics().schema_version
+            or not isinstance(manifest, dict)
+            or hash_json(manifest) != run["input_hash"]
+            or (
+                "conflict_occurrence_policy" in manifest
+                and manifest["conflict_occurrence_policy"] != "run/v1"
+            )
+        ):
+            invalid(rid)
+        pins = manifest.get("evidence")
+        if not isinstance(pins, list) or not all(isinstance(pin, dict) for pin in pins):
+            invalid(rid)
+        pin_map = {str(pin.get("source_span_id")): pin for pin in pins}
+        if len(pin_map) != len(pins) or len(pins) > 200:
+            invalid(rid)
+        requested: set[str] = set()
+        for row in rows:
+            source_ids = row.get("source_run_ids") or [str(row["run_id"])]
+            if rid not in source_ids:
+                continue
+            if not row["evidence"] or len(row["evidence"]) > 200:
+                invalid(str(row["id"]))
+            requested.update(
+                str(edge["source_span_id"])
+                for edge in row["evidence"]
+                if str(edge["source_span_id"]) in pin_map
+            )
+        blocks = (
+            evidence.verify_spans(
+                conn,
+                sorted(requested),
+                str(run["entity_id"]),
+                str(run["corpus_version_id"]),
+                run["as_of"],
+            )
+            if requested
+            else []
+        )
+        for block in blocks:
+            pin = pin_map[block["source_span_id"]]
+            if any(
+                pin.get(field) != block[field] for field in ("document_version_id", "text_hash")
+            ):
+                invalid(rid)
+        scopes[rid] = {block["source_span_id"]: block for block in blocks}
+        pinned.update(scopes[rid])
+    if sum(len(block["text"].encode()) for block in pinned.values()) > 8 * 1024 * 1024:
+        raise reads.too_large(str(rows[0]["id"]))
+    return scopes, pinned
