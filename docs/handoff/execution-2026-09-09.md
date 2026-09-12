@@ -247,3 +247,51 @@ Independent PostgreSQL probes reproduced the late lock-upgrade deadlock and
 verified early locking. This does not claim to solve broader worker lease or
 terminal lifecycle questions. The bounded plan and disjoint #61 API/web plans
 govern subsequent dispatch; canonical tasks and live gates remain unchanged.
+
+September 11 event-ordering verification: PR #283 merged at
+2e3f92b13611cc03235c9532eba0ddab67b74f33. Independent review approved exact
+head 3dfb542598b1b7c426518920adb1e0fc131d9ba3 after 103 PostgreSQL tests passed
+without skips. The new 14-case suite and full 750-test extraction/ontology suite
+passed; the original RED checkpoint demonstrated a committed higher ID hiding
+a later-committing lower ID from resumed reads. Full local gates passed with
+1,936 Python tests, three existing opt-in skips and 463 JavaScript tests. All
+seven required checks passed (CI 34654504867, Shared paths 34654504917). Root
+recorded explicit lead approval and merged with the reviewed-head guard.
+Same-run transaction ordering is verified; old unordered writers must be drained
+before relying on it. No stronger queue lease guarantee or hosted rollout is
+claimed, and #135 remains open for actual API/browser SSE acceptance.
+
+The refreshed inventory then contained 25 open issues and no other PR. Backend
+preflight identified a concrete #61 contract gap: worker normalization intentionally
+retains malformed/uncited candidates, but proposal reads required valid financial
+payloads and at least one evidence edge. Issue #284 separately owns the reviewed
+candidate-display correction under ADR-0024 Amendment 1 before runtime dispatch.
+JSON text extracted directly from stored fields preserves unsafe numeric values
+without browser rounding. It does not relax strict approval inputs or financial
+rules. The wrapper is a display choice, not an inferred validation outcome.
+
+Issue bodies #61/#64 now reference the merged contract prerequisite, #65/#56
+name main rather than retired integration history, and #56 clarifies #177's sole
+live-ingestion ownership. #191/#201 distinguish merged bounded API/mock gate code
+from outstanding real-provider billing and passing live benchmark acceptance.
+No canonical task completion or live threshold changed in this reconciliation.
+
+PR #285 merged at f8731e69a1a98a2fe49435effccaeff6fd50e10f after independent
+approval of final head 80b9422d5d960455d8c35620991ccda1274cebef and all seven
+required checks (CI 34656860298, Shared paths 34656860240). Contract 0.9.0 adds
+the read-only candidate-fields projection and permits zero proposal evidence.
+The original contract RED had 18 failures; final 66 contract tests and 488 full
+JavaScript tests pass with coverage floors intact. Four API version/parity tests
+also pass. Independent compiler review exposed required `$defs` metadata in both
+candidate and existing financial payload types; actual typed fixture probes now
+pass after the narrow generator correction. Its AST regression preserves every
+unrelated type and all seven financial variants. Frozen financial schemas,
+worker code and migrations are unchanged. Issue #284 is closed; runtime SQL
+projection, safe browser rendering and #61/#135 acceptance remain outstanding.
+
+Both registered #61 implementation children are now ready on the merged contract
+and event-ordering baseline. The root dispatches API and web work separately,
+preserving independent review and final-head CI for each. The parent keeps its
+canonical task ownership and waits for combined acceptance. The pending owner
+inputs for live credentials/environment/spend, SEC identity and second CODEOWNER
+remain unresolved; no paid/provider/hosted request is implied by this dispatch.

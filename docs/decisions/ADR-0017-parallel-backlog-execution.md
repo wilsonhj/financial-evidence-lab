@@ -136,3 +136,12 @@ Issue #284, under ADR-0024 Amendment 1, owns the narrow read representation
 follow-up and package 0.9.0 release. Register it before both #61 runtime lanes;
 this does not change their disjoint implementation ownership or financial inputs.
 No canonical checkbox or live-provider/credential gate is changed.
+
+Wave 10 dispatch confirmation: PR #285 merged at f8731e6 after final independent
+approval and all required checks. Register BACKLOG-EXECUTION-CONTROL's current
+branch as agent/188-execution-wave10; mark the candidate prerequisite merged and
+both #61 implementation children ready. Root assigns separate API and web owners
+on this reviewed baseline. Keep their existing allowed paths disjoint, retain
+lead-only contract marker changes with the API mount, and require real local HTTP
+worker/browser streaming acceptance in addition to fixture-mode browser tests.
+No live-provider or milestone acceptance is inferred by enabling implementation.
