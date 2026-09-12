@@ -21,6 +21,7 @@ export function failure(status: number, code: string): Response {
     { status, headers: { "cache-control": "no-store" } },
   );
 }
+class BodyTooLarge extends Error {}
 export async function boundedText(
   body: ReadableStream<Uint8Array> | null,
   limit: number,
@@ -35,7 +36,7 @@ export async function boundedText(
       const { value, done } = await reader.read();
       if (done) return result + decoder.decode();
       size += value.byteLength;
-      if (size > limit) throw new Error("Body exceeds limit");
+      if (size > limit) throw new BodyTooLarge("Body exceeds limit");
       result += decoder.decode(value, { stream: true });
     }
   } finally {
@@ -65,7 +66,8 @@ export async function requestExtraction(
   let body: string | undefined;
   if (request.method !== "GET") {
     if (
-      request.headers.get("origin") !== new URL(request.url).origin ||
+      request.headers.get("origin") !==
+        `${new URL(request.url).protocol}//${request.headers.get("host") ?? new URL(request.url).host}` ||
       (request.headers.has("sec-fetch-site") &&
         request.headers.get("sec-fetch-site") !== "same-origin")
     )
@@ -84,8 +86,10 @@ export async function requestExtraction(
         return failure(415, "VALIDATION_ERROR");
       try {
         body = await boundedText(request.body, 1024 * 1024);
-      } catch {
-        return failure(413, "EXTRACTION_TOO_LARGE");
+      } catch (error) {
+        return error instanceof BodyTooLarge
+          ? failure(413, "EXTRACTION_TOO_LARGE")
+          : failure(422, "VALIDATION_ERROR");
       }
       try {
         if (!route.input(JSON.parse(body))) return failure(422, "VALIDATION_ERROR");
@@ -93,7 +97,13 @@ export async function requestExtraction(
         return failure(422, "VALIDATION_ERROR");
       }
       headers.set("content-type", "application/json");
-    } else if (request.body) return failure(422, "VALIDATION_ERROR");
+    } else {
+      try {
+        await boundedText(request.body, 0);
+      } catch {
+        return failure(422, "VALIDATION_ERROR");
+      }
+    }
   }
   if (route.stream) {
     const last = request.headers.get("last-event-id");
@@ -180,7 +190,9 @@ export async function requestExtraction(
       );
     }
     return Response.json(data, { status: upstream.status, headers: outputHeaders });
-  } catch {
-    return failure(502, "UPSTREAM_UNAVAILABLE");
+  } catch (error) {
+    return error instanceof BodyTooLarge
+      ? failure(413, "EXTRACTION_TOO_LARGE")
+      : failure(502, "UPSTREAM_UNAVAILABLE");
   }
 }

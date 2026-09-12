@@ -219,3 +219,95 @@ describe("extraction action and stream integrity", () => {
     expect(fetcher).not.toHaveBeenCalled();
   });
 });
+
+describe("Next request host origin boundary", () => {
+  it("uses the incoming Host when Next internally normalizes the request URL", async () => {
+    const fetcher = vi.fn().mockResolvedValue(Response.json(result));
+    const request = new Request("http://localhost:3210/api/extraction/review", {
+      method: "POST",
+      headers: {
+        host: "127.0.0.1:3210",
+        origin: "http://127.0.0.1:3210",
+        "sec-fetch-site": "same-origin",
+        "content-type": "application/json",
+        "idempotency-key": "browser-test",
+      },
+      body: JSON.stringify(command),
+    });
+    expect((await requestExtraction(config, "review", request, fetcher)).status).toBe(200);
+  });
+  it("does not trust an attacker-supplied forwarded host for origin admission", async () => {
+    const fetcher = vi.fn();
+    const request = new Request("https://web.example/api/extraction/review", {
+      method: "POST",
+      headers: {
+        host: "web.example",
+        "x-forwarded-host": "evil.example",
+        origin: "https://evil.example",
+        "content-type": "application/json",
+        "idempotency-key": "browser-test",
+      },
+      body: JSON.stringify(command),
+    });
+    expect((await requestExtraction(config, "review", request, fetcher)).status).toBe(403);
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+});
+
+it("admits an empty DELETE stream from the framework but rejects actual bytes", async () => {
+  const run = {
+    id: workspace,
+    workspace_id: workspace,
+    entity_id: workspace,
+    status: "cancelled",
+    modes: ["kpi"],
+    as_of: "2026-07-01T00:00:00Z",
+    ontology_version: "v1",
+    workflow_version: "v3",
+    provider: "mock",
+    model: "mock",
+    limits: {},
+    usage: { calls: 0, input_tokens: 0, output_tokens: 0, cost_usd: "0" },
+    version: 1,
+    created_at: "2026-07-01T00:00:00Z",
+    cancel_requested_at: "2026-07-01T00:00:00Z",
+  };
+  const fetcher = vi
+    .fn()
+    .mockResolvedValue(Response.json(run, { headers: { etag: '"cancelled"' } }));
+  const request = (body: string) =>
+    new Request(`https://web.example/api/extraction/runs/${workspace}`, {
+      method: "DELETE",
+      headers: {
+        origin: "https://web.example",
+        "idempotency-key": "cancel",
+        "if-match": '"running"',
+      },
+      body,
+    });
+  expect((await requestExtraction(config, `runs/${workspace}`, request(""), fetcher)).status).toBe(
+    200,
+  );
+  expect(
+    (await requestExtraction(config, `runs/${workspace}`, request("{}"), fetcher)).status,
+  ).toBe(422);
+  expect(fetcher).toHaveBeenCalledTimes(1);
+});
+
+it("returns a typed size failure before materializing an oversized upstream JSON response", async () => {
+  const fetcher = vi
+    .fn()
+    .mockResolvedValue(
+      new Response(" ".repeat(8 * 1024 * 1024 + 1), {
+        headers: { "content-type": "application/json" },
+      }),
+    );
+  const response = await requestExtraction(
+    config,
+    "proposals",
+    new Request("https://web.example/api/extraction/proposals"),
+    fetcher,
+  );
+  expect(response.status).toBe(413);
+  expect((await response.json()).error.code).toBe("EXTRACTION_TOO_LARGE");
+});

@@ -3,6 +3,7 @@ import candidateSchema from "@fel/contracts/schemas/extraction-candidate-fields.
 import payloadSchema from "@fel/contracts/schemas/extraction-payload.schema.json";
 import conflictSchema from "@fel/contracts/schemas/extraction-conflict.schema.json";
 import contextSchema from "@fel/contracts/schemas/extraction-validation-context.schema.json";
+import eventPageSchema from "@fel/contracts/schemas/extraction-event-page.schema.json";
 import eventSchema from "@fel/contracts/schemas/extraction-event.schema.json";
 import reviewSchema from "@fel/contracts/schemas/extraction-review-command.schema.json";
 import resultSchema from "@fel/contracts/schemas/extraction-review-result.schema.json";
@@ -34,6 +35,11 @@ const payload: Guard<Schemas["ExtractionPayload"]> = (v): v is Schemas["Extracti
 const candidate = schema<Schemas["ExtractionCandidateFields"]>(candidateSchema);
 const context = schema<Schemas["ExtractionValidationContext"]>(contextSchema);
 const eventSchemaGuard = schema<Event>(eventSchema);
+ajv.addSchema({
+  $id: "https://contracts.fel.dev/schemas/extraction-event-page/extraction-event.schema.json",
+  $ref: eventSchema.$id,
+});
+const eventPageGuard = schema<Schemas["ExtractionEventPage"]>(eventPageSchema);
 export const object = (v: unknown): v is Record<string, unknown> =>
   typeof v === "object" && v !== null && !Array.isArray(v);
 export const uuid = (v: unknown): v is string =>
@@ -207,6 +213,11 @@ const reason = (v: unknown) => str(v) && v.trim().length > 0 && v.length <= 2000
 const ids = (v: unknown) => array(uuid, 200, 1)(v) && new Set(v).size === v.length;
 const conflict = schema<Conflict>(conflictSchema);
 export const guards = {
+  events: (v: unknown): v is Schemas["ExtractionEventPage"] =>
+    eventPageGuard(v) &&
+    v.items.every((e) => event(e) && e.run_id === v.run_id) &&
+    v.items.length <= v.limit &&
+    (v.items.length > 0 || (v.next_cursor === null && v.previous_cursor === null)),
   candidate,
   payload,
   edge,

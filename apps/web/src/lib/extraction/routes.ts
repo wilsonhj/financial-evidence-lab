@@ -11,22 +11,6 @@ export type Route = {
   workspace?: string;
   version?: string;
 };
-const eventPage: Guard<unknown> = (v: unknown): v is unknown =>
-  object(v) &&
-  uuid(v.run_id) &&
-  Object.keys(v).every((k) =>
-    ["run_id", "items", "next_cursor", "previous_cursor", "limit"].includes(k),
-  ) &&
-  Array.isArray(v.items) &&
-  v.items.every(guards.event) &&
-  v.items.every((e) => e.run_id === v.run_id) &&
-  Number.isInteger(v.limit) &&
-  Number(v.limit) >= 1 &&
-  Number(v.limit) <= 200 &&
-  v.items.length <= Number(v.limit) &&
-  (v.next_cursor === null || cursor(v.next_cursor)) &&
-  (v.previous_cursor === null || cursor(v.previous_cursor)) &&
-  (v.items.length > 0 || (v.next_cursor === null && v.previous_cursor === null));
 const paging = ["limit", "cursor"];
 /** The browser selects a named local resource, never an upstream URL. */
 export function resolveRoute(path: string, method: string, workspace: string): Route | undefined {
@@ -92,7 +76,7 @@ export function resolveRoute(path: string, method: string, workspace: string): R
       if (action === "event-history")
         return {
           upstream: `/v1/extraction-runs/${id}/event-history`,
-          output: eventPage,
+          output: guards.events,
           query: paging,
           id,
         };
