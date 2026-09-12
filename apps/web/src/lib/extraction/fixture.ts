@@ -1,4 +1,7 @@
 import "node:process";
+import { fixtureStream } from "./fixture-stream";
+import { fixtureAction } from "./fixture-actions";
+import { MOCK_CORPUS_VERSION_ID } from "../observatory/fixtures/synthetic-trace";
 import rawPayload from "@fel/contracts/fixtures/extraction-payload.json";
 import { DOC_10Q_VERSION_ID, ENTITY_ID, fixtureSpans } from "../fixtures/synthetic-filing";
 import {
@@ -36,6 +39,7 @@ export function initialFixture() {
     status: "waiting_review",
     modes: ["kpi"],
     as_of: "2026-07-01T00:00:00Z",
+    corpus_version_id: MOCK_CORPUS_VERSION_ID,
     ontology_version: "saas-metrics/v1",
     workflow_version: "extraction-workflow/v3",
     provider: "mock",
@@ -167,7 +171,7 @@ export function fixtureFetch(state: FixtureState): typeof fetch {
     const path = url.pathname,
       query = url.searchParams;
     const method = init?.method ?? "GET";
-    if (method !== "GET") return fixtureError(409, "FIXTURE_ACTION_UNAVAILABLE");
+    if (method !== "GET") return fixtureAction(state, path, init ?? {});
     try {
       const workspace = `/v1/workspaces/${FIXTURE_WORKSPACE}`;
       if (path === `${workspace}/extraction-permissions`) return json(state.permissions);
@@ -201,6 +205,13 @@ export function fixtureFetch(state: FixtureState): typeof fetch {
         const run = state.runs.find((r) => r.id === id);
         if (!run) return fixtureError(404, "NOT_FOUND");
         if (!action) return json(run, `"fixture-run-${run.version}-${run.status}"`);
+        if (action === "events")
+          return fixtureStream(
+            state,
+            run.id,
+            Number(new Headers(init?.headers).get("last-event-id") ?? 0),
+            init?.signal,
+          );
         if (action === "steps")
           return json(
             page(
