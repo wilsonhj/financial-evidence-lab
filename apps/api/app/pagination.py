@@ -68,7 +68,7 @@ def _scope(value: Any) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise ValueError("scope")
     endpoint = value.get("endpoint")
-    if endpoint not in {"documents", "workspaces", "runs", "siblings", "events"}:
+    if endpoint not in {"documents", "workspaces", "runs", "siblings", "events", "extraction_runs"}:
         raise ValueError("endpoint")
     if endpoint == "siblings":
         fields.add("target_version_id")

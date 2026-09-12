@@ -61,3 +61,35 @@ def extraction_tenant(extraction_url: str) -> dict[str, Any]:
         "Authorization": f"Bearer {make_mock_token(ids['org'], ids['user'], 'owner')}"
     }
     return ids
+
+
+@pytest.fixture
+def seeded_runs(extraction_url: str, extraction_tenant: dict[str, Any]) -> list[str]:
+    tenant = extraction_tenant
+    corpus = str(uuid.uuid4())
+    ids = sorted(str(uuid.uuid4()) for _ in range(5))
+    with psycopg.connect(extraction_url) as conn:
+        conn.execute(
+            "INSERT INTO corpus_versions(id,label,status) VALUES (%s,'read fixture','superseded')",
+            (corpus,),
+        )
+        for run_id in reversed(ids):
+            conn.execute(
+                "INSERT INTO extraction_runs(id,org_id,workspace_id,entity_id,modes,as_of,"
+                "corpus_version_id,ontology_version,workflow_version,provider,model,policy_id,"
+                "input_hash,idempotency_key,created_by,created_at) VALUES "
+                "(%s,%s,%s,%s,ARRAY['kpi'],'2026-06-30Z',%s,'ontology/v1',"
+                "'extraction-workflow/v3','mock','mock-structured-v1',%s,%s,%s,%s,'2026-01-01Z')",
+                (
+                    run_id,
+                    tenant["org"],
+                    tenant["workspace"],
+                    tenant["entity"],
+                    corpus,
+                    tenant["policy"],
+                    "sha256:" + "a" * 64,
+                    run_id,
+                    tenant["user"],
+                ),
+            )
+    return ids
