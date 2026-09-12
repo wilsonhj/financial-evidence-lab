@@ -10,6 +10,7 @@ export type Route = {
   id?: string;
   workspace?: string;
   version?: string;
+  record?: string;
 };
 const paging = ["limit", "cursor"];
 /** The browser selects a named local resource, never an upstream URL. */
@@ -101,6 +102,7 @@ export function resolveRoute(path: string, method: string, workspace: string): R
         upstream: `/v1/approved-extractions/${id}/versions`,
         output: guards.versions,
         query: paging,
+        record: id,
       };
     }
   }
@@ -152,17 +154,42 @@ export function queryFor(route: Route, params: URLSearchParams): string {
   }
   return params.size ? `?${params}` : "";
 }
-export function matchesResource(route: Route, data: unknown): boolean {
+const sameId = (value: unknown, expected: string) =>
+  uuid(value) && value.toLowerCase() === expected.toLowerCase();
+export function matchesResource(
+  route: Route,
+  data: unknown,
+  query = new URLSearchParams(),
+): boolean {
   if (!object(data)) return false;
-  if (route.id && (data.id ?? data.record_id ?? data.run_id) !== route.id) return false;
-  if (route.version && data.version_id !== route.version) return false;
-  if (route.workspace && data.workspace_id !== undefined && data.workspace_id !== route.workspace)
-    return false;
+  if (route.id && !sameId(data.id ?? data.record_id ?? data.run_id, route.id)) return false;
+  if (route.version && !sameId(data.version_id, route.version)) return false;
   if (
     route.workspace &&
-    Array.isArray(data.items) &&
-    data.items.some((v) => !object(v) || v.workspace_id !== route.workspace)
+    data.workspace_id !== undefined &&
+    !sameId(data.workspace_id, route.workspace)
   )
     return false;
+  if (Array.isArray(data.items)) {
+    if (query.has("limit") && data.limit !== Number(query.get("limit"))) return false;
+    if (
+      query.has("cursor") &&
+      [data.next_cursor, data.previous_cursor].includes(query.get("cursor"))
+    )
+      return false;
+    const ids = new Set<string>();
+    for (const item of data.items) {
+      if (!object(item)) return false;
+      if (route.workspace && !sameId(item.workspace_id, route.workspace)) return false;
+      if (route.record && !sameId(item.record_id, route.record)) return false;
+      const run = query.get("run_id");
+      if (run && !sameId(item.run_id ?? item.occurrence_run_id, run)) return false;
+      for (const filter of ["state", "status"])
+        if (query.has(filter) && item[filter] !== query.get(filter)) return false;
+      const id = String(item.version_id ?? item.id).toLowerCase();
+      if (ids.has(id)) return false;
+      ids.add(id);
+    }
+  }
   return true;
 }

@@ -162,7 +162,7 @@ export async function requestExtraction(
         { status: upstream.status, headers: outputHeaders },
       );
     }
-    if (!route.output(data) || !matchesResource(route, data))
+    if (!route.output(data) || !matchesResource(route, data, new URL(request.url).searchParams))
       return failure(502, "INVALID_RESPONSE");
     const tag = upstream.headers.get("etag");
     if (route.etag && !etag(tag)) return failure(502, "INVALID_RESPONSE");
@@ -181,7 +181,10 @@ export async function requestExtraction(
         target.search ||
         target.hash ||
         !match ||
-        !uuid(match[2])
+        !uuid(match[2]) ||
+        !(match[1] === "extraction-runs"
+          ? guards.run(data) && data.id.toLowerCase() === match[2].toLowerCase()
+          : guards.approved(data) && data.record_id.toLowerCase() === match[2].toLowerCase())
       )
         return failure(502, "INVALID_RESPONSE");
       outputHeaders.set(
