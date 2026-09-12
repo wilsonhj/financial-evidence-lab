@@ -255,6 +255,28 @@ describe("run and correction commands", () => {
     await vi.waitFor(() => expect(v.status()).toContain("Action committed"));
     expect(fetcher.mock.calls[2]?.[1].headers["if-match"]).toBe('"2"');
   });
+  it("refreshes a stale rerun against the run itself, not its mutation path", async () => {
+    const run = initialFixture().runs[0]!;
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(Response.json({}, { status: 412 }))
+      .mockResolvedValueOnce(Response.json(run, { headers: { etag: '"fixture-run-1"' } }));
+    vi.stubGlobal("fetch", fetcher);
+    const v = view(() =>
+      ActionForm({
+        action: "rerun",
+        path: `runs/${run.id}/rerun`,
+        permitted: true,
+        initialEtag: '"1"',
+      }),
+    );
+    v.field("rerun-draft", "Recheck the source");
+    v.submit();
+    await vi.waitFor(() => expect(v.status()).toContain("draft is preserved"));
+    v.click("Refresh current version for comparison");
+    await vi.waitFor(() => expect(v.button("Use refreshed version")).toBeTruthy());
+    expect(fetcher.mock.calls[1]?.[0]).toBe(`/api/extraction/runs/${run.id}`);
+  });
   it("rejects malformed edits locally and does not fabricate an action receipt", async () => {
     const fetcher = vi.fn();
     vi.stubGlobal("fetch", fetcher);

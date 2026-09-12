@@ -29,7 +29,8 @@ export default async function ExtractionsPage({
         </p>
         <form method="get">
           <label htmlFor="queue-state">State</label>
-          <select name="state" id="queue-state" defaultValue={query.get("state") ?? "needs_review"}>
+          <select name="state" id="queue-state" defaultValue={query.get("state") ?? ""}>
+            <option value="">All states</option>
             {["proposed", "needs_review", "accepted", "rejected", "superseded"].map((s) => (
               <option key={s}>{s}</option>
             ))}

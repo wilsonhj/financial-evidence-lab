@@ -70,6 +70,13 @@ export function buildReview(
   if (action === "edit" || action === "merge") body = `${body.slice(0, -1)},"patch":${patchText}}`;
   const parsed: unknown = JSON.parse(body);
   if (!guards.review(parsed)) throw new Error("Supply a complete valid review command and reason");
+  // The replacement text is spliced in verbatim, so it can carry duplicate
+  // top-level keys that win at parse time and silently retarget the command.
+  // Everything outside `patch` must still be exactly what the selection built.
+  const fields: Record<string, unknown> = { ...(parsed as Record<string, unknown>) };
+  delete fields.patch;
+  if (JSON.stringify(fields) !== JSON.stringify(base))
+    throw new Error("Replacement JSON must not redefine the review command");
   if (
     parsed.action === "edit" &&
     (parsed.patch.length !== selected.length ||

@@ -59,6 +59,21 @@ describe("mounted extraction pages", () => {
     expect(html).toContain("Extraction view unavailable");
     expect(html).not.toContain("synthetic-fixture-only");
   });
+  it("ignores an unrelated query parameter instead of blanking the route", async () => {
+    const html = renderToStaticMarkup(
+      await Queue({ searchParams: Promise.resolve({ utm_source: "email" }) }),
+    );
+    expect(html).not.toContain("Extraction view unavailable");
+    expect(html).toContain("Extraction review");
+  });
+  it("describes the queue it actually loaded", async () => {
+    const unfiltered = renderToStaticMarkup(await Queue({}));
+    expect(unfiltered).toContain('<option value="" selected="">All states</option>');
+    const filtered = renderToStaticMarkup(
+      await Queue({ searchParams: Promise.resolve({ state: "needs_review" }) }),
+    );
+    expect(filtered).toContain('<option selected="">needs_review</option>');
+  });
   it("keeps empty queue and invalid cursor outcomes explicit", async () => {
     expect(
       renderToStaticMarkup(await Queue({ searchParams: Promise.resolve({ state: "accepted" }) })),

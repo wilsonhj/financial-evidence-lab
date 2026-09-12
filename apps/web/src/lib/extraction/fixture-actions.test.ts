@@ -31,6 +31,44 @@ describe("synthetic review interaction fixture", () => {
     expect(state.proposals[0]?.payload).toEqual(original[0]?.payload);
     expect((await call(fetcher, "extractions/review", body, "fresh-key")).status).toBe(412);
   });
+  it("does not let a malformed review body enter the run-creation branch", async () => {
+    const state = initialFixture(),
+      fetcher = fixtureFetch(state);
+    const createCommand = JSON.stringify({
+      entity_id: state.runs[0]!.entity_id,
+      as_of: state.runs[0]!.as_of,
+      modes: ["kpi"],
+      source_span_ids: [state.proposals[0]!.evidence[0]!.source_span_id],
+    });
+    const response = await call(fetcher, "extractions/review", createCommand);
+    expect(response.status).toBe(422);
+    expect(state.runs).toHaveLength(1);
+  });
+  it("checks the reviewed capability, not create, for a malformed review body", async () => {
+    const state = initialFixture();
+    state.permissions.allowed_actions = ["accept"];
+    const response = await call(fixtureFetch(state), "extractions/review", "{}");
+    expect(response.status).toBe(422);
+  });
+  it("creates a bounded run with the requested limits", async () => {
+    const state = initialFixture(),
+      fetcher = fixtureFetch(state);
+    const limits = { max_calls: 1, max_cost_usd: "0.10" };
+    const response = await call(
+      fetcher,
+      `workspaces/${FIXTURE_WORKSPACE}/extraction-runs`,
+      JSON.stringify({
+        entity_id: state.runs[0]!.entity_id,
+        as_of: state.runs[0]!.as_of,
+        modes: ["kpi"],
+        source_span_ids: [state.proposals[0]!.evidence[0]!.source_span_id],
+        limits,
+      }),
+      "create-bounded",
+    );
+    expect(response.status).toBe(202);
+    expect((await response.json()).limits).toEqual(limits);
+  });
   it("keeps immutable correction history and rejects stale head before mutation", async () => {
     const state = initialFixture(),
       fetcher = fixtureFetch(state),
@@ -49,7 +87,9 @@ describe("synthetic review interaction fixture", () => {
       '"1"',
     );
     expect(first.status).toBe(201);
-    expect(guards.approved(await first.json())).toBe(true);
+    const corrected = await first.clone().json();
+    expect(guards.approved(corrected)).toBe(true);
+    expect(corrected.validation_context).toEqual(current.validation_context);
     expect(state.versions[0]).toEqual(before[0]);
     expect(
       (

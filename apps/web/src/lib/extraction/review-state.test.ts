@@ -45,6 +45,25 @@ describe("intentional extraction review", () => {
       state.conflicts[0]!.member_versions,
     );
   });
+  it("rejects replacement JSON that redefines the command's own targets", () => {
+    const state = initialFixture();
+    const [a, b] = [state.proposals[0]!, state.proposals[1]!];
+    const injected =
+      JSON.stringify([{ extraction_id: a.id, payload: a.payload, evidence: a.evidence }]) +
+      `, "extraction_ids": ["${b.id}"], "expected_versions": {"${b.id}": ${b.version}}`;
+    expect(() =>
+      buildReview([a], "edit", "Source rechecked", injected, state.conflicts, [a.id]),
+    ).toThrow("must not redefine");
+  });
+  it("rejects replacement JSON that appends an unrelated top-level key", () => {
+    const p = initialFixture().proposals[0]!;
+    const injected =
+      JSON.stringify([{ extraction_id: p.id, payload: p.payload, evidence: p.evidence }]) +
+      ', "reason": "silently replaced"';
+    expect(() =>
+      buildReview([p], "edit", "Source rechecked", injected, initialFixture().conflicts, [p.id]),
+    ).toThrow("must not redefine");
+  });
   it("reuses a key only for identical path/method/preconditions/body", () => {
     const first = prepareRequest("review", "POST", JSON.stringify(command), null);
     expect(prepareRequest("review", "POST", first.body, null, first)).toBe(first);

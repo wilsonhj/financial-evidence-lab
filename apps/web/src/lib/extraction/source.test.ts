@@ -26,6 +26,31 @@ describe("explicit extraction source", () => {
     );
     expect(next.data.items[0]?.id).not.toBe(page.items[0]?.id);
   });
+  it("binds a fixture cursor to the limit and filter that produced it", async () => {
+    const source = createSource({ mode: "fixture" });
+    const { data: page } = await source.read(
+      "proposals",
+      guards.proposals,
+      new URLSearchParams({ limit: "1", state: "needs_review" }),
+    );
+    expect(page.next_cursor).not.toBeNull();
+    // Reinterpreting an offset under a different page size would silently skip rows.
+    await expect(
+      source.read(
+        "proposals",
+        guards.proposals,
+        new URLSearchParams({ limit: "2", cursor: page.next_cursor! }),
+      ),
+    ).rejects.toThrow();
+    // Carrying a cursor across a filter change would page a different list.
+    await expect(
+      source.read(
+        "proposals",
+        guards.proposals,
+        new URLSearchParams({ limit: "1", state: "accepted", cursor: page.next_cursor! }),
+      ),
+    ).rejects.toThrow();
+  });
   it("never falls back from configured HTTP after a failure", async () => {
     const fetcher = vi.fn().mockRejectedValue(new Error("private upstream failure"));
     const source = createSource(

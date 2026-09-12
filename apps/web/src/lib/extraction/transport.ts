@@ -22,6 +22,21 @@ export function failure(status: number, code: string): Response {
   );
 }
 class BodyTooLarge extends Error {}
+/**
+ * Next derives `request.url`'s protocol from the local socket, so behind a TLS
+ * terminator it is `http:` while the browser sends an `https:` Origin. The
+ * same-origin property this gate needs lives in the host, which is compared
+ * against the incoming Host header; a forwarded host is never trusted.
+ */
+function originHost(value: string | null): string | null {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:" ? url.host : null;
+  } catch {
+    return null;
+  }
+}
 export async function boundedText(
   body: ReadableStream<Uint8Array> | null,
   limit: number,
@@ -65,9 +80,9 @@ export async function requestExtraction(
   });
   let body: string | undefined;
   if (request.method !== "GET") {
+    const host = request.headers.get("host") ?? new URL(request.url).host;
     if (
-      request.headers.get("origin") !==
-        `${new URL(request.url).protocol}//${request.headers.get("host") ?? new URL(request.url).host}` ||
+      originHost(request.headers.get("origin")) !== host ||
       (request.headers.has("sec-fetch-site") &&
         request.headers.get("sec-fetch-site") !== "same-origin")
     )

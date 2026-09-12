@@ -46,7 +46,9 @@ export function ActionForm({
       const response = await sendPrepared(pending.current);
       if (!response.ok) {
         setMessage(statusMessage(response.status));
-        if (response.status === 412) setStale(true);
+        // A create has no current version to compare against, so it must not
+        // enter the stale state its refresh control cannot clear.
+        if (response.status === 412 && action !== "create") setStale(true);
         return;
       }
       const value: unknown = await response.json();
@@ -70,7 +72,8 @@ export function ActionForm({
   async function refresh() {
     setBusy(true);
     try {
-      const resource = path.replace(/\/corrections$/, "");
+      // Both mutation suffixes must come off: `runs/<id>/rerun` has no GET route.
+      const resource = path.replace(/\/(corrections|rerun)$/, "");
       const response = await fetch(`/api/extraction/${resource}`, { cache: "no-store" });
       const value: unknown = await response.json();
       if (!response.ok || (!guards.run(value) && !guards.approved(value)))

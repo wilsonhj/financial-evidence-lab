@@ -236,6 +236,39 @@ describe("Next request host origin boundary", () => {
     });
     expect((await requestExtraction(config, "review", request, fetcher)).status).toBe(200);
   });
+  it("admits a browser https Origin when TLS terminates before the Next socket", async () => {
+    const fetcher = vi.fn().mockResolvedValue(Response.json(result));
+    const request = new Request("http://web.example/api/extraction/review", {
+      method: "POST",
+      headers: {
+        host: "web.example",
+        origin: "https://web.example",
+        "sec-fetch-site": "same-origin",
+        "content-type": "application/json",
+        "idempotency-key": "browser-test",
+      },
+      body: JSON.stringify(command),
+    });
+    expect((await requestExtraction(config, "review", request, fetcher)).status).toBe(200);
+  });
+  it.each(["null", "https://web.example.evil", "javascript:alert(1)", ""])(
+    "rejects opaque or foreign origin %s",
+    async (origin) => {
+      const fetcher = vi.fn();
+      const request = new Request("http://web.example/api/extraction/review", {
+        method: "POST",
+        headers: {
+          host: "web.example",
+          ...(origin ? { origin } : {}),
+          "content-type": "application/json",
+          "idempotency-key": "browser-test",
+        },
+        body: JSON.stringify(command),
+      });
+      expect((await requestExtraction(config, "review", request, fetcher)).status).toBe(403);
+      expect(fetcher).not.toHaveBeenCalled();
+    },
+  );
   it("does not trust an attacker-supplied forwarded host for origin admission", async () => {
     const fetcher = vi.fn();
     const request = new Request("https://web.example/api/extraction/review", {
