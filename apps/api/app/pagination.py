@@ -50,6 +50,7 @@ def scope(
     as_of: datetime | None = None,
     corpus_version_id: uuid.UUID | None = None,
     target_version_id: uuid.UUID | None = None,
+    extraction_filter: str | None = None,
 ) -> dict[str, Any]:
     result: dict[str, Any] = {
         "endpoint": endpoint,
@@ -60,6 +61,8 @@ def scope(
     }
     if endpoint == "siblings":
         result["target_version_id"] = str(target_version_id) if target_version_id else None
+    if endpoint in {"extraction_proposals", "extraction_conflicts"}:
+        result["filter"] = extraction_filter
     return result
 
 
@@ -68,14 +71,33 @@ def _scope(value: Any) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise ValueError("scope")
     endpoint = value.get("endpoint")
-    if endpoint not in {"documents", "workspaces", "runs", "siblings", "events", "extraction_runs"}:
+    if endpoint not in {
+        "documents",
+        "workspaces",
+        "runs",
+        "siblings",
+        "events",
+        "extraction_runs",
+        "extraction_proposals",
+        "extraction_conflicts",
+        "extraction_steps",
+    }:
         raise ValueError("endpoint")
     if endpoint == "siblings":
         fields.add("target_version_id")
+    if endpoint in {"extraction_proposals", "extraction_conflicts"}:
+        fields.add("filter")
+        allowed = (
+            {None, "proposed", "needs_review", "accepted", "rejected", "superseded"}
+            if endpoint == "extraction_proposals"
+            else {None, "open", "resolved", "superseded"}
+        )
+        if value.get("filter") not in allowed:
+            raise ValueError("extraction filter")
     if value.keys() != fields:
         raise ValueError("scope fields")
     result = dict(value)
-    for field in fields - {"endpoint", "as_of"}:
+    for field in fields - {"endpoint", "as_of", "filter"}:
         item = value[field]
         if item is not None:
             if not isinstance(item, str):

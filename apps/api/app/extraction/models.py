@@ -19,6 +19,8 @@ from pydantic import (
 Action = Literal["create", "cancel", "rerun", "accept", "edit", "reject", "merge", "correct"]
 RunStatus = Literal["queued", "running", "waiting_review", "succeeded", "failed", "cancelled"]
 Mode = Literal["kpi", "guidance", "revenue_driver"]
+ProposalState = Literal["proposed", "needs_review", "accepted", "rejected", "superseded"]
+ConflictStatus = Literal["open", "resolved", "superseded"]
 
 
 class ClosedModel(BaseModel):

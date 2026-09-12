@@ -1,5 +1,6 @@
 """Bounded tenant reads using the caller's transaction and RLS role."""
 
+from datetime import datetime
 from typing import Any
 from uuid import UUID
 
@@ -122,3 +123,74 @@ def proposal(
         raise too_large(proposal_id)
     evidence = [{key: str(value) for key, value in edge.items()} for edge in edges]
     return serializers.proposal(row, evidence, [str(group["conflict_id"]) for group in groups])
+
+
+def proposal_page(
+    conn: psycopg.Connection[dict[str, Any]],
+    workspace_id: UUID,
+    org_id: str,
+    state: str | None,
+    limit: int | None,
+    cursor: str | None,
+    order: Order | None,
+) -> dict[str, Any]:
+    ws = workspace(conn, workspace_id, org_id)
+    rows, metadata = read_page(
+        conn,
+        query="SELECT id,created_at FROM extraction_proposals WHERE workspace_id=%s "
+        "AND org_id=%s AND (%s::text IS NULL OR state=%s)",
+        params=(workspace_id, org_id, state, state),
+        keys=("created_at", "id"),
+        request_scope=scope(
+            "extraction_proposals", org_id, workspace_id, ws["as_of"], extraction_filter=state
+        ),
+        limit=limit,
+        token=cursor,
+        order=order,
+        force_page=True,
+    )
+    assert metadata is not None
+    return serializers.page([proposal(conn, row["id"], org_id) for row in rows], metadata)
+
+
+def step_page(
+    conn: psycopg.Connection[dict[str, Any]],
+    run_id: UUID,
+    org_id: str,
+    limit: int | None,
+    cursor: str | None,
+    order: Order | None,
+) -> dict[str, Any]:
+    source = run(conn, run_id, org_id)
+    rows, metadata = read_page(
+        conn,
+        query="SELECT s.id,s.step_name,s.attempt,s.status,s.input_hash,s.output_hash, "
+        "s.started_at,s.finished_at,s.input_tokens,s.output_tokens,s.cost_usd, "
+        "(s.error IS NOT NULL) AS has_error, COALESCE(s.started_at,r.created_at) AS sort_at "
+        "FROM extraction_run_steps s JOIN extraction_runs r ON r.id=s.run_id AND r.org_id=s.org_id "
+        "WHERE s.run_id=%s AND s.org_id=%s",
+        params=(run_id, org_id),
+        keys=("sort_at", "id"),
+        request_scope=scope(
+            "extraction_steps",
+            org_id,
+            run_id,
+            datetime.fromisoformat(source["as_of"].replace("Z", "+00:00")),
+            UUID(source["corpus_version_id"]),
+        ),
+        limit=limit,
+        token=cursor,
+        order=order,
+        force_page=True,
+    )
+    items = []
+    for row in rows:
+        row.pop("sort_at")
+        row["id"] = str(row["id"])
+        row["cost_usd"] = str(row["cost_usd"])
+        row["error"] = serializers.safe_error({} if row.pop("has_error") else None)
+        for key in ("started_at", "finished_at"):
+            row[key] = row[key].isoformat() if row[key] else None
+        items.append(row)
+    assert metadata is not None
+    return serializers.page(items, metadata)

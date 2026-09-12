@@ -9,7 +9,7 @@ from app.auth import TenantContext
 from app.db import tenant_connection
 from app.dependencies import get_tenant_context
 from app.extraction import reads, serializers
-from app.extraction.models import Action, ExtractionPermissions
+from app.extraction.models import Action, ExtractionPermissions, ProposalState
 from app.pagination import Order
 
 router = APIRouter(prefix="/v1", tags=["extraction"])
@@ -60,5 +60,21 @@ def get_proposal(extractionId: UUID, response: Response, ctx: Tenant) -> dict[st
     with tenant_connection(ctx, snapshot_read=True) as conn:
         body = reads.proposal(conn, extractionId, ctx.org_id)
     response.headers["ETag"] = serializers.etag(body)
+    response.headers["Cache-Control"] = "no-store"
+    return body
+
+
+@router.get("/workspaces/{workspaceId}/extractions")
+def list_proposals(
+    workspaceId: UUID,
+    response: Response,
+    ctx: Tenant,
+    state: Annotated[ProposalState | None, Query()] = None,
+    limit: Annotated[int | None, Query(ge=1, le=200)] = None,
+    cursor: Annotated[str | None, Query(max_length=2048)] = None,
+    order: Annotated[Order | None, Query()] = None,
+) -> dict[str, Any]:
+    with tenant_connection(ctx, snapshot_read=True) as conn:
+        body = reads.proposal_page(conn, workspaceId, ctx.org_id, state, limit, cursor, order)
     response.headers["Cache-Control"] = "no-store"
     return body
