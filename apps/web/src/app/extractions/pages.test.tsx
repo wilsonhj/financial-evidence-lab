@@ -11,6 +11,9 @@ import Events from "../extraction-runs/[runId]/events/page";
 import Approved from "../approved-extractions/[recordId]/page";
 import Versions from "../approved-extractions/[recordId]/versions/page";
 import Version from "../approved-extractions/[recordId]/versions/[versionId]/page";
+import LoadingQueue from "./loading";
+import LoadingRuns from "../extraction-runs/loading";
+import LoadingApproved from "../approved-extractions/loading";
 import { FIXTURE_RUN, FIXTURE_RECORD, fixtureId } from "../../lib/extraction/fixture";
 const pages = [
   ["Extraction review", () => Queue({})],
@@ -35,6 +38,15 @@ const pages = [
 beforeEach(() => vi.stubEnv("FEL_EVIDENCE_SOURCE", "fixture"));
 afterEach(() => vi.unstubAllEnvs());
 describe("mounted extraction pages", () => {
+  it.each([LoadingQueue, LoadingRuns, LoadingApproved])(
+    "announces pending navigation",
+    (Loading) => {
+      const html = renderToStaticMarkup(<Loading />);
+      expect(html).toContain('role="status"');
+      expect(html).toContain('aria-busy="true"');
+      expect(html).toContain("Loading extraction view");
+    },
+  );
   it.each(pages)("renders %s against real fixture source guards", async (title, load) => {
     const html = renderToStaticMarkup(await load());
     expect(html).toContain(title);
