@@ -4,6 +4,7 @@ import proposal from "@fel/contracts/fixtures/extraction-proposal.json";
 import payload from "@fel/contracts/fixtures/extraction-payload.json";
 import conflict from "@fel/contracts/fixtures/extraction-conflict.json";
 import event from "@fel/contracts/fixtures/extraction-event.json";
+import result from "@fel/contracts/fixtures/extraction-review-result.json";
 import { guards } from "./contracts";
 
 describe("extraction response boundary", () => {
@@ -41,5 +42,33 @@ describe("extraction response boundary", () => {
     expect(guards.proposals({ ...page, items: [proposal, proposal] })).toBe(false);
     expect(guards.proposals({ ...page, next_cursor: "x".repeat(2049) })).toBe(false);
     expect(guards.proposals({ ...page, items: [], next_cursor: "cursor" })).toBe(false);
+  });
+  it("rejects rounded conflict preconditions and result versions", () => {
+    const id = Object.keys(conflict.member_versions)[0]!;
+    expect(
+      guards.conflict({
+        ...conflict,
+        member_versions: { ...conflict.member_versions, [id]: 9007199254740992 },
+      }),
+    ).toBe(false);
+    expect(
+      guards.result({
+        ...result,
+        proposal_versions: {
+          ...result.proposal_versions,
+          [Object.keys(result.proposal_versions)[0]!]: 9007199254740992,
+        },
+      }),
+    ).toBe(false);
+    expect(
+      guards.result({
+        ...result,
+        approved_versions: result.approved_versions.map((v) => ({
+          ...v,
+          version: 9007199254740992,
+        })),
+      }),
+    ).toBe(false);
+    expect(guards.result(result)).toBe(true);
   });
 });

@@ -295,13 +295,11 @@ it("admits an empty DELETE stream from the framework but rejects actual bytes", 
 });
 
 it("returns a typed size failure before materializing an oversized upstream JSON response", async () => {
-  const fetcher = vi
-    .fn()
-    .mockResolvedValue(
-      new Response(" ".repeat(8 * 1024 * 1024 + 1), {
-        headers: { "content-type": "application/json" },
-      }),
-    );
+  const fetcher = vi.fn().mockResolvedValue(
+    new Response(" ".repeat(8 * 1024 * 1024 + 1), {
+      headers: { "content-type": "application/json" },
+    }),
+  );
   const response = await requestExtraction(
     config,
     "proposals",

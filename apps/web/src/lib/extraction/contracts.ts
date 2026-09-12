@@ -211,7 +211,10 @@ function page<T>(guard: Guard<T>): Guard<{
 }
 const reason = (v: unknown) => str(v) && v.trim().length > 0 && v.length <= 2000;
 const ids = (v: unknown) => array(uuid, 200, 1)(v) && new Set(v).size === v.length;
-const conflict = schema<Conflict>(conflictSchema);
+const conflictSchemaGuard = schema<Conflict>(conflictSchema);
+const conflict = (v: unknown): v is Conflict =>
+  conflictSchemaGuard(v) && Object.values(v.member_versions).every(positive);
+const resultSchemaGuard = schema<Schemas["ReviewResult"]>(resultSchema);
 export const guards = {
   events: (v: unknown): v is Schemas["ExtractionEventPage"] =>
     eventPageGuard(v) &&
@@ -243,7 +246,10 @@ export const guards = {
         )(v) && new Set(v).size === v.length,
     }),
   review: schema<Review>(reviewSchema),
-  result: schema<Schemas["ReviewResult"]>(resultSchema),
+  result: (v: unknown): v is Schemas["ReviewResult"] =>
+    resultSchemaGuard(v) &&
+    Object.values(v.proposal_versions).every(positive) &&
+    v.approved_versions.every((version) => positive(version.version)),
   correction: (v: unknown): v is Correction =>
     closed(v, { reason, payload, evidence: array(edge, 200, 1) }),
   create: (v: unknown): v is CreateRun =>

@@ -111,7 +111,15 @@ export function ReviewQueue({
         return;
       }
       const value: unknown = await response.json();
-      if (!guards.result(value))
+      if (
+        !guards.result(value) ||
+        value.action !== action ||
+        ![value.proposal_states, value.proposal_versions].every(
+          (map) =>
+            Object.keys(map).length === selected.length &&
+            selected.every((p) => Object.hasOwn(map, p.id)),
+        )
+      )
         throw new Error("Invalid review receipt; refresh before proceeding");
       setResult(value);
       setRows(

@@ -76,6 +76,29 @@ afterEach(() => {
 });
 
 describe("review interaction state", () => {
+  it.each(["action", "selection", "versions"])(
+    "rejects a receipt with mismatched %s",
+    async (part) => {
+      const p = selected();
+      const result = resultFor(p.id);
+      if (part === "action") result.action = "reject";
+      if (part === "selection")
+        result.proposal_states = { [initialFixture().proposals[1]!.id]: "accepted" };
+      if (part === "versions")
+        result.proposal_versions = { [initialFixture().proposals[1]!.id]: 2 };
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(result)));
+      const v = view(() =>
+        ReviewQueue({ proposals: [p], permissions: initialFixture().permissions }),
+      );
+      (props(findOne(v.tree(), (e) => e.type === "input")).onChange as (e: unknown) => void)({
+        target: { checked: true },
+      });
+      v.field("review-reason", "Checked evidence");
+      v.submit();
+      await vi.waitFor(() => expect(v.status()).toContain("Invalid review receipt"));
+      expect(v.status()).not.toContain("completed");
+    },
+  );
   it("contains role-aware controls and preserves one body/key across a network retry", async () => {
     const p = selected(),
       fetcher = vi
@@ -257,13 +280,11 @@ describe("live event component", () => {
     expect(events.every(guards.event)).toBe(true);
     vi.stubGlobal(
       "fetch",
-      vi
-        .fn()
-        .mockResolvedValue(
-          new Response(events.map((e) => `id: ${e.id}\ndata: ${JSON.stringify(e)}\n\n`).join(""), {
-            headers: { "content-type": "text/event-stream" },
-          }),
-        ),
+      vi.fn().mockResolvedValue(
+        new Response(events.map((e) => `id: ${e.id}\ndata: ${JSON.stringify(e)}\n\n`).join(""), {
+          headers: { "content-type": "text/event-stream" },
+        }),
+      ),
     );
     const v = view(() => RunEvents({ runId: run.id }));
     v.tree();
