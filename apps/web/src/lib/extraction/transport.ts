@@ -171,9 +171,10 @@ export async function requestExtraction(
     if (location) {
       const target = new URL(location, config.baseUrl);
       const base = new URL(config.baseUrl);
-      const match = /^\/v1\/(extraction-runs|approved-extractions)\/([0-9a-f-]+)$/i.exec(
-        target.pathname,
-      );
+      const match =
+        /^\/v1\/(extraction-runs|approved-extractions)\/([0-9a-f-]+)(?:\/versions\/([0-9a-f-]+))?$/i.exec(
+          target.pathname,
+        );
       if (
         target.origin !== base.origin ||
         target.username ||
@@ -182,14 +183,17 @@ export async function requestExtraction(
         target.hash ||
         !match ||
         !uuid(match[2]) ||
+        (match[3] !== undefined && !uuid(match[3])) ||
         !(match[1] === "extraction-runs"
-          ? guards.run(data) && data.id.toLowerCase() === match[2].toLowerCase()
-          : guards.approved(data) && data.record_id.toLowerCase() === match[2].toLowerCase())
+          ? guards.run(data) && !match[3] && data.id.toLowerCase() === match[2].toLowerCase()
+          : guards.approved(data) &&
+            data.record_id.toLowerCase() === match[2].toLowerCase() &&
+            (!match[3] || data.version_id.toLowerCase() === match[3].toLowerCase()))
       )
         return failure(502, "INVALID_RESPONSE");
       outputHeaders.set(
         "location",
-        `/api/extraction/${match[1] === "extraction-runs" ? "runs" : "approved"}/${match[2]}`,
+        `/api/extraction/${match[1] === "extraction-runs" ? "runs" : "approved"}/${match[2]}${match[3] ? `/versions/${match[3]}` : ""}`,
       );
     }
     return Response.json(data, { status: upstream.status, headers: outputHeaders });

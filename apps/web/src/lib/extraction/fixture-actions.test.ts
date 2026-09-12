@@ -49,6 +49,9 @@ describe("synthetic review interaction fixture", () => {
       '"1"',
     );
     expect(first.status).toBe(201);
+    expect(first.headers.get("location")).toBe(
+      `/v1/approved-extractions/${FIXTURE_RECORD}/versions/${state.versions[1]!.version_id}`,
+    );
     expect(guards.approved(await first.json())).toBe(true);
     expect(state.versions[0]).toEqual(before[0]);
     expect(

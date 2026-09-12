@@ -62,4 +62,28 @@ describe("extraction response identity", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("location")).toBe(`/api/extraction/runs/${run.id}`);
   });
+  it("translates a correction's exact immutable-version Location and rejects another version", async () => {
+    const version = initialFixture().versions[0]!;
+    const location = `/v1/approved-extractions/${version.record_id}/versions/${version.version_id}`;
+    const response = await read(`approved/${version.record_id}`, version, "", { location });
+    expect(response.status).toBe(200);
+    expect(response.headers.get("location")).toBe(
+      `/api/extraction/approved/${version.record_id}/versions/${version.version_id}`,
+    );
+    expect(
+      (
+        await read(`approved/${version.record_id}`, version, "", {
+          location: `/v1/approved-extractions/${version.record_id}/versions/${fixtureId(99)}`,
+        })
+      ).status,
+    ).toBe(502);
+    const run = initialFixture().runs[0]!;
+    expect(
+      (
+        await read(`runs/${run.id}`, run, "", {
+          location: `/v1/extraction-runs/${run.id}/versions/${version.version_id}`,
+        })
+      ).status,
+    ).toBe(502);
+  });
 });

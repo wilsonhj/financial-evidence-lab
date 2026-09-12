@@ -162,7 +162,13 @@ export async function fixtureAction(
       parent_version_id: prior.version_id,
     };
     draft.versions.push(current);
-    response = Response.json(current, { status: 201, headers: { etag: `"${current.version}"` } });
+    response = Response.json(current, {
+      status: 201,
+      headers: {
+        etag: `"${current.version}"`,
+        location: `/v1/approved-extractions/${current.record_id}/versions/${current.version_id}`,
+      },
+    });
   } else if (resource === "extractions" && id === "review") {
     if (!guards.review(input)) return fixtureError(422, "VALIDATION_ERROR");
     const selected = input.extraction_ids.map((id) => draft.proposals.find((p) => p.id === id));
