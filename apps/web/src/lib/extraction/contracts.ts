@@ -42,8 +42,7 @@ export const uuid = (v: unknown): v is string =>
 const str = (v: unknown): v is string => typeof v === "string";
 const integer = (v: unknown): v is number => Number.isSafeInteger(v) && Number(v) >= 0;
 const positive = (v: unknown): v is number => integer(v) && v > 0;
-const date = (v: unknown) =>
-  str(v) && /^\d{4}-\d{2}-\d{2}T.*(?:Z|[+-]\d{2}:\d{2})$/.test(v) && Number.isFinite(Date.parse(v));
+const date = schema<string>({ type: "string", format: "date-time" });
 const one =
   (...values: string[]) =>
   (v: unknown) =>
