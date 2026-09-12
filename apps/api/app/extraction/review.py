@@ -1,5 +1,7 @@
 """One transaction for reviewed proposal states, immutable approvals and receipts."""
 
+from copy import deepcopy
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -141,6 +143,8 @@ def _apply(
             "SELECT id FROM extraction_conflicts WHERE id=%s AND org_id=%s FOR UPDATE",
             (group_id, ctx.org_id),
         )
+    if _discover(conn, ids, ctx.org_id) != (run_ids, group_ids):
+        raise DiscoveryChanged()
     rows = _locked_rows(conn, ctx.org_id, run_ids)
     selected = {str(row["id"]): row for row in rows if str(row["id"]) in ids}
     if set(body["expected_versions"]) != set(ids) or any(
@@ -153,44 +157,129 @@ def _apply(
         locked_runs[str(row["run_id"])]["status"] != "waiting_review" for row in selected.values()
     ):
         raise api_error(409, "CONFLICT", "Extraction is not awaiting review.")
-    if group_ids or body.get("conflict_resolution"):
-        raise api_error(409, "CONFLICT", "Explicit conflict adjudication is required.")
-    if body["action"] not in ("accept", "reject"):
-        raise api_error(409, "CONFLICT", "Review replacement is not available.")
+    groups = {gid: conflicts.detail(conn, gid, ctx.org_id) for gid in group_ids}
+    decisions = conflicts.decisions_for(groups, body, {str(row["id"]): row for row in rows})
     approvals = []
     workspace_id = str(next(iter(selected.values()))["workspace_id"])
-    if body["action"] == "accept":
-        result = validation.evaluate(
-            conn,
-            [row for row in rows if row["state"] not in ("rejected", "superseded")],
-            locked_runs,
-        )
+    if body["action"] != "reject":
+        validation_rows = [
+            dict(row) for row in rows if row["state"] not in ("rejected", "superseded")
+        ]
+        if body["action"] == "edit":
+            patches = {patch["extraction_id"]: patch for patch in body["patch"]}
+            if len(patches) != len(body["patch"]) or set(patches) != set(ids):
+                raise api_error(
+                    412, "PRECONDITION_FAILED", "Complete selected replacements required."
+                )
+            for row in validation_rows:
+                if str(row["id"]) in patches:
+                    replacement = patches[str(row["id"])]
+                    row.update(
+                        payload=replacement["payload"],
+                        evidence=replacement["evidence"],
+                        validation_summary={},
+                    )
+        result = validation.evaluate(conn, validation_rows, locked_runs)
+        waived = conflicts.check_evaluated(result, set(ids), groups, decisions, body["action"])
         for pid in ids:
-            if result.drafts[pid].validation_summary["blockers"]:
+            blockers = result.drafts[pid].validation_summary["blockers"]
+            if any(blocker != "duplicate_candidate" or pid not in waived for blocker in blockers):
                 validation.invalid(pid)
-        if result.conflicts:
-            raise api_error(409, "CONFLICT", "Comparable proposals require adjudication.")
         from app.extraction import approved
 
-        for pid in ids:
-            run = locked_runs[str(selected[pid]["run_id"])]
+        if body["action"] == "merge":
+            from fel_workers.extraction.validate.duplicates import comparability_key_for
+
+            source_id = body["patch"]["payload_source_id"]
+            if source_id not in ids:
+                raise api_error(
+                    412, "PRECONDITION_FAILED", "Merge payload source must be selected."
+                )
+            source = result.drafts[source_id]
+            identity = (
+                comparability_key_for(source.payload),
+                source.payload.get("definition"),
+                source.comparability_key,
+            )
+            if any(
+                (
+                    comparability_key_for(result.drafts[pid].payload),
+                    result.drafts[pid].payload.get("definition"),
+                    result.drafts[pid].comparability_key,
+                )
+                != identity
+                for pid in ids
+            ):
+                raise api_error(409, "CONFLICT", "Merge inputs are not comparable.")
+            merged = deepcopy(source)
+            edges = {
+                (edge["source_span_id"], edge["document_version_id"], edge["role"]): edge
+                for pid in ids
+                for edge in result.drafts[pid].evidence
+            }
+            if len(edges) > 200:
+                raise reads.too_large(source_id)
+            merged.evidence = [edges[key] for key in sorted(edges)]
+            source_runs = {
+                str(selected[pid]["run_id"]): locked_runs[str(selected[pid]["run_id"])]
+                for pid in ids
+            }
             approvals.append(
                 approved.create(
                     conn,
                     ctx,
                     workspace_id,
-                    result.drafts[pid],
-                    validation.source_context({str(run["id"]): run}),
+                    merged,
+                    validation.source_context(source_runs),
                     body["reason"],
                 )
             )
-    state = "accepted" if body["action"] == "accept" else "rejected"
+        else:
+            for pid in ids:
+                run = locked_runs[str(selected[pid]["run_id"])]
+                approvals.append(
+                    approved.create(
+                        conn,
+                        ctx,
+                        workspace_id,
+                        result.drafts[pid],
+                        validation.source_context({str(run["id"]): run}),
+                        body["reason"],
+                    )
+                )
+    state = {"accept": "accepted", "edit": "accepted", "reject": "rejected", "merge": "superseded"}[
+        body["action"]
+    ]
     for pid in ids:
         conn.execute(
             "UPDATE extraction_proposals SET state=%s,version=version+1 WHERE id=%s AND org_id=%s",
             (state, pid, ctx.org_id),
         )
     review_id = str(uuid4())
+    resolutions = {}
+    resolved_groups = []
+    for gid, decision in sorted(decisions.items()):
+        resolved_at = datetime.now(UTC)
+        resolution = {
+            "review_id": review_id,
+            "selected_winner_ids": decision["selected_winner_ids"],
+            "approved_record_ids": [item["record_id"] for item in approvals],
+            "reason": decision["reason"],
+            "actor_user_id": ctx.user_id,
+            "resolved_at": resolved_at.isoformat(),
+        }
+        conn.execute(
+            "UPDATE extraction_conflicts SET status='resolved',resolved_by=%s,"
+            "resolved_at=%s,resolution_note=%s WHERE id=%s AND org_id=%s",
+            (ctx.user_id, resolved_at, decision["reason"], gid, ctx.org_id),
+        )
+        projected = conflicts.detail(conn, gid, ctx.org_id)
+        projected.pop("etag")
+        projected["resolution"] = resolution
+        from app.extraction.serializers import etag
+
+        resolved_groups.append({"conflict_id": gid, "etag": etag(projected)})
+        resolutions[gid] = resolution
     result_body = {
         "review_id": review_id,
         "action": body["action"],
@@ -198,7 +287,7 @@ def _apply(
         "proposal_versions": {pid: selected[pid]["version"] + 1 for pid in ids},
         "approved_record_ids": [item["record_id"] for item in approvals],
         "approved_versions": approvals,
-        "resolved_conflicts": [],
+        "resolved_conflicts": resolved_groups,
     }
     conn.execute(
         "INSERT INTO extraction_reviews(id,org_id,workspace_id,action,actor_user_id,reason,"
@@ -215,7 +304,7 @@ def _apply(
             key,
             Jsonb(body["expected_versions"]),
             ids,
-            Jsonb({"command": body, "result": result_body}),
+            Jsonb({"command": body, "result": result_body, "resolutions": resolutions}),
             result_body["approved_record_ids"],
         ),
     )
