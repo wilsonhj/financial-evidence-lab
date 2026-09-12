@@ -13,7 +13,13 @@ from app.db import tenant_connection
 from app.dependencies import get_tenant_context
 from app.errors import api_error
 from app.extraction import reads, runs, serializers
-from app.extraction.models import Action, ExtractionPermissions, ProposalState, RunCreate
+from app.extraction.models import (
+    Action,
+    ExtractionPermissions,
+    ProposalState,
+    RerunCommand,
+    RunCreate,
+)
 from app.pagination import Order
 
 router = APIRouter(prefix="/v1", tags=["extraction"])
@@ -129,3 +135,51 @@ def list_proposals(
         body = reads.proposal_page(conn, workspaceId, ctx.org_id, state, limit, cursor, order)
     response.headers["Cache-Control"] = "no-store"
     return body
+
+
+@router.delete("/extraction-runs/{runId}")
+async def cancel_run(
+    runId: UUID,
+    request: Request,
+    ctx: Tenant,
+    idempotency_key: Annotated[str, Header(alias="Idempotency-Key", min_length=8, max_length=128)],
+    if_match: Annotated[str, Header(alias="If-Match", max_length=128)],
+) -> JSONResponse:
+    async for chunk in request.stream():
+        if chunk:
+            raise api_error(422, "VALIDATION_ERROR", "Cancellation has no request body.")
+    from starlette.concurrency import run_in_threadpool
+
+    result = await run_in_threadpool(
+        runs.cancel,
+        ctx,
+        runId,
+        idempotency_key,
+        if_match,
+        getattr(request.state, "request_id", "unknown"),
+    )
+    return JSONResponse(result.body, status_code=result.status, headers=result.headers)
+
+
+@router.post("/extraction-runs/{runId}/rerun", status_code=202)
+async def rerun_extraction(
+    runId: UUID,
+    request: Request,
+    ctx: Tenant,
+    idempotency_key: Annotated[str, Header(alias="Idempotency-Key", min_length=8, max_length=128)],
+) -> JSONResponse:
+    try:
+        body = RerunCommand.model_validate(await command_body(request, runId))
+    except ValidationError:
+        raise api_error(422, "VALIDATION_ERROR", "Request failed validation.") from None
+    from starlette.concurrency import run_in_threadpool
+
+    result = await run_in_threadpool(
+        runs.rerun,
+        ctx,
+        runId,
+        body.reason,
+        idempotency_key,
+        getattr(request.state, "request_id", "unknown"),
+    )
+    return JSONResponse(result.body, status_code=result.status, headers=result.headers)

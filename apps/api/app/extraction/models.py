@@ -327,3 +327,7 @@ class RunCreate(ClosedModel):
                 if key in value and value[key] is None:
                     raise ValueError("A supplied selection or limits cannot be null.")
         return value
+
+
+class RerunCommand(ClosedModel):
+    reason: NonemptyString
