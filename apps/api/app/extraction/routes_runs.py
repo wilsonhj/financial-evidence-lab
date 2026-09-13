@@ -1,6 +1,7 @@
 """Authenticated extraction permissions and run transport."""
 
 import json
+import math
 from typing import Annotated, Any
 from uuid import UUID
 
@@ -43,8 +44,19 @@ async def command_body(request: Request, resource_id: UUID | str) -> Any:
             result[key] = value
         return result
 
+    def finite_number(value: str) -> float:
+        parsed = float(value)
+        if not math.isfinite(parsed):
+            raise ValueError("Unrepresentable JSON number.")
+        return parsed
+
+    def invalid_constant(value: str) -> None:
+        raise ValueError("Non-JSON numeric constant.")
+
     try:
-        return json.loads(raw, object_pairs_hook=pairs)
+        return json.loads(
+            raw, object_pairs_hook=pairs, parse_float=finite_number, parse_constant=invalid_constant
+        )
     except (ValueError, UnicodeError, RecursionError):
         raise api_error(422, "VALIDATION_ERROR", "Request failed validation.") from None
 

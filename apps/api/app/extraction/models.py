@@ -209,12 +209,23 @@ class EvidenceEdge(ClosedModel):
     citation_status: Literal["verified", "partial", "contradictory", "invalid"]
 
 
+def unique_version_keys(value: Any) -> Any:
+    if isinstance(value, dict) and len({UUID(str(key)) for key in value}) != len(value):
+        raise ValueError("Duplicate canonical version IDs.")
+    return value
+
+
 class ConflictDecision(ClosedModel):
     conflict_id: UUID
     expected_etag: ETag
     member_versions: dict[UUID, ExpectedVersion] = Field(min_length=2, max_length=200)
     selected_winner_ids: list[UUID] = Field(max_length=100)
     reason: Reason
+
+    @field_validator("member_versions", mode="before")
+    @classmethod
+    def unique_members(cls, value: Any) -> Any:
+        return unique_version_keys(value)
 
     @field_validator("selected_winner_ids")
     @classmethod
@@ -231,6 +242,11 @@ class ReviewBase(ClosedModel):
     conflict_resolution: list[ConflictDecision] | None = Field(
         default=None, min_length=1, max_length=100
     )
+
+    @field_validator("expected_versions", mode="before")
+    @classmethod
+    def unique_versions(cls, value: Any) -> Any:
+        return unique_version_keys(value)
 
     @field_validator("extraction_ids")
     @classmethod
