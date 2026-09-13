@@ -148,6 +148,7 @@ def test_clock_skew_and_optional_not_before(signing):
         {"jku": "https://evil.example/keys"},
         {"jwk": {"kty": "oct"}},
         {"x5u": "https://evil.example/cert"},
+        {"b64": False},
     ],
 )
 def test_untrusted_headers_never_fetch(signing, headers):
@@ -502,3 +503,86 @@ def test_excessively_nested_json_fails_safely(signing):
                 },
             ),
         ).verify(token(signing))
+
+
+def test_malformed_public_key_fails_without_publishing_partial_refresh(signing, monkeypatch):
+    from app import supabase_auth
+    from app.auth import TokenVerifierUnavailable
+
+    clock, calls = [100.0], []
+    monkeypatch.setattr(supabase_auth, "monotonic", lambda: clock[0])
+    broken = {**signing[2], "kid": "broken"}
+    del broken["x" if signing[1] == "ES256" else "n"]
+
+    def service(_):
+        calls.append(1)
+        keys = [signing[2]] if len(calls) == 1 else [{**signing[2], "kid": "new"}, broken]
+        return httpx.Response(200, json={"keys": keys})
+
+    subject = verifier(signing, handler=service)
+    subject.verify(token(signing))
+    clock[0] = 130.0
+    for _ in range(2):
+        with pytest.raises(TokenVerifierUnavailable):
+            subject.verify(token(signing, headers={"kid": "new"}))
+    assert subject.verify(token(signing)).user_id == USER
+    assert len(calls) == 2
+    # A failed refresh must not move the original set's expiry from 400 to 430.
+    clock[0] = 400.0
+    with pytest.raises(TokenVerifierUnavailable):
+        subject.verify(token(signing))
+    assert len(calls) == 3
+
+
+def test_refresh_wait_is_bounded_and_failed_fetch_is_shared(signing):
+    from app.auth import TokenVerifierUnavailable
+
+    entered, release = Event(), Event()
+    calls = []
+
+    def service(_):
+        calls.append(1)
+        entered.set()
+        assert release.wait(3)
+        return httpx.Response(503)
+
+    subject = verifier(signing, handler=service)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first = pool.submit(subject.verify, token(signing))
+        assert entered.wait(1)
+        second = pool.submit(subject.verify, token(signing))
+        try:
+            # The second call must finish while the first transport stays blocked.
+            with pytest.raises(TokenVerifierUnavailable):
+                second.result(timeout=2)
+        finally:
+            release.set()
+        with pytest.raises(TokenVerifierUnavailable):
+            first.result()
+    for _ in range(3):
+        with pytest.raises(TokenVerifierUnavailable):
+            subject.verify(token(signing))
+    assert len(calls) == 1
+
+
+@pytest.mark.parametrize("failure", [httpx.ConnectTimeout, httpx.ReadTimeout, httpx.ConnectError])
+def test_transport_failure_is_safe_and_cools_down(signing, failure):
+    from app.auth import TokenVerifierUnavailable
+
+    calls = []
+
+    def service(_):
+        calls.append(1)
+        raise failure("private identity URL")
+
+    subject = verifier(signing, handler=service)
+    for _ in range(2):
+        with pytest.raises(TokenVerifierUnavailable, match="^Identity verification unavailable.$"):
+            subject.verify(token(signing))
+    assert len(calls) == 1
+
+
+def test_supported_maximum_key_count_is_usable(signing):
+    keys = [{**signing[2], "kid": f"key-{index + 1}"} for index in range(32)]
+    subject = verifier(signing, handler=lambda _: httpx.Response(200, json={"keys": keys}))
+    assert subject.verify(token(signing)).org_id == ORG
