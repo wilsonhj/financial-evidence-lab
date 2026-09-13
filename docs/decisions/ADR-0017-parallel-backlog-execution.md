@@ -172,3 +172,19 @@ It is design/tracking only until a bounded design and workstream are accepted;
 no auth implementation/dependency dispatch is made here. Preserve #108's
 accepted July21 mock-auth hosted-reader smoke exception. That exception and
 local #61 acceptance do not establish production identity verification.
+
+
+Wave 12 ruling: PR295 merged at e6e24b after independent final-head approval
+and all required checks plus real HTTP acceptance. A scratch actual-API/PG
+audit then reproduced four nonfinite JSON inputs accepted with qualifiers
+silently persisted as null, and two UUID version-map alias inputs collapsing
+conflicting versions before completeness checks. Authorize the #61 API child
+on replacement branch agent/61-command-boundary, limited in this dispatch to
+extraction/routes_runs.py, extraction/models.py and focused extraction tests.
+Reject non-JSON constants and float overflow before command normalization;
+reject canonical UUID collisions in expected_versions and member_versions
+before Pydantic coalesces keys. Preserve ordinary numeric strings/finite JSON,
+uppercase UUID support without collisions, existing errors, financial rules,
+contracts and all other loaders. Require real no-mutation/receipt regressions
+and independent final-head review/CI. The control branch is
+agent/188-execution-wave12; no canonical or live gate changes.

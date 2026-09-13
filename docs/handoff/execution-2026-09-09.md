@@ -334,3 +334,170 @@ waiting, and review/terminal events after another browser page submits review.
 Forced browser disconnect/reconnect is covered by separate client/proxy and
 actual HTTP API tests, not asserted by that cross-stack scenario. Hosted108 and
 old-writer draining remain separate conditions; canonical checkboxes unchanged.
+
+
+PR295 merged at e6e24b064533ab7fa979a1f952ffe47369ca9bf0 after independent
+approval of d5d8573, 21 real PostgreSQL tests and four additional edit/merge
+controls. Full Python verification passed 2,047 tests with three existing
+opt-in skips and 89.28% coverage; all required checks and HTTP acceptance pass.
+Unrelated malformed peers no longer block selected valid review; relevant
+financial families, explicit groups and unknown identities remain included.
+Each conflict records its winning approvals. The proposed correction race
+was not reachable through current guarded writers, so no speculative fix landed.
+
+The next six-case actual-API/PG audit showed NaN, Infinity, -Infinity and1e400
+returning200 and persisting null, plus canonical/uppercase UUID aliases with
+versions2/1 being accepted at version1. The bounded command rejection fix is
+registered by ADR0017 under the same #61 API owner. The parent remains open.
+The local benchmark preflight passed 100-item approval and both reconnect
+checks; its measured series is pinned to e6e24b and is not yet a passing p95
+claim. No hosted/provider action or canonical checkbox change is recorded.
+
+
+September 13 measured local reference acceptance at backend
+`e6e24b064533ab7fa979a1f952ffe47369ca9bf0`: one correctness preflight, ten
+warmups and 100 sequential measured cycles all passed without retries or
+dropped observations. Each cycle creates a fresh tenant/run, uses the real
+mounted HTTP API and production queue/durable mock worker, and reviews 100
+distinct dated ARR proposals against matching hashed synthetic bytes. One
+proposal is worker-produced; 99 are explicit setup clones with recalculated
+normalization/validation metadata. Setup and worker execution are outside timing.
+All 111 cycles verify 100 accepted version2 proposals, 100 immutable approvals,
+source/evidence hashes, a succeeded job at attempt1 and exact reconnect events.
+
+| Operation | p95 ms | Required less than ms | Result |
+|---|---:|---:|---|
+| Create | 12.451541 | 500 | Pass |
+| 100-item review | 550.613459 | 1000 | Pass |
+| Waiting-review reconnect | 16.744875 | 2000 | Pass |
+| Terminal reconnect | 12.971000 | 2000 | Pass |
+
+The lead independently recalculated the nearest-rank p95 (95th of 100 sorted
+samples) from raw integer nanoseconds and inspected the timing/postcondition
+code. POST timing includes complete response bytes and transaction commit;
+reconnect measures a fresh connection to its first complete eligible durable
+SSE frame, not headers/heartbeats. This is one local client, one Uvicorn worker,
+6,208 source bytes and a conflict-free workload. It excludes Next/browser
+rendering, hosted networking, model latency and worst-case peer/evidence loads.
+Existing cross-stack functional tests separately prove later event production.
+
+Machine: Mac16,11, 12 logical CPUs, 24 GiB RAM, macOS26.6.2, Python3.11.16,
+PostgreSQL17.10. Durability stayed enabled (fsync/synchronous_commit on),
+shared_buffers128MB, normal pool defaults. One-minute host load was3.52 at
+start and3.84 at end. The owned API stopped cleanly; isolated synthetic database
+and scratch artifacts remain preserved. No production or provider credentials.
+
+Runner SHA256: `efe758e19737fb61fb1b45321f8e05844f204e7d5f6532b0e5e3250158fd8e9d`.
+Full cycle artifact SHA256: `ed72d9158e489be26001724403ac40a2f8b40707a1041bd9ba7527faf581d6a8`.
+Source SHA256: `sha256:13a2e5130e59ec36b3e9d36fa36fc5e805af22b8f22ac306b476ee1acfc1e2bf`.
+
+<details>
+<summary>Raw measured nanoseconds, in sample order</summary>
+
+Columns: create, 100-item review, waiting-review reconnect, terminal reconnect.
+Warmups/preflight are excluded from these 100 measured rows.
+
+```jsonl
+[9766333,377295458,11735000,11872625]
+[10159208,378481208,10591833,11835708]
+[10446625,422924708,11977875,12108125]
+[9940875,382664916,10290958,11651583]
+[11041750,383282291,11236917,12129417]
+[10225958,380883209,10582500,12197416]
+[10564125,396295750,12228208,12999125]
+[10129500,384414083,11221791,12182916]
+[9746834,466637584,13638625,12197708]
+[11610250,415366458,14280542,11432792]
+[10115750,403723666,10225250,10983500]
+[15058708,513858916,13199917,14428792]
+[11066584,391251625,11280250,11733166]
+[10495417,393497333,10753875,10857083]
+[10781000,387748708,11848709,11887666]
+[9659125,402057625,10681625,11769917]
+[9719375,450109041,11992334,12054958]
+[9797917,761428625,11486416,12820541]
+[10381083,399558208,12356875,10612375]
+[9735375,341023000,9533250,11113083]
+[7925875,404310625,10001500,11826959]
+[9823333,405531667,19310750,11947750]
+[9803167,393070583,10574917,12184500]
+[9629542,406268125,10954875,11727167]
+[9477000,408424583,10898708,11595750]
+[9973000,411023875,11829708,11723333]
+[9759250,429242875,11790541,11596625]
+[9789792,404660625,10369333,11638292]
+[9948959,441784250,10574125,11946542]
+[10108584,463698375,12694750,10995583]
+[10478208,404434541,16662833,11071792]
+[10521875,548978959,11664708,11847541]
+[9731000,421421291,10436792,11904584]
+[9521208,422049500,10606958,12644959]
+[10723250,424592416,10301917,12686292]
+[10579958,420009750,10608416,11755375]
+[10308041,428004708,10593125,11842959]
+[9955334,416818334,10936958,11627000]
+[9892167,431137625,10694042,11806041]
+[10480667,428591542,11829750,11729167]
+[10229083,435058000,10485666,11881250]
+[9947500,438587583,10520792,11877000]
+[10302958,435955250,11767917,12003792]
+[9969667,427532375,18619333,11695084]
+[9711916,469508208,11987625,14203334]
+[12451541,432957042,10705000,11835000]
+[9992834,437015000,10578875,12674875]
+[10421416,436610000,10751625,11950083]
+[10410750,456739167,11276125,12071416]
+[10188958,440983791,10477375,11584250]
+[10031291,440808875,10680666,11769500]
+[10124208,440750250,12569375,11665791]
+[9662042,630053917,10549208,12971000]
+[13430042,455585625,13560375,11837208]
+[10451583,455182792,12312209,11921667]
+[10207500,458076292,11538667,11812625]
+[10000541,447182500,10177875,11884334]
+[9803333,452278458,10407125,11739583]
+[9885459,456780041,10708417,12019875]
+[9976666,480527708,11463791,12052709]
+[10007709,461494916,10248250,11079916]
+[10614875,453449334,11904458,10912500]
+[11068042,491769917,11285291,10715875]
+[10812083,464073208,10576916,11545083]
+[10332875,458871417,11785292,11862541]
+[10185708,459036167,19101208,11674917]
+[10573000,474867209,11147625,12206917]
+[10072208,464560625,11432500,11546500]
+[10407792,467734833,11595667,10855875]
+[10619125,471619250,10281625,15533167]
+[21314833,479857333,11353167,11048291]
+[10081333,477344750,11638125,11969500]
+[10161833,478302333,11114917,12392834]
+[10215084,470424792,12013542,12357083]
+[10080875,582379208,11758041,11502667]
+[10070958,478720584,11632417,11767291]
+[10340042,500943416,11846500,11930000]
+[10043292,475030125,11909333,11814750]
+[9707208,472535375,11453916,11565667]
+[9781375,474991959,10514084,11840333]
+[9568500,480824041,11362834,11838833]
+[9910291,488274167,11657541,10968416]
+[10033416,500241542,12249959,12821083]
+[10948500,504251250,11518875,12060666]
+[10230084,478881833,12079000,12654584]
+[10272625,550613459,19358333,12263416]
+[8902958,458134875,10442792,10052250]
+[8287792,526621458,21111375,10737792]
+[10332958,492861209,10633709,12029792]
+[9786958,544938291,11283000,11901791]
+[12765208,494417625,10684167,11789333]
+[9750541,572758625,13537208,12106917]
+[11290000,523702917,11011750,11744250]
+[10062791,545315625,12031542,12817167]
+[17904791,558033916,16744875,11796833]
+[10061167,504435500,11350916,12681292]
+[10667792,412662792,10420500,11800959]
+[11925583,362475500,11455916,11809000]
+[10819083,353134250,10756042,13440750]
+[10487917,357299084,11027292,11913917]
+```
+
+</details>
