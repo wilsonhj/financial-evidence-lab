@@ -188,3 +188,26 @@ uppercase UUID support without collisions, existing errors, financial rules,
 contracts and all other loaders. Require real no-mutation/receipt regressions
 and independent final-head review/CI. The control branch is
 agent/188-execution-wave12; no canonical or live gate changes.
+
+
+Wave 13 reader prerequisite ruling: issue #301 implements #108's accepted
+design addendum item 9 as a dedicated offline repair. Register exactly seven
+web/eval files on agent/301-reader-integrity. Reuse the existing error parser
+and integrity view: only parsed INTEGRITY_ERROR on HTTP 500–599 selects the
+new internal kind. Preserve parser tolerance, all 404/anti-oracle behavior,
+other status classes, fixed public copy and the existing wire contract.
+No new dependency, hosted work or API/worker changes are authorized. The
+accepted #108 mock-auth exception remains valid for that separately provisioned
+smoke; production auth #292 does not replace its environment requirements.
+The lead may publish the bounded reader plan in this control package.
+
+Wave 13 extraction acceptance ruling: PR299 merged at 19e5b9a after independent
+review, all seven required checks and real HTTP/worker/browser acceptance.
+Replace the completed command-fix branch with agent/61-acceptance-proofs,
+restricted to three named test files. Prove same-head correction serialization
+and receipt replay, real foreign-tenant resources and denied actions, and
+stream revocation/disconnect/resume/size limits using isolated PostgreSQL.
+No production edits are dispatched: a reproducible defect returns to the lead
+for a separately bounded fix. Publish its evidence map and test plan here.
+Neither these tests nor the sequential benchmark waive the reference-profile
+performance or live M3 release gates; no canonical checkbox changes.

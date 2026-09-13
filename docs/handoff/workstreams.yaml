@@ -97,7 +97,7 @@ packages:
     tasks: []
     depends_on: []
     team: integration
-    branch: agent/188-execution-wave12
+    branch: agent/188-execution-wave13
     status: active # Reconcile verified prerequisites and coordinate disjoint #61 implementation under ADR-0024.
     allowed_paths:
       - specs/001-financial-evidence-lab/tasks.md # Lead-only verified checkbox/annotation updates.
@@ -111,6 +111,8 @@ packages:
       - docs/superpowers/plans/2026-09-11-extraction-event-ordering.md
       - docs/superpowers/plans/2026-09-11-extraction-review-backend.md
       - docs/superpowers/plans/2026-09-11-extraction-review-web.md
+      - docs/superpowers/plans/2026-09-13-reader-integrity-classification.md
+      - docs/superpowers/plans/2026-09-13-extraction-acceptance-proofs.md
       - docs/research/2026-09-11-model-scenario-design.md # Read-only future design findings; no #64 dispatch or domain-policy acceptance.
       - .github/required-checks.md # Reconcile verified September 10 protection settings only.
   - id: PLATFORM-NODE24
@@ -275,7 +277,7 @@ packages:
   - id: READER-PROD-SMOKE # child F of #87; owns #96 criterion #11
     issue: 108
     tasks: []
-    depends_on: [READER-CROSS-STACK, M2-CONTRACT] # #105+#106; READER-WEB-HTTP inherited via READER-CROSS-STACK
+    depends_on: [READER-CROSS-STACK, M2-CONTRACT, READER-INTEGRITY-CLASSIFICATION] # Hosted credentials and infra prerequisites remain blocked.
     team: trust
     branch: test/reader-prod-smoke
     status: blocked # registered after #105/#106; NOT ready — hosted deployment credentials not provisioned; INTEGRITY_ERROR→unavailable residual blocks integrity-alert UI acceptance
@@ -286,6 +288,21 @@ packages:
       - apps/api/**
       - workers/**
       - .github/** # gated hosted-smoke workflow; shared — integration-lead authorization required
+  - id: READER-INTEGRITY-CLASSIFICATION
+    issue: 301
+    tasks: [] # Dedicated prerequisite for hosted #108, not hosted acceptance.
+    depends_on: [READER-WEB-HTTP, READER-CROSS-STACK, M2-OBSERVATORY-UI]
+    team: experience
+    branch: agent/301-reader-integrity
+    status: ready # Lead releases after reviewed wave13 registration; #108 remains blocked.
+    allowed_paths:
+      - apps/web/src/lib/data/http-source.ts
+      - apps/web/src/lib/data/http-source.test.ts
+      - apps/web/src/components/EvidenceFailureState.tsx
+      - apps/web/src/components/EvidenceFailureState.test.tsx
+      - apps/web/src/app/reader/reader-pagination.test.tsx
+      - evals/harness/reader_cross_stack.py
+      - evals/tests/test_reader_cross_stack.py
   - id: INFRA-WORKER-DEPLOY # Railway worker startCommand -> consumer mode (issue #84)
     issue: 84
     tasks: []
@@ -516,23 +533,19 @@ packages:
     tasks: []
     depends_on: [M3-REVIEW-CANDIDATE-CONTRACT]
     team: platform
-    branch: agent/61-command-boundary
-    status: active # PR295/e6e24b merged; confirmed nonfinite JSON and UUID version-map alias residuals remain.
+    branch: agent/61-acceptance-proofs
+    status: ready # PR299/19e5b9a merged; test-only acceptance follow-up after reviewed wave13 registration.
     allowed_paths:
-      - apps/api/app/extraction/**
-      - apps/api/tests/extraction/**
-      - apps/api/app/main.py
-      - apps/api/app/pagination.py
-      - apps/api/tests/test_pagination.py
-      - packages/contracts/openapi/openapi.yaml # Lead-owned removal of implemented extraction x-fel-status markers only, with router mount.
-      - specs/003-agentic-extraction/contracts/extraction-api.yaml # Same implementation-marker alignment only.
+      - apps/api/tests/extraction/test_correction_concurrency.py
+      - apps/api/tests/extraction/test_access_boundaries.py
+      - apps/api/tests/extraction/test_sse_lifecycle.py
   - id: M3-REVIEW-WEB
     issue: 61
     tasks: []
     depends_on: [M3-REVIEW-CANDIDATE-CONTRACT]
     team: experience
     branch: agent/61-review-patch-boundary
-    status: merged # PR288/290 integration plus independently reviewed PR291/cde9cea and PR294/c4ffc2e residual fixes.
+    status: merged # PR288/290 integration plus reviewed PR291/cde9cea, PR294/c4ffc2e and PR297/73a7d2b residual fixes.
     allowed_paths:
       - apps/web/src/lib/extraction/**
       - apps/web/src/components/extraction/**
@@ -548,7 +561,7 @@ packages:
     depends_on: []
     team: platform
     branch: agent/292-production-auth-api
-    status: ready # Accepted ADR0025; root dispatches offline implementation after the design PR merges.
+    status: active # ADR0025 accepted in PR296/2a5e3ca; offline implementation PR300, no hosted identity acceptance.
     allowed_paths:
       - apps/api/app/auth.py
       - apps/api/app/dependencies.py
