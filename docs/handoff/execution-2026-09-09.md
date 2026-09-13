@@ -307,9 +307,9 @@ acceptance. These are mock-provider/local-CI proofs, not hosted/live gates.
 
 The old local branches are preserved. Their redundant validator cache was never
 pushed; equivalent caching is already in main. PR288's recovery-era body was
-corrected to its actual merged head711e7b4. PR291 is the current component-only
-follow-up; lead inspection verified all seven required jobs plus HTTP acceptance
-green at74910f7. Independent source review remains required before merge.
+corrected to its actual merged head711e7b4. PR291 merged at cde9cea after independent approval of74910f7 and149 focused
+tests. Lead inspection verified all seven required jobs plus HTTP acceptance
+green at that exact head, then explicitly approved and merged with a head guard.
 
 Current-main review identified bounded API peer/adjudication residuals and raw
 web patch-text command-member injection. ADR0017 records replacement branches
