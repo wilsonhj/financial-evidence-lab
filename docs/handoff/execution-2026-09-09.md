@@ -318,3 +318,19 @@ remains open; no canonical task checkbox or milestone gate is changed. Issue292
 now tracks production authentication separately, preserving #108's explicit
 mock-auth exception. Live environment/spend, provider key choice, SEC identity
 and second CODEOWNER inputs remain pending.
+
+
+PR294 merged at c4ffc2ef4c587fa5732df1c86d5336d25c9d5c40 after independent
+approval of1baabdb and28 focused tests,641 full JS tests with unchanged coverage
+floors, all seven required jobs and actual HTTP acceptance. Standalone parsing
+prevents raw edit/merge text from overriding command action or expected versions
+while preserving original numeric text. The web child is now merged; API review
+residuals remain active in PR295, so the parent remains open.
+
+Issue135 closed after independent audit of both stated streaming criteria:
+mounted same-origin proxy and live async browser delivery. Actual cross-stack
+acceptance34742696474 observes queued events before the worker, later review
+waiting, and review/terminal events after another browser page submits review.
+Forced browser disconnect/reconnect is covered by separate client/proxy and
+actual HTTP API tests, not asserted by that cross-stack scenario. Hosted108 and
+old-writer draining remain separate conditions; canonical checkboxes unchanged.

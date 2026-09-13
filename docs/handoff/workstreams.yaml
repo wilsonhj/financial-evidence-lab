@@ -532,7 +532,7 @@ packages:
     depends_on: [M3-REVIEW-CANDIDATE-CONTRACT]
     team: experience
     branch: agent/61-review-patch-boundary
-    status: active # PR288/290 merged; raw patch boundary residual. PR291 independently owns component-only fixes.
+    status: merged # PR288/290 integration plus independently reviewed PR291/cde9cea and PR294/c4ffc2e residual fixes.
     allowed_paths:
       - apps/web/src/lib/extraction/**
       - apps/web/src/components/extraction/**
