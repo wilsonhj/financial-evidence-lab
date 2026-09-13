@@ -542,6 +542,28 @@ packages:
       - apps/web/src/app/api/extraction/**
       - apps/web/src/app/desk/page.tsx
       - apps/web/e2e/extraction-review.spec.ts
+  - id: PRODUCTION-AUTH-VERIFIER
+    issue: 292
+    tasks: [] # Historical T0004 production-auth residual; no duplicate task ledger.
+    depends_on: []
+    team: platform
+    branch: agent/292-production-auth
+    status: blocked # ADR0025 design and dependency authorization require independent review before implementation.
+    allowed_paths:
+      - apps/api/app/auth.py
+      - apps/api/app/dependencies.py
+      - apps/api/app/config.py
+      - apps/api/app/supabase_auth.py
+      - apps/api/tests/test_supabase_auth.py
+      - apps/api/tests/test_supabase_membership.py
+      - apps/api/pyproject.toml
+      - requirements.txt
+      - requirements.lock
+      - requirements-dev.lock
+      - docs/decisions/ADR-0025-production-token-verification.md
+      - docs/superpowers/plans/2026-09-13-production-auth-verifier.md
+      - docs/handoff/workstreams.yaml
+      - docs/handoff/production-auth.md
   - id: M3-CONFIDENCE-GATE # confidence scoring + extraction quality gate
     issue: 62
     tasks: [T0306, T0307, T0310]
