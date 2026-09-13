@@ -1,0 +1,74 @@
+name: Extraction cross-stack acceptance
+
+on:
+  pull_request:
+    branches: [main, "integration/**"]
+  push:
+    branches: [main, "integration/**"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: extraction-acceptance-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  extraction-cross-stack:
+    name: Extraction — HTTP API, worker and browser acceptance
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: pgvector/pgvector:0.8.5-pg17
+        env:
+          POSTGRES_USER: fel
+          POSTGRES_PASSWORD: fel-ci-only
+          POSTGRES_DB: fel_extraction_acceptance
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U fel -d fel_extraction_acceptance"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      FEL_DATABASE_URL: postgresql://fel:fel-ci-only@localhost:5432/fel_extraction_acceptance
+      FEL_AUTH_MODE: mock
+      FEL_ALLOW_MOCK_LLM: "1"
+      FEL_WORKER_DB_ROLE: fel_worker
+      # Only synthetic evidence and the existing deterministic model mock.
+      # The browser, HTTP proxy, API, queue, worker and database are real.
+      FEL_STORAGE_DIR: ${{ github.workspace }}/.acceptance-storage
+      CROSS_STACK_MANIFEST: ${{ github.workspace }}/.acceptance-manifest.json
+      PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/apps/api:${{ github.workspace }}/workers/src:${{ github.workspace }}/packages/providers:${{ github.workspace }}/packages/ontology:${{ github.workspace }}/packages/retrieval:${{ github.workspace }}/packages/retrieval-evals
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version-file: .python-version
+          cache: pip
+          cache-dependency-path: requirements-dev.lock
+      - run: pip install --require-hashes -r requirements-dev.lock
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Provision and verify the migration ledger
+        run: |
+          python scripts/db/migrate.py
+          python scripts/db/migrate.py --check
+      - name: Seed bounded synthetic evidence
+        run: python -m evals.harness.extraction_cross_stack seed --manifest "$CROSS_STACK_MANIFEST"
+      - name: Install Chromium and its OS dependencies
+        run: pnpm --filter @fel/web exec playwright install --with-deps chromium
+      - name: Exercise the production HTTP stack
+        run: pnpm --filter @fel/web exec playwright test --config playwright.cross-stack.config.ts
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: extraction-cross-stack-results
+          path: apps/web/test-results/
+          if-no-files-found: ignore
