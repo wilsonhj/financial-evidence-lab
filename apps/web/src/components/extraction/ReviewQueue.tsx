@@ -18,6 +18,33 @@ import {
 } from "../../lib/extraction/review-state";
 import { PayloadFields } from "./display";
 
+function isReviewableState(state: Proposal["state"]): boolean {
+  switch (state) {
+    case "proposed":
+    case "needs_review":
+      return true;
+    case "accepted":
+    case "rejected":
+    case "superseded":
+      return false;
+    default: {
+      const _never: never = state;
+      return _never;
+    }
+  }
+}
+
+function keepReviewableIds(
+  ids: string[],
+  rows: Proposal[],
+  states: Record<string, string> = {},
+): string[] {
+  return ids.filter((id) => {
+    const state = states[id] ?? rows.find((row) => row.id === id)?.state;
+    return state === "proposed" || state === "needs_review" ? isReviewableState(state) : false;
+  });
+}
+
 export function ReviewQueue({
   proposals,
   permissions: initialPermissions,
@@ -80,8 +107,15 @@ export function ReviewQueue({
       );
       setGroups(conflicts);
       if (!contextOnly) {
-        setRows(rows.map((p) => current.find((c) => c.id === p.id) ?? p));
-        setCompared(true);
+        const nextRows = rows.map((p) => current.find((c) => c.id === p.id) ?? p);
+        const remaining = keepReviewableIds(selectedIds, nextRows);
+        setRows(nextRows);
+        setSelectedIds(remaining);
+        setCompared(remaining.length > 0);
+        if (!remaining.length) {
+          setGroups([]);
+          setWinners([]);
+        }
         pending.current = undefined;
       }
       setMessage(
@@ -122,13 +156,19 @@ export function ReviewQueue({
       )
         throw new Error("Invalid review receipt; refresh before proceeding");
       setResult(value);
-      setRows(
-        rows.map((p) =>
-          value.proposal_states[p.id]
-            ? { ...p, state: value.proposal_states[p.id]!, version: value.proposal_versions[p.id]! }
-            : p,
-        ),
+      const nextRows = rows.map((p) =>
+        value.proposal_states[p.id]
+          ? { ...p, state: value.proposal_states[p.id]!, version: value.proposal_versions[p.id]! }
+          : p,
       );
+      const remaining = keepReviewableIds(selectedIds, nextRows, value.proposal_states);
+      setRows(nextRows);
+      setSelectedIds(remaining);
+      setCompared(false);
+      if (!remaining.length) {
+        setGroups([]);
+        setWinners([]);
+      }
       setMessage(
         `Atomic ${action} completed for ${selected.length} selected proposals. Unselected proposals were not submitted.`,
       );

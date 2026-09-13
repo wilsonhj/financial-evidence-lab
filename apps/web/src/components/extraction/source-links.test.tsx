@@ -16,6 +16,18 @@ describe("immutable source navigation", () => {
     expect(html).toContain("document_version_id=aaaaaaaa-0000-4000-8000-000000001001");
     expect(html).toContain("/reader/aaaaaaaa-0000-4000-8000-000000000001?");
   });
+  it("omits an empty corpus pin from reader links so latest_parsed is not implied", async () => {
+    vi.stubEnv("FEL_EVIDENCE_SOURCE", "fixture");
+    const html = renderToStaticMarkup(
+      await SourceLinks({
+        evidence: proposal.evidence,
+        sources: [{ run_id: run.id, as_of: run.as_of }],
+      }),
+    );
+    expect(html).toContain("Read evidence span");
+    expect(html).toContain("No corpus pin recorded");
+    expect(html).not.toContain("corpus_version_id=");
+  });
   it("never substitutes present context for unknown historical provenance", async () => {
     const html = renderToStaticMarkup(
       await SourceLinks({ evidence: proposal.evidence, sources: null }),
