@@ -186,6 +186,7 @@ def test_later_edit_compares_with_approved_edit_not_original_proposal(
             "source_span_id": source_fixture["span"],
             "document_version_id": source_fixture["version"],
             "role": "supports",
+            "citation_status": "invalid",
         }
     ]
     edited = submit(
