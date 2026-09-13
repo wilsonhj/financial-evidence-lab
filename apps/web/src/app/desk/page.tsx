@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
 
@@ -12,5 +13,12 @@ export const metadata: Metadata = {
 export default async function DeskPage() {
   const theme = resolveDeskTheme((await cookies()).get("fel-theme")?.value ?? null);
 
-  return <DeskClient initialTheme={theme} />;
+  return (
+    <>
+      <nav aria-label="Extraction review">
+        <Link href="/extractions">Open extraction review</Link>
+      </nav>
+      <DeskClient initialTheme={theme} />
+    </>
+  );
 }
