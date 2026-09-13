@@ -18,11 +18,12 @@ def clone(url, fixture, payload, *, evidence=True):
         conn.execute(
             "INSERT INTO extraction_proposals(id,org_id,workspace_id,run_id,kind,metric_id,"
             "payload,raw_payload_hash,definition_hash,comparability_key,validation_summary,state) "
-            "SELECT %s,org_id,workspace_id,run_id,kind,%s,%s,%s,definition_hash,"
+            "SELECT %s,org_id,workspace_id,run_id,%s,%s,%s,%s,definition_hash,"
             "comparability_key,validation_summary,'needs_review' "
             "FROM extraction_proposals WHERE id=%s",
             (
                 proposal,
+                payload["kind"],
                 payload["metric_id"],
                 Jsonb(payload),
                 hash_json(payload),
@@ -58,6 +59,24 @@ def test_malformed_peer_only_blocks_when_potentially_related(
         headers={**extraction_tenant["headers"], "Idempotency-Key": str(uuid4())},
     )
     assert response.status_code == (422 if related else 200), response.text
+    if not related:
+        receipt = response.json()["approved_versions"][0]
+        path = "/v1/approved-extractions/" + receipt["record_id"]
+        record = extraction_client.get(path, headers=extraction_tenant["headers"]).json()
+        corrected = extraction_client.post(
+            path + "/corrections",
+            json={
+                "reason": "Verify corrected reading.",
+                "payload": record["payload"],
+                "evidence": record["evidence"],
+            },
+            headers={
+                **extraction_tenant["headers"],
+                "Idempotency-Key": str(uuid4()),
+                "If-Match": receipt["etag"],
+            },
+        )
+        assert corrected.status_code == 201, corrected.text
     with psycopg.connect(extraction_url) as conn:
         assert conn.execute(
             "SELECT state,version,payload FROM extraction_proposals WHERE id=%s",
@@ -94,7 +113,8 @@ def test_each_adjudication_records_only_its_winners_approvals(
         for group, winner in [(group1, ids[0]), (group2, ids[1])]:
             record = str(
                 conn.execute(
-                    "SELECT record_id FROM approved_extraction_versions WHERE origin_proposal_id=%s",
+                    "SELECT record_id FROM approved_extraction_versions "
+                    "WHERE origin_proposal_id=%s",
                     (winner,),
                 ).fetchone()[0]
             )

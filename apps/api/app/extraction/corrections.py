@@ -10,6 +10,7 @@ from app.db import tenant_connection
 from app.errors import api_error
 from app.extraction import (
     approved,
+    conflicts,
     receipts,
     review,
     runs,
@@ -121,6 +122,15 @@ def _apply(
         }
         validation_rows = [row for row in validation_rows if str(row["id"]) != origin_id]
         validation_rows.append(replacement)
+        validation_rows = validation_peers.relevant_rows(
+            validation_rows,
+            {origin_id},
+            {
+                pid
+                for gid in group_ids
+                for pid in conflicts.detail(conn, gid, ctx.org_id)["member_versions"]
+            },
+        )
         evaluated = validation.evaluate(conn, validation_rows, locked)
         draft = evaluated.drafts[origin_id]
         if draft.validation_summary["blockers"]:
