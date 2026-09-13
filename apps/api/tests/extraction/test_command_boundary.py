@@ -19,7 +19,7 @@ def snapshot(url, org):
         "extraction_reviews",
         "extraction_conflicts",
         "extraction_conflict_members",
-        "extraction_events",
+        "extraction_run_events",
         "approved_extraction_records",
         "approved_extraction_versions",
         "audit_events",
