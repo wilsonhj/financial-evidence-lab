@@ -27,6 +27,7 @@ export function ActionForm({
   const [stale, setStale] = useState(false);
   const [busy, setBusy] = useState(false);
   const [comparison, setComparison] = useState<Run | Approved | null>(null);
+  const [refreshedTag, setRefreshedTag] = useState<string | null>(null);
   const [result, setResult] = useState<Run | Approved | null>(null);
   const pending = useRef<PendingRequest | undefined>(undefined);
   const method = action === "cancel" ? "DELETE" : "POST";
@@ -76,7 +77,7 @@ export function ActionForm({
       if (!response.ok || (!guards.run(value) && !guards.approved(value)))
         throw new Error("Unable to refresh current version");
       setComparison(value);
-      setTag(response.headers.get("etag"));
+      setRefreshedTag(response.headers.get("etag"));
       pending.current = undefined;
     } catch (e) {
       setMessage(e instanceof Error ? e.message : "Comparison unavailable");
@@ -146,7 +147,21 @@ export function ActionForm({
         <section>
           <h3>Current version {comparison.version}</h3>
           {"payload" in comparison ? (
-            <PayloadFields payload={comparison.payload} />
+            <>
+              <PayloadFields payload={comparison.payload} />
+              <section aria-label="Current evidence">
+                <h4>Evidence</h4>
+                <ul>
+                  {comparison.evidence.map((edge, index) => (
+                    <li key={index}>
+                      Span {edge.source_span_id} · Parsed version {edge.document_version_id} ·{" "}
+                      {edge.role} · {edge.citation_status}
+                    </li>
+                  ))}
+                </ul>
+                <p>Evidence manifest {comparison.evidence_manifest_hash}</p>
+              </section>
+            </>
           ) : (
             <p>{comparison.status}</p>
           )}
@@ -155,6 +170,8 @@ export function ActionForm({
             onClick={() => {
               setStale(false);
               setComparison(null);
+              if (refreshedTag) setTag(refreshedTag);
+              setRefreshedTag(null);
               setMessage("Draft preserved. Submit intentionally using the refreshed version.");
             }}
           >

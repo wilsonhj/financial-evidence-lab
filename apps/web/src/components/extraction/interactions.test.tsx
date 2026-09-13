@@ -173,6 +173,91 @@ describe("review interaction state", () => {
     (props(winner).onChange as (e: unknown) => void)({ target: { checked: true } });
     expect(props(findAll(v.tree(), (e) => e.type === "input")[1]!).checked).toBe(true);
   });
+  it("clears completed selections so another pending proposal can be reviewed", async () => {
+    const pending = selected();
+    const other = { ...selected(), id: initialFixture().proposals[1]!.id };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(resultFor(pending.id))));
+    const v = view(() =>
+      ReviewQueue({ proposals: [pending, other], permissions: initialFixture().permissions }),
+    );
+    const first = findAll(v.tree(), (e) => e.type === "input" && props(e).type === "checkbox")[0]!;
+    (props(first).onChange as (e: unknown) => void)({ target: { checked: true } });
+    v.field("review-reason", "Checked evidence");
+    v.submit();
+    await vi.waitFor(() => expect(v.status()).toContain("Atomic accept completed"));
+    const boxes = findAll(v.tree(), (e) => e.type === "input" && props(e).type === "checkbox");
+    expect(props(boxes[0]!).checked).toBe(false);
+    expect(props(boxes[0]!).disabled).toBe(true);
+    expect(props(boxes[1]!).disabled).toBe(false);
+    (props(boxes[1]!).onChange as (e: unknown) => void)({ target: { checked: true } });
+    expect(props(v.button("Submit atomic review")).disabled).toBe(false);
+    expect(
+      findAll(
+        v.tree(),
+        (e) => e.type === "h2" && props(e).children === "Refreshed selected versions",
+      ),
+    ).toHaveLength(0);
+  });
+  it("drops a selection that became terminal during comparison refresh", async () => {
+    const p = selected();
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce(Response.json({}, { status: 412 }))
+        .mockResolvedValueOnce(Response.json(initialFixture().permissions))
+        .mockResolvedValueOnce(Response.json({ ...p, state: "accepted", version: 2 })),
+    );
+    const v = view(() =>
+      ReviewQueue({ proposals: [p], permissions: initialFixture().permissions }),
+    );
+    (props(findOne(v.tree(), (e) => e.type === "input")).onChange as (e: unknown) => void)({
+      target: { checked: true },
+    });
+    v.field("review-reason", "Preserve this reason");
+    v.submit();
+    await vi.waitFor(() => expect(v.status()).toContain("draft is preserved"));
+    v.click("Refresh comparison and permissions");
+    await vi.waitFor(() => expect(v.status()).toContain("Current versions loaded"));
+    const box = findOne(v.tree(), (e) => e.type === "input" && props(e).type === "checkbox");
+    expect(props(box).checked).toBe(false);
+    expect(props(box).disabled).toBe(true);
+    expect(props(v.button("Submit atomic review")).disabled).toBe(true);
+  });
+  it("does not keep a pre-review payload as the refreshed comparison after success", async () => {
+    const p = selected();
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce(Response.json(initialFixture().permissions))
+        .mockResolvedValueOnce(Response.json({ ...p, version: 1 }))
+        .mockResolvedValueOnce(Response.json(resultFor(p.id))),
+    );
+    const v = view(() =>
+      ReviewQueue({ proposals: [p], permissions: initialFixture().permissions }),
+    );
+    (props(findOne(v.tree(), (e) => e.type === "input")).onChange as (e: unknown) => void)({
+      target: { checked: true },
+    });
+    v.field("review-reason", "Checked evidence");
+    v.click("Refresh comparison and permissions");
+    await vi.waitFor(() => expect(v.status()).toContain("Current versions loaded"));
+    expect(
+      findOne(
+        v.tree(),
+        (e) => e.type === "h2" && props(e).children === "Refreshed selected versions",
+      ),
+    ).toBeTruthy();
+    v.submit();
+    await vi.waitFor(() => expect(v.status()).toContain("Atomic accept completed"));
+    expect(
+      findAll(
+        v.tree(),
+        (e) => e.type === "h2" && props(e).children === "Refreshed selected versions",
+      ),
+    ).toHaveLength(0);
+  });
   it("keeps viewer actions disabled and handles permission refresh failure", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({}, { status: 403 })));
     const permissions = { ...initialFixture().permissions, allowed_actions: [] };
@@ -250,6 +335,20 @@ describe("run and correction commands", () => {
     v.click("Refresh current version for comparison");
     await vi.waitFor(() => expect(v.button("Use refreshed version")).toBeTruthy());
     expect(props(findOne(v.tree(), (e) => props(e).id === "correct-draft")).value).toBe(body);
+    expect(String(props(findOne(v.tree(), (e) => e.type === "h3")).children)).toContain(
+      "Current version",
+    );
+    expect(
+      findAll(
+        v.tree(),
+        (e) =>
+          e.type === "li" &&
+          String(props(e).children).includes(approved.evidence[0]!.source_span_id),
+      ).length,
+    ).toBeGreaterThan(0);
+    expect(
+      props(findOne(v.tree(), (e) => e.type === "button" && props(e).type === "submit")).disabled,
+    ).toBe(true);
     v.click("Use refreshed version");
     v.submit();
     await vi.waitFor(() => expect(v.status()).toContain("Action committed"));

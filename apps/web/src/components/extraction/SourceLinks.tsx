@@ -65,12 +65,16 @@ export async function SourceLinks({
           );
           const query =
             source &&
-            new URLSearchParams({
-              as_of: source.as_of,
-              corpus_version_id: source.corpus_version_id ?? "",
-              document_version_id: edge.document_version_id,
-              span: edge.source_span_id,
-            });
+            (() => {
+              const params = new URLSearchParams({
+                as_of: source.as_of,
+                document_version_id: edge.document_version_id,
+                span: edge.source_span_id,
+              });
+              if (source.corpus_version_id)
+                params.set("corpus_version_id", source.corpus_version_id);
+              return params;
+            })();
           return (
             <li key={index}>
               {edge.role} · {edge.citation_status} ·{" "}
