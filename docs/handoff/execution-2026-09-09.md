@@ -295,3 +295,42 @@ preserving independent review and final-head CI for each. The parent keeps its
 canonical task ownership and waits for combined acceptance. The pending owner
 inputs for live credentials/environment/spend, SEC identity and second CODEOWNER
 remain unresolved; no paid/provider/hosted request is implied by this dispatch.
+
+
+September 13 recovery reconciliation: fresh GitHub inspection found main
+10d2ca4ab1a6200b0e79c58629a276eac822622c after another agent merged PR287/288
+through PR290. PR289's destructive sibling rebuild proposal was closed without
+merge; main uses the checksummed non-destructive isolated sibling setup. The
+merged integration reports 633 JS and 2,036 Python passes (89.25% coverage),
+24 fixture browser passes and the new production-mounted HTTP/worker/browser
+acceptance. These are mock-provider/local-CI proofs, not hosted/live gates.
+
+The old local branches are preserved. Their redundant validator cache was never
+pushed; equivalent caching is already in main. PR288's recovery-era body was
+corrected to its actual merged head711e7b4. PR291 merged at cde9cea after independent approval of74910f7 and149 focused
+tests. Lead inspection verified all seven required jobs plus HTTP acceptance
+green at that exact head, then explicitly approved and merged with a head guard.
+
+Current-main review identified bounded API peer/adjudication residuals and raw
+web patch-text command-member injection. ADR0017 records replacement branches
+under the existing #61 child ownership, with non-overlapping paths. The parent
+remains open; no canonical task checkbox or milestone gate is changed. Issue292
+now tracks production authentication separately, preserving #108's explicit
+mock-auth exception. Live environment/spend, provider key choice, SEC identity
+and second CODEOWNER inputs remain pending.
+
+
+PR294 merged at c4ffc2ef4c587fa5732df1c86d5336d25c9d5c40 after independent
+approval of1baabdb and28 focused tests,641 full JS tests with unchanged coverage
+floors, all seven required jobs and actual HTTP acceptance. Standalone parsing
+prevents raw edit/merge text from overriding command action or expected versions
+while preserving original numeric text. The web child is now merged; API review
+residuals remain active in PR295, so the parent remains open.
+
+Issue135 closed after independent audit of both stated streaming criteria:
+mounted same-origin proxy and live async browser delivery. Actual cross-stack
+acceptance34742696474 observes queued events before the worker, later review
+waiting, and review/terminal events after another browser page submits review.
+Forced browser disconnect/reconnect is covered by separate client/proxy and
+actual HTTP API tests, not asserted by that cross-stack scenario. Hosted108 and
+old-writer draining remain separate conditions; canonical checkboxes unchanged.

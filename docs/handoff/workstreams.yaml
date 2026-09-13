@@ -97,7 +97,7 @@ packages:
     tasks: []
     depends_on: []
     team: integration
-    branch: agent/188-execution-wave10
+    branch: agent/188-execution-wave11
     status: active # Reconcile verified prerequisites and coordinate disjoint #61 implementation under ADR-0024.
     allowed_paths:
       - specs/001-financial-evidence-lab/tasks.md # Lead-only verified checkbox/annotation updates.
@@ -481,7 +481,7 @@ packages:
     depends_on: [M3-REVIEW-API, M3-REVIEW-WEB]
     team: experience
     branch: agent/m3-review # Integration acceptance only; implementation uses the disjoint children below.
-    status: blocked # Lead verifies combined backend/web and worker-to-browser acceptance before closing #61 or canonical tasks.
+    status: blocked # PR290 supplies executable cross-stack proof; current safety residuals and remaining acceptance still precede closure.
     allowed_paths: []
   - id: EXTRACTION-EVENT-ORDERING
     issue: 135
@@ -516,8 +516,8 @@ packages:
     tasks: []
     depends_on: [M3-REVIEW-CANDIDATE-CONTRACT]
     team: platform
-    branch: agent/61-extraction-review-api
-    status: ready # Contract/event prerequisites merged; root dispatches the backend plan in a dedicated worktree and database.
+    branch: agent/61-review-peer-boundary
+    status: active # PR287/290 merged; bounded current-main peer/adjudication residuals under #61 remain.
     allowed_paths:
       - apps/api/app/extraction/**
       - apps/api/tests/extraction/**
@@ -531,8 +531,8 @@ packages:
     tasks: []
     depends_on: [M3-REVIEW-CANDIDATE-CONTRACT]
     team: experience
-    branch: agent/61-extraction-review-web
-    status: ready # Dispatch alongside backend under the published disjoint web plan; actual HTTP streaming still requires proof.
+    branch: agent/61-review-patch-boundary
+    status: merged # PR288/290 integration plus independently reviewed PR291/cde9cea and PR294/c4ffc2e residual fixes.
     allowed_paths:
       - apps/web/src/lib/extraction/**
       - apps/web/src/components/extraction/**
