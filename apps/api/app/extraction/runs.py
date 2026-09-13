@@ -213,15 +213,19 @@ def locked_run(
         "WHERE id=%s AND org_id=%s",
         (run_id, org_id),
     ).fetchone()
-    assert size is not None
+    if size is None:
+        raise api_error(404, "NOT_FOUND", "Extraction run not found.")
     if size["size"] > 1048576:
         raise reads.too_large(run_id)
     row = conn.execute(
-        f"SELECT {reads.RUN_COLUMNS},org_id,policy_id,input_manifest,input_hash "
-        "FROM extraction_runs WHERE id=%s AND org_id=%s",
+        psycopg.sql.SQL(
+            "SELECT {},org_id,policy_id,input_manifest,input_hash "
+            "FROM extraction_runs WHERE id=%s AND org_id=%s"
+        ).format(psycopg.sql.SQL(reads.RUN_COLUMNS)),
         (run_id, org_id),
     ).fetchone()
-    assert row is not None
+    if row is None:
+        raise api_error(404, "NOT_FOUND", "Extraction run not found.")
     return row
 
 
@@ -233,9 +237,11 @@ _JOB_REQUEST = (
 
 def _bound_job(conn: psycopg.Connection[dict[str, Any]], run: dict[str, Any]) -> str:
     rows = conn.execute(
-        f"SELECT id,octet_length(({_JOB_REQUEST})::text) AS size FROM jobs "
-        f"WHERE org_id=%s AND kind='extraction_run' AND COALESCE(({_JOB_REQUEST})->>'run_id',"
-        f"({_JOB_REQUEST})->>'id')=%s ORDER BY id LIMIT 2 FOR NO KEY UPDATE",
+        psycopg.sql.SQL(
+            "SELECT id,octet_length(({request})::text) AS size FROM jobs "
+            "WHERE org_id=%s AND kind='extraction_run' AND COALESCE(({request})->>'run_id',"
+            "({request})->>'id')=%s ORDER BY id LIMIT 2 FOR NO KEY UPDATE"
+        ).format(request=psycopg.sql.SQL(_JOB_REQUEST)),
         (run["org_id"], str(run["id"])),
     ).fetchall()
     if len(rows) != 1:
@@ -243,10 +249,13 @@ def _bound_job(conn: psycopg.Connection[dict[str, Any]], run: dict[str, Any]) ->
     if rows[0]["size"] > 1048576:
         raise reads.too_large(run["id"])
     row = conn.execute(
-        f"SELECT {_JOB_REQUEST} AS request FROM jobs WHERE id=%s AND org_id=%s",
+        psycopg.sql.SQL("SELECT {} AS request FROM jobs WHERE id=%s AND org_id=%s").format(
+            psycopg.sql.SQL(_JOB_REQUEST)
+        ),
         (rows[0]["id"], run["org_id"]),
     ).fetchone()
-    assert row is not None
+    if row is None:
+        raise api_error(409, "CONFLICT", "Run has no unambiguous bound job.")
     try:
         request = request_from_payload({"request": row["request"]})
         matches = (

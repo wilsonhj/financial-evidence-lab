@@ -21,7 +21,8 @@ def append(
         "VALUES (%s,%s,%s,%s) RETURNING id",
         (org_id, run_id, event_type, Jsonb(redact_event_payload(payload, event_type=event_type))),
     ).fetchone()
-    assert row is not None
+    if row is None:
+        raise RuntimeError("Extraction event insertion returned no identity")
     return int(row["id"])
 
 
@@ -173,7 +174,8 @@ def page(
         order=order,
         force_page=True,
     )
-    assert metadata is not None
+    if metadata is None:
+        raise RuntimeError("Extraction event pagination returned no metadata")
     if any(row["size"] > 65536 for row in rows):
         raise reads.too_large(run["id"])
     data = conn.execute(

@@ -50,7 +50,8 @@ def detail(
             "WHERE id=%s AND org_id=%s",
             (str(conflict_id), resolutions[0]["id"], org_id),
         ).fetchone()
-        assert saved is not None
+        if saved is None:
+            raise api_error(409, "CONFLICT", "Historical conflict lacks winner provenance.")
         resolution = saved["resolution"]
     body = {
         "id": str(row["id"]),
@@ -89,7 +90,8 @@ def page(
         order=order,
         force_page=True,
     )
-    assert metadata is not None
+    if metadata is None:
+        raise RuntimeError("Extraction conflict pagination metadata is missing")
     return serializers.page([detail(conn, row["id"], org_id) for row in rows], metadata)
 
 
@@ -138,11 +140,42 @@ def check_evaluated(
     groups: dict[str, dict[str, Any]],
     decisions: dict[str, dict[str, Any]],
     action: str,
+    approved_origins: dict[str, str] | None = None,
 ) -> set[str]:
     """Only an explicit adjudication can discharge a set-level duplicate conflict."""
     from fel_workers.extraction.validate.duplicates import value_fingerprint
 
     waived_duplicates: set[str] = set()
+    # An earlier merge superseded the selected proposals, but its approved
+    # result remains authoritative. Inspect every touched adjudication even if
+    # this batch's detector emits no conflict (for example after an edit).
+    from fel_workers.extraction.validate.conflicts import detect_conflicts
+
+    for group in groups.values():
+        touched = selected & set(group["member_versions"])
+        if group["status"] == "open" or not touched:
+            continue
+        resolution = group["resolution"]
+        if resolution is None:
+            raise api_error(409, "CONFLICT", "Historical conflict lacks winner provenance.")
+        winners = {
+            approved_origins[rid]
+            for rid in resolution["approved_record_ids"]
+            if approved_origins is not None
+            and rid in approved_origins
+            and approved_origins[rid] in group["member_versions"]
+        }
+        if not winners:
+            raise api_error(409, "CONFLICT", "Historical conflict lacks current winner provenance.")
+        for pid in touched:
+            for winner in winners:
+                if not detect_conflicts([result.drafts[pid], result.drafts[winner]]):
+                    continue
+                if action != "edit" or value_fingerprint(
+                    result.drafts[pid].payload
+                ) != value_fingerprint(result.drafts[winner].payload):
+                    raise api_error(409, "CONFLICT", "Proposal contradicts the recorded winner.")
+                waived_duplicates.add(pid)
     for detected in result.conflicts:
         members = set(detected.member_proposal_ids)
         touched = members & selected
@@ -162,20 +195,6 @@ def check_evaluated(
                 if touched <= winners or action == "merge":
                     waived_duplicates.update(touched)
             else:
-                resolution = group["resolution"]
-                if resolution is None:
-                    raise api_error(409, "CONFLICT", "Historical conflict lacks winner provenance.")
-                winners = members & set(resolution["selected_winner_ids"])
-                if (
-                    not winners
-                    or action != "edit"
-                    or any(
-                        value_fingerprint(result.drafts[pid].payload)
-                        != value_fingerprint(result.drafts[winner].payload)
-                        for pid in touched
-                        for winner in winners
-                    )
-                ):
+                if not touched <= waived_duplicates:
                     raise api_error(409, "CONFLICT", "Proposal contradicts the recorded winner.")
-                waived_duplicates.update(touched)
     return waived_duplicates

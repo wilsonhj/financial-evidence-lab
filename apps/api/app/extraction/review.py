@@ -11,7 +11,7 @@ from psycopg.types.json import Jsonb
 from app.auth import TenantContext
 from app.db import tenant_connection
 from app.errors import api_error
-from app.extraction import conflicts, events, reads, receipts, runs, validation
+from app.extraction import conflicts, events, reads, receipts, runs, validation, validation_peers
 from app.extraction.models import ReviewCommand
 from app.observability import record_audit_event
 
@@ -51,7 +51,7 @@ def _discover(
         run_ids.update(str(row["run_id"]) for row in member_runs)
     if len(run_ids) > 100:
         raise reads.too_large(ids[0])
-    return sorted(run_ids), group_ids
+    return validation_peers.expand_runs(conn, org, run_ids), group_ids
 
 
 def _locked_rows(
@@ -74,7 +74,8 @@ def _locked_rows(
             "validation_summary FROM extraction_proposals WHERE id=%s AND org_id=%s",
             (size["id"], org),
         ).fetchone()
-        assert row is not None
+        if row is None:
+            raise api_error(409, "CONFLICT", "Extraction proposal changed during review.")
         edges = conn.execute(
             "SELECT source_span_id,document_version_id,role "
             "FROM extraction_proposal_evidence WHERE proposal_id=%s AND org_id=%s "
@@ -162,9 +163,9 @@ def _apply(
     approvals = []
     workspace_id = str(next(iter(selected.values()))["workspace_id"])
     if body["action"] != "reject":
-        validation_rows = [
-            dict(row) for row in rows if row["state"] not in ("rejected", "superseded")
-        ]
+        validation_rows, approved_origins = validation_peers.current_rows(
+            conn, ctx.org_id, rows, locked_runs
+        )
         if body["action"] == "edit":
             patches = {patch["extraction_id"]: patch for patch in body["patch"]}
             if len(patches) != len(body["patch"]) or set(patches) != set(ids):
@@ -180,7 +181,9 @@ def _apply(
                         validation_summary={},
                     )
         result = validation.evaluate(conn, validation_rows, locked_runs)
-        waived = conflicts.check_evaluated(result, set(ids), groups, decisions, body["action"])
+        waived = conflicts.check_evaluated(
+            result, set(ids), groups, decisions, body["action"], approved_origins
+        )
         for pid in ids:
             blockers = result.drafts[pid].validation_summary["blockers"]
             if any(blocker != "duplicate_candidate" or pid not in waived for blocker in blockers):

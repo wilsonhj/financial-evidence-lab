@@ -1,7 +1,7 @@
 """Compose existing deterministic rules with freshly verified, immutable source pins."""
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, NoReturn
 
 import psycopg
 from pydantic import ValidationError
@@ -33,7 +33,7 @@ class Evaluated:
     context: dict[str, Any]
 
 
-def invalid(resource_id: str) -> None:
+def invalid(resource_id: str) -> NoReturn:
     raise api_error(
         422, "VALIDATION_ERROR", "Extraction failed revalidation.", {"resource_id": resource_id}
     )
@@ -86,7 +86,6 @@ def evaluate(
             block = local.get(str(edge["source_span_id"]))
             if block is None or str(edge["document_version_id"]) != block["document_version_id"]:
                 invalid(resource)
-            assert block is not None
             verified.append(
                 {
                     "source_span_id": block["source_span_id"],

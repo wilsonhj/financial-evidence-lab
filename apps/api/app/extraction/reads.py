@@ -35,7 +35,9 @@ def run(
     conn: psycopg.Connection[dict[str, Any]], run_id: UUID | str, org_id: str
 ) -> dict[str, Any]:
     row = conn.execute(
-        f"SELECT {RUN_COLUMNS} FROM extraction_runs WHERE id=%s AND org_id=%s",
+        psycopg.sql.SQL("SELECT {} FROM extraction_runs WHERE id=%s AND org_id=%s").format(
+            psycopg.sql.SQL(RUN_COLUMNS)
+        ),
         (run_id, org_id),
     ).fetchone()
     if row is None:
@@ -55,7 +57,9 @@ def run_page(
     ws = workspace(conn, workspace_id, org_id)
     rows, metadata = read_page(
         conn,
-        query=f"SELECT {RUN_COLUMNS} FROM extraction_runs WHERE workspace_id=%s AND org_id=%s",
+        query=psycopg.sql.SQL("SELECT {} FROM extraction_runs WHERE workspace_id=%s AND org_id=%s")
+        .format(psycopg.sql.SQL(RUN_COLUMNS))
+        .as_string(),
         params=(workspace_id, org_id),
         keys=("created_at", "id"),
         request_scope=scope("extraction_runs", org_id, workspace_id, ws["as_of"]),
@@ -66,7 +70,8 @@ def run_page(
     )
     for row in rows:
         row["error"] = {} if row.pop("has_error") else None
-    assert metadata is not None
+    if metadata is None:
+        raise RuntimeError("Extraction run pagination returned no metadata")
     return serializers.page([serializers.run(row) for row in rows], metadata)
 
 
@@ -106,7 +111,8 @@ def proposal(
         "FROM extraction_proposals WHERE id=%s AND org_id=%s",
         (proposal_id, org_id),
     ).fetchone()
-    assert row is not None
+    if row is None:
+        raise api_error(404, "NOT_FOUND", "Extraction proposal not found.")
     row["field_text"] = {field["key"]: field["text"] for field in fields}
     edges = conn.execute(
         "SELECT source_span_id,document_version_id,role,citation_status "
@@ -149,7 +155,8 @@ def proposal_page(
         order=order,
         force_page=True,
     )
-    assert metadata is not None
+    if metadata is None:
+        raise RuntimeError("Extraction proposal pagination returned no metadata")
     return serializers.page([proposal(conn, row["id"], org_id) for row in rows], metadata)
 
 
@@ -192,5 +199,6 @@ def step_page(
         for key in ("started_at", "finished_at"):
             row[key] = row[key].isoformat() if row[key] else None
         items.append(row)
-    assert metadata is not None
+    if metadata is None:
+        raise RuntimeError("Extraction step pagination returned no metadata")
     return serializers.page(items, metadata)

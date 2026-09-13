@@ -5,16 +5,66 @@ from __future__ import annotations
 import hashlib
 import os
 import uuid
+from pathlib import Path
 from typing import Any
-from urllib.parse import urlsplit, urlunsplit
 
 import psycopg
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+import migrate
 from app.auth import make_mock_token
 from app.main import app as main_app
+
+
+def ensure_extraction_api_database(base_url: str) -> str:
+    """Provision this lane without touching the worker's ``_extraction`` sibling.
+
+    The API commits immutable evidence/history, so it cannot share the base
+    corpus database or the worker fixtures' potentially rebuilt sibling. Use
+    the existing checksummed migration ledger instead of a first-table probe:
+    pending migrations advance existing test data, while drift fails closed.
+    Never drop a database or silently baseline an untracked schema.
+    """
+    connection = psycopg.conninfo.conninfo_to_dict(base_url)
+    base_name = connection.get("dbname", "")
+    database = base_name + "_extraction_api"
+    if not base_name or len(database.encode("utf-8")) > 63:
+        raise ValueError("TEST_DATABASE_URL needs an explicit, bounded database name")
+    connection["dbname"] = database
+    url = psycopg.conninfo.make_conninfo(**connection)
+    with psycopg.connect(base_url, autocommit=True) as conn:
+        try:
+            conn.execute(
+                psycopg.sql.SQL("CREATE DATABASE {}").format(psycopg.sql.Identifier(database))
+            )
+        except psycopg.errors.DuplicateDatabase:
+            pass
+
+    migrations = migrate.discover_migrations(Path(__file__).resolve().parents[4] / "db/migrations")
+    with psycopg.connect(url, autocommit=True) as conn:
+        migrate.acquire_lock(conn)
+        try:
+            migrate.ensure_ledger(conn)
+            plan = migrate.build_plan(migrations, migrate.read_ledger(conn))
+            if plan.drifted or plan.missing:
+                raise RuntimeError("Extraction API test database migration ledger does not match")
+            for migration in plan.pending:
+                migrate.apply_migration(conn, migration)
+        finally:
+            migrate.release_lock(conn)
+    return url
+
+
+@pytest.fixture(scope="session")
+def extraction_database_url() -> str:
+    base = os.environ.get("TEST_DATABASE_URL")
+    if not base:
+        if os.environ.get("FEL_REQUIRE_DB") == "1":
+            raise RuntimeError("FEL_REQUIRE_DB=1 but TEST_DATABASE_URL is unset")
+        pytest.skip("TEST_DATABASE_URL not configured")
+    return ensure_extraction_api_database(base)
 
 
 @pytest.fixture
@@ -27,15 +77,10 @@ def extraction_client() -> TestClient:
 
 
 @pytest.fixture
-def extraction_url(monkeypatch: pytest.MonkeyPatch) -> str:
-    base = os.environ.get("TEST_DATABASE_URL")
-    if not base:
-        pytest.skip("TEST_DATABASE_URL not configured")
-    parsed = urlsplit(base)
-    url = urlunsplit(parsed._replace(path=parsed.path + "_extraction"))
-    monkeypatch.setenv("FEL_DATABASE_URL", url)
+def extraction_url(monkeypatch: pytest.MonkeyPatch, extraction_database_url: str) -> str:
+    monkeypatch.setenv("FEL_DATABASE_URL", extraction_database_url)
     monkeypatch.setenv("FEL_AUTH_MODE", "mock")
-    return url
+    return extraction_database_url
 
 
 @pytest.fixture

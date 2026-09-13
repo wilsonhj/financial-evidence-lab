@@ -3,15 +3,48 @@
 from datetime import datetime
 from uuid import UUID
 
+import psycopg
+
 from app.auth import TenantContext
 from app.db import tenant_connection
 from app.errors import api_error
-from app.extraction import approved, receipts, review, runs, serializers, validation
+from app.extraction import (
+    approved,
+    receipts,
+    review,
+    runs,
+    serializers,
+    validation,
+    validation_peers,
+)
 from app.extraction.models import CorrectionCommand
 from app.observability import record_audit_event
 
 
 def apply(
+    ctx: TenantContext,
+    record_id: UUID,
+    body: CorrectionCommand,
+    key: str,
+    expected_etag: str,
+    request_id: str,
+) -> receipts.Receipt:
+    for attempt in range(3):
+        try:
+            return _apply(ctx, record_id, body, key, expected_etag, request_id)
+        except (
+            review.DiscoveryChanged,
+            psycopg.errors.SerializationFailure,
+            psycopg.errors.DeadlockDetected,
+        ):
+            if attempt == 2:
+                raise api_error(
+                    409, "CONFLICT", "Concurrent extraction changes; retry the request."
+                ) from None
+    raise AssertionError("Unreachable retry boundary")
+
+
+def _apply(
     ctx: TenantContext,
     record_id: UUID,
     body: CorrectionCommand,
@@ -45,13 +78,14 @@ def apply(
             "WHERE id=%s AND org_id=%s",
             (old["version_id"], ctx.org_id),
         ).fetchone()
-        assert origin is not None
-        if origin["origin_proposal_id"] is None:
+        if origin is None or origin["origin_proposal_id"] is None:
             validation.invalid(str(record_id))
         origin_id = str(origin["origin_proposal_id"])
         peer_run_ids, group_ids = review._discover(conn, [origin_id], ctx.org_id)
         all_runs = sorted(set(peer_run_ids) | set(source_pins))
         locked = {rid: runs.locked_run(conn, UUID(rid), ctx.org_id) for rid in all_runs}
+        if review._discover(conn, [origin_id], ctx.org_id) != (peer_run_ids, group_ids):
+            raise review.DiscoveryChanged()
         for rid, pin in source_pins.items():
             run = locked[rid]
             if (
@@ -73,10 +107,7 @@ def apply(
                 (gid, ctx.org_id),
             )
         peers = review._locked_rows(conn, ctx.org_id, all_runs)
-        conn.execute(
-            "SELECT id FROM approved_extraction_records WHERE id=%s AND org_id=%s FOR UPDATE",
-            (record_id, ctx.org_id),
-        )
+        validation_rows, _ = validation_peers.current_rows(conn, ctx.org_id, peers, locked)
         current = approved.detail(conn, ctx.org_id, str(record_id))
         if serializers.etag(current) != expected_etag:
             raise api_error(412, "PRECONDITION_FAILED", "Approved extraction changed.")
@@ -88,11 +119,7 @@ def apply(
             "validation_summary": {},
             "source_run_ids": sorted(source_pins),
         }
-        validation_rows = [
-            row
-            for row in peers
-            if str(row["id"]) != origin_id and row["state"] not in ("rejected", "superseded")
-        ]
+        validation_rows = [row for row in validation_rows if str(row["id"]) != origin_id]
         validation_rows.append(replacement)
         evaluated = validation.evaluate(conn, validation_rows, locked)
         draft = evaluated.drafts[origin_id]

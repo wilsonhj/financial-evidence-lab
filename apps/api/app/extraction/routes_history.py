@@ -99,7 +99,8 @@ def list_approved_versions(
             order=order,
             force_page=True,
         )
-        assert metadata is not None
+        if metadata is None:
+            raise RuntimeError("Approved extraction history pagination returned no metadata")
         body = serializers.page(
             [approved.detail(conn, ctx.org_id, str(recordId), str(row["id"])) for row in rows],
             metadata,

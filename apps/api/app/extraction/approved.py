@@ -41,7 +41,8 @@ def detail(
         "ON r.id=v.record_id AND r.org_id=v.org_id WHERE v.id=%s AND v.org_id=%s",
         (size["id"], org),
     ).fetchone()
-    assert row is not None
+    if row is None:
+        raise api_error(404, "NOT_FOUND", "Approved extraction not found.")
     edges = row.pop("evidence_manifest")
     if len(edges) > 200:
         raise reads.too_large(record_id)
