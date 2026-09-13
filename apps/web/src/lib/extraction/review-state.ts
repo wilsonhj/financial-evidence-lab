@@ -67,7 +67,11 @@ export function buildReview(
   if ("conflict_resolution" in base && base.conflict_resolution?.length === 0)
     delete base.conflict_resolution;
   let body = JSON.stringify(base);
-  if (action === "edit" || action === "merge") body = `${body.slice(0, -1)},"patch":${patchText}}`;
+  if (action === "edit" || action === "merge") {
+    // Require one standalone JSON value; keep its original numeric text below.
+    JSON.parse(patchText);
+    body = `${body.slice(0, -1)},"patch":${patchText}}`;
+  }
   const parsed: unknown = JSON.parse(body);
   if (!guards.review(parsed)) throw new Error("Supply a complete valid review command and reason");
   if (
