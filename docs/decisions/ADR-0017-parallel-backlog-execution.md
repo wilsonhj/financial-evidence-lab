@@ -200,3 +200,14 @@ No new dependency, hosted work or API/worker changes are authorized. The
 accepted #108 mock-auth exception remains valid for that separately provisioned
 smoke; production auth #292 does not replace its environment requirements.
 The lead may publish the bounded reader plan in this control package.
+
+Wave 13 extraction acceptance ruling: PR299 merged at 19e5b9a after independent
+review, all seven required checks and real HTTP/worker/browser acceptance.
+Replace the completed command-fix branch with agent/61-acceptance-proofs,
+restricted to three named test files. Prove same-head correction serialization
+and receipt replay, real foreign-tenant resources and denied actions, and
+stream revocation/disconnect/resume/size limits using isolated PostgreSQL.
+No production edits are dispatched: a reproducible defect returns to the lead
+for a separately bounded fix. Publish its evidence map and test plan here.
+Neither these tests nor the sequential benchmark waive the reference-profile
+performance or live M3 release gates; no canonical checkbox changes.

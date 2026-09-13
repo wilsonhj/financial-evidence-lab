@@ -522,3 +522,13 @@ reader-integrity plan repair this narrow classification prerequisite. Its
 seven-file lane is disjoint from extraction API tests and production auth.
 No #108/#96/#87 closure, corpus-pin policy change or canonical checkbox is
 authorized by this registration.
+
+PR299 merged at 19e5b9ac1ccbcf1b8ca8901ef8d4bd67d52ba79a after final
+independent approval: 52 PostgreSQL tests and 12 additional probes, with both
+rebased commits unchanged. Final CI34759533770, shared paths34759533815 and
+HTTP/worker/browser acceptance34759533890 all passed. The command boundary
+now rejects nonfinite JSON and ambiguous UUID version-map keys before writes.
+Issue #61 remains open for concrete acceptance proofs; its new lane owns only
+three test files and may not repair production code without a new lead ruling.
+The detailed evidence map and test plan distinguish these missing proofs from
+confirmed defects and from separately outstanding release-profile performance.
