@@ -218,11 +218,94 @@ describe("review interaction state", () => {
     v.submit();
     await vi.waitFor(() => expect(v.status()).toContain("draft is preserved"));
     v.click("Refresh comparison and permissions");
-    await vi.waitFor(() => expect(v.status()).toContain("Current versions loaded"));
+    await vi.waitFor(() => expect(v.status()).toContain("no longer reviewable"));
     const box = findOne(v.tree(), (e) => e.type === "input" && props(e).type === "checkbox");
     expect(props(box).checked).toBe(false);
     expect(props(box).disabled).toBe(true);
     expect(props(v.button("Submit atomic review")).disabled).toBe(true);
+  });
+  it("clears a stale lock after 412 refresh drops a now-terminal selection", async () => {
+    const pending = selected();
+    const other = { ...selected(), id: initialFixture().proposals[1]!.id };
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce(Response.json({}, { status: 412 }))
+        .mockResolvedValueOnce(Response.json(initialFixture().permissions))
+        .mockResolvedValueOnce(Response.json({ ...pending, state: "accepted", version: 2 })),
+    );
+    const v = view(() =>
+      ReviewQueue({ proposals: [pending, other], permissions: initialFixture().permissions }),
+    );
+    const first = findAll(v.tree(), (e) => e.type === "input" && props(e).type === "checkbox")[0]!;
+    (props(first).onChange as (e: unknown) => void)({ target: { checked: true } });
+    v.field("review-reason", "Preserve this reason");
+    v.submit();
+    await vi.waitFor(() => expect(v.status()).toContain("draft is preserved"));
+    v.click("Refresh comparison and permissions");
+    await vi.waitFor(() => expect(v.status()).toContain("no longer reviewable"));
+    const boxes = findAll(v.tree(), (e) => e.type === "input" && props(e).type === "checkbox");
+    expect(props(boxes[0]!).checked).toBe(false);
+    expect(props(boxes[0]!).disabled).toBe(true);
+    (props(boxes[1]!).onChange as (e: unknown) => void)({ target: { checked: true } });
+    expect(props(v.button("Submit atomic review")).disabled).toBe(false);
+  });
+  it("drops explicit winners that left the selected batch after mixed 412 refresh", async () => {
+    const state = initialFixture();
+    const first = state.proposals[0]!;
+    const second = { ...first, id: state.proposals[1]!.id };
+    const conflict = {
+      ...state.conflicts[0]!,
+      member_versions: { [first.id]: 1, [second.id]: 1 },
+    };
+    let posts = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+        const url = String(input);
+        const method = init?.method ?? "GET";
+        if (method === "POST") {
+          posts += 1;
+          if (posts === 1) return Response.json({}, { status: 412 });
+          return Response.json(resultFor(second.id));
+        }
+        if (url.endsWith("/permissions")) return Response.json(state.permissions);
+        if (url.endsWith(`/proposals/${first.id}`))
+          return Response.json({ ...first, state: "accepted" as const, version: 2 });
+        if (url.endsWith(`/proposals/${second.id}`)) return Response.json(second);
+        if (url.endsWith(`/conflicts/${conflict.id}`)) return Response.json(conflict);
+        throw new Error(`unexpected ${method} ${url}`);
+      }),
+    );
+    const v = view(() =>
+      ReviewQueue({ proposals: [first, second], permissions: state.permissions }),
+    );
+    const select = (id: string, checked: boolean) => {
+      const box = findOne(
+        v.tree(),
+        (e) => e.type === "input" && props(e)["aria-label"] === `Select arr ${id}`,
+      );
+      (props(box).onChange as (e: unknown) => void)({ target: { checked } });
+    };
+    select(first.id, true);
+    select(second.id, true);
+    v.click("Load complete conflict context");
+    await vi.waitFor(() => expect(v.status()).toContain("Choose the winners explicitly"));
+    const winner = findAll(
+      v.tree(),
+      (e) => e.type === "input" && props(e).type === "checkbox" && !props(e)["aria-label"],
+    )[0]!;
+    (props(winner).onChange as (e: unknown) => void)({ target: { checked: true } });
+    v.field("review-reason", "Checked evidence");
+    v.submit();
+    await vi.waitFor(() => expect(v.status()).toContain("draft is preserved"));
+    v.click("Refresh comparison and permissions");
+    await vi.waitFor(() => expect(v.status()).toContain("Current versions loaded"));
+    v.click("Use refreshed versions");
+    v.submit();
+    await vi.waitFor(() => expect(v.status()).toContain("Atomic accept completed"));
+    expect(v.status()).not.toContain("Winners must be explicitly selected");
   });
   it("does not keep a pre-review payload as the refreshed comparison after success", async () => {
     const p = selected();
