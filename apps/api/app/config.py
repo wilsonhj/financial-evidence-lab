@@ -14,6 +14,10 @@ class Settings:
     database_url: str | None = field(default_factory=lambda: os.environ.get("FEL_DATABASE_URL"))
     storage_dir: str | None = field(default_factory=lambda: os.environ.get("FEL_STORAGE_DIR"))
     auth_mode: str = field(default_factory=lambda: os.environ.get("FEL_AUTH_MODE", "mock"))
+    auth_issuer: str = field(default_factory=lambda: os.environ.get("FEL_AUTH_ISSUER", ""))
+    auth_audience: str = field(
+        default_factory=lambda: os.environ.get("FEL_AUTH_AUDIENCE", "authenticated")
+    )
     # Spec section 18.2 default hard limits.
     user_daily_cost_limit_usd: Decimal = field(
         default_factory=lambda: Decimal(os.environ.get("FEL_USER_DAILY_LIMIT_USD", "25"))

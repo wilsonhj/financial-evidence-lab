@@ -1,9 +1,9 @@
 """Authentication boundary.
 
 TokenVerifier is the frozen seam: the mock verifier decodes unsigned
-development tokens; the Supabase implementation (JWKS signature checks
-against SUPABASE_URL) is integration-credentialed work and plugs in behind
-the same protocol without touching callers. Membership/role is checked
+development tokens; the Supabase implementation verifies asymmetric signatures
+against the explicitly configured issuer behind the same protocol.
+Membership/role is checked
 against the memberships table, never trusted from the claim alone, and
 user_metadata is never consulted.
 """
@@ -31,6 +31,10 @@ ROLES = ("owner", "editor", "reviewer", "viewer")
 
 class TokenVerificationError(Exception):
     pass
+
+
+class TokenVerifierUnavailable(Exception):
+    """Trusted identity material is unavailable; never fall back to mock."""
 
 
 class TokenVerifier(Protocol):
