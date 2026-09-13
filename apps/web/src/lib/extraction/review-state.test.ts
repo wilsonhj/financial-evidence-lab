@@ -9,19 +9,24 @@ describe("intentional extraction review", () => {
     ["merge", "expected_versions"],
     ["merge", "action"],
   ] as const)("rejects trailing %s replacement command member %s", (action, member) => {
-    const p = { ...initialFixture().proposals[0]!, conflict_ids: [] };
-    const edit = JSON.stringify([
-      { extraction_id: p.id, payload: p.payload, evidence: p.evidence },
-    ]);
+    const selected = initialFixture()
+      .proposals.slice(0, 2)
+      .map((p) => ({ ...p, conflict_ids: [] }));
+    const p = selected[0]!;
+    const edit = JSON.stringify(
+      selected.map((p) => ({ extraction_id: p.id, payload: p.payload, evidence: p.evidence })),
+    );
     const merge = JSON.stringify({ payload_source_id: p.id });
     const patch = action === "edit" ? edit : merge;
     const overrideAction = action === "edit" ? "merge" : "edit";
     const overridePatch = action === "edit" ? merge : edit;
     const trailing =
       member === "expected_versions"
-        ? `,"expected_versions":${JSON.stringify({ [p.id]: p.version + 1 })}`
+        ? `,"expected_versions":${JSON.stringify(Object.fromEntries(selected.map((p) => [p.id, p.version + 1])))}`
         : `,"action":"${overrideAction}","patch":${overridePatch}`;
-    expect(() => buildReview([p], action, "Reviewed version", patch + trailing, [], [])).toThrow();
+    expect(() =>
+      buildReview(selected, action, "Reviewed version", patch + trailing, [], []),
+    ).toThrow();
   });
   it("names only selected IDs/versions and preserves explicit full replacement JSON bytes", () => {
     const p = initialFixture().proposals[0]!;
