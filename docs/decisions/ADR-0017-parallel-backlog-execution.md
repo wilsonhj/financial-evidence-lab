@@ -145,3 +145,30 @@ on this reviewed baseline. Keep their existing allowed paths disjoint, retain
 lead-only contract marker changes with the API mount, and require real local HTTP
 worker/browser streaming acceptance in addition to fixture-mode browser tests.
 No live-provider or milestone acceptance is inferred by enabling implementation.
+
+
+Wave 11 reconciliation (September 13): current main 10d2ca4 includes externally
+merged PR287, PR288 and integration PR290. Preserve their reviewed repairs and
+committed real HTTP/worker/browser acceptance; do not resume merged branches.
+The lead replaces the API child branch with agent/61-review-peer-boundary for
+three bounded residuals: unrelated malformed comparison peers blocking valid
+selected review, per-group approval references leaking unrelated batch results,
+and correction discovery expansion while waiting for group locks (only if a
+real concurrency regression reproduces it). Existing deterministic financial
+rules, relevant-peer completeness and sorted resource locks remain binding.
+
+Replace the web child branch with agent/61-review-patch-boundary, restricted in
+this dispatch to lib/extraction/review-state.ts and its existing focused tests.
+Validate user patch text as one standalone JSON value before raw interpolation;
+preserve numeric lexemes and prevent top-level command/precondition overrides.
+PR291 independently owns its five component/test files. These source claims are
+disjoint. No shared implementation, contract shape, migration, provider choice,
+credential policy, threshold or canonical completion changes are authorized.
+The control branch is agent/188-execution-wave11. Independent review, explicit
+lead approval and exact-head checks precede every remaining merge.
+
+Issue292 records the separately unowned production token-verifier prerequisite.
+It is design/tracking only until a bounded design and workstream are accepted;
+no auth implementation/dependency dispatch is made here. Preserve #108's
+accepted July21 mock-auth hosted-reader smoke exception. That exception and
+local #61 acceptance do not establish production identity verification.
