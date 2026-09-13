@@ -97,4 +97,133 @@ describe("bounded extraction SSE", () => {
     await consumeExtractionEvents(run, { open, onEvent: () => {}, signal: controller.signal });
     expect(open).toHaveBeenCalledTimes(6);
   });
+  it.each([502, 503, 504])("retries HTTP %i with the last received ID", async (status) => {
+    const cancel = vi.fn();
+    const open = vi
+      .fn()
+      .mockResolvedValueOnce(response(frame(event(1))))
+      .mockResolvedValueOnce(new Response(new ReadableStream({ cancel }), { status }))
+      .mockResolvedValueOnce(response(frame(event(1)) + frame(event(2, "run_succeeded"))));
+    const seen: number[] = [];
+    const wait = vi.fn<(ms: number, signal: AbortSignal) => Promise<void>>(async () => {});
+    await consumeExtractionEvents(run, {
+      open,
+      wait,
+      signal: new AbortController().signal,
+      onEvent: (e) => seen.push(e.id),
+    });
+    expect(seen).toEqual([1, 2]);
+    expect(open.mock.calls.map(([lastId]) => lastId)).toEqual([0, 1, 1]);
+    expect(wait.mock.calls.map(([ms]) => ms)).toEqual([250, 500]);
+    expect(cancel).toHaveBeenCalledOnce();
+  });
+  it("bounds persistent gateway failures with backoff", async () => {
+    const open = vi.fn(async () => new Response(null, { status: 503 }));
+    const wait = vi.fn<(ms: number, signal: AbortSignal) => Promise<void>>(async () => {});
+    await expect(
+      consumeExtractionEvents(run, {
+        open,
+        wait,
+        signal: new AbortController().signal,
+        onEvent: () => {},
+      }),
+    ).rejects.toThrow("Reconnect limit");
+    expect(open).toHaveBeenCalledTimes(6);
+    expect(wait.mock.calls.map(([ms]) => ms)).toEqual([250, 500, 1000, 2000, 2000]);
+  });
+  it("retries a proxy outage but stops when aborted during backoff", async () => {
+    const controller = new AbortController();
+    const open = vi.fn(async () =>
+      Response.json(
+        { error: { code: "UPSTREAM_UNAVAILABLE", message: "Unavailable", request_id: "test" } },
+        { status: 502 },
+      ),
+    );
+    const wait = vi.fn(async () => {
+      controller.abort();
+    });
+    await consumeExtractionEvents(run, {
+      open,
+      wait,
+      signal: controller.signal,
+      onEvent: () => {},
+    });
+    expect(open).toHaveBeenCalledOnce();
+    expect(wait).toHaveBeenCalledOnce();
+  });
+  it.each([401, 403, 404, 409, 413, 422, 500])("does not retry HTTP %i", async (status) => {
+    const open = vi.fn(async () => new Response(null, { status }));
+    const wait = vi.fn(async () => {});
+    await expect(
+      consumeExtractionEvents(run, {
+        open,
+        wait,
+        signal: new AbortController().signal,
+        onEvent: () => {},
+      }),
+    ).rejects.toThrow(`HTTP ${status}`);
+    expect(open).toHaveBeenCalledOnce();
+    expect(wait).not.toHaveBeenCalled();
+  });
+  it.each(["INVALID_RESPONSE", "INTEGRITY_ERROR"])(
+    "does not retry %s at the proxy",
+    async (code) => {
+      const open = vi.fn(async () =>
+        Response.json({ error: { code, message: "Invalid", request_id: "test" } }, { status: 502 }),
+      );
+      const wait = vi.fn(async () => {});
+      await expect(
+        consumeExtractionEvents(run, {
+          open,
+          wait,
+          signal: new AbortController().signal,
+          onEvent: () => {},
+        }),
+      ).rejects.toThrow();
+      expect(open).toHaveBeenCalledOnce();
+      expect(wait).not.toHaveBeenCalled();
+    },
+  );
+  it.each(["broken", "x".repeat(65537), "{}"])(
+    "rejects malformed or oversized gateway error envelopes",
+    async (text) => {
+      const open = vi.fn(
+        async () =>
+          new Response(text, {
+            status: 502,
+            headers: { "content-type": "application/json" },
+          }),
+      );
+      const wait = vi.fn(async () => {});
+      await expect(
+        consumeExtractionEvents(run, {
+          open,
+          wait,
+          signal: new AbortController().signal,
+          onEvent: () => {},
+        }),
+      ).rejects.toThrow();
+      expect(open).toHaveBeenCalledOnce();
+      expect(wait).not.toHaveBeenCalled();
+    },
+  );
+  it.each([[0xff], [0xc3]])("does not reconnect after malformed UTF-8", async (...bytes) => {
+    const open = vi.fn(
+      async () =>
+        new Response(new Uint8Array(bytes), {
+          headers: { "content-type": "text/event-stream" },
+        }),
+    );
+    const wait = vi.fn(async () => {});
+    await expect(
+      consumeExtractionEvents(run, {
+        open,
+        wait,
+        signal: new AbortController().signal,
+        onEvent: () => {},
+      }),
+    ).rejects.toThrow("Invalid extraction UTF-8");
+    expect(open).toHaveBeenCalledOnce();
+    expect(wait).not.toHaveBeenCalled();
+  });
 });

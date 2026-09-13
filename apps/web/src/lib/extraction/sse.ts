@@ -3,6 +3,51 @@ import { guards, uuid, type Event } from "./contracts";
 class InvalidStream extends Error {}
 const FRAME_BYTES = 65536;
 const terminal = new Set<Event["type"]>(["run_succeeded", "run_failed", "run_cancelled"]);
+function decode(decoder: TextDecoder, bytes?: Uint8Array): string {
+  try {
+    return decoder.decode(bytes, { stream: bytes !== undefined });
+  } catch {
+    throw new InvalidStream("Invalid extraction UTF-8");
+  }
+}
+async function retryableResponse(response: Response): Promise<boolean> {
+  if (
+    ![502, 503, 504].includes(response.status) ||
+    !response.headers.get("content-type")?.startsWith("application/json") ||
+    !response.body
+  ) {
+    await response.body?.cancel().catch(() => {});
+    return [502, 503, 504].includes(response.status);
+  }
+  // The proxy also uses 502 for invalid upstream data. Only its explicit
+  // outage envelope is retryable; never turn protocol/integrity errors into retries.
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder("utf-8", { fatal: true });
+  let text = "",
+    size = 0;
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) {
+        text += decode(decoder);
+        break;
+      }
+      size += value.byteLength;
+      if (size > FRAME_BYTES) throw new InvalidStream("Extraction error exceeds 64 KiB");
+      text += decode(decoder, value);
+    }
+    let data: unknown;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      throw new InvalidStream("Malformed extraction error");
+    }
+    return guards.error(data) && data.error.code === "UPSTREAM_UNAVAILABLE";
+  } finally {
+    await reader.cancel().catch(() => {});
+    reader.releaseLock();
+  }
+}
 /** Incremental framing with a byte ceiling, including a frame split across arbitrary chunks. */
 export async function* parseExtractionEvents(
   response: Response,
@@ -62,13 +107,13 @@ export async function* parseExtractionEvents(
     while (true) {
       const chunk = await reader.read();
       if (chunk.done) {
-        decoder.decode();
+        decode(decoder);
         return;
       }
       // A large network chunk may contain many legal small frames. Decode in
       // bounded pieces instead of retaining an arbitrary chunk as one string.
       for (let offset = 0; offset < chunk.value.length; offset += 4096) {
-        pending += decoder.decode(chunk.value.subarray(offset, offset + 4096), { stream: true });
+        pending += decode(decoder, chunk.value.subarray(offset, offset + 4096));
         let newline: number;
         while ((newline = pending.indexOf("\n")) >= 0) {
           const event = line(pending.slice(0, newline));
@@ -123,7 +168,7 @@ export async function consumeExtractionEvents(
     try {
       const response = await open(lastId, options.signal);
       if (!response.ok) {
-        await response.body?.cancel();
+        if (await retryableResponse(response)) throw new Error("Extraction gateway unavailable");
         throw new InvalidStream(`Extraction stream unavailable (HTTP ${response.status})`);
       }
       options.onStatus?.("connected");
