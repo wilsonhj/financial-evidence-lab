@@ -501,3 +501,24 @@ Warmups/preflight are excluded from these 100 measured rows.
 ```
 
 </details>
+
+
+## September 13 — reader prerequisite and acceptance reconciliation
+
+PR297 merged at 73a7d2bfd9c95a055ba17b412ef659e79855d446 after independent
+final-head approval, all seven required checks and HTTP/worker/browser
+acceptance. PR298 merged at 3888942848a7aa08d1896eadb76247f85e2ee0ce with
+the independently verified local benchmark and command-boundary dispatch.
+The sequential local benchmark does not establish the parent specification's
+25-user release profile. PR300 owns offline production-auth implementation
+after accepted design PR296; no hosted identity acceptance is inferred.
+
+The read-only #96/#87 audit confirms both remain trackers for #108. The new
+extraction browser smoke uses SQL-seeded source evidence and one section; it
+does not prove ingestion-produced corpus, non-first-section or corruption
+screenshots, or hosted operation. Existing API-detected INTEGRITY_ERROR still
+becomes generic unavailable in the web source. Dedicated issue #301 and the
+reader-integrity plan repair this narrow classification prerequisite. Its
+seven-file lane is disjoint from extraction API tests and production auth.
+No #108/#96/#87 closure, corpus-pin policy change or canonical checkbox is
+authorized by this registration.
