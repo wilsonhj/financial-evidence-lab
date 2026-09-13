@@ -547,8 +547,8 @@ packages:
     tasks: [] # Historical T0004 production-auth residual; no duplicate task ledger.
     depends_on: []
     team: platform
-    branch: agent/292-production-auth
-    status: blocked # ADR0025 design and dependency authorization require independent review before implementation.
+    branch: agent/292-production-auth-api
+    status: ready # Accepted ADR0025; root dispatches offline implementation after the design PR merges.
     allowed_paths:
       - apps/api/app/auth.py
       - apps/api/app/dependencies.py

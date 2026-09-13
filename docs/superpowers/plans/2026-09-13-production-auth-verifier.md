@@ -1,6 +1,6 @@
 # Production token verification design — issue292
 
-Status: Proposed; offline implementation dispatch awaits independent design review and registered paths. Hosted authentication remains separately credentialed. No provider substitution or OpenAI code is involved.
+Status: Accepted by the integration lead after independent design review; offline implementation dispatch follows merge of ADR0025 and this registration. Hosted authentication remains separately credentialed. No provider substitution or OpenAI code is involved.
 
 ## Existing boundary and selected behavior
 
@@ -34,7 +34,7 @@ Invalid token/claims returns the existing safe401 envelope; transient key-servic
 
 ## Registration
 
-Proposed workstream PRODUCTION-AUTH-VERIFIER under292, tasks[] (historical T0004 residual remains linked, not duplicated), depends_on[], branch agent/292-production-auth. Allowed exact auth.py/dependencies.py/config.py/new supabase_auth.py, focused auth test files, apps/api/pyproject.toml, requirements.txt/requirements.lock/requirements-dev.lock, accepted new ADR0025, dedicated implementation plan and deployment notes. Root alone registers workstreams/ADR; no extraction/main/pagination/web paths or migration changes.
+Registered workstream PRODUCTION-AUTH-VERIFIER under292, tasks[] (historical T0004 residual remains linked, not duplicated), depends_on[], branch agent/292-production-auth-api. Allowed exact auth.py/dependencies.py/config.py/new supabase_auth.py, focused auth test files, apps/api/pyproject.toml, requirements.txt/requirements.lock/requirements-dev.lock, accepted new ADR0025, dedicated implementation plan and deployment notes. Root alone registers workstreams/ADR; no extraction/main/pagination/web paths or migration changes.
 
 ## Sources checked September13
 
@@ -43,4 +43,4 @@ Proposed workstream PRODUCTION-AUTH-VERIFIER under292, tasks[] (historical T0004
 - https://supabase.com/changelog/47093-self-hosted-supabase-api-external-url-to-include-auth-v1
 - https://pyjwt.readthedocs.io/en/stable/api.html
 
-These support the verification primitives; numeric budgets and claim-mapping selections above are proposed FEL policy, not vendor requirements.
+These support the verification primitives; numeric budgets and claim-mapping selections above are accepted offline FEL policy, not vendor requirements.

@@ -1,6 +1,6 @@
 # ADR-0025: Production token verification behind the existing tenant boundary
 
-Status: Proposed for independent design review; implementation blocked
+Status: Accepted for offline implementation after independent design review and integration-lead approval (2026-09-13)
 
 Date: 2026-09-13
 
@@ -12,7 +12,7 @@ The only implemented verifier accepts unsigned mock tokens. Credentials alone
 cannot activate production identity verification. Keep #108's accepted mock-auth
 hosted reader-smoke exception; its evidence-path proof does not certify identity.
 
-## Proposed decision
+## Decision
 
 Use the existing TokenVerifier/TenantContext boundary. Verify Supabase asymmetric
 access tokens with PyJWT[crypto], mapping UUID sub and trusted app_metadata.org_id
@@ -32,7 +32,7 @@ The bounded implementation plan specifies exact limits, claim/error semantics,
 timeout limitations, offline key/transport tests, RLS regressions and deployment
 conditions: `../superpowers/plans/2026-09-13-production-auth-verifier.md`.
 
-## Dependency and path authorization proposed
+## Dependency and path authorization
 
 Add reviewed PyJWT[crypto] and direct existing-httpx requirements in API metadata
 and runtime input, resolve necessary runtime/dev lock changes with existing tools,
@@ -41,8 +41,8 @@ immutable test environment or update unrelated dependencies. No migration, wire
 schema, generated contract, worker/provider, web or extraction-path change.
 
 Register PRODUCTION-AUTH-VERIFIER under #292 with tasks[] to preserve the sole
-canonical ledger. The branch is agent/292-production-auth. It remains blocked
-until independent design approval and lead acceptance of this ADR. Hosted
+canonical ledger. The implementation branch is agent/292-production-auth-api. Dispatch follows
+merge of this reviewed design; the present design branch is agent/292-production-auth. Hosted
 identity provisioning/testing remains separately environment-authorized; the
 offline implementation does not request or publish actual keys or user tokens.
 
