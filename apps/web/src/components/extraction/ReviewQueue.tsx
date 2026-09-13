@@ -112,17 +112,20 @@ export function ReviewQueue({
         setRows(nextRows);
         setSelectedIds(remaining);
         setCompared(remaining.length > 0);
+        setWinners((ids) => ids.filter((id) => remaining.includes(id)));
         if (!remaining.length) {
           setGroups([]);
-          setWinners([]);
+          setStale(false);
         }
         pending.current = undefined;
+        setMessage(
+          remaining.length
+            ? "Current versions loaded below. Compare them with your preserved draft, then use the refreshed versions explicitly."
+            : "Selected proposals are no longer reviewable. Choose another pending proposal.",
+        );
+      } else {
+        setMessage("Complete conflict membership loaded. Choose the winners explicitly.");
       }
-      setMessage(
-        contextOnly
-          ? "Complete conflict membership loaded. Choose the winners explicitly."
-          : "Current versions loaded below. Compare them with your preserved draft, then use the refreshed versions explicitly.",
-      );
     } catch (e) {
       setMessage(e instanceof Error ? e.message : "Unable to refresh comparison");
     } finally {
@@ -165,9 +168,9 @@ export function ReviewQueue({
       setRows(nextRows);
       setSelectedIds(remaining);
       setCompared(false);
+      setWinners((ids) => ids.filter((id) => remaining.includes(id)));
       if (!remaining.length) {
         setGroups([]);
-        setWinners([]);
       }
       setMessage(
         `Atomic ${action} completed for ${selected.length} selected proposals. Unselected proposals were not submitted.`,
