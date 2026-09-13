@@ -180,6 +180,11 @@ def _apply(
                         evidence=replacement["evidence"],
                         validation_summary={},
                     )
+        validation_rows = validation_peers.relevant_rows(
+            validation_rows,
+            set(ids),
+            {pid for group in groups.values() for pid in group["member_versions"]},
+        )
         result = validation.evaluate(conn, validation_rows, locked_runs)
         waived = conflicts.check_evaluated(
             result, set(ids), groups, decisions, body["action"], approved_origins
@@ -266,7 +271,11 @@ def _apply(
         resolution = {
             "review_id": review_id,
             "selected_winner_ids": decision["selected_winner_ids"],
-            "approved_record_ids": [item["record_id"] for item in approvals],
+            "approved_record_ids": [
+                item["record_id"]
+                for index, item in enumerate(approvals)
+                if body["action"] == "merge" or ids[index] in decision["selected_winner_ids"]
+            ],
             "reason": decision["reason"],
             "actor_user_id": ctx.user_id,
             "resolved_at": resolved_at.isoformat(),

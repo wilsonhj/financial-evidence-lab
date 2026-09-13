@@ -6,6 +6,47 @@ import psycopg
 
 from app.errors import api_error
 from app.extraction import approved, reads, validation
+from fel_ontology import load_saas_metrics
+
+
+def relevant_rows(
+    rows: list[dict[str, Any]], selected_ids: set[str], required_ids: set[str]
+) -> list[dict[str, Any]]:
+    """Conservative dependency superset for the current deterministic worker rules.
+
+    Duplicates/conflicts require the same metric (ontology keys retain metric
+    identity); segment sums also stay within one metric. The only cross-metric
+    identities in validate/accounting.py are RPO/cRPO and revenue/COGS/gross
+    profit. Keep all contexts within these families rather than guessing at a
+    malformed period, currency or dimension. Unknown identity stays included.
+    Explicit group members always remain dependencies, even if edited apart.
+    """
+    metrics = {
+        row["payload"].get("metric_id")
+        for row in rows
+        if str(row["id"]) in selected_ids and isinstance(row["payload"].get("metric_id"), str)
+    }
+    if len([row for row in rows if str(row["id"]) in selected_ids]) != len(selected_ids):
+        validation.invalid(sorted(selected_ids)[0])
+    for family in ({"rpo", "crpo"}, {"revenue", "cogs", "gross_profit"}):
+        if metrics & family:
+            metrics |= family
+    result = []
+    known_metrics = {metric.id for metric in load_saas_metrics().metrics}
+    for row in rows:
+        payload = row["payload"]
+        metric = payload.get("metric_id")
+        if (
+            str(row["id"]) in selected_ids | required_ids
+            or not isinstance(metric, str)
+            or not metric
+            or metric != row["metric_id"]
+            or payload.get("kind") not in ("kpi", "guidance", "revenue_driver")
+            or (payload.get("kind") == "kpi" and metric not in known_metrics)
+            or metric in metrics
+        ):
+            result.append(row)
+    return result
 
 
 def heads(
