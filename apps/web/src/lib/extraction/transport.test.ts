@@ -3,6 +3,7 @@ import result from "@fel/contracts/fixtures/extraction-review-result.json";
 import command from "@fel/contracts/fixtures/extraction-review-command.json";
 import proposal from "@fel/contracts/fixtures/extraction-proposal.json";
 import { loadConfig, requestExtraction } from "./transport";
+import { consumeExtractionEvents } from "./sse";
 const workspace = "00000000-0000-4000-8000-000000000001";
 const config = {
   mode: "http" as const,
@@ -125,6 +126,135 @@ const action = (body = JSON.stringify(command), headers: Record<string, string> 
     body,
   });
 describe("extraction action and stream integrity", () => {
+  it.each([
+    [401, "UNAUTHORIZED"],
+    [403, "FORBIDDEN"],
+    [500, "INTEGRITY_ERROR"],
+  ])("keeps typed upstream HTTP %i errors fatal", async (status, code) => {
+    const fetcher = vi.fn(async () =>
+      Response.json(
+        {
+          error: { code, message: "Private upstream explanation", request_id: "test" },
+        },
+        { status },
+      ),
+    );
+    const wait = vi.fn(async () => {});
+    await expect(
+      consumeExtractionEvents(workspace, {
+        signal: new AbortController().signal,
+        onEvent: () => {},
+        wait,
+        open: () =>
+          requestExtraction(
+            config,
+            `runs/${workspace}/events`,
+            new Request(`https://web.example/api/extraction/runs/${workspace}/events`),
+            fetcher,
+          ),
+      }),
+    ).rejects.toThrow(`HTTP ${status}`);
+    expect(fetcher).toHaveBeenCalledOnce();
+    expect(wait).not.toHaveBeenCalled();
+  });
+  it("does not retry a successful upstream response with the wrong stream type", async () => {
+    const fetcher = vi.fn(async () => Response.json({ private: "source text" }));
+    const wait = vi.fn(async () => {});
+    await expect(
+      consumeExtractionEvents(workspace, {
+        signal: new AbortController().signal,
+        onEvent: () => {},
+        wait,
+        open: () =>
+          requestExtraction(
+            config,
+            `runs/${workspace}/events`,
+            new Request(`https://web.example/api/extraction/runs/${workspace}/events`),
+            fetcher,
+          ),
+      }),
+    ).rejects.toThrow();
+    expect(fetcher).toHaveBeenCalledOnce();
+    expect(wait).not.toHaveBeenCalled();
+  });
+  it.each([502, 503, 504])("retries a real proxied gateway HTTP %i and resumes", async (status) => {
+    const terminal = {
+      schema_version: "extraction-event/v1",
+      id: 8,
+      run_id: workspace,
+      type: "run_succeeded",
+      occurred_at: "2026-07-01T00:00:00Z",
+      payload: {},
+    };
+    const cancel = vi.fn();
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(new ReadableStream({ cancel }), {
+          status,
+          headers: { "content-type": "text/html" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(`id: 8\ndata: ${JSON.stringify(terminal)}\n\n`, {
+          headers: { "content-type": "text/event-stream" },
+        }),
+      );
+    const seen: number[] = [];
+    const wait = vi.fn(async () => {});
+    await consumeExtractionEvents(workspace, {
+      lastId: 7,
+      signal: new AbortController().signal,
+      onEvent: (event) => seen.push(event.id),
+      wait,
+      open: (lastId, signal) =>
+        requestExtraction(
+          config,
+          `runs/${workspace}/events`,
+          new Request(`https://web.example/api/extraction/runs/${workspace}/events`, {
+            signal,
+            headers: { "last-event-id": String(lastId) },
+          }),
+          fetcher,
+        ),
+    });
+    expect(seen).toEqual([8]);
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(wait).toHaveBeenCalledOnce();
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(
+      fetcher.mock.calls.map(([, init]) => new Headers(init.headers).get("last-event-id")),
+    ).toEqual(["7", "7"]);
+  });
+  it.each(["{", new Uint8Array([0xff]), new Uint8Array([0xc3])])(
+    "keeps malformed proxied error bytes fatal to the consumer",
+    async (body) => {
+      const fetcher = vi.fn(
+        async () =>
+          new Response(body, {
+            status: 503,
+            headers: { "content-type": "application/json" },
+          }),
+      );
+      const wait = vi.fn(async () => {});
+      await expect(
+        consumeExtractionEvents(workspace, {
+          signal: new AbortController().signal,
+          onEvent: () => {},
+          wait,
+          open: () =>
+            requestExtraction(
+              config,
+              `runs/${workspace}/events`,
+              new Request(`https://web.example/api/extraction/runs/${workspace}/events`),
+              fetcher,
+            ),
+        }),
+      ).rejects.toThrow();
+      expect(fetcher).toHaveBeenCalledOnce();
+      expect(wait).not.toHaveBeenCalled();
+    },
+  );
   it("retains exact body and key for retries and excludes browser authorization", async () => {
     const fetcher = vi.fn().mockImplementation(() => Promise.resolve(Response.json(result)));
     const body = JSON.stringify(command, null, 2);

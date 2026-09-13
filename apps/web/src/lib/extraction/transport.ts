@@ -22,6 +22,14 @@ export function failure(status: number, code: string): Response {
   );
 }
 class BodyTooLarge extends Error {}
+class InvalidResponse extends Error {}
+function decode(decoder: TextDecoder, bytes?: Uint8Array): string {
+  try {
+    return decoder.decode(bytes, { stream: bytes !== undefined });
+  } catch {
+    throw new InvalidResponse("Invalid response encoding");
+  }
+}
 export async function boundedText(
   body: ReadableStream<Uint8Array> | null,
   limit: number,
@@ -34,10 +42,10 @@ export async function boundedText(
   try {
     while (true) {
       const { value, done } = await reader.read();
-      if (done) return result + decoder.decode();
+      if (done) return result + decode(decoder);
       size += value.byteLength;
       if (size > limit) throw new BodyTooLarge("Body exceeds limit");
-      result += decoder.decode(value, { stream: true });
+      result += decode(decoder, value);
     }
   } finally {
     await reader.cancel().catch(() => {});
@@ -140,12 +148,19 @@ export async function requestExtraction(
       return new Response(upstream.body, { status: upstream.status, headers: outputHeaders });
     }
     if (!upstream.headers.get("content-type")?.startsWith("application/json")) {
-      await upstream.body?.cancel();
-      return failure(502, "INVALID_RESPONSE");
+      await upstream.body?.cancel().catch(() => {});
+      return failure(
+        502,
+        [502, 503, 504].includes(upstream.status) ? "UPSTREAM_UNAVAILABLE" : "INVALID_RESPONSE",
+      );
     }
-    const data: unknown = JSON.parse(
-      await boundedText(upstream.body, upstream.ok ? 8 * 1024 * 1024 : 65536),
-    );
+    const text = await boundedText(upstream.body, upstream.ok ? 8 * 1024 * 1024 : 65536);
+    let data: unknown;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      throw new InvalidResponse("Malformed upstream JSON");
+    }
     if (!upstream.ok) {
       if (!guards.error(data)) return failure(502, "INVALID_RESPONSE");
       return Response.json(
@@ -200,6 +215,9 @@ export async function requestExtraction(
   } catch (error) {
     return error instanceof BodyTooLarge
       ? failure(413, "EXTRACTION_TOO_LARGE")
-      : failure(502, "UPSTREAM_UNAVAILABLE");
+      : failure(
+          502,
+          error instanceof InvalidResponse ? "INVALID_RESPONSE" : "UPSTREAM_UNAVAILABLE",
+        );
   }
 }
