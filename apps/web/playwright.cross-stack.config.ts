@@ -19,6 +19,7 @@ const env = {
   FEL_API_BASE_URL: api,
   FEL_API_BEARER_TOKEN: token,
   FEL_WORKSPACE_ID: manifest.workspace!,
+  FEL_ENTITY_IDS: manifest.entity!,
   FEL_RATE_LIMIT_BURST: "200",
 };
 
