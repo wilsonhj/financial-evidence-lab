@@ -334,3 +334,21 @@ waiting, and review/terminal events after another browser page submits review.
 Forced browser disconnect/reconnect is covered by separate client/proxy and
 actual HTTP API tests, not asserted by that cross-stack scenario. Hosted108 and
 old-writer draining remain separate conditions; canonical checkboxes unchanged.
+
+
+PR295 merged at e6e24b064533ab7fa979a1f952ffe47369ca9bf0 after independent
+approval of d5d8573, 21 real PostgreSQL tests and four additional edit/merge
+controls. Full Python verification passed 2,047 tests with three existing
+opt-in skips and 89.28% coverage; all required checks and HTTP acceptance pass.
+Unrelated malformed peers no longer block selected valid review; relevant
+financial families, explicit groups and unknown identities remain included.
+Each conflict records its winning approvals. The proposed correction race
+was not reachable through current guarded writers, so no speculative fix landed.
+
+The next six-case actual-API/PG audit showed NaN, Infinity, -Infinity and1e400
+returning200 and persisting null, plus canonical/uppercase UUID aliases with
+versions2/1 being accepted at version1. The bounded command rejection fix is
+registered by ADR0017 under the same #61 API owner. The parent remains open.
+The local benchmark preflight passed 100-item approval and both reconnect
+checks; its measured series is pinned to e6e24b and is not yet a passing p95
+claim. No hosted/provider action or canonical checkbox change is recorded.
