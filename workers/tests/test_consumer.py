@@ -465,3 +465,40 @@ def test_extraction_dispatch_passes_a_working_cancel_check(
     )
 
     assert seen == {"before": False, "after": True}
+
+
+def test_fetch_forwards_explicit_reporting_period(corpus_conn: psycopg.Connection) -> None:
+    from datetime import date
+
+    payload = {**_FETCH_PAYLOAD, "period_start": "2026-01-01", "period_end": "2026-03-31"}
+    handle_sec_filing_fetch(corpus_conn, MockStorageProvider(), FixtureSecClient(), payload)
+    row = corpus_conn.execute(
+        "SELECT period_start, period_end FROM documents WHERE accession = %s",
+        (payload["accession"],),
+    ).fetchone()
+    assert row == (date(2026, 1, 1), date(2026, 3, 31))
+
+
+@pytest.mark.parametrize(
+    "period",
+    [
+        {"period_start": "2026-01-01"},
+        {"period_end": "2026-03-31"},
+        {"period_start": None, "period_end": None},
+        {"period_start": "2026-04-01", "period_end": "2026-03-31"},
+        {"period_start": "2026-02-30", "period_end": "2026-03-31"},
+        {"period_start": "20260101", "period_end": "20260331"},
+        {"period_start": 20260101, "period_end": "2026-03-31"},
+    ],
+)
+def test_invalid_reporting_period_rejected_before_fetch(
+    corpus_conn: psycopg.Connection, period: dict[str, object]
+) -> None:
+    class NoFetch(FixtureSecClient):
+        def fetch_document(self, url: str) -> bytes:
+            pytest.fail("invalid reporting period reached transport")
+
+    with pytest.raises(ValueError, match="reporting period"):
+        handle_sec_filing_fetch(
+            corpus_conn, MockStorageProvider(), NoFetch(), {**_FETCH_PAYLOAD, **period}
+        )
