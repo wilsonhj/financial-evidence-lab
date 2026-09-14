@@ -1,5 +1,45 @@
 # Implementation status
 
+## September 14 load and reader implementation results
+
+The spec-driven implementation and measured repair plan merged in #315/#317.
+This checkpoint supersedes the earlier September 14 implementation snapshot
+where stated below. Re-query GitHub before dispatching further work.
+
+- #108 preparation merged in #318 (`1a0de4b`). The real consumer now preserves
+  validated reporting periods and supports explicit, hash-checked committed
+  SEC transport fixtures with no network fallback. Four actual ingestion jobs
+  and six production-build Chromium tests cover citations, two amendments,
+  corpus membership/pins, anti-oracle visibility, typed authentication failures,
+  canonical corruption and real API outage/recovery. Final PR CI passed 2,365
+  Python tests with 88.84% coverage and the existing extraction HTTP workflow.
+- #108 itself stays open. No hosted run occurred: the dedicated Railway
+  target/access and protected environment are unavailable. The dispatch-only
+  workflow validates deployed revisions and bindings, uses reversible owned
+  faults, and scans public artifacts for credentials. A genuine parser or
+  normalizer release is still needed to exercise competing derived versions of
+  one accession without fabricating version metadata. Local screenshots and
+  limitations are in `evals/reports/reader-prod-smoke/2026-09-14-local-smoke.md`.
+- #61's implemented batching repair reduces a 100-item review from 829 to 37
+  SQL statements and removes unused version data from identity/head bindings.
+  Existing atomicity, concurrency, correction, ETag, provenance and tenant tests
+  pass. PR #316 contains the implementation, executable load runner and all raw
+  evidence; its final integration checks are recorded on the PR.
+- #61's load gate **remains failed**. Three unchanged 25-user profiles completed
+  all 100 measured observations per operation without errors, with actual
+  25-way overlap. Bulk p95 was 4,147.19 ms, 1,002.23 ms, then 1,501.91 ms against
+  the strict 1,000 ms limit. Create and both SSE gates passed. A separate
+  diagnostic observed WAL-write contention and roughly 1,031 ms pool/setup
+  wait p95. The shared local Docker VM is below the reference DB resources.
+  No durability setting, pool limit, threshold, retry policy or workload was
+  relaxed; no favorable run was selected to claim acceptance. See
+  `apps/api/EXTRACTION_LOAD.md` and its retained baseline/diagnostic artifacts.
+
+Both issues stay open, and canonical milestone checkboxes and credential
+policies remain unchanged. Further execution needs an appropriate dedicated
+load target and the dedicated hosted-reader environment, not another claim of
+completion based on local functional tests.
+
 ## September 14 verification and ownership checkpoint
 
 Snapshot base: `df1f85a` (merged PR #311). Re-query GitHub before dispatch;

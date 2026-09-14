@@ -1215,7 +1215,7 @@ packages:
     depends_on: [M3-REVIEW-API, M3-REVIEW-WEB]
     team: trust
     branch: agent/61-load-acceptance
-    status: ready # Scaled 25-user proof; full reference profile remains separately unproven.
+    status: blocked # PR #316 implements the runner and batching repair; latest measured bulk p95 1501.91 ms still fails 1000 ms. WAL/storage contention and missing reference resources remain.
     allowed_paths:
       - apps/api/benchmarks/**
       - apps/api/tests/test_extraction_load_report.py
@@ -1229,7 +1229,7 @@ packages:
     depends_on: [READER-INTEGRITY-CLASSIFICATION, READER-WEB-DEPLOY-CONFIG]
     team: trust
     branch: test/reader-prod-smoke
-    status: ready # Local implementation under accepted #108 addendum; parent hosted acceptance stays blocked until dedicated access exists.
+    status: merged # PR #318 @ 1a0de4b; real worker and local production-browser proof pass. Parent hosted acceptance remains blocked.
     credentials: mock-only
     allowed_paths:
       - workers/src/fel_workers/ingestion/fixture_sec_client.py
