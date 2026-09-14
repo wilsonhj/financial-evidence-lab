@@ -1117,6 +1117,13 @@ body:has(.desk-shell[data-fel-theme="oled"]) .site-header {
 .fact-card dd {
   margin: 0;
   font-variant-numeric: tabular-nums;
+  /* XBRL concept names (us-gaap:RevenueFrom...) carry no break opportunity.
+     Without this, one such token sets the panel's min-content width, and
+     because .evidence-panel declares overflow-y: auto, CSS promotes the
+     horizontal axis to auto as well — turning the sticky panel into an
+     unintended horizontal scroller that slices every heading and quote.
+     Same guard as .obs-meta dd. */
+  word-break: break-word;
 }
 
 .fact-source {
