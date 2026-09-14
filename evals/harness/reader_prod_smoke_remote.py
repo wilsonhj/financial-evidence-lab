@@ -11,7 +11,7 @@ import json
 import os
 import re
 import shlex
-import subprocess
+import subprocess  # nosec B404 — bounded acceptance subprocesses, no shell
 import sys
 from pathlib import Path
 from typing import Any
@@ -149,32 +149,34 @@ def remote_command(cwd: str, executable: str, arguments: list[str]) -> str:
 
 
 def ssh(config: dict[str, str], instance: str, command: str) -> bytes:
-    result = subprocess.run(
-        [
-            "ssh",
-            "-F",
-            "/dev/null",
-            "-T",
-            "-o",
-            "BatchMode=yes",
-            "-o",
-            "IdentitiesOnly=yes",
-            "-o",
-            "StrictHostKeyChecking=yes",
-            "-o",
-            "ConnectTimeout=15",
-            "-o",
-            "LogLevel=ERROR",
-            "-o",
-            "UserKnownHostsFile=" + config["KNOWN_HOSTS"],
-            "-i",
-            config["SSH_KEY"],
-            instance + "@ssh.railway.com",
-            command,
-        ],
-        capture_output=True,
-        timeout=55,
-        check=False,
+    result = (
+        subprocess.run(  # nosec B603,B607 — system SSH, pinned host/key, allowlisted quoted command
+            [
+                "ssh",
+                "-F",
+                "/dev/null",
+                "-T",
+                "-o",
+                "BatchMode=yes",
+                "-o",
+                "IdentitiesOnly=yes",
+                "-o",
+                "StrictHostKeyChecking=yes",
+                "-o",
+                "ConnectTimeout=15",
+                "-o",
+                "LogLevel=ERROR",
+                "-o",
+                "UserKnownHostsFile=" + config["KNOWN_HOSTS"],
+                "-i",
+                config["SSH_KEY"],
+                instance + "@ssh.railway.com",
+                command,
+            ],
+            capture_output=True,
+            timeout=55,
+            check=False,
+        )
     )
     if result.returncode or len(result.stdout) > 128 * 1024:
         # Neither SSH stderr nor a remote traceback may disclose service secrets.
