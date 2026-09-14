@@ -10,7 +10,9 @@ import argparse
 import json
 import os
 import signal
-import subprocess  # nosec B404 — bounded acceptance subprocesses, no shell
+
+# bounded acceptance subprocesses, no shell.
+import subprocess  # nosec B404
 import sys
 import tempfile
 import time
@@ -42,7 +44,8 @@ def main() -> None:
     ):
         raise ValueError("Local service control requires the matching dedicated local target")
     hosted = os.environ.get("FEL_READER_SMOKE_SERVICE_HOSTED") == "1"
-    host = "0.0.0.0" if hosted else "127.0.0.1"  # nosec B104 — explicit hosted API binding
+    # explicit hosted API binding.
+    host = "0.0.0.0" if hosted else "127.0.0.1"  # nosec B104
     port = os.environ.get("PORT", "8218") if hosted else "8218"
     if not port.isdigit() or not 1 <= int(port) <= 65535:
         raise ValueError("Invalid dedicated API port")
@@ -79,7 +82,8 @@ def main() -> None:
             elif action == "start" and child is None:
                 stopped_at = None
                 child = (
-                    subprocess.Popen(  # nosec B603 — fixed Uvicorn module, validated port, no shell
+                    # fixed Uvicorn module, validated port, no shell.
+                    subprocess.Popen(  # nosec B603
                         [
                             sys.executable,
                             "-m",

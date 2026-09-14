@@ -12,7 +12,9 @@ import hashlib
 import json
 import os
 import re
-import subprocess  # nosec B404 — bounded acceptance subprocesses, no shell
+
+# bounded acceptance subprocesses, no shell.
+import subprocess  # nosec B404
 import sys
 from pathlib import Path
 from typing import Any
@@ -112,7 +114,8 @@ def setup(database_url: str, storage: Path, target: str) -> dict[str, Any]:
         FEL_FIXTURE_INGEST="1",
         FEL_WORKER_DB_ROLE="fel_worker",
     )
-    result = subprocess.run(  # nosec B603 — fixed worker module and literal queue arguments
+    # fixed worker module and literal queue arguments.
+    result = subprocess.run(  # nosec B603
         [
             sys.executable,
             "-m",
