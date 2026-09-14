@@ -31,8 +31,6 @@ jobs:
       READER_SMOKE_REMOTE_CWD: ${{ vars.READER_SMOKE_REMOTE_CWD }}
       READER_SMOKE_REMOTE_PYTHON: ${{ vars.READER_SMOKE_REMOTE_PYTHON }}
       READER_SMOKE_REMOTE_MANIFEST: ${{ vars.READER_SMOKE_REMOTE_MANIFEST }}
-      READER_SMOKE_SSH_KEY: ${{ runner.temp }}/reader-smoke-key
-      READER_SMOKE_KNOWN_HOSTS: ${{ runner.temp }}/reader-smoke-known-hosts
       READER_SMOKE_MANIFEST: ${{ github.workspace }}/.reader-smoke/manifest.json
       READER_SMOKE_REMOTE_EXEC: ${{ github.workspace }}/evals/harness/reader_prod_smoke_remote.py
     steps:
@@ -72,6 +70,8 @@ jobs:
         env:
           SSH_PRIVATE_KEY: ${{ secrets.READER_SMOKE_SSH_PRIVATE_KEY }}
           SSH_KNOWN_HOSTS: ${{ secrets.READER_SMOKE_SSH_KNOWN_HOSTS }}
+          READER_SMOKE_SSH_KEY: ${{ runner.temp }}/reader-smoke-key
+          READER_SMOKE_KNOWN_HOSTS: ${{ runner.temp }}/reader-smoke-known-hosts
         run: |
           python - <<'PY'
           import os
@@ -84,6 +84,8 @@ jobs:
               path.write_text(value.rstrip() + '\n')
               path.chmod(0o600)
           PY
+          printf 'READER_SMOKE_SSH_KEY=%s\nREADER_SMOKE_KNOWN_HOSTS=%s\n' \
+            "$READER_SMOKE_SSH_KEY" "$READER_SMOKE_KNOWN_HOSTS" >> "$GITHUB_ENV"
       - name: Verify actual service revisions, targets and web bindings; fetch public manifest
         id: prepared
         run: python evals/harness/reader_prod_smoke_remote.py --prepare
