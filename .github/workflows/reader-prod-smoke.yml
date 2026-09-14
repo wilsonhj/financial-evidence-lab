@@ -92,6 +92,10 @@ jobs:
       - name: Restore dedicated API and canonical blob after every outcome
         if: always() && steps.prepared.outcome == 'success'
         run: python evals/harness/reader_prod_smoke_remote.py --recover
+      - name: Reject any credential-bearing artifacts
+        id: sanitized
+        if: always() && steps.prepared.outcome == 'success'
+        run: python evals/harness/reader_prod_smoke_remote.py --sanitize
       - name: Build public artifact digest
         if: always() && steps.prepared.outcome == 'success'
         run: |
@@ -103,12 +107,13 @@ jobs:
           Path('.reader-smoke/digests.json').write_text(json.dumps(entries, indent=2) + '\n')
           PY
       - uses: actions/upload-artifact@v4
-        if: always() && steps.prepared.outcome == 'success'
+        if: always() && steps.sanitized.outcome == 'success'
         with:
           name: hosted-reader-smoke-${{ github.sha }}
           path: |
             .reader-smoke/
             apps/web/test-results/
+          include-hidden-files: true # Only the explicitly listed public proof and browser artifacts.
           if-no-files-found: error
           retention-days: 30
       - name: Remove private SSH material

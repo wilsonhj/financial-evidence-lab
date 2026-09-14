@@ -29,6 +29,23 @@ test.afterEach(async ({ context }, info) => {
   await context.tracing.stop({ path: info.outputPath("browser-trace.zip") });
 });
 
+// Native fetch keeps authenticated requests outside Playwright's diagnostic
+// steps, which otherwise retain Authorization headers on connection failures.
+async function httpGet(
+  url: string,
+  options: { headers?: Record<string, string>; timeout?: number } = {},
+) {
+  try {
+    const response = await fetch(url, {
+      headers: options.headers,
+      signal: AbortSignal.timeout(options.timeout ?? 10_000),
+    });
+    return { status: () => response.status, ok: () => response.ok, json: () => response.json() };
+  } catch {
+    throw new Error("Evidence HTTP request failed before a response");
+  }
+}
+
 async function fault(action: "corrupt" | "restore") {
   // This command runs beside the API storage. Hosted execution must provide a
   // reviewed remote transport executable; no shell command strings are eval'd.
@@ -54,12 +71,12 @@ test("real ingestion yields stable reader selections and terminal amendment auth
   request,
 }, info) => {
   for (const pin of [undefined, seed.corpus]) {
-    const first = await request.get(reader(target.id, pin), { headers });
+    const first = await httpGet(reader(target.id, pin), { headers });
     expect(first.status()).toBe(200);
     const body = await first.json();
     expect(body.document.document_version_id).toBe(target.version);
     expect(body.corpus_version_id).toBe(pin ?? null);
-    expect(await (await request.get(reader(target.id, pin), { headers })).json()).toEqual(body);
+    expect(await (await httpGet(reader(target.id, pin), { headers })).json()).toEqual(body);
     const section = body.document.sections.find(
       (item: { id: string }) => item.id === target.section,
     );
@@ -71,9 +88,9 @@ test("real ingestion yields stable reader selections and terminal amendment auth
     expect(quote).toBe(target.quote);
     expect(`sha256:${createHash("sha256").update(quote).digest("hex")}`).toBe(target.text_hash);
   }
-  const excluded = await request.get(reader(target.id, seed.pinned_corpus), { headers });
+  const excluded = await httpGet(reader(target.id, seed.pinned_corpus), { headers });
   expect(excluded.status()).toBe(404);
-  const pinnedOriginal = await request.get(reader(seed.documents.original.id, seed.pinned_corpus), {
+  const pinnedOriginal = await httpGet(reader(seed.documents.original.id, seed.pinned_corpus), {
     headers,
   });
   expect(pinnedOriginal.status()).toBe(200);
@@ -104,8 +121,8 @@ test("future filings and absent IDs share the same not-found result; auth stays 
   request,
 }) => {
   const missing = randomUUID();
-  const future = await request.get(reader(seed.documents.future.id), { headers });
-  const absent = await request.get(reader(missing), { headers });
+  const future = await httpGet(reader(seed.documents.future.id), { headers });
+  const absent = await httpGet(reader(missing), { headers });
   expect(future.status()).toBe(404);
   expect(absent.status()).toBe(404);
   const hiddenBody = await future.json();
@@ -125,7 +142,7 @@ test("future filings and absent IDs share the same not-found result; auth stays 
     ["Bearer invalid", 401],
     [`Bearer ${token(seed.denied_user)}`, 403],
   ] as const) {
-    const result = await request.get(reader(target.id), {
+    const result = await httpGet(reader(target.id), {
       headers: auth ? { Authorization: auth } : {},
     });
     expect(result.status()).toBe(status);
@@ -133,13 +150,13 @@ test("future filings and absent IDs share the same not-found result; auth stays 
   }
 });
 
-test("canonical byte corruption fails closed and is restored", async ({ page, request }, info) => {
+test("canonical byte corruption fails closed and is restored", async ({ page }, info) => {
   if (process.env.READER_SMOKE_HOSTED === "1" && !process.env.READER_SMOKE_REMOTE_EXEC) {
     throw new Error("Hosted corruption requires the dedicated API/storage remote executor");
   }
   try {
     await fault("corrupt");
-    const response = await request.get(reader(target.id), { headers });
+    const response = await httpGet(reader(target.id), { headers });
     expect(response.status()).toBe(500);
     expect((await response.json()).error.code).toBe("INTEGRITY_ERROR");
     await page.goto(pagePath());
@@ -151,7 +168,7 @@ test("canonical byte corruption fails closed and is restored", async ({ page, re
   } finally {
     await fault("restore");
   }
-  const recovered = await request.get(reader(target.id), { headers });
+  const recovered = await httpGet(reader(target.id), { headers });
   expect(recovered.status()).toBe(200);
 });
 
@@ -183,7 +200,7 @@ test("real dedicated API outage shows unavailable and recovers", async ({
     await expect
       .poll(async () => {
         try {
-          observed = (await request.get(`${api}/health`, { timeout: 5000 })).status();
+          observed = (await httpGet(`${api}/health`, { timeout: 5000 })).status();
         } catch {
           observed = "connection-failed";
         }
@@ -204,7 +221,7 @@ test("real dedicated API outage shows unavailable and recovers", async ({
     await expect
       .poll(async () => {
         try {
-          return (await request.get(`${api}/health`)).status();
+          return (await httpGet(`${api}/health`)).status();
         } catch {
           return 0;
         }
@@ -261,7 +278,7 @@ test("real upstream authentication failures remain typed in the browser", async 
           if (child && child.exitCode !== null)
             throw new Error("Owned auth web service failed startup");
           try {
-            return (await request.get(`${url}${pagePath()}`)).ok();
+            return (await httpGet(`${url}${pagePath()}`)).ok();
           } catch {
             return false;
           }
@@ -278,4 +295,10 @@ test("real upstream authentication failures remain typed in the browser", async 
       }
     }
   }
+});
+
+test("HTTP transport failure diagnostics contain no bearer", async () => {
+  await expect(httpGet("http://127.0.0.1:1", { headers })).rejects.toThrow(
+    "Evidence HTTP request failed before a response",
+  );
 });
