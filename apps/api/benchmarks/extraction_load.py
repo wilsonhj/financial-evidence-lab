@@ -12,6 +12,7 @@ import hashlib
 import json
 import os
 import platform
+import shutil
 import socket
 
 # Local benchmark launches only fixed executable/argument allowlists, never a shell.
@@ -234,8 +235,11 @@ def main() -> int:
             pg[key] = setting["value"]
     config = settings()
     if sys.platform == "darwin":
-        # Fixed read-only macOS command from the local toolchain; no shell or user arguments.
-        raw = subprocess.check_output(["sysctl", "-n", "hw.memsize"], text=True)  # nosec B603, B607
+        sysctl = shutil.which("sysctl")
+        if sysctl is None:
+            raise RuntimeError("sysctl is required for macOS memory metadata")
+        # Absolute toolchain path; fixed read-only arguments; no shell.
+        raw = subprocess.check_output([sysctl, "-n", "hw.memsize"], text=True)  # nosec B603
         memory_bytes = int(raw)
     else:
         memory_bytes = os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES")
@@ -263,13 +267,16 @@ def main() -> int:
         worker_and_setup_excluded=True,
         timings_include_auth_pool_wait_and_full_http=True,
     )
-    for name, command in (
-        ("commit", ["git", "rev-parse", "HEAD"]),
-        ("tree", ["git", "rev-parse", "HEAD^{tree}"]),
-        ("worktree_status", ["git", "status", "--porcelain"]),
+    git = shutil.which("git")
+    if git is None:
+        raise RuntimeError("git is required for load metadata")
+    for name, args in (
+        ("commit", ["rev-parse", "HEAD"]),
+        ("tree", ["rev-parse", "HEAD^{tree}"]),
+        ("worktree_status", ["status", "--porcelain"]),
     ):
-        # Commands above are fixed git metadata queries, without user arguments or shell.
-        git_value = subprocess.check_output(command, text=True)  # nosec B603
+        # Absolute git path; fixed metadata queries; no shell or user arguments.
+        git_value = subprocess.check_output([git, *args], text=True)  # nosec B603
         metadata[name] = git_value.strip()
     (args.output / "metadata.json").write_text(json.dumps(metadata, indent=2))
     rows: list[dict[str, Any]] = []
