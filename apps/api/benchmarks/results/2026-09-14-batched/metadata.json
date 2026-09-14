@@ -1,0 +1,35 @@
+{
+  "platform": "macOS-26.6.2-arm64-arm-64bit",
+  "started_at_unix": 1789422571.5659368,
+  "host_load": [17.14013671875, 15.8818359375, 27.7216796875],
+  "physical_memory_bytes": 17179869184,
+  "harness_sha256": {
+    "extraction_load_report.py": "546fe46c6700b6c537bb42dc074df471dd4e62009ac18fe923f89fde22c88b05",
+    "extraction_load_fixture.py": "8935b62dfab3e8770fef79e9763d7b71f2123d182417de6c1ce1f04022b2b86d",
+    "__init__.py": "bb1af751e558921dc26b4e2bc1d6155774a3002905066a50a72430b1cd15bad8",
+    "extraction_load.py": "25ee76fc3ef8739688523194854222e367cd2f0ca1c6bb6ed37ac312e3924ae6"
+  },
+  "cpu_count": 10,
+  "python": "3.11.14 (main, Feb 12 2026, 00:41:29) [Clang 21.1.4 ]",
+  "api_processes": 1,
+  "db_pool_min": 1,
+  "db_pool_max": 10,
+  "rate_limit_qps": 5.0,
+  "rate_limit_burst": 20.0,
+  "postgres": {
+    "server_version": "17.10 (Debian 17.10-1.pgdg12+1)",
+    "fsync": "on",
+    "synchronous_commit": "on",
+    "shared_buffers": "128MB",
+    "max_connections": "100"
+  },
+  "source_bytes": 5699,
+  "source_hash": "sha256:fec601d1ec7b498dfaf0d5351ce8eb95e044f5750f5fa67de0f940b5059f0d3a",
+  "proposal_count": 100,
+  "synthetic": true,
+  "worker_and_setup_excluded": true,
+  "timings_include_auth_pool_wait_and_full_http": true,
+  "commit": "0b143ed420a317dc0a97e772ee2a2de865ec035a",
+  "tree": "60effa19fdbee09266feab4ba409aca8587b1f80",
+  "worktree_status": "?? apps/api/benchmarks/results/"
+}
