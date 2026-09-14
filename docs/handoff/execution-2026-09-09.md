@@ -15,25 +15,25 @@ Starting revision: a184374. Starting live inventory: 37 issues, zero PRs.
 Owner requested implementation of all open issues with parallel agents.
 ADR-0017 records the initial dispatch and scope narrowing.
 
-| Issue | Branch | Scope | State | Evidence |
-|---|---|---|---|---|
-| #248 | agent/test-query-p95-flake | API query test/performance instructions | merged, PR #256 @ 1e6765c | Independent review; real PostgreSQL module 24 passed, 1 deliberate benchmark skip; opt-in local p95 0.052s; all CI passed |
-| #230 | agent/test-publish-race-wait | Two named ingestion race test files | merged, PR #255 @ 802d0eb | Independent review caught real-clock test flake; deterministic-clock fix reviewed; warning-removal mutation fails; real PostgreSQL 3 passed; all CI passed |
-| #221 | agent/arch-checkpoint-rerun | Extraction source/tests only | merged, PR #257 @ 6c409e8 | Immutable rejected-row CAS preserves concurrent owner; failed-attempt retry durable; independent 479 PostgreSQL tests passed |
-| #137 | agent/137-cutover-hardening | Retrieval API provenance and retrieval/evaluation model guards | merged, PR #261 @ 29c241c | Independent review verified provenance through rollback failure; current CI passed; issue closed |
-| #219 | agent/m4-formula-ast | Calculation engine, ADR-0018 and canonical task additions | merged, PR #262 @ dff71f0 | Independent 233 tests including local benchmarks; legacy golden hashes and SCC oracle verified; final CI passed |
-| #200 | agent/200-locked-runtime | Runtime packaging, locks and health/recovery | code merged, PR #259 @ 7a69133; hosted acceptance pending | Independent clean install, all packaged assets, 50 focused PostgreSQL tests and current CI passed; watchdog exits and local supervisor relaunch proved |
-| #194 | claude/close-trailing-acceptance-gaps | Remove unreachable extraction tool layer | merged, PR #260 @ c16955c | Independent code review and full PostgreSQL extraction suite passed; worker-role adoption remains #190 |
-| #153 | agent/153-unit-policy | Ontology-owned comparison policy and extraction checks | merged, PR #264 @ 54cad9a | Independent 657 PostgreSQL-enabled tests, wheel import and SIX vocabulary verified; final CI passed |
-| #190 | agent/190-worker-role-rollout | Committed Railway role selection | code merged, PR #265 @ 65f7159 | Independent 47 PostgreSQL tests and exact restricted-login startup checks passed; hosted verification pending |
-| #203 | agent/203-ci-observability | Coverage floors, required checks, browser cache, deployed Sentry package | merged, PR #269 @ c7b2d0c | 1778 Python tests and 419 JS tests passed; negative coverage probes fail; SDK privacy verified; seven strict admin-enforced required checks applied and read back; real reviewer staffing and hosted telemetry remain |
-| #266 | agent/266-terminal-schedule-test | Test database-clock invariant | merged, PR #267 @ 41857d2 | Independent 17 PostgreSQL tests, regression mutation and final CI passed |
-| #154 | agent/154-guidance-range-ordering | Signed guidance ordering and universal range validation | merged, PR #270 @ 3fbc8ac | 720 PostgreSQL-enabled source tests; independent 141 tests, 1681 endpoint combinations, final CI passed; issue closed |
-| #191 | agent/191-pagination-reader | Bounded API reads and coordinated web consumers | active, PR #272 | Backend and web agents share one worktree with disjoint file ownership; adversarial and integration checks pending |
-| #196 | agent/arch-complexity-split | Extraction control/stages/checkpoints/stores | extraction merged, PR #274 @ 5e0bf99 | 1112 full worker/ontology/provider tests, independent 208 PostgreSQL tests and 64 global bindings; unchanged tests/goldens/SQL; API portion waits for #191 |
-| #197 | agent/197-data-model-design | Canonical model/forecast/export storage sketch | merged, PR #275 @ 05d85d8; issue closed | Existing 0009 PostgreSQL harness and independent design/231 engine tests passed; historical missed ordering disclosed; table implementation stays #64/#66/#68 |
-| #81 | agent/81-sec-fixture-recovery | Historical fixture recovery and supplemental SEC discovery | blocked after read-only recovery design | Final d8fd80e has 60 rows/7 asserted features; no committed validator/bytes/receipts. Current SEC contact identity requested; no fetches or new byte verification |
-| #188 | agent/188-execution-wave7 | Execution plan and ownership | coordinating | Initial control PR #254 merged @ 2b15032; subsequent paths checked |
+| Issue | Branch                                | Scope                                                                    | State                                                     | Evidence                                                                                                                                                                                                              |
+| ----- | ------------------------------------- | ------------------------------------------------------------------------ | --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| #248  | agent/test-query-p95-flake            | API query test/performance instructions                                  | merged, PR #256 @ 1e6765c                                 | Independent review; real PostgreSQL module 24 passed, 1 deliberate benchmark skip; opt-in local p95 0.052s; all CI passed                                                                                             |
+| #230  | agent/test-publish-race-wait          | Two named ingestion race test files                                      | merged, PR #255 @ 802d0eb                                 | Independent review caught real-clock test flake; deterministic-clock fix reviewed; warning-removal mutation fails; real PostgreSQL 3 passed; all CI passed                                                            |
+| #221  | agent/arch-checkpoint-rerun           | Extraction source/tests only                                             | merged, PR #257 @ 6c409e8                                 | Immutable rejected-row CAS preserves concurrent owner; failed-attempt retry durable; independent 479 PostgreSQL tests passed                                                                                          |
+| #137  | agent/137-cutover-hardening           | Retrieval API provenance and retrieval/evaluation model guards           | merged, PR #261 @ 29c241c                                 | Independent review verified provenance through rollback failure; current CI passed; issue closed                                                                                                                      |
+| #219  | agent/m4-formula-ast                  | Calculation engine, ADR-0018 and canonical task additions                | merged, PR #262 @ dff71f0                                 | Independent 233 tests including local benchmarks; legacy golden hashes and SCC oracle verified; final CI passed                                                                                                       |
+| #200  | agent/200-locked-runtime              | Runtime packaging, locks and health/recovery                             | code merged, PR #259 @ 7a69133; hosted acceptance pending | Independent clean install, all packaged assets, 50 focused PostgreSQL tests and current CI passed; watchdog exits and local supervisor relaunch proved                                                                |
+| #194  | claude/close-trailing-acceptance-gaps | Remove unreachable extraction tool layer                                 | merged, PR #260 @ c16955c                                 | Independent code review and full PostgreSQL extraction suite passed; worker-role adoption remains #190                                                                                                                |
+| #153  | agent/153-unit-policy                 | Ontology-owned comparison policy and extraction checks                   | merged, PR #264 @ 54cad9a                                 | Independent 657 PostgreSQL-enabled tests, wheel import and SIX vocabulary verified; final CI passed                                                                                                                   |
+| #190  | agent/190-worker-role-rollout         | Committed Railway role selection                                         | code merged, PR #265 @ 65f7159                            | Independent 47 PostgreSQL tests and exact restricted-login startup checks passed; hosted verification pending                                                                                                         |
+| #203  | agent/203-ci-observability            | Coverage floors, required checks, browser cache, deployed Sentry package | merged, PR #269 @ c7b2d0c                                 | 1778 Python tests and 419 JS tests passed; negative coverage probes fail; SDK privacy verified; seven strict admin-enforced required checks applied and read back; real reviewer staffing and hosted telemetry remain |
+| #266  | agent/266-terminal-schedule-test      | Test database-clock invariant                                            | merged, PR #267 @ 41857d2                                 | Independent 17 PostgreSQL tests, regression mutation and final CI passed                                                                                                                                              |
+| #154  | agent/154-guidance-range-ordering     | Signed guidance ordering and universal range validation                  | merged, PR #270 @ 3fbc8ac                                 | 720 PostgreSQL-enabled source tests; independent 141 tests, 1681 endpoint combinations, final CI passed; issue closed                                                                                                 |
+| #191  | agent/191-pagination-reader           | Bounded API reads and coordinated web consumers                          | active, PR #272                                           | Backend and web agents share one worktree with disjoint file ownership; adversarial and integration checks pending                                                                                                    |
+| #196  | agent/arch-complexity-split           | Extraction control/stages/checkpoints/stores                             | extraction merged, PR #274 @ 5e0bf99                      | 1112 full worker/ontology/provider tests, independent 208 PostgreSQL tests and 64 global bindings; unchanged tests/goldens/SQL; API portion waits for #191                                                            |
+| #197  | agent/197-data-model-design           | Canonical model/forecast/export storage sketch                           | merged, PR #275 @ 05d85d8; issue closed                   | Existing 0009 PostgreSQL harness and independent design/231 engine tests passed; historical missed ordering disclosed; table implementation stays #64/#66/#68                                                         |
+| #81   | agent/81-sec-fixture-recovery         | Historical fixture recovery and supplemental SEC discovery               | blocked after read-only recovery design                   | Final d8fd80e has 60 rows/7 asserted features; no committed validator/bytes/receipts. Current SEC contact identity requested; no fetches or new byte verification                                                     |
+| #188  | agent/188-execution-wave7             | Execution plan and ownership                                             | coordinating                                              | Initial control PR #254 merged @ 2b15032; subsequent paths checked                                                                                                                                                    |
 
 Ruling: narrow #230 and #221 test ownership — their original workers/tests/**
 globs overlapped, while the required implementation is separable — any shared
@@ -147,7 +147,6 @@ and tests remain owned by #203; reuse existing request telemetry. Reserve only
 index migration 0010 under this ADR, retaining only indexes supported by query
 plans. Provider metering remains explicitly tracked under #195.
 
-
 September 10 reconciliation: GitHub shows #190 and #200 closed at 22:52 UTC.
 Their code and local acceptance were verified; no hosted adoption or restart is
 inferred from their closure. Keep those operational checks in #177/#108's live
@@ -169,7 +168,6 @@ API-dependent design, code or smoke test has been undertaken after this gate.
 Second CODEOWNER identity and approved live environment/spend cap also remain
 unanswered. Independent offline work continues.
 
-
 #191 bounded test-path ruling: the full PostgreSQL suite found the existing
 `test_query_snapshot_keeps_every_run` in `test_retrieval_costs.py` assumes a
 51-run legacy success. Authorize only its request/expectation update: the
@@ -186,7 +184,6 @@ required 3–6 supplemental issuers and >=8 byte-verified feature gate. The
 approved current FEL_SEC_USER_AGENT is missing; the owner was asked for the
 application/contact identity. No historical personal identity was adopted and
 no SEC request was made. A blocked dataset-only dispatch records this work.
-
 
 September 11 UTC: PR #272 merged at fa4cfa2eb03865471bd9d29bf8016cf825a4c71f.
 Independent review approved exact head e590bc94134720407726e59cac2519416e1f2adf
@@ -296,7 +293,6 @@ canonical task ownership and waits for combined acceptance. The pending owner
 inputs for live credentials/environment/spend, SEC identity and second CODEOWNER
 remain unresolved; no paid/provider/hosted request is implied by this dispatch.
 
-
 September 13 recovery reconciliation: fresh GitHub inspection found main
 10d2ca4ab1a6200b0e79c58629a276eac822622c after another agent merged PR287/288
 through PR290. PR289's destructive sibling rebuild proposal was closed without
@@ -319,7 +315,6 @@ now tracks production authentication separately, preserving #108's explicit
 mock-auth exception. Live environment/spend, provider key choice, SEC identity
 and second CODEOWNER inputs remain pending.
 
-
 PR294 merged at c4ffc2ef4c587fa5732df1c86d5336d25c9d5c40 after independent
 approval of1baabdb and28 focused tests,641 full JS tests with unchanged coverage
 floors, all seven required jobs and actual HTTP acceptance. Standalone parsing
@@ -334,7 +329,6 @@ waiting, and review/terminal events after another browser page submits review.
 Forced browser disconnect/reconnect is covered by separate client/proxy and
 actual HTTP API tests, not asserted by that cross-stack scenario. Hosted108 and
 old-writer draining remain separate conditions; canonical checkboxes unchanged.
-
 
 PR295 merged at e6e24b064533ab7fa979a1f952ffe47369ca9bf0 after independent
 approval of d5d8573, 21 real PostgreSQL tests and four additional edit/merge
@@ -353,7 +347,6 @@ The local benchmark preflight passed 100-item approval and both reconnect
 checks; its measured series is pinned to e6e24b and is not yet a passing p95
 claim. No hosted/provider action or canonical checkbox change is recorded.
 
-
 September 13 measured local reference acceptance at backend
 `e6e24b064533ab7fa979a1f952ffe47369ca9bf0`: one correctness preflight, ten
 warmups and 100 sequential measured cycles all passed without retries or
@@ -365,12 +358,12 @@ normalization/validation metadata. Setup and worker execution are outside timing
 All 111 cycles verify 100 accepted version2 proposals, 100 immutable approvals,
 source/evidence hashes, a succeeded job at attempt1 and exact reconnect events.
 
-| Operation | p95 ms | Required less than ms | Result |
-|---|---:|---:|---|
-| Create | 12.451541 | 500 | Pass |
-| 100-item review | 550.613459 | 1000 | Pass |
-| Waiting-review reconnect | 16.744875 | 2000 | Pass |
-| Terminal reconnect | 12.971000 | 2000 | Pass |
+| Operation                |     p95 ms | Required less than ms | Result |
+| ------------------------ | ---------: | --------------------: | ------ |
+| Create                   |  12.451541 |                   500 | Pass   |
+| 100-item review          | 550.613459 |                  1000 | Pass   |
+| Waiting-review reconnect |  16.744875 |                  2000 | Pass   |
+| Terminal reconnect       |  12.971000 |                  2000 | Pass   |
 
 The lead independently recalculated the nearest-rank p95 (95th of 100 sorted
 samples) from raw integer nanoseconds and inspected the timing/postcondition
@@ -502,7 +495,6 @@ Warmups/preflight are excluded from these 100 measured rows.
 
 </details>
 
-
 ## September 13 — reader prerequisite and acceptance reconciliation
 
 PR297 merged at 73a7d2bfd9c95a055ba17b412ef659e79855d446 after independent
@@ -533,7 +525,6 @@ three test files and may not repair production code without a new lead ruling.
 The detailed evidence map and test plan distinguish these missing proofs from
 confirmed defects and from separately outstanding release-profile performance.
 
-
 ## Reader web service configuration prerequisite — issue #303
 
 The lead prepared `infra/railway/web.json` from reviewed main 1b2da77. The
@@ -548,3 +539,41 @@ exact configured start command returned HTTP 200 with status=ok/service=fel-web
 on isolated local port 61786. The owned server was stopped after verification.
 These checks do not certify a Railway-built image or hosted reader acceptance.
 Independent review and final CI remain required before integration.
+
+## September 14 — extraction proof and selective recovery audit
+
+The owner requested completion of #306, a #61 criterion audit, coordination
+reconciliation and selective recovery while respecting other agents. The
+live ownership check found #306 had already merged at `1b2da77` before the
+takeover began. #308, #310 and #311 also merged; the reviewed base was
+`df1f85a`. No open PR was present at the subsequent branch reservation.
+Issue #61 comment 5660038952 records the disjoint follow-up ownership.
+
+### Acceptance evidence and boundaries
+
+| Boundary                                                      | Evidence                                                                                                   | Remaining scope                                                                             |
+| ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| Generated review API, temporal source pins, immutable history | #290 and bounded review follow-ups through #305; real API/worker/PostgreSQL/Next/browser workflow          | Preserve current-head required CI and acceptance; no hosted claim.                          |
+| Same-head correction and exact receipt replay                 | #306 final head `deeb951`, real competing PostgreSQL writers and singular version/audit/receipt assertions | Preserve these assertions in the follow-up.                                                 |
+| Foreign tenant resources and denied role actions              | #306 valid-target read/mutation negative matrix and authentic/forged-role checks                           | Do not equate this negative matrix alone with every positive role action.                   |
+| Stream lifecycle                                              | #306 route-local heartbeat clock, revocation, foreign resume and oversized-event proofs                    | Strengthen disconnect proof to require client and server completion before resource checks. |
+| Performance                                                   | Recorded 100 sequential local samples above, pinned to their original backend                              | No 25-active-user or full reference-profile certification; #61 stays open.                  |
+| Calibration and live/hosted release                           | Separately owned #62, #132/#177, #108 and #292                                                             | No credential, gate or dependency changes.                                                  |
+
+The independent re-review verified that the shared-clock defect was repaired
+in #306. Its exact-head CI run 34812282174 and HTTP acceptance run
+34812282200 passed. The original disconnect assertion could still accept an
+idle pool sample between live polls, so a test-only follow-up observes actual
+server response termination and joins the client reader before checking
+resources. This is stronger evidence, not a claimed production repair.
+
+Selective recovery excludes the old Claude branch's broad SSE retry rewrite,
+transport reversions and already-merged source/selection repairs. The bounded
+fixture action repair addresses endpoint dispatch, requested limits and
+immutable correction provenance. Fixture failures are not represented as
+production authorization escapes or provider spending. Unknown query controls,
+CR-only SSE framing and cursor refinements remain outside this verified slice.
+
+The integration lead retains #61 open and leaves canonical checkboxes
+unchanged. Completing these proofs does not silently waive the accepted
+reference-profile requirements or move load acceptance into #62.
