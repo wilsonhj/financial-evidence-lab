@@ -1,0 +1,26 @@
+{
+  "schema_version": "sec-fixture-transport/v1",
+  "documents": [
+    {
+      "url": "https://www.sec.gov/Archives/edgar/data/9999998/000999999826000001/original.html",
+      "path": "original.html",
+      "sha256": "38ac85bb4e95abe1c37ab8a4fea6f23326714913dd26ff6a448f59f1f327ae89"
+    },
+    {
+      "url": "https://www.sec.gov/Archives/edgar/data/9999998/000999999826000002/amendment1.html",
+      "path": "amendment1.html",
+      "sha256": "dcb288a0200f11cdcc83078cc00d2c1721572ff2d75711051a6ee3bef4268040"
+    },
+    {
+      "url": "https://www.sec.gov/Archives/edgar/data/9999998/000999999826000003/amendment2.html",
+      "path": "amendment2.html",
+      "sha256": "f807dc5d0a7076bee946cde30823e21d1ebd6dc3ffba775f37cd84d323fcb361"
+    },
+    {
+      "url": "https://www.sec.gov/Archives/edgar/data/9999998/000999999826000004/future.html",
+      "path": "future.html",
+      "sha256": "6dc184438d951c65ca13b64022217469266188368359589be5c059b8c156a965"
+    }
+  ],
+  "submissions": []
+}
