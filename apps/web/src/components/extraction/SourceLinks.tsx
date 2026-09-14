@@ -65,16 +65,14 @@ export async function SourceLinks({
           );
           const query =
             source &&
-            (() => {
-              const params = new URLSearchParams({
-                as_of: source.as_of,
-                document_version_id: edge.document_version_id,
-                span: edge.source_span_id,
-              });
-              if (source.corpus_version_id)
-                params.set("corpus_version_id", source.corpus_version_id);
-              return params;
-            })();
+            new URLSearchParams({
+              as_of: source.as_of,
+              // Empty explicitly overrides a configured reader corpus. Omitting
+              // this key would substitute today's deployment pin for history.
+              corpus_version_id: source.corpus_version_id ?? "",
+              document_version_id: edge.document_version_id,
+              span: edge.source_span_id,
+            });
           return (
             <li key={index}>
               {edge.role} · {edge.citation_status} ·{" "}
