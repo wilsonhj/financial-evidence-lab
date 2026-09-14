@@ -32,7 +32,7 @@ describe("immutable source navigation", () => {
       );
       expect(html).toContain("Read evidence span");
       if (!corpus) expect(html).toContain("No corpus pin recorded");
-      const href = html.match(/href="([^"]*\/reader\/[^\"]*)"/)![1]!.replaceAll("&amp;", "&");
+      const href = html.match(/href="([^"]*\/reader\/[^"]*)"/)![1]!.replaceAll("&amp;", "&");
       const link = new URL(href, "http://localhost");
       const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status: 404 }));
       const reader = new HttpEvidenceSource({
