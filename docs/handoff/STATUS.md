@@ -17,13 +17,13 @@ by this checkpoint where implementation or issue state differs.
 - #306 (`1b2da77`, reviewed head `deeb951`) adds the three extraction
   acceptance-test files. Its required CI and real HTTP/worker/browser
   acceptance passed. The clock repair is route-local and preserves the
-  process clock. A separate bounded follow-up strengthens disconnect proof
-  beyond a transient idle pool sample.
+  process clock. PR #313 (`8c7d2d5`) strengthens disconnect proof
+  by requiring actual client and server termination before resource checks.
 - #61 remains open. Implemented review and immutable history do not certify
   the canonical 25-active-user reference profile. Existing sequential local
   measurements retain their original scope. Do not weaken performance gates
   or transfer this gap to #62's calibration/live-provider package.
-- Selective recovery is limited to the two fixture action files: endpoint
+- Integrated recovery is limited to the two fixture action files: endpoint
   dispatch, requested limits and preservation of correction provenance.
   These concern fixture/demo parity, not production authorization escapes.
   The retired Claude branch's broad SSE retries must not be restored.

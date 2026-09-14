@@ -551,14 +551,14 @@ Issue #61 comment 5660038952 records the disjoint follow-up ownership.
 
 ### Acceptance evidence and boundaries
 
-| Boundary                                                      | Evidence                                                                                                   | Remaining scope                                                                             |
-| ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| Generated review API, temporal source pins, immutable history | #290 and bounded review follow-ups through #305; real API/worker/PostgreSQL/Next/browser workflow          | Preserve current-head required CI and acceptance; no hosted claim.                          |
-| Same-head correction and exact receipt replay                 | #306 final head `deeb951`, real competing PostgreSQL writers and singular version/audit/receipt assertions | Preserve these assertions in the follow-up.                                                 |
-| Foreign tenant resources and denied role actions              | #306 valid-target read/mutation negative matrix and authentic/forged-role checks                           | Do not equate this negative matrix alone with every positive role action.                   |
-| Stream lifecycle                                              | #306 route-local heartbeat clock, revocation, foreign resume and oversized-event proofs                    | Strengthen disconnect proof to require client and server completion before resource checks. |
-| Performance                                                   | Recorded 100 sequential local samples above, pinned to their original backend                              | No 25-active-user or full reference-profile certification; #61 stays open.                  |
-| Calibration and live/hosted release                           | Separately owned #62, #132/#177, #108 and #292                                                             | No credential, gate or dependency changes.                                                  |
+| Boundary                                                      | Evidence                                                                                                   | Remaining scope                                                                                   |
+| ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Generated review API, temporal source pins, immutable history | #290 and bounded review follow-ups through #305; real API/worker/PostgreSQL/Next/browser workflow          | Preserve current-head required CI and acceptance; no hosted claim.                                |
+| Same-head correction and exact receipt replay                 | #306 final head `deeb951`, real competing PostgreSQL writers and singular version/audit/receipt assertions | Preserve these assertions in the follow-up.                                                       |
+| Foreign tenant resources and denied role actions              | #306 valid-target read/mutation negative matrix and authentic/forged-role checks                           | Do not equate this negative matrix alone with every positive role action.                         |
+| Stream lifecycle                                              | #306 route-local heartbeat clock, revocation, foreign resume and oversized-event proofs                    | Completed in #313 (`8c7d2d5`): client and real ASGI response termination precede resource checks. |
+| Performance                                                   | Recorded 100 sequential local samples above, pinned to their original backend                              | No 25-active-user or full reference-profile certification; #61 stays open.                        |
+| Calibration and live/hosted release                           | Separately owned #62, #132/#177, #108 and #292                                                             | No credential, gate or dependency changes.                                                        |
 
 The independent re-review verified that the shared-clock defect was repaired
 in #306. Its exact-head CI run 34812282174 and HTTP acceptance run
@@ -577,3 +577,25 @@ CR-only SSE framing and cursor refinements remain outside this verified slice.
 The integration lead retains #61 open and leaves canonical checkboxes
 unchanged. Completing these proofs does not silently waive the accepted
 reference-profile requirements or move load acceptance into #62.
+
+### Completed bounded repairs
+
+- #313 merged at `8c7d2d59f9911c9e2e0f501c1d954bcc4c797024`. Independent
+  TCP mutation testing showed the old test accepted a deliberately leaked
+  response and the repair rejected it. That probe used stubbed DB observations;
+  authoritative CI 34814861984 subsequently passed 2,293 Python tests with
+  three existing opt-in skips and 89.57% coverage, above the unchanged 88.41%
+  floor. HTTP/worker/browser acceptance 34814861963 also passed.
+- #314's unchanged reviewed head `a3d57df9cbc95b89fd23fe136ceea8190d7ee534`
+  is integrated with this reconciliation. Four regression cases failed before
+  the fixture repair; 107 extraction-library tests and types/lint/format passed
+  locally, and an independent reviewer reran the seven focused tests. Its
+  original-head CI 34814894452 and HTTP acceptance 34814894428 passed.
+  After #313 advanced main, branch protection required refreshed integration
+  checks. The combined integration retains the reviewed fixture commit in its
+  ancestry and receives its own full CI and HTTP acceptance before merge;
+  the earlier run is not substituted for that gate.
+
+#61 remains open for the recorded performance-acceptance boundary. Canonical
+task states, release criteria and the #62 dependency/credential policy remain
+unchanged. Older retained work branches are not fresh implementation queues.

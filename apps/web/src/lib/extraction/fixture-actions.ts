@@ -75,6 +75,8 @@ export async function fixtureAction(
   } catch {
     return fixtureError(422, "VALIDATION_ERROR");
   }
+  if (path.endsWith("/review") && !guards.review(input))
+    return fixtureError(422, "VALIDATION_ERROR");
   const action =
     path.endsWith("/review") && guards.review(input)
       ? input.action
@@ -125,6 +127,7 @@ export async function fixtureAction(
             as_of: input.as_of,
             modes: input.modes,
             corpus_version_id: input.corpus_version_id ?? parent.corpus_version_id,
+            limits: input.limits ?? parent.limits,
           }
         : {}),
     };
@@ -156,10 +159,18 @@ export async function fixtureAction(
     if (headers.get("if-match") !== `"${prior.version}"`)
       return fixtureError(412, "PRECONDITION_FAILED");
     const current = {
-      ...approved(input.payload, input.evidence, input.reason, draft.runs[0]!),
-      record_id: prior.record_id,
+      ...prior,
+      version_id: crypto.randomUUID(),
       version: prior.version + 1,
       parent_version_id: prior.version_id,
+      kind: input.payload.kind,
+      metric_id: input.payload.metric_id,
+      payload: structuredClone(input.payload),
+      evidence: structuredClone(input.evidence),
+      evidence_manifest_hash: `sha256:${"b".repeat(64)}`,
+      approved_by: fixtureId(9),
+      created_at: new Date().toISOString(),
+      approval_reason: input.reason,
     };
     draft.versions.push(current);
     response = Response.json(current, {

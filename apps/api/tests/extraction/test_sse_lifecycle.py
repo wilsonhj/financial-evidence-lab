@@ -5,7 +5,7 @@ import queue
 import socket
 import time
 import uuid
-from threading import Thread
+from threading import Event, Thread
 
 import httpx
 import psycopg
@@ -227,8 +227,20 @@ def test_revoked_viewer_stream_drops_without_later_payload(
 
 
 def test_disconnect_releases_checkout_and_transaction(
-    live_api, extraction_tenant, extraction_url, waiting_review_fixture
+    live_api, extraction_tenant, extraction_url, waiting_review_fixture, monkeypatch
 ):
+    completed = Event()
+
+    class ObservedResponse(routes_events.StreamingResponse):
+        async def __call__(self, scope, receive, send):
+            try:
+                await super().__call__(scope, receive, send)
+            finally:
+                completed.set()
+
+    # Observe real server completion; a healthy poll releases its DB checkout
+    # even while the response is still running, so an idle sample is insufficient.
+    monkeypatch.setattr(routes_events, "StreamingResponse", ObservedResponse)
     tenant, fixture = extraction_tenant, waiting_review_fixture
     path = live_api + "/v1/extraction-runs/" + fixture["run"] + "/events"
     baseline = _occupancy(extraction_url)
@@ -239,13 +251,23 @@ def test_disconnect_releases_checkout_and_transaction(
         reader.start()
         replayed = _drain_authorized(inbox)
         assert replayed
+        assert not completed.is_set(), "waiting-review stream ended before disconnect"
+        # Shutdown wakes the reader blocked in recv as well as notifying the
+        # server. Merely closing a socket in another thread need not wake recv.
+        network = stream.extensions["network_stream"]
+        network.get_extra_info("socket").shutdown(socket.SHUT_RDWR)
+    reader.join(5)
+    assert not reader.is_alive(), "client stream reader survived disconnect"
+    assert completed.wait(5), "server streaming response survived disconnect"
+
+    def resources_released():
+        current = _occupancy(extraction_url)
+        return all(current[key] <= baseline[key] for key in baseline)
+
     released = _wait_until(
-        lambda: (
-            _occupancy(extraction_url)["idle_in_transaction"] <= baseline["idle_in_transaction"]
-            and _occupancy(extraction_url)["checked_out"] <= baseline["checked_out"]
-        ),
+        resources_released,
         5,
-        "disconnect left a checked-out connection or idle transaction",
+        "disconnect left a checked-out connection or active/idle transaction",
     )
     assert released
     assert _occupancy(extraction_url)["idle_in_transaction"] <= baseline["idle_in_transaction"]
