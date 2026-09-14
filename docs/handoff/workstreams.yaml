@@ -97,11 +97,12 @@ packages:
     tasks: []
     depends_on: []
     team: integration
-    branch: agent/188-execution-wave13
-    status: active # Reconcile verified prerequisites and coordinate disjoint #61 implementation under ADR-0024.
+    branch: agent/188-review-reconcile
+    status: merged # September 14 lead reconciliation and bounded recovery integration; future dispatch requires a new live ownership check.
     allowed_paths:
       - specs/001-financial-evidence-lab/tasks.md # Lead-only verified checkbox/annotation updates.
       - docs/handoff/execution-2026-09-09.md
+      - docs/handoff/STATUS.md
       - docs/handoff/workstreams.yaml
       - docs/decisions/ADR-0017-parallel-backlog-execution.md
       - docs/superpowers/plans/2026-09-09-backlog-resolution.md
@@ -277,10 +278,15 @@ packages:
   - id: READER-PROD-SMOKE # child F of #87; owns #96 criterion #11
     issue: 108
     tasks: []
-    depends_on: [READER-CROSS-STACK, M2-CONTRACT, READER-INTEGRITY-CLASSIFICATION, READER-WEB-DEPLOY-CONFIG] # Hosted credentials and infra prerequisites remain blocked.
+    depends_on: [
+        READER-CROSS-STACK,
+        M2-CONTRACT,
+        READER-INTEGRITY-CLASSIFICATION,
+        READER-WEB-DEPLOY-CONFIG,
+      ] # Hosted credentials and infra prerequisites remain blocked.
     team: trust
     branch: test/reader-prod-smoke
-    status: blocked # registered after #105/#106; NOT ready — hosted deployment credentials not provisioned; INTEGRITY_ERROR→unavailable residual blocks integrity-alert UI acceptance
+    status: blocked # #304 fixes integrity classification and #311 supplies web configuration; hosted provisioning and actual ingestion-to-reader smoke remain unverified.
     credentials: hosted-required # override defaults.credentials mock-only; names only until lead provisions
     allowed_paths:
       - evals/** # hosted-smoke harness + evidence capture
@@ -294,7 +300,7 @@ packages:
     depends_on: [READER-WEB-HTTP, READER-CROSS-STACK, M2-OBSERVATORY-UI]
     team: experience
     branch: agent/301-reader-integrity
-    status: ready # Lead releases after reviewed wave13 registration; #108 remains blocked.
+    status: merged # PR #304 @ 5dc48f0; explicit integrity classification verified. #108 retains hosted acceptance.
     allowed_paths:
       - apps/web/src/lib/data/http-source.ts
       - apps/web/src/lib/data/http-source.test.ts
@@ -309,7 +315,7 @@ packages:
     depends_on: [READER-WEB-HTTP]
     team: integration
     branch: agent/303-railway-web
-    status: active # Lead-owned offline #108 prerequisite; no hosted deployment.
+    status: merged # PR #311 @ df1f85a; offline configuration/build/start verification only, no hosted deployment.
     allowed_paths:
       - infra/railway/web.json
       - infra/README.md
@@ -512,7 +518,7 @@ packages:
     depends_on: [M3-REVIEW-API, M3-REVIEW-WEB]
     team: experience
     branch: agent/m3-review # Integration acceptance only; implementation uses the disjoint children below.
-    status: blocked # PR290 supplies executable cross-stack proof; current safety residuals and remaining acceptance still precede closure.
+    status: blocked # #290/#306/#313 supply functional and teardown evidence; the documented load-acceptance boundary still precedes closure. Do not redispatch implementation.
     allowed_paths: []
   - id: EXTRACTION-EVENT-ORDERING
     issue: 135
@@ -547,8 +553,8 @@ packages:
     tasks: []
     depends_on: [M3-REVIEW-CANDIDATE-CONTRACT]
     team: platform
-    branch: agent/61-acceptance-proofs
-    status: ready # PR299/19e5b9a merged; test-only acceptance follow-up after reviewed wave13 registration.
+    branch: cursor/61-acceptance-proofs-97f4
+    status: merged # PR #306 @ 1b2da77 plus #313 @ 8c7d2d5; real PG/CI/HTTP acceptance passed, including actual disconnect termination. #61 remains open.
     allowed_paths:
       - apps/api/tests/extraction/test_correction_concurrency.py
       - apps/api/tests/extraction/test_access_boundaries.py
@@ -559,7 +565,7 @@ packages:
     depends_on: [M3-REVIEW-CANDIDATE-CONTRACT]
     team: experience
     branch: agent/61-review-patch-boundary
-    status: merged # PR288/290 integration plus reviewed PR291/cde9cea, PR294/c4ffc2e and PR297/73a7d2b residual fixes.
+    status: merged # PR288/290 plus PR291/cde9cea, PR294/c4ffc2e, PR297/73a7d2b and PR305/18f510e historical source-scope repair.
     allowed_paths:
       - apps/web/src/lib/extraction/**
       - apps/web/src/components/extraction/**
@@ -575,7 +581,7 @@ packages:
     depends_on: []
     team: platform
     branch: agent/292-production-auth-api
-    status: active # ADR0025 accepted in PR296/2a5e3ca; offline implementation PR300, no hosted identity acceptance.
+    status: merged # PR #300 @ e66fb6b implements accepted ADR0025; #310 @ 0230338 hardens mock claims. Hosted identity acceptance remains #292-owned.
     allowed_paths:
       - apps/api/app/auth.py
       - apps/api/app/dependencies.py
@@ -1178,3 +1184,26 @@ packages:
     # Old #76 validator/excerpt/amendment acceptance debt precedes supplements.
     # Keep 20-issuer cohort read-only and >=8 actual byte-verified features;
     # 3-6 supplemental issuers must come from fetched SEC discovery evidence.
+
+  # Owner-authorized bounded recovery, issue #61 comment 5660038952.
+  # Disjoint from the already merged Cursor proof package; no credential or
+  # milestone dependency policy changes.
+  - id: M3-REVIEW-DISCONNECT-PROOF
+    issue: 61
+    tasks: []
+    depends_on: [M3-REVIEW-API]
+    team: trust
+    branch: agent/61-disconnect-proof
+    status: merged # PR #313 @ 8c7d2d5; real PostgreSQL and HTTP acceptance passed.
+    allowed_paths:
+      - apps/api/tests/extraction/test_sse_lifecycle.py
+  - id: M3-REVIEW-FIXTURE-PARITY
+    issue: 61
+    tasks: []
+    depends_on: [M3-REVIEW-WEB]
+    team: experience
+    branch: agent/61-fixture-contract-parity
+    status: merged # Reviewed PR #314 head a3d57df integrated with the lead reconciliation; three fixture-only defects repaired.
+    allowed_paths:
+      - apps/web/src/lib/extraction/fixture-actions.ts
+      - apps/web/src/lib/extraction/fixture-actions.test.ts
