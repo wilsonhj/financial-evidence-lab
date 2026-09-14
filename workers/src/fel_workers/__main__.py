@@ -22,6 +22,10 @@ Two modes:
     and complete them with fabricated output, so they must never point at
     a production database or queue.
 
+  - ``FEL_FIXTURE_INGEST`` set truthy — pinned local SEC bytes through the
+    real ingestion pipeline, requiring ``FEL_FIXTURE_DIR`` (manifest/assets)
+    and ``FEL_STORAGE_DIR`` (durable blobs). Isolated acceptance use only.
+
   The structured MODEL binding is a separate, equally explicit opt-in:
   ``FEL_ALLOW_MOCK_LLM`` (see :func:`build_structured_llm`). Nothing else
   binds a model, so an unconfigured worker cannot answer ``extraction_run``
@@ -36,7 +40,7 @@ Two modes:
   after stripping whitespace, case-insensitive ``1``/``true``/``yes``/``on``
   means set; absent or empty means unset; ANY other non-empty value (e.g.
   the typo ``ture``, or ``0``) exits with status 2 rather than being
-  guessed at. With neither (or both) mode set, the process exits with
+  guessed at. Without exactly one mode set, the process exits with
   status 2 before any database connection is attempted. ``--max-iterations``
   bounds the loop for tests/one-shot drains.
 
@@ -164,7 +168,8 @@ def build_run_providers() -> tuple[SecClient, StorageProvider]:
     Direct (library/test) calls default to the deterministic mocks when
     ``FEL_SEC_LIVE`` is unset; the DEPLOYMENT path never relies on that
     default — :func:`run_entry` gates provider mode explicitly (exit 2
-    unless exactly one of ``FEL_SEC_LIVE``/``FEL_MOCK_SMOKE`` is set truthy;
+    unless exactly one of ``FEL_SEC_LIVE``/``FEL_MOCK_SMOKE``/
+    ``FEL_FIXTURE_INGEST`` is set truthy;
     see :func:`_read_mode_flag`) before this function is reached.
 
     Live mode (``FEL_SEC_LIVE`` truthy): fails closed unless ``FEL_STORAGE_DIR``
@@ -181,6 +186,20 @@ def build_run_providers() -> tuple[SecClient, StorageProvider]:
     from fel_workers.ingestion.sec_client import LiveSecClient
     from fel_workers.storage import LocalDirStorageProvider
 
+    if _read_mode_flag("FEL_FIXTURE_INGEST"):
+        # Check all flags even for direct callers: never silently prefer a
+        # synthetic transport over an explicitly selected live mode.
+        resolve_provider_mode()
+        fixture_dir = os.environ.get("FEL_FIXTURE_DIR", "").strip()
+        fixture_storage_dir = os.environ.get("FEL_STORAGE_DIR", "").strip()
+        if not fixture_dir or not fixture_storage_dir:
+            raise RuntimeError("FEL_FIXTURE_INGEST requires FEL_FIXTURE_DIR and FEL_STORAGE_DIR")
+        from fel_workers.ingestion.fixture_sec_client import FixtureSecClient
+
+        try:
+            return FixtureSecClient(fixture_dir), LocalDirStorageProvider(fixture_storage_dir)
+        except (ValueError, OSError, RuntimeError) as exc:
+            raise RuntimeError("FEL_FIXTURE_INGEST fixture/storage validation failed") from exc
     if not _read_mode_flag("FEL_SEC_LIVE"):
         return MockSecClient(), MockStorageProvider()
     storage_dir = os.environ.get("FEL_STORAGE_DIR")
@@ -313,19 +332,26 @@ def validate_extraction_model_binding(queue_name: str) -> None:
 
 
 def resolve_provider_mode() -> str:
-    """Resolve the explicit provider mode: ``"live"`` or ``"mock"``.
+    """Resolve the explicit provider mode: ``"live"``, ``"mock"`` or ``"fixture"``.
 
     The consumer never guesses: an unconfigured worker attached to a real
     database/queue with mock providers would mark real ``sec_discovery``
     jobs successful with empty output and could persist mock bytes under
-    real accessions. Raises ``RuntimeError`` when neither — or both — of
-    ``FEL_SEC_LIVE`` / ``FEL_MOCK_SMOKE`` is set truthy, or when either
+    real accessions. Raises ``RuntimeError`` unless exactly one of
+    ``FEL_SEC_LIVE`` / ``FEL_MOCK_SMOKE`` / ``FEL_FIXTURE_INGEST`` is set truthy,
+    or when any
     carries an unrecognized value (strict parsing via
     :func:`_read_mode_flag`; a typo like ``FEL_SEC_LIVE=ture`` fails closed
     instead of silently reading as unset).
     """
     live = _read_mode_flag("FEL_SEC_LIVE")
     mock = _read_mode_flag("FEL_MOCK_SMOKE")
+    fixture = _read_mode_flag("FEL_FIXTURE_INGEST")
+    if fixture and (live or mock):
+        raise RuntimeError(
+            "FEL_FIXTURE_INGEST conflicts with FEL_SEC_LIVE/FEL_MOCK_SMOKE —"
+            " provider mode is ambiguous; set exactly one and restart."
+        )
     if live and mock:
         raise RuntimeError(
             "both FEL_SEC_LIVE and FEL_MOCK_SMOKE are set — provider mode"
@@ -335,11 +361,15 @@ def resolve_provider_mode() -> str:
         return "live"
     if mock:
         return "mock"
+    if fixture:
+        return "fixture"
     raise RuntimeError(
         "provider mode is not configured — refusing to start. Set"
         " FEL_SEC_LIVE=1 for live SEC ingestion (also requires"
         " FEL_STORAGE_DIR and FEL_SEC_USER_AGENT), or FEL_MOCK_SMOKE=1 to"
-        " explicitly opt in to the deterministic mock providers. WARNING:"
+        " explicitly opt in to the deterministic mock providers, or"
+        " FEL_FIXTURE_INGEST=1 with FEL_FIXTURE_DIR and FEL_STORAGE_DIR for"
+        " isolated fixture ingestion. WARNING:"
         " mock mode claims real queued jobs and completes them with"
         " fabricated output; it must never point at a production database"
         " or queue."
