@@ -270,13 +270,13 @@ def main() -> int:
     git = shutil.which("git")
     if git is None:
         raise RuntimeError("git is required for load metadata")
-    for name, args in (
+    for name, git_args in (
         ("commit", ["rev-parse", "HEAD"]),
         ("tree", ["rev-parse", "HEAD^{tree}"]),
         ("worktree_status", ["status", "--porcelain"]),
     ):
         # Absolute git path; fixed metadata queries; no shell or user arguments.
-        git_value = subprocess.check_output([git, *args], text=True)  # nosec B603
+        git_value = subprocess.check_output([git, *git_args], text=True)  # nosec B603
         metadata[name] = git_value.strip()
     (args.output / "metadata.json").write_text(json.dumps(metadata, indent=2))
     rows: list[dict[str, Any]] = []

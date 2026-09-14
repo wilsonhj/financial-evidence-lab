@@ -107,3 +107,15 @@ behavior and reduced work, not satisfaction of the latency requirement.
 Raw samples, reports and profiles: [original baseline](benchmarks/results/2026-09-14-baseline/),
 [batched baseline](benchmarks/results/2026-09-14-batched/), and
 [projected bindings](benchmarks/results/2026-09-14-projected/).
+
+A subsequent instrumented 25-review **diagnostic, not another acceptance run**,
+observed pool acquisition/setup p95 of about 1,031 ms. PostgreSQL activity samples
+showed up to eight simultaneous `WALWrite` waiters, with WAL segment creation/sync
+waits as well. Individual writes stalled 354–413 ms and one commit took 382 ms;
+slow requests then needed only 130–180 ms of SQL execution. There were no reported
+deadlocks or temporary-file spills. This supports WAL/storage contention
+amplifying pool waits as a remaining limitation; it does not prove all latency
+variation has that cause. The Docker VM has approximately 7.65 GiB, shared with
+other local services, below the reference database resources. Durability and
+pool settings remain unchanged. [Diagnostic samples](benchmarks/results/2026-09-14-diagnostic/)
+are retained separately from all three failed acceptance runs.

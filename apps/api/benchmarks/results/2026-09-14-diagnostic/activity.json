@@ -1,0 +1,1502 @@
+[
+  { "at_ns": 731163048936833, "activity": [["idle", "Client", "ClientRead", 2]] },
+  {
+    "at_ns": 731163101765041,
+    "activity": [
+      ["idle", "Client", "ClientRead", 1],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731163154254750,
+    "activity": [
+      ["idle", "Client", "ClientRead", 1],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731163205761541,
+    "activity": [
+      ["idle", "Client", "ClientRead", 1],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731163258897250,
+    "activity": [
+      ["idle", "Client", "ClientRead", 1],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731163312750000,
+    "activity": [
+      ["active", null, null, 1],
+      ["idle", "Client", "ClientRead", 1]
+    ]
+  },
+  { "at_ns": 731163368122833, "activity": [["idle", "Client", "ClientRead", 1]] },
+  { "at_ns": 731163419120166, "activity": [["idle", "Client", "ClientRead", 1]] },
+  { "at_ns": 731163473626791, "activity": [["idle", "Client", "ClientRead", 1]] },
+  {
+    "at_ns": 731163527447375,
+    "activity": [
+      ["active", null, null, 1],
+      ["idle", "Client", "ClientRead", 1]
+    ]
+  },
+  { "at_ns": 731163580719375, "activity": [["idle", "Client", "ClientRead", 1]] },
+  { "at_ns": 731163640901000, "activity": [["idle", "Client", "ClientRead", 1]] },
+  { "at_ns": 731163692710250, "activity": [["idle in transaction", "Client", "ClientRead", 1]] },
+  {
+    "at_ns": 731163748134333,
+    "activity": [
+      ["active", null, null, 5],
+      ["idle in transaction", "Client", "ClientRead", 2]
+    ]
+  },
+  {
+    "at_ns": 731163800531125,
+    "activity": [
+      ["active", "Client", "ClientRead", 1],
+      ["active", "IO", "WalSync", 1],
+      ["idle", "Client", "ClientRead", 2],
+      ["idle in transaction", "Client", "ClientRead", 6]
+    ]
+  },
+  { "at_ns": 731163852386625, "activity": [["idle", "Client", "ClientRead", 11]] },
+  {
+    "at_ns": 731163904686916,
+    "activity": [
+      ["active", null, null, 1],
+      ["idle", "Client", "ClientRead", 11]
+    ]
+  },
+  { "at_ns": 731163959781750, "activity": [["idle", "Client", "ClientRead", 12]] },
+  {
+    "at_ns": 731164010736625,
+    "activity": [
+      ["active", "IO", "WalSync", 1],
+      ["idle", "Client", "ClientRead", 11]
+    ]
+  },
+  {
+    "at_ns": 731164061611041,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731164114827916,
+    "activity": [
+      ["active", null, null, 1],
+      ["idle", "Client", "ClientRead", 11]
+    ]
+  },
+  {
+    "at_ns": 731164168280500,
+    "activity": [
+      ["active", null, null, 1],
+      ["idle", "Client", "ClientRead", 11]
+    ]
+  },
+  { "at_ns": 731164224048708, "activity": [["idle", "Client", "ClientRead", 10]] },
+  {
+    "at_ns": 731164278462375,
+    "activity": [
+      ["active", null, null, 1],
+      ["idle", "Client", "ClientRead", 11]
+    ]
+  },
+  {
+    "at_ns": 731164334113041,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731164389554625,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731164444395166,
+    "activity": [
+      ["active", null, null, 1],
+      ["idle", "Client", "ClientRead", 11]
+    ]
+  },
+  {
+    "at_ns": 731164499782291,
+    "activity": [
+      ["active", null, null, 1],
+      ["idle", "Client", "ClientRead", 11]
+    ]
+  },
+  {
+    "at_ns": 731164550713541,
+    "activity": [
+      ["idle", "Client", "ClientRead", 10],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731164602758250,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  { "at_ns": 731164659942083, "activity": [["idle", "Client", "ClientRead", 12]] },
+  { "at_ns": 731164715247125, "activity": [["idle", "Client", "ClientRead", 12]] },
+  {
+    "at_ns": 731164770102083,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731164822984166,
+    "activity": [
+      ["active", null, null, 1],
+      ["idle", "Client", "ClientRead", 11]
+    ]
+  },
+  {
+    "at_ns": 731164875762833,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731164926887916,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731164979064041,
+    "activity": [
+      ["active", null, null, 1],
+      ["idle", "Client", "ClientRead", 10]
+    ]
+  },
+  { "at_ns": 731165031160250, "activity": [["idle", "Client", "ClientRead", 12]] },
+  { "at_ns": 731165091405250, "activity": [["idle", "Client", "ClientRead", 12]] },
+  {
+    "at_ns": 731165142363916,
+    "activity": [
+      ["active", null, null, 1],
+      ["idle", "Client", "ClientRead", 11]
+    ]
+  },
+  {
+    "at_ns": 731165198142291,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731165248979166,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731165299752791,
+    "activity": [
+      ["active", null, null, 1],
+      ["idle", "Client", "ClientRead", 10]
+    ]
+  },
+  {
+    "at_ns": 731165350641416,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731165402144416,
+    "activity": [
+      ["active", null, null, 1],
+      ["idle", "Client", "ClientRead", 11]
+    ]
+  },
+  {
+    "at_ns": 731165453167125,
+    "activity": [
+      ["active", "IO", "WalWrite", 1],
+      ["idle", "Client", "ClientRead", 11]
+    ]
+  },
+  {
+    "at_ns": 731165504250041,
+    "activity": [
+      ["active", null, null, 1],
+      ["idle", "Client", "ClientRead", 11]
+    ]
+  },
+  {
+    "at_ns": 731165555738166,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731165606817583,
+    "activity": [
+      ["active", null, null, 1],
+      ["idle", "Client", "ClientRead", 11]
+    ]
+  },
+  { "at_ns": 731165658182500, "activity": [["idle", "Client", "ClientRead", 10]] },
+  { "at_ns": 731165710862458, "activity": [["idle", "Client", "ClientRead", 12]] },
+  {
+    "at_ns": 731165762488541,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731165813537500,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731165864704666,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731165917316791,
+    "activity": [
+      ["active", null, null, 1],
+      ["idle", "Client", "ClientRead", 11]
+    ]
+  },
+  { "at_ns": 731165972336208, "activity": [["idle", "Client", "ClientRead", 12]] },
+  { "at_ns": 731166024825166, "activity": [["idle", "Client", "ClientRead", 11]] },
+  {
+    "at_ns": 731166075633083,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731166126927666,
+    "activity": [
+      ["active", null, null, 1],
+      ["idle", "Client", "ClientRead", 11]
+    ]
+  },
+  {
+    "at_ns": 731166182230666,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731166236615708,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731166288616291,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731166341446291,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731166395921041,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  { "at_ns": 731166451674708, "activity": [["idle", "Client", "ClientRead", 10]] },
+  {
+    "at_ns": 731166503221041,
+    "activity": [
+      ["active", null, null, 1],
+      ["idle", "Client", "ClientRead", 11]
+    ]
+  },
+  { "at_ns": 731166554312875, "activity": [["idle", "Client", "ClientRead", 12]] },
+  {
+    "at_ns": 731166605959208,
+    "activity": [
+      ["active", "IO", "WalSync", 1],
+      ["idle", "Client", "ClientRead", 11]
+    ]
+  },
+  {
+    "at_ns": 731166657980458,
+    "activity": [
+      ["active", null, null, 1],
+      ["idle", "Client", "ClientRead", 11]
+    ]
+  },
+  {
+    "at_ns": 731166715856333,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731166769629958,
+    "activity": [
+      ["active", null, null, 1],
+      ["idle", "Client", "ClientRead", 11]
+    ]
+  },
+  { "at_ns": 731166825021666, "activity": [["idle", "Client", "ClientRead", 10]] },
+  { "at_ns": 731166877412833, "activity": [["idle", "Client", "ClientRead", 12]] },
+  {
+    "at_ns": 731166928420291,
+    "activity": [
+      ["active", null, null, 1],
+      ["idle", "Client", "ClientRead", 11]
+    ]
+  },
+  { "at_ns": 731166990235875, "activity": [["idle", "Client", "ClientRead", 12]] },
+  { "at_ns": 731167043384000, "activity": [["idle", "Client", "ClientRead", 12]] },
+  {
+    "at_ns": 731167097857166,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", null, null, 1]
+    ]
+  },
+  {
+    "at_ns": 731167151600500,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731167206866458,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731167274175083,
+    "activity": [
+      ["active", "IO", "WalWrite", 1],
+      ["idle", "Client", "ClientRead", 11]
+    ]
+  },
+  { "at_ns": 731167334731750, "activity": [["idle", "Client", "ClientRead", 10]] },
+  {
+    "at_ns": 731167385652958,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731167436437125,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731167492626000,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731167545198375,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731167599837958,
+    "activity": [
+      ["active", null, null, 1],
+      ["idle", "Client", "ClientRead", 11]
+    ]
+  },
+  {
+    "at_ns": 731167650875458,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731167701440375,
+    "activity": [
+      ["active", null, null, 1],
+      ["idle", "Client", "ClientRead", 11]
+    ]
+  },
+  {
+    "at_ns": 731167753383708,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  { "at_ns": 731167805810708, "activity": [["idle", "Client", "ClientRead", 11]] },
+  {
+    "at_ns": 731167857382416,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731167910579416,
+    "activity": [
+      ["active", null, null, 1],
+      ["idle", "Client", "ClientRead", 11]
+    ]
+  },
+  {
+    "at_ns": 731167962663541,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731168016675375,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731168074005250,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731168126370583,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731168179776250,
+    "activity": [
+      ["active", null, null, 1],
+      ["idle", "Client", "ClientRead", 11]
+    ]
+  },
+  {
+    "at_ns": 731168238509875,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731168289884000,
+    "activity": [
+      ["idle", "Client", "ClientRead", 10],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731168343753666,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731168397051791,
+    "activity": [
+      ["active", null, null, 1],
+      ["idle", "Client", "ClientRead", 11]
+    ]
+  },
+  {
+    "at_ns": 731168448592666,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731168503297416,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731168555605458,
+    "activity": [
+      ["active", null, null, 1],
+      ["idle", "Client", "ClientRead", 11]
+    ]
+  },
+  {
+    "at_ns": 731168608299708,
+    "activity": [
+      ["active", null, null, 1],
+      ["idle", "Client", "ClientRead", 11]
+    ]
+  },
+  { "at_ns": 731168662603375, "activity": [["idle", "Client", "ClientRead", 12]] },
+  { "at_ns": 731168723665250, "activity": [["idle", "Client", "ClientRead", 10]] },
+  {
+    "at_ns": 731168776399416,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731168829664375,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731168880771166,
+    "activity": [
+      ["active", null, null, 1],
+      ["idle", "Client", "ClientRead", 11]
+    ]
+  },
+  {
+    "at_ns": 731168934341041,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731168985227958,
+    "activity": [
+      ["active", null, null, 1],
+      ["idle", "Client", "ClientRead", 11]
+    ]
+  },
+  {
+    "at_ns": 731169042160125,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731169104499041,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731169160444708,
+    "activity": [
+      ["active", null, null, 1],
+      ["idle", "Client", "ClientRead", 11]
+    ]
+  },
+  { "at_ns": 731169211772333, "activity": [["idle", "Client", "ClientRead", 10]] },
+  { "at_ns": 731169264222333, "activity": [["idle", "Client", "ClientRead", 12]] },
+  {
+    "at_ns": 731169317695125,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731169375301625,
+    "activity": [
+      ["active", null, null, 1],
+      ["idle", "Client", "ClientRead", 11]
+    ]
+  },
+  {
+    "at_ns": 731169429621750,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731169483253208,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731169538124875,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731169593211416,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731169648768541,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  { "at_ns": 731169709501625, "activity": [["idle", "Client", "ClientRead", 10]] },
+  { "at_ns": 731169766341083, "activity": [["idle", "Client", "ClientRead", 12]] },
+  {
+    "at_ns": 731169821629208,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731169876868958,
+    "activity": [
+      ["active", null, null, 1],
+      ["idle", "Client", "ClientRead", 11]
+    ]
+  },
+  {
+    "at_ns": 731169927539208,
+    "activity": [
+      ["active", null, null, 1],
+      ["idle", "Client", "ClientRead", 11]
+    ]
+  },
+  {
+    "at_ns": 731169978762083,
+    "activity": [
+      ["active", null, null, 1],
+      ["idle", "Client", "ClientRead", 11]
+    ]
+  },
+  {
+    "at_ns": 731170034991416,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731170091732083,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731170145434833,
+    "activity": [
+      ["idle", "Client", "ClientRead", 10],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731170196729791,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731170249332541,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731170306835083,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731170360842250,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731170414635250,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731170469815958,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731170525029958,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731170579840166,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  { "at_ns": 731170630746291, "activity": [["idle", "Client", "ClientRead", 11]] },
+  { "at_ns": 731170685427333, "activity": [["idle", "Client", "ClientRead", 12]] },
+  {
+    "at_ns": 731170740957375,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731170794216916,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle", null, null, 1]
+    ]
+  },
+  {
+    "at_ns": 731170849925375,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731170902677041,
+    "activity": [
+      ["active", null, null, 1],
+      ["idle", "Client", "ClientRead", 11]
+    ]
+  },
+  {
+    "at_ns": 731170955616833,
+    "activity": [
+      ["idle", "Client", "ClientRead", 10],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  { "at_ns": 731171009518250, "activity": [["idle", "Client", "ClientRead", 12]] },
+  {
+    "at_ns": 731171060700625,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731171111873291,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731171167575291,
+    "activity": [
+      ["active", null, null, 1],
+      ["idle", "Client", "ClientRead", 11]
+    ]
+  },
+  {
+    "at_ns": 731171218455875,
+    "activity": [
+      ["active", null, null, 1],
+      ["idle", "Client", "ClientRead", 11]
+    ]
+  },
+  {
+    "at_ns": 731171269292750,
+    "activity": [
+      ["active", null, null, 1],
+      ["idle", "Client", "ClientRead", 11]
+    ]
+  },
+  { "at_ns": 731171325046125, "activity": [["idle", "Client", "ClientRead", 11]] },
+  {
+    "at_ns": 731171375663625,
+    "activity": [
+      ["active", "IO", "WalSync", 1],
+      ["idle", "Client", "ClientRead", 11]
+    ]
+  },
+  { "at_ns": 731171435928000, "activity": [["idle", "Client", "ClientRead", 12]] },
+  {
+    "at_ns": 731171487059291,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731171542159333,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", null, null, 1]
+    ]
+  },
+  {
+    "at_ns": 731171601745250,
+    "activity": [
+      ["active", null, null, 1],
+      ["idle", "Client", "ClientRead", 11]
+    ]
+  },
+  {
+    "at_ns": 731171652796083,
+    "activity": [
+      ["active", null, null, 1],
+      ["idle", "Client", "ClientRead", 11]
+    ]
+  },
+  {
+    "at_ns": 731171709386541,
+    "activity": [
+      ["idle", "Client", "ClientRead", 10],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731171765075666,
+    "activity": [
+      ["active", null, null, 1],
+      ["idle", "Client", "ClientRead", 11]
+    ]
+  },
+  {
+    "at_ns": 731171815851833,
+    "activity": [
+      ["active", null, null, 1],
+      ["idle", "Client", "ClientRead", 11]
+    ]
+  },
+  {
+    "at_ns": 731171868226750,
+    "activity": [
+      ["active", null, null, 1],
+      ["idle", "Client", "ClientRead", 11]
+    ]
+  },
+  {
+    "at_ns": 731171924661583,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731171976533500,
+    "activity": [
+      ["active", null, null, 1],
+      ["idle", "Client", "ClientRead", 11]
+    ]
+  },
+  {
+    "at_ns": 731172030981208,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731172082174125,
+    "activity": [
+      ["active", null, null, 1],
+      ["idle", "Client", "ClientRead", 11]
+    ]
+  },
+  {
+    "at_ns": 731172134752375,
+    "activity": [
+      ["active", null, null, 1],
+      ["idle", "Client", "ClientRead", 10]
+    ]
+  },
+  { "at_ns": 731172189881291, "activity": [["idle", "Client", "ClientRead", 12]] },
+  {
+    "at_ns": 731172241466750,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731172296198000,
+    "activity": [
+      ["active", null, null, 1],
+      ["idle", "Client", "ClientRead", 11]
+    ]
+  },
+  {
+    "at_ns": 731172347961833,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731172399511666,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731172450634750,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  { "at_ns": 731172504862333, "activity": [["idle", "Client", "ClientRead", 10]] },
+  {
+    "at_ns": 731172556772000,
+    "activity": [
+      ["idle", "Client", "ClientRead", 10],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731172609498833,
+    "activity": [
+      ["active", null, null, 1],
+      ["idle", "Client", "ClientRead", 11]
+    ]
+  },
+  { "at_ns": 731172665185791, "activity": [["idle", "Client", "ClientRead", 12]] },
+  {
+    "at_ns": 731172715788166,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731172766634791,
+    "activity": [
+      ["active", null, null, 1],
+      ["idle", "Client", "ClientRead", 11]
+    ]
+  },
+  {
+    "at_ns": 731172818349250,
+    "activity": [
+      ["active", null, null, 1],
+      ["idle", "Client", "ClientRead", 11]
+    ]
+  },
+  {
+    "at_ns": 731172869593833,
+    "activity": [
+      ["active", null, null, 1],
+      ["idle", "Client", "ClientRead", 10]
+    ]
+  },
+  {
+    "at_ns": 731172922788375,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731172976662208,
+    "activity": [
+      ["active", null, null, 1],
+      ["idle", "Client", "ClientRead", 11]
+    ]
+  },
+  { "at_ns": 731173028247875, "activity": [["idle", "Client", "ClientRead", 12]] },
+  {
+    "at_ns": 731173080616125,
+    "activity": [
+      ["active", null, null, 1],
+      ["idle", "Client", "ClientRead", 11]
+    ]
+  },
+  {
+    "at_ns": 731173131721916,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731173183050375,
+    "activity": [
+      ["active", null, null, 1],
+      ["idle", "Client", "ClientRead", 11]
+    ]
+  },
+  {
+    "at_ns": 731173233980000,
+    "activity": [
+      ["active", null, null, 1],
+      ["idle", "Client", "ClientRead", 10]
+    ]
+  },
+  { "at_ns": 731173288046166, "activity": [["idle", "Client", "ClientRead", 12]] },
+  {
+    "at_ns": 731173341354083,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731173392392875,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731173446693208,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731173497862333,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731173552930791,
+    "activity": [
+      ["active", null, null, 1],
+      ["idle", "Client", "ClientRead", 11]
+    ]
+  },
+  {
+    "at_ns": 731173604185333,
+    "activity": [
+      ["active", null, null, 1],
+      ["idle", "Client", "ClientRead", 11]
+    ]
+  },
+  {
+    "at_ns": 731173655389041,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731173711107291,
+    "activity": [
+      ["active", null, null, 1],
+      ["idle", "Client", "ClientRead", 10]
+    ]
+  },
+  {
+    "at_ns": 731173762293125,
+    "activity": [
+      ["active", null, null, 1],
+      ["idle", "Client", "ClientRead", 11]
+    ]
+  },
+  {
+    "at_ns": 731173813833500,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731173866663583,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle", null, null, 1]
+    ]
+  },
+  {
+    "at_ns": 731173917838166,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", null, null, 1]
+    ]
+  },
+  {
+    "at_ns": 731173976025041,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731174029642708,
+    "activity": [
+      ["idle", "Client", "ClientRead", 11],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731174093863666,
+    "activity": [
+      ["active", null, null, 1],
+      ["idle", "Client", "ClientRead", 11]
+    ]
+  },
+  { "at_ns": 731174149646541, "activity": [["idle", "Client", "ClientRead", 10]] },
+  {
+    "at_ns": 731174225015708,
+    "activity": [
+      ["active", null, null, 1],
+      ["idle", "Client", "ClientRead", 2],
+      ["idle in transaction", "Client", "ClientRead", 7]
+    ]
+  },
+  {
+    "at_ns": 731174280703708,
+    "activity": [
+      ["active", "Client", "ClientRead", 1],
+      ["active", null, null, 1],
+      ["idle in transaction", "Client", "ClientRead", 8]
+    ]
+  },
+  {
+    "at_ns": 731174332140791,
+    "activity": [
+      ["idle", "Client", "ClientRead", 8],
+      ["idle in transaction", "Client", "ClientRead", 2]
+    ]
+  },
+  {
+    "at_ns": 731174385842500,
+    "activity": [
+      ["idle", "Client", "ClientRead", 3],
+      ["idle in transaction", "Client", "ClientRead", 7]
+    ]
+  },
+  {
+    "at_ns": 731174439390041,
+    "activity": [
+      ["active", null, null, 1],
+      ["idle in transaction", "Client", "ClientRead", 9]
+    ]
+  },
+  { "at_ns": 731174511909958, "activity": [["idle in transaction", "Client", "ClientRead", 10]] },
+  {
+    "at_ns": 731174571202958,
+    "activity": [
+      ["active", "IO", "WalWrite", 1],
+      ["active", "LWLock", "WALWrite", 1],
+      ["active", null, null, 1],
+      ["idle in transaction", "Client", "ClientRead", 7]
+    ]
+  },
+  {
+    "at_ns": 731174629308833,
+    "activity": [
+      ["active", null, null, 4],
+      ["idle in transaction", "Client", "ClientRead", 6]
+    ]
+  },
+  {
+    "at_ns": 731174685801125,
+    "activity": [
+      ["active", "IO", "WalWrite", 1],
+      ["active", "LWLock", "WALWrite", 3],
+      ["active", null, null, 4],
+      ["idle in transaction", "Client", "ClientRead", 2]
+    ]
+  },
+  {
+    "at_ns": 731174738943833,
+    "activity": [
+      ["active", null, null, 2],
+      ["idle in transaction", "Client", "ClientRead", 8]
+    ]
+  },
+  {
+    "at_ns": 731174791078375,
+    "activity": [
+      ["active", null, null, 1],
+      ["idle in transaction", "Client", "ClientRead", 9]
+    ]
+  },
+  {
+    "at_ns": 731174843392708,
+    "activity": [
+      ["active", null, null, 2],
+      ["idle in transaction", "Client", "ClientRead", 7],
+      ["idle in transaction", null, null, 1]
+    ]
+  },
+  {
+    "at_ns": 731174914155291,
+    "activity": [
+      ["active", null, null, 1],
+      ["idle in transaction", "Client", "ClientRead", 9]
+    ]
+  },
+  {
+    "at_ns": 731174967119541,
+    "activity": [
+      ["active", null, null, 1],
+      ["idle in transaction", "Client", "ClientRead", 9]
+    ]
+  },
+  {
+    "at_ns": 731175021879208,
+    "activity": [
+      ["active", "IO", "WalInitWrite", 1],
+      ["active", null, null, 5],
+      ["idle in transaction", "Client", "ClientRead", 4]
+    ]
+  },
+  {
+    "at_ns": 731175078263500,
+    "activity": [
+      ["active", "IO", "WalInitWrite", 1],
+      ["active", "LWLock", "WALInsert", 1],
+      ["active", "LWLock", "WALWrite", 8]
+    ]
+  },
+  {
+    "at_ns": 731175133135208,
+    "activity": [
+      ["active", "IO", "WalInitWrite", 1],
+      ["active", "LWLock", "WALInsert", 1],
+      ["active", "LWLock", "WALWrite", 8]
+    ]
+  },
+  {
+    "at_ns": 731175185496916,
+    "activity": [
+      ["active", "IO", "WalInitWrite", 1],
+      ["active", "LWLock", "WALInsert", 1],
+      ["active", "LWLock", "WALWrite", 8]
+    ]
+  },
+  {
+    "at_ns": 731175241660583,
+    "activity": [
+      ["active", "IO", "WalInitSync", 1],
+      ["active", "LWLock", "WALInsert", 1],
+      ["active", "LWLock", "WALWrite", 8]
+    ]
+  },
+  {
+    "at_ns": 731175300064166,
+    "activity": [
+      ["active", "IO", "WalInitSync", 1],
+      ["active", "LWLock", "WALInsert", 1],
+      ["active", "LWLock", "WALWrite", 8]
+    ]
+  },
+  {
+    "at_ns": 731175358515500,
+    "activity": [
+      ["active", "IO", "WalInitSync", 1],
+      ["active", "LWLock", "WALInsert", 1],
+      ["active", "LWLock", "WALWrite", 8]
+    ]
+  },
+  {
+    "at_ns": 731175414223583,
+    "activity": [
+      ["active", "IO", "DataFileExtend", 1],
+      ["active", null, null, 1],
+      ["idle", "Client", "ClientRead", 1],
+      ["idle in transaction", "Client", "ClientRead", 7]
+    ]
+  },
+  {
+    "at_ns": 731175466879458,
+    "activity": [
+      ["idle", "Client", "ClientRead", 3],
+      ["idle in transaction", "Client", "ClientRead", 7]
+    ]
+  },
+  {
+    "at_ns": 731175532355583,
+    "activity": [
+      ["active", null, null, 1],
+      ["idle", "Client", "ClientRead", 5],
+      ["idle in transaction", "Client", "ClientRead", 4]
+    ]
+  },
+  {
+    "at_ns": 731175585384500,
+    "activity": [
+      ["active", null, null, 3],
+      ["idle", "Client", "ClientRead", 5],
+      ["idle in transaction", "Client", "ClientRead", 2]
+    ]
+  },
+  {
+    "at_ns": 731175640169666,
+    "activity": [
+      ["idle", "Client", "ClientRead", 9],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  { "at_ns": 731175692586458, "activity": [["idle", "Client", "ClientRead", 10]] },
+  { "at_ns": 731175743662750, "activity": [["idle", "Client", "ClientRead", 10]] },
+  { "at_ns": 731175795068750, "activity": [["idle", "Client", "ClientRead", 10]] },
+  {
+    "at_ns": 731175846747583,
+    "activity": [
+      ["active", null, null, 1],
+      ["idle", "Client", "ClientRead", 10]
+    ]
+  },
+  { "at_ns": 731175901044333, "activity": [["idle", "Client", "ClientRead", 10]] },
+  {
+    "at_ns": 731175956718041,
+    "activity": [
+      ["idle", "Client", "ClientRead", 10],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  { "at_ns": 731176008777875, "activity": [["idle", "Client", "ClientRead", 11]] },
+  {
+    "at_ns": 731176061408875,
+    "activity": [
+      ["idle", "Client", "ClientRead", 10],
+      ["idle", null, null, 1]
+    ]
+  },
+  { "at_ns": 731176112681041, "activity": [["idle", "Client", "ClientRead", 10]] },
+  {
+    "at_ns": 731176166307375,
+    "activity": [
+      ["idle", "Client", "ClientRead", 10],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  { "at_ns": 731176218529041, "activity": [["idle", "Client", "ClientRead", 11]] },
+  {
+    "at_ns": 731176274005583,
+    "activity": [
+      ["idle", "Client", "ClientRead", 10],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731176328116333,
+    "activity": [
+      ["idle", "Client", "ClientRead", 10],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  { "at_ns": 731176387468541, "activity": [["idle", "Client", "ClientRead", 11]] },
+  {
+    "at_ns": 731176441908833,
+    "activity": [
+      ["idle", "Client", "ClientRead", 10],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731176497595541,
+    "activity": [
+      ["idle", "Client", "ClientRead", 10],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  {
+    "at_ns": 731176550920625,
+    "activity": [
+      ["idle", "Client", "ClientRead", 10],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  { "at_ns": 731176604248791, "activity": [["idle", "Client", "ClientRead", 11]] },
+  { "at_ns": 731176680088541, "activity": [["idle", "Client", "ClientRead", 11]] },
+  {
+    "at_ns": 731176733777250,
+    "activity": [
+      ["idle", "Client", "ClientRead", 10],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  },
+  { "at_ns": 731176786260125, "activity": [["idle", "Client", "ClientRead", 10]] },
+  { "at_ns": 731176841027750, "activity": [["idle", "Client", "ClientRead", 10]] },
+  {
+    "at_ns": 731176897022041,
+    "activity": [
+      ["active", null, null, 1],
+      ["idle", "Client", "ClientRead", 10]
+    ]
+  },
+  { "at_ns": 731176950348416, "activity": [["idle", "Client", "ClientRead", 10]] },
+  { "at_ns": 731177006050166, "activity": [["idle", "Client", "ClientRead", 10]] },
+  {
+    "at_ns": 731177058437583,
+    "activity": [
+      ["idle", "Client", "ClientRead", 2],
+      ["idle in transaction", "Client", "ClientRead", 8]
+    ]
+  },
+  {
+    "at_ns": 731177114132625,
+    "activity": [
+      ["active", null, null, 4],
+      ["idle", "Client", "ClientRead", 5],
+      ["idle in transaction", "Client", "ClientRead", 1]
+    ]
+  }
+]
