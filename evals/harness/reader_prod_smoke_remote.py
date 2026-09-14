@@ -15,8 +15,10 @@ import shlex
 # bounded acceptance subprocesses, no shell.
 import subprocess  # nosec B404
 import sys
+import zipfile
+import zlib
 from pathlib import Path
-from typing import Any
+from typing import IO, Any
 from urllib.parse import urlsplit
 from uuid import UUID
 
@@ -46,9 +48,15 @@ assert set(manifest)==set(expected.split())
 if action=="inspect":
     print(json.dumps({"revision":revision,"target":target,"manifest":manifest}))
 elif action=="recover":
-    subprocess.run([sys.executable,"-m","evals.harness.reader_prod_smoke_service","start","--manifest",manifest_path,"--dedicated-target",target],check=True,capture_output=True)
+    operations=[("evals.harness.reader_prod_smoke_service","start")]
     if (storage/".reader-smoke-original").exists():
-        subprocess.run([sys.executable,"-m","evals.harness.reader_prod_smoke","restore","--manifest",manifest_path,"--dedicated-target",target],check=True,capture_output=True)
+        operations.append(("evals.harness.reader_prod_smoke","restore"))
+    failures=[]
+    for recovery_module,recovery_action in operations:
+        result=subprocess.run([sys.executable,"-m",recovery_module,recovery_action,"--manifest",manifest_path,"--dedicated-target",target],check=False,capture_output=True)
+        failures.append(result.returncode != 0)
+    if any(failures):
+        raise RuntimeError("Dedicated recovery was incomplete")
 else:
     allowed={"evals.harness.reader_prod_smoke":{"corrupt","restore"},"evals.harness.reader_prod_smoke_service":{"stop","start"}}
     assert action in allowed.get(module,set()), "operation refused"
@@ -267,9 +275,71 @@ def parse_operation(arguments: list[str], config: dict[str, str]) -> tuple[str, 
     return module, action
 
 
+_MOCK_BEARER = re.compile(rb"mock\.[A-Za-z0-9_-]+")
+
+
+def _contains_mock_bearer(stream: IO[bytes]) -> bool:
+    previous = b""
+    while chunk := stream.read(65536):
+        combined = previous + chunk
+        if _MOCK_BEARER.search(combined):
+            return True
+        # The shortest matching token is six bytes, so this also catches a
+        # token prefix split across reads without retaining artifact contents.
+        previous = combined[-16:]
+    return False
+
+
+def sanitize_artifacts(roots: list[Path]) -> None:
+    """Refuse uploads with mock credentials, including compressed trace entries.
+
+    Leaking or unscannable files are removed, all remaining files are checked,
+    then a generic error blocks the workflow upload. Never print artifact data.
+    """
+    rejected = False
+    inspected = 0
+    for root in roots:
+        if root.is_symlink():
+            root.unlink()
+            rejected = True
+            continue
+        for path in sorted(root.rglob("*")):
+            if path.is_dir() and not path.is_symlink():
+                continue
+            inspected += 1
+            unsafe = path.is_symlink() or bool(_MOCK_BEARER.search(str(path).encode()))
+            if not unsafe:
+                try:
+                    with path.open("rb") as stream:
+                        unsafe = _contains_mock_bearer(stream)
+                    if not unsafe and (path.suffix.lower() == ".zip" or zipfile.is_zipfile(path)):
+                        with zipfile.ZipFile(path) as archive:
+                            for entry in archive.infolist():
+                                if _MOCK_BEARER.search(entry.filename.encode()):
+                                    unsafe = True
+                                    break
+                                with archive.open(entry) as stream:
+                                    if _contains_mock_bearer(stream):
+                                        unsafe = True
+                                        break
+                except (OSError, ValueError, RuntimeError, zipfile.BadZipFile, zlib.error):
+                    unsafe = True
+            if unsafe:
+                rejected = True
+                try:
+                    path.unlink()
+                except OSError:
+                    pass  # Upload is still refused if removal itself fails.
+    if rejected or not inspected:
+        raise RuntimeError("Public artifact safety check failed; upload refused")
+
+
 def main() -> None:
-    config = configuration()
     arguments = sys.argv[1:]
+    if arguments == ["--sanitize"]:
+        sanitize_artifacts([Path(".reader-smoke"), Path("apps/web/test-results")])
+        return
+    config = configuration()
     if arguments == ["--prepare"]:
         proof = inspect(config)
         path = Path(config["MANIFEST"])

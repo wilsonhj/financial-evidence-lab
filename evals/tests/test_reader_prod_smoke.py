@@ -335,3 +335,127 @@ def test_service_control_failed_replacement_preserves_previous_command(monkeypat
         write_control(control, "stop")
     assert control.read_text() == "start"
     assert list(tmp_path.iterdir()) == [control]
+
+
+def test_artifact_sanitizer_preserves_public_evidence(tmp_path):
+    import zipfile
+
+    from harness.reader_prod_smoke_remote import sanitize_artifacts
+
+    artifacts = tmp_path / ".reader-smoke"
+    artifacts.mkdir()
+    manifest = artifacts / "manifest.json"
+    manifest.write_text('{"target":"dedicated-smoke","documents":[]}')
+    trace = artifacts / "browser-trace.zip"
+    with zipfile.ZipFile(trace, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("trace.trace", '{"url":"https://web.example.test/reader/123"}')
+        archive.writestr("resources/screenshot.png", b"public image bytes")
+    before = {p.name: p.read_bytes() for p in artifacts.iterdir()}
+    sanitize_artifacts([artifacts, tmp_path / "absent-results"])
+    assert {p.name: p.read_bytes() for p in artifacts.iterdir()} == before
+
+
+@pytest.mark.parametrize("placement", ["plain", "zip-entry", "zip-name", "chunk-boundary"])
+def test_artifact_sanitizer_removes_bearer_leaks_without_echoing(tmp_path, placement):
+    import zipfile
+
+    from harness.reader_prod_smoke_remote import sanitize_artifacts
+
+    token = "mock.synthetic_owner_credential"
+    safe = tmp_path / "manifest.json"
+    safe.write_text('{"target":"dedicated-smoke"}')
+    leaking = tmp_path / ("trace.zip" if placement.startswith("zip") else "result.json")
+    if placement.startswith("zip"):
+        with zipfile.ZipFile(leaking, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr(
+                token if placement == "zip-name" else "trace.trace",
+                "safe body" if placement == "zip-name" else "Authorization: Bearer " + token,
+            )
+    else:
+        prefix = "x" * 65533 if placement == "chunk-boundary" else "Authorization: Bearer "
+        leaking.write_text(prefix + token)
+    with pytest.raises(RuntimeError) as error:
+        sanitize_artifacts([tmp_path])
+    assert token not in str(error.value)
+    assert "Bearer" not in str(error.value)
+    assert not leaking.exists()
+    assert safe.exists()
+
+
+def test_artifact_sanitizer_rejects_unreadable_zip_and_scans_every_file(tmp_path):
+    from harness.reader_prod_smoke_remote import sanitize_artifacts
+
+    (tmp_path / "broken.zip").write_bytes(b"not a readable archive")
+    (tmp_path / "first.json").write_text("mock.synthetic_first")
+    (tmp_path / "second.json").write_text("mock.synthetic_second")
+    with pytest.raises(RuntimeError):
+        sanitize_artifacts([tmp_path])
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_recovery_attempts_blob_restore_when_api_restart_fails(monkeypatch, tmp_path):
+    import subprocess
+    import sys
+    from types import SimpleNamespace
+
+    from harness.reader_prod_smoke_remote import API_PROGRAM
+
+    target = "dedicated-smoke"
+    manifest = {
+        key: "synthetic"
+        for key in (
+            "schema_version",
+            "target",
+            "org",
+            "user",
+            "denied_user",
+            "workspace",
+            "entity",
+            "as_of",
+            "corpus",
+            "pinned_corpus",
+            "documents",
+            "jobs",
+        )
+    }
+    manifest.update(schema_version="reader-prod-smoke/v1", target=target)
+    path = tmp_path / "manifest.json"
+    path.write_text(json.dumps(manifest))
+    (tmp_path / ".reader-smoke-target").write_text(target)
+    (tmp_path / ".reader-smoke-original").write_bytes(b"synthetic backup")
+    for name, value in {
+        "RAILWAY_PUBLIC_DOMAIN": "api.example.test",
+        "RAILWAY_GIT_COMMIT_SHA": "a" * 40,
+        "FEL_READER_SMOKE_TARGET": target,
+        "FEL_READER_SMOKE_SERVICE_HOSTED": "1",
+        "FEL_AUTH_MODE": "mock",
+        "FEL_STORAGE_DIR": str(tmp_path),
+    }.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "remote",
+            "a" * 40,
+            target,
+            str(path),
+            "https://api.example.test",
+            "",
+            "recover",
+        ],
+    )
+    actions = []
+
+    def recovery_process(argv, **kwargs):
+        action = argv[3]
+        actions.append(action)
+        code = 1 if action == "start" else 0
+        if code and kwargs.get("check"):
+            raise subprocess.CalledProcessError(code, argv)
+        return SimpleNamespace(returncode=code)
+
+    monkeypatch.setattr(subprocess, "run", recovery_process)
+    with pytest.raises(RuntimeError, match="recovery was incomplete"):
+        exec(API_PROGRAM, {})
+    assert actions == ["start", "restore"]
