@@ -54,7 +54,6 @@ PR validates unique workstream IDs, resolved acyclic dependencies and pairwise
 non-overlap of the dispatched paths. Durable completion evidence lives in
 GitHub and the execution record, separate from the canonical task ledger.
 
-
 #196 extraction ruling: after #154 merges, narrow the existing refactor dispatch
 to the exact workflow/stage/checkpoint/store modules in workstreams.yaml. Keep
 all tests/goldens, financial logic, hashes, version pins and SQL unchanged.
@@ -65,7 +64,6 @@ The existing 510-line accounting validator is within the issue's approximate
 #196. The lead may publish its bounded plan and reconcile verified branch
 protection settings in .github/required-checks.md within the control PR.
 
-
 Wave 7 ruling: #196's extraction portion is verified and merged; register its
 remaining API portion separately, blocked until #191 merges and a concrete
 split design narrows ownership. #197's hygiene/design issue is closed after
@@ -75,7 +73,6 @@ changing metering expectations. Register #81 dataset-only recovery as blocked:
 its historical source is available, but fresh byte verification, original
 acceptance debt and fetched supplemental discovery remain. No SEC request uses
 the historical contact without a current approved FEL_SEC_USER_AGENT.
-
 
 Wave 8 ruling: PR #272 merged at fa4cfa2 after independent final-head approval,
 local PostgreSQL regressions and all required CI. Register #196's remaining API
@@ -146,7 +143,6 @@ lead-only contract marker changes with the API mount, and require real local HTT
 worker/browser streaming acceptance in addition to fixture-mode browser tests.
 No live-provider or milestone acceptance is inferred by enabling implementation.
 
-
 Wave 11 reconciliation (September 13): current main 10d2ca4 includes externally
 merged PR287, PR288 and integration PR290. Preserve their reviewed repairs and
 committed real HTTP/worker/browser acceptance; do not resume merged branches.
@@ -173,7 +169,6 @@ no auth implementation/dependency dispatch is made here. Preserve #108's
 accepted July21 mock-auth hosted-reader smoke exception. That exception and
 local #61 acceptance do not establish production identity verification.
 
-
 Wave 12 ruling: PR295 merged at e6e24b after independent final-head approval
 and all required checks plus real HTTP acceptance. A scratch actual-API/PG
 audit then reproduced four nonfinite JSON inputs accepted with qualifiers
@@ -188,7 +183,6 @@ uppercase UUID support without collisions, existing errors, financial rules,
 contracts and all other loaders. Require real no-mutation/receipt regressions
 and independent final-head review/CI. The control branch is
 agent/188-execution-wave12; no canonical or live gate changes.
-
 
 Wave 13 reader prerequisite ruling: issue #301 implements #108's accepted
 design addendum item 9 as a dedicated offline repair. Register exactly seven
@@ -212,7 +206,6 @@ for a separately bounded fix. Publish its evidence map and test plan here.
 Neither these tests nor the sequential benchmark waive the reference-profile
 performance or live M3 release gates; no canonical checkbox changes.
 
-
 Reader hosting prerequisite ruling: issue #303 implements #108's accepted
 design addendum item 1 as a lead-owned offline configuration PR. Authorize
 infra/railway/web.json and the two adjacent infrastructure READMEs, plus the
@@ -221,3 +214,24 @@ Node/pnpm pins, injected PORT and /api/health; no application/dependency edits.
 The root integration lead serializes these shared scheduling changes with
 other control PRs. Local schema/build/start verification and independent review
 are required; no hosted environment or deployment is authorized by this change.
+
+### September 14 load and hosted reader execution ruling
+
+The owner's subsequent request explicitly directs implementation of #61 load
+acceptance and #108. The integration lead ratifies the bounded plan in
+`docs/superpowers/plans/2026-09-14-load-and-hosted-reader-acceptance.md` and its
+two disjoint local-preparation registrations. Existing hosted credentials and
+release gates are preserved: local preparation is not hosted acceptance, and
+scaled 25-user measurements are not the full reference profile. No canonical
+task mapping or checkbox changes are authorized by preparation alone.
+
+For #108, the accepted design already authorizes fixture SEC transport, real
+consumer ingestion, colocated worker/API startup, blob fault injection and the
+named dispatch-only workflow. Authorize the minimal consumer correction to
+forward an explicitly supplied, validated reporting-period pair into the
+existing ingestion API, after a failing regression demonstrates the loss. No
+period inference algorithm or direct-SQL evidence mutation is introduced.
+Production corpus publication helpers may publish worker-produced versions;
+the harness must verify successful jobs and ingestion before starting the API.
+Hosted fault injection requires an identified dedicated smoke service and
+restoration on failure; existing production services are not fallback targets.
