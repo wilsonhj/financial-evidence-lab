@@ -57,44 +57,46 @@ export default async function DocumentListPage({
         label="Filing pages"
       />
       <p>Showing {documents.length} filings. Amendment history is not fully loaded.</p>
-      <table className="doc-table">
-        <thead>
-          <tr>
-            <th scope="col">Form</th>
-            <th scope="col">Accession</th>
-            <th scope="col">Period</th>
-            <th scope="col">Published</th>
-            <th scope="col">Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          {documents.map((doc) => {
-            return (
-              <tr key={doc.id}>
-                <td>
-                  <Link href={`/reader/${doc.id}`}>{doc.form ?? "Filing"}</Link>
-                </td>
-                <td>
-                  {doc.accession}
-                  {/^https?:\/\//i.test(doc.source_url) && (
-                    <>
-                      {" "}
-                      · <a href={doc.source_url}>Original filing</a>
-                    </>
-                  )}
-                </td>
-                <td>{formatPeriodRange(doc)}</td>
-                <td>{doc.published_at.slice(0, 10)}</td>
-                <td>
-                  <span className="badge">
-                    {doc.form?.endsWith("/A") ? "Amendment / restatement" : "History not loaded"}
-                  </span>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+      <div className="doc-scroll" tabIndex={0} role="region" aria-label="Filings">
+        <table className="doc-table">
+          <thead>
+            <tr>
+              <th scope="col">Form</th>
+              <th scope="col">Accession</th>
+              <th scope="col">Period</th>
+              <th scope="col">Published</th>
+              <th scope="col">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {documents.map((doc) => {
+              return (
+                <tr key={doc.id}>
+                  <td>
+                    <Link href={`/reader/${doc.id}`}>{doc.form ?? "Filing"}</Link>
+                  </td>
+                  <td>
+                    {doc.accession}
+                    {/^https?:\/\//i.test(doc.source_url) && (
+                      <>
+                        {" "}
+                        · <a href={doc.source_url}>Original filing</a>
+                      </>
+                    )}
+                  </td>
+                  <td>{formatPeriodRange(doc)}</td>
+                  <td>{doc.published_at.slice(0, 10)}</td>
+                  <td>
+                    <span className="badge">
+                      {doc.form?.endsWith("/A") ? "Amendment / restatement" : "History not loaded"}
+                    </span>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </main>
   );
 }

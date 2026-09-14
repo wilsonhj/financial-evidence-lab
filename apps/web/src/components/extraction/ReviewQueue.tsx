@@ -191,61 +191,63 @@ export function ReviewQueue({
       {!rows.length ? (
         <p>No proposals on this page.</p>
       ) : (
-        <table>
-          <caption>Proposals on this page</caption>
-          <thead>
-            <tr>
-              <th>Select</th>
-              <th>Metric</th>
-              <th>Kind</th>
-              <th>Source run</th>
-              <th>State</th>
-              <th>Confidence</th>
-              <th>Blockers</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((p) => (
-              <tr key={p.id}>
-                <td>
-                  <input
-                    type="checkbox"
-                    aria-label={`Select ${p.metric_id} ${p.id}`}
-                    checked={selectedIds.includes(p.id)}
-                    disabled={busy || !["proposed", "needs_review"].includes(p.state)}
-                    onChange={(e) => {
-                      change();
-                      setGroups([]);
-                      setWinners([]);
-                      setSelectedIds(
-                        e.target.checked
-                          ? [...selectedIds, p.id]
-                          : selectedIds.filter((id) => id !== p.id),
-                      );
-                    }}
-                  />
-                </td>
-                <td>
-                  <Link href={`/extractions/${p.id}`}>{p.metric_id}</Link>
-                </td>
-                <td>{p.kind}</td>
-                <td>
-                  <Link href={`/extraction-runs/${p.run_id}`}>Run {p.run_id}</Link>
-                </td>
-                <td>
-                  {p.state} (v{p.version})
-                </td>
-                <td>{p.record_confidence ?? "Uncalibrated"}</td>
-                <td>
-                  {p.validations
-                    .filter((v) => v.status !== "pass")
-                    .map((v) => `${v.status}: ${v.code}`)
-                    .join(", ") || "No recorded blockers"}
-                </td>
+        <div className="doc-scroll" tabIndex={0} role="region" aria-label="Proposals on this page">
+          <table>
+            <caption>Proposals on this page</caption>
+            <thead>
+              <tr>
+                <th>Select</th>
+                <th>Metric</th>
+                <th>Kind</th>
+                <th>Source run</th>
+                <th>State</th>
+                <th>Confidence</th>
+                <th>Blockers</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {rows.map((p) => (
+                <tr key={p.id}>
+                  <td>
+                    <input
+                      type="checkbox"
+                      aria-label={`Select ${p.metric_id} ${p.id}`}
+                      checked={selectedIds.includes(p.id)}
+                      disabled={busy || !["proposed", "needs_review"].includes(p.state)}
+                      onChange={(e) => {
+                        change();
+                        setGroups([]);
+                        setWinners([]);
+                        setSelectedIds(
+                          e.target.checked
+                            ? [...selectedIds, p.id]
+                            : selectedIds.filter((id) => id !== p.id),
+                        );
+                      }}
+                    />
+                  </td>
+                  <td>
+                    <Link href={`/extractions/${p.id}`}>{p.metric_id}</Link>
+                  </td>
+                  <td>{p.kind}</td>
+                  <td>
+                    <Link href={`/extraction-runs/${p.run_id}`}>Run {p.run_id}</Link>
+                  </td>
+                  <td>
+                    {p.state} (v{p.version})
+                  </td>
+                  <td>{p.record_confidence ?? "Uncalibrated"}</td>
+                  <td>
+                    {p.validations
+                      .filter((v) => v.status !== "pass")
+                      .map((v) => `${v.status}: ${v.code}`)
+                      .join(", ") || "No recorded blockers"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
       <p>
         {selected.length} selected. Review is atomic: the whole selected batch succeeds or none of

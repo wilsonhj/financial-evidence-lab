@@ -27,31 +27,33 @@ export default async function RunsPage({
         {!page.data.items.length ? (
           <p>No runs on this page.</p>
         ) : (
-          <table>
-            <caption>Run history</caption>
-            <thead>
-              <tr>
-                <th>Run</th>
-                <th>Status</th>
-                <th>Cutoff</th>
-                <th>Provider</th>
-                <th>Cost USD</th>
-              </tr>
-            </thead>
-            <tbody>
-              {page.data.items.map((run) => (
-                <tr key={run.id}>
-                  <td>
-                    <Link href={`/extraction-runs/${run.id}`}>{run.id}</Link>
-                  </td>
-                  <td>{run.status}</td>
-                  <td>{run.as_of}</td>
-                  <td>{run.provider}</td>
-                  <td>{run.usage.cost_usd}</td>
+          <div className="doc-scroll" tabIndex={0} role="region" aria-label="Run history">
+            <table>
+              <caption>Run history</caption>
+              <thead>
+                <tr>
+                  <th>Run</th>
+                  <th>Status</th>
+                  <th>Cutoff</th>
+                  <th>Provider</th>
+                  <th>Cost USD</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {page.data.items.map((run) => (
+                  <tr key={run.id}>
+                    <td>
+                      <Link href={`/extraction-runs/${run.id}`}>{run.id}</Link>
+                    </td>
+                    <td>{run.status}</td>
+                    <td>{run.as_of}</td>
+                    <td>{run.provider}</td>
+                    <td>{run.usage.cost_usd}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
         <ExtractionPagination
           path="/extraction-runs"

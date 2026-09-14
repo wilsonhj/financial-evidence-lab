@@ -49,32 +49,39 @@ export default async function RunPage({
           {" · "}
           <Link href={`/extraction-runs/${r.id}/events`}>Stored event history</Link>
         </p>
-        <table>
-          <caption>Execution steps in order</caption>
-          <thead>
-            <tr>
-              <th>Step</th>
-              <th>Attempt</th>
-              <th>Status</th>
-              <th>Started</th>
-              <th>Finished</th>
-            </tr>
-          </thead>
-          <tbody>
-            {steps.data.items.map((s) => (
-              <tr key={s.id}>
-                <td>{s.step_name}</td>
-                <td>{s.attempt}</td>
-                <td>
-                  {s.status}
-                  {s.error && `: ${s.error.error.code}`}
-                </td>
-                <td>{s.started_at ?? "Not started"}</td>
-                <td>{s.finished_at ?? "Not finished"}</td>
+        <div
+          className="doc-scroll"
+          tabIndex={0}
+          role="region"
+          aria-label="Execution steps in order"
+        >
+          <table>
+            <caption>Execution steps in order</caption>
+            <thead>
+              <tr>
+                <th>Step</th>
+                <th>Attempt</th>
+                <th>Status</th>
+                <th>Started</th>
+                <th>Finished</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {steps.data.items.map((s) => (
+                <tr key={s.id}>
+                  <td>{s.step_name}</td>
+                  <td>{s.attempt}</td>
+                  <td>
+                    {s.status}
+                    {s.error && `: ${s.error.error.code}`}
+                  </td>
+                  <td>{s.started_at ?? "Not started"}</td>
+                  <td>{s.finished_at ?? "Not finished"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
         <ExtractionPagination
           path={`/extraction-runs/${r.id}`}
           query={Object.fromEntries(query)}

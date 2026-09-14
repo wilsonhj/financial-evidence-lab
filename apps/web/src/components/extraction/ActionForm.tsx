@@ -159,7 +159,7 @@ export function ActionForm({
                     </li>
                   ))}
                 </ul>
-                <p>Evidence manifest {comparison.evidence_manifest_hash}</p>
+                <p className="hash-value">Evidence manifest {comparison.evidence_manifest_hash}</p>
               </section>
             </>
           ) : (

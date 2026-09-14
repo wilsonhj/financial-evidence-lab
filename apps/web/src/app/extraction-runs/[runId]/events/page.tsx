@@ -25,25 +25,32 @@ export default async function EventHistoryPage({
         {!page.items.length ? (
           <p>No events on this page.</p>
         ) : (
-          <table>
-            <caption>Persisted events in order</caption>
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>Type</th>
-                <th>Time</th>
-              </tr>
-            </thead>
-            <tbody>
-              {page.items.map((e) => (
-                <tr key={e.id}>
-                  <td>{e.id}</td>
-                  <td>{e.type}</td>
-                  <td>{e.occurred_at}</td>
+          <div
+            className="doc-scroll"
+            tabIndex={0}
+            role="region"
+            aria-label="Persisted events in order"
+          >
+            <table>
+              <caption>Persisted events in order</caption>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Type</th>
+                  <th>Time</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {page.items.map((e) => (
+                  <tr key={e.id}>
+                    <td>{e.id}</td>
+                    <td>{e.type}</td>
+                    <td>{e.occurred_at}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
         <ExtractionPagination
           path={`/extraction-runs/${runId}/events`}

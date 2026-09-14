@@ -15,7 +15,7 @@ export function ApprovedView({ approved }: { approved: Approved }) {
       <p>
         {approved.ontology_version} · {approved.normalizer_version} · {approved.validator_version}
       </p>
-      <p>Evidence manifest: {approved.evidence_manifest_hash}</p>
+      <p className="hash-value">Evidence manifest: {approved.evidence_manifest_hash}</p>
       {approved.parent_version_id && (
         <p>
           <Link

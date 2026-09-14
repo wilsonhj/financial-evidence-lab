@@ -37,27 +37,29 @@ export function RunEvents({ runId }: { runId: string }) {
       <button type="button" onClick={() => setAttempt((a) => a + 1)}>
         Reconnect live events
       </button>
-      <table>
-        <caption>Ordered event history</caption>
-        <thead>
-          <tr>
-            <th>Event ID</th>
-            <th>Event</th>
-            <th>Time</th>
-          </tr>
-        </thead>
-        <tbody>
-          {events.map((e) => (
-            <tr key={e.id}>
-              <td>{e.id}</td>
-              <td>{e.type}</td>
-              <td>
-                <time dateTime={e.occurred_at}>{e.occurred_at}</time>
-              </td>
+      <div className="doc-scroll" tabIndex={0} role="region" aria-label="Ordered event history">
+        <table>
+          <caption>Ordered event history</caption>
+          <thead>
+            <tr>
+              <th>Event ID</th>
+              <th>Event</th>
+              <th>Time</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {events.map((e) => (
+              <tr key={e.id}>
+                <td>{e.id}</td>
+                <td>{e.type}</td>
+                <td>
+                  <time dateTime={e.occurred_at}>{e.occurred_at}</time>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </section>
   );
 }

@@ -753,8 +753,17 @@ body:has(.desk-shell[data-fel-theme="oled"]) .site-header {
   }
 }
 @media (max-width: 850px) {
+  /* WCAG 2.2 SC 1.4.10 (Reflow): a bare `1fr` is `minmax(auto, 1fr)`, and that
+     auto floor resolves to .desk-sidebar's min-content — 455.7px once the
+     sidebar becomes a row (12 + brand 110.7 + gap 12 + nav 309 + 12). The floor
+     outran a 390px viewport, so BOTH grid items stretched to 455.7px and the
+     document scrolled. The `overflow: auto` on .desk-sidebar nav below could
+     not absorb it: overflow zeroes a flex item's automatic MINIMUM size, not
+     its container's intrinsic min-content size, so the nav was never asked to
+     shrink and that scroller had never engaged. This restores the desktop
+     rule's own minmax(0, 1fr) idiom, which this override had dropped. */
   .desk-shell {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   .desk-sidebar {
     padding: 10px 12px;
@@ -860,6 +869,26 @@ body:has(.desk-shell[data-fel-theme="oled"]) .site-header {
   border-collapse: collapse;
   width: 100%;
   font-size: 0.92rem;
+}
+
+/* WCAG 2.2 SC 1.4.10 (Reflow): the filings table's min-content width is 525px
+   against a 350px content box at 390px viewport — the Status badge alone
+   claims 191px because .badge is white-space: nowrap. A data table is exempt
+   from reflow (it requires two-dimensional layout), so the scroll belongs to
+   the table's own region rather than to the document. Mirrors .obs-lane.
+   The call site must carry tabIndex/role/aria-label: Chromium skips a
+   scroller that has focusable children, and the Period/Published/Status
+   columns contain none (SC 2.1.1). */
+.doc-scroll {
+  overflow-x: auto;
+}
+
+/* A sha256: evidence-manifest digest is 71 characters with no break
+   opportunity, so it sets its paragraph's min-content width and pushes the
+   document past a 390px viewport (WCAG 2.2 SC 1.4.10). Same hazard and same
+   guard as .fact-card dd and .obs-meta dd. */
+.hash-value {
+  word-break: break-word;
 }
 
 .doc-table th,
@@ -1298,6 +1327,17 @@ body:has(.desk-shell[data-fel-theme="oled"]) .site-header {
 .obs-lane {
   min-width: 0;
   overflow-x: auto;
+  /* .visually-hidden is position: absolute with no inset, so it paints at its
+     static position — inside a scrolled lane table that is up to 600px to the
+     right. A scroll container only clips descendants for which it is in the
+     containing-block chain, and while this box stayed position: static that
+     chain ran past it to the initial containing block. The overflow-x above
+     therefore could not clip those boxes, and their right edge landed in the
+     DOCUMENT's scrollable overflow, scrolling the whole page sideways (WCAG
+     2.2 SC 1.4.10). Making the lane a containing block confines them to its
+     own scroll area. z-index stays auto, so no stacking context is created.
+     Note: any future popover inside a lane will now be clipped by it. */
+  position: relative;
 }
 
 .obs-lane h3 {
