@@ -77,3 +77,33 @@ Focused report tests:
 ```sh
 python -m pytest apps/api/tests/test_extraction_load_report.py
 ```
+
+## September 14 local results
+
+All three measured runs completed 100 observations per operation, zero HTTP or
+verification errors, and 25-way overlap in every wave. The strict bulk-review
+latency gate **remains failed**. None is full reference-profile acceptance.
+
+| Code/workload checkpoint      | Create p95 ms | Bulk review p95 ms | Waiting SSE p95 ms | Terminal SSE p95 ms |
+| ----------------------------- | ------------: | -----------------: | -----------------: | ------------------: |
+| Original, `4feb4ac`           |        156.22 |        **4147.19** |             152.43 |              115.66 |
+| Batched SQL, `0b143ed`        |        131.30 |        **1002.23** |             127.15 |              120.13 |
+| Projected bindings, `7df3e67` |        152.48 |        **1501.91** |             218.22 |              284.67 |
+
+These are local macOS 10-CPU / 16-GiB runs against the same disposable PostgreSQL
+17 database in Docker with the normal pool maximum of 10, fsync and synchronous
+commit enabled. Earlier test data remains in the isolated database. Host load
+varied; raw intervals and environment metadata are retained rather than selecting
+a favorable run. No API/worker/browser test suite ran alongside the third load
+run. Environmental causation is not established by these measurements alone.
+
+The verified SQL repair reduced one 100-item review from 829 to 37 statements.
+An isolated profile improved from 759.89 ms to 135.71 ms. Projected identity/head
+bindings additionally reduced unnecessary JSON from 396,200 to 25,200 bytes,
+without changing immutable financial payloads. Existing atomicity, concurrency,
+correction, tenant, ETag and provenance tests pass. This establishes the repair's
+behavior and reduced work, not satisfaction of the latency requirement.
+
+Raw samples, reports and profiles: [original baseline](benchmarks/results/2026-09-14-baseline/),
+[batched baseline](benchmarks/results/2026-09-14-batched/), and
+[projected bindings](benchmarks/results/2026-09-14-projected/).
