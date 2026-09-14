@@ -1,0 +1,169 @@
+{
+  "http_status": 200,
+  "elapsed_ms": 135.711875,
+  "sql_count": 37,
+  "sql_ms": 104.010085,
+  "functions": {
+    "app.extraction.review._discover": {
+      "count": 3,
+      "ms": 17.644875
+    },
+    "app.extraction.review._locked_rows": {
+      "count": 1,
+      "ms": 8.5515
+    },
+    "app.extraction.validation_peers.current_rows": {
+      "count": 1,
+      "ms": 1.333666
+    },
+    "app.extraction.validation.evaluate": {
+      "count": 1,
+      "ms": 13.550625
+    },
+    "app.extraction.review.finish_review": {
+      "count": 1,
+      "ms": 5.08525
+    },
+    "app.extraction.review._apply": {
+      "count": 1,
+      "ms": 119.683417
+    }
+  },
+  "queries": [
+    {
+      "sql": "INSERT INTO approved_extraction_versions(id,org_id,record_id,version,parent_version_id,origin_proposal_id,payload,comparability_key,evidence_manifest,evidence_manifest_hash,ontology_version,normalizer_version,validator_version,approved_by,approval_reason,validation_context) SELECT x.version_id,%s,x.record_id,1,NULL,x.origin_proposal_id,x.payload,x.comparability_key,x.evidence_manifest,x.evidence_manifest_hash,x.ontology_version,%s,%s,%s,%s,x.validation_context FROM jsonb_to_recordset(%s) AS x(record_id uuid,version_id uuid,origin_proposal_id uuid,payload jsonb,comparability_key jsonb,evidence_manifest jsonb,evidence_manifest_hash text,ontology_version text,validation_context jsonb)",
+      "count": 1,
+      "ms": 17.689667
+    },
+    {
+      "sql": "INSERT INTO approved_extraction_records(id,org_id,workspace_id,kind,metric_id,entity_id) SELECT x.record_id,%s,%s,x.kind,x.metric_id,x.entity_id FROM jsonb_to_recordset(%s) AS x(record_id uuid,kind text,metric_id text,entity_id uuid)",
+      "count": 1,
+      "ms": 15.297417
+    },
+    {
+      "sql": "UPDATE approved_extraction_records r SET current_version_id=x.version_id,version=1 FROM jsonb_to_recordset(%s) AS x(record_id uuid,version_id uuid) WHERE r.id=x.record_id AND r.org_id=%s",
+      "count": 1,
+      "ms": 8.46625
+    },
+    {
+      "sql": "SELECT r.id,v.id AS version_id,v.origin_proposal_id,p.run_id AS origin_run_id,octet_length(v.validation_context::text) AS size FROM approved_extraction_records r JOIN approved_extraction_versions v ON v.id=r.current_version_id AND v.org_id=r.org_id JOIN extraction_proposals p ON p.id=v.origin_proposal_id AND p.org_id=v.org_id WHERE r.org_id=%s AND (p.run_id=ANY(%s::uuid[]) OR EXISTS (SELECT 1 FROM jsonb_array_elements(CASE WHEN jsonb_typeof(v.validation_context->'source_runs')='array' THEN v.validation_context->'source_runs' ELSE '[]'::jsonb END) pin WHERE pin->>'run_id'=ANY(%s::text[]))) ORDER BY r.id LIMIT 201",
+      "count": 4,
+      "ms": 7.870167
+    },
+    {
+      "sql": "UPDATE extraction_proposals SET state=%s,version=version+1 WHERE id=ANY(%s::uuid[]) AND org_id=%s",
+      "count": 1,
+      "ms": 7.808083
+    },
+    {
+      "sql": "SELECT id,run_id,workspace_id FROM extraction_proposals WHERE org_id=%s AND id=ANY(%s::uuid[]) ORDER BY id",
+      "count": 3,
+      "ms": 6.176208
+    },
+    {
+      "sql": "INSERT INTO extraction_reviews(id,org_id,workspace_id,action,actor_user_id,reason,request_id,idempotency_key,expected_versions,input_ids,patch,result_ids) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::uuid[],%s,%s::uuid[])",
+      "count": 1,
+      "ms": 4.814167
+    },
+    {
+      "sql": "SELECT DISTINCT m.conflict_id FROM extraction_conflict_members m WHERE m.org_id=%s AND m.proposal_id=ANY(%s::uuid[]) ORDER BY m.conflict_id LIMIT 101",
+      "count": 3,
+      "ms": 3.904917
+    },
+    {
+      "sql": "SELECT id,run_id,workspace_id,kind,metric_id,state,version,payload,validation_summary FROM extraction_proposals WHERE id=ANY(%s::uuid[]) AND org_id=%s ORDER BY id",
+      "count": 1,
+      "ms": 2.8775
+    },
+    {
+      "sql": "SELECT p.id AS proposal_id,e.source_span_id,e.document_version_id,e.role FROM unnest(%s::uuid[]) AS p(id) CROSS JOIN LATERAL (SELECT source_span_id,document_version_id,role FROM extraction_proposal_evidence WHERE proposal_id=p.id AND org_id=%s ORDER BY source_span_id,document_version_id,role LIMIT 201) e ORDER BY p.id,e.source_span_id,e.document_version_id,e.role",
+      "count": 1,
+      "ms": 2.783042
+    },
+    {
+      "sql": "SELECT v.id AS version_id,v.record_id,v.parent_version_id,v.version,r.kind,r.metric_id,v.payload,v.evidence_manifest,v.evidence_manifest_hash,v.ontology_version,v.approved_by,v.created_at,v.approval_reason,v.normalizer_version,v.validator_version,v.validation_context FROM approved_extraction_versions v JOIN approved_extraction_records r ON r.id=v.record_id AND r.org_id=v.org_id WHERE v.id=ANY(%s::uuid[]) AND v.org_id=%s",
+      "count": 1,
+      "ms": 2.76775
+    },
+    {
+      "sql": "SELECT octet_length(input_manifest::text) AS size FROM extraction_runs WHERE id=%s AND org_id=%s",
+      "count": 1,
+      "ms": 2.342708
+    },
+    {
+      "sql": "INSERT INTO idempotency_keys(key,org_id,endpoint,response_status,response_body) VALUES (%s,%s,%s,%s,%s)",
+      "count": 1,
+      "ms": 2.298209
+    },
+    {
+      "sql": "SELECT s.id,s.document_version_id,s.section_id,s.page,s.start_char,s.end_char,s.text_hash, d.published_at,v.canonical_text_key,sec.parent_id,sec.heading,sec.heading_path,sec.ord, sec.start_char AS section_start,sec.end_char AS section_end FROM source_spans s JOIN document_versions v ON v.id=s.document_version_id JOIN documents d ON d.id=v.document_id JOIN sections sec ON sec.id=s.section_id AND sec.document_version_id=v.id JOIN corpus_version_documents cv ON cv.document_version_id=v.id WHERE s.id=ANY(%s::uuid[]) AND d.entity_id=%s AND d.published_at<=%s AND v.status='parsed' AND cv.corpus_version_id=%s ORDER BY v.id,s.id LIMIT 201",
+      "count": 1,
+      "ms": 2.021334
+    },
+    {
+      "sql": "Composed([SQL('SELECT '), SQL('id, workspace_id, entity_id, parent_run_id, status, modes, as_of, corpus_version_id, ontology_version, workflow_version, provider, model, version, created_at, cancel_requested_at, max_calls, max_input_tokens, max_output_tokens, max_wall_seconds, max_cost_usd, calls_used, input_tokens_used, output_tokens_used, cost_usd, (error IS NOT NULL) AS has_error'), SQL(',org_id,policy_id,input_manifest,input_hash FROM extraction_runs WHERE id=%s AND org_id=%s')])",
+      "count": 1,
+      "ms": 1.774833
+    },
+    {
+      "sql": "SELECT id,record_id,octet_length(payload::text)+octet_length(evidence_manifest::text)+COALESCE(octet_length(validation_context::text),0) AS size FROM approved_extraction_versions WHERE id=ANY(%s::uuid[]) AND org_id=%s",
+      "count": 1,
+      "ms": 1.74675
+    },
+    {
+      "sql": "SET LOCAL ROLE fel_app",
+      "count": 2,
+      "ms": 1.73125
+    },
+    {
+      "sql": "INSERT INTO extraction_run_events(org_id,run_id,event_type,payload) VALUES (%s,%s,%s,%s) RETURNING id",
+      "count": 2,
+      "ms": 1.714082
+    },
+    {
+      "sql": "SELECT id FROM extraction_runs WHERE id=%s AND org_id=%s FOR UPDATE",
+      "count": 1,
+      "ms": 1.675375
+    },
+    {
+      "sql": "SELECT set_config('request.jwt.claims', %s, true)",
+      "count": 2,
+      "ms": 1.636251
+    },
+    {
+      "sql": "SELECT id,octet_length(payload::text)+octet_length(validation_summary::text) AS size FROM extraction_proposals WHERE org_id=%s AND run_id=ANY(%s::uuid[]) ORDER BY id LIMIT 201 FOR UPDATE",
+      "count": 1,
+      "ms": 1.526916
+    },
+    {
+      "sql": "UPDATE extraction_runs SET status='succeeded',finished_at=now() WHERE id=%s AND org_id=%s AND status='waiting_review'",
+      "count": 1,
+      "ms": 1.25975
+    },
+    {
+      "sql": "SELECT 1 FROM extraction_conflicts c JOIN extraction_conflict_members m ON m.conflict_id=c.id AND m.org_id=c.org_id JOIN extraction_proposals p ON p.id=m.proposal_id AND p.org_id=m.org_id WHERE c.org_id=%s AND p.run_id=%s AND c.status='open' LIMIT 1",
+      "count": 1,
+      "ms": 1.09375
+    },
+    {
+      "sql": "SELECT 1 FROM extraction_proposals WHERE org_id=%s AND run_id=%s AND state IN ('proposed','needs_review') LIMIT 1",
+      "count": 1,
+      "ms": 0.93425
+    },
+    {
+      "sql": "SELECT pg_advisory_xact_lock(%s)",
+      "count": 1,
+      "ms": 0.646042
+    },
+    {
+      "sql": "SELECT response_status, response_body FROM idempotency_keys WHERE org_id=%s AND endpoint=%s AND key=%s",
+      "count": 1,
+      "ms": 0.6095
+    },
+    {
+      "sql": "\n        INSERT INTO audit_events\n            (org_id, actor_user_id, request_id, action, object_type, object_id, payload)\n        VALUES (%s, %s, %s, %s, %s, %s, %s)\n        ",
+      "count": 1,
+      "ms": 0.543917
+    }
+  ]
+}

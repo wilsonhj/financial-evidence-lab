@@ -65,27 +65,38 @@ def _locked_rows(
     ).fetchall()
     if len(sizes) > 200:
         raise reads.too_large(str(sizes[200]["id"]))
-    rows = []
     for size in sizes:
         if size["size"] > 1048576:
             raise reads.too_large(str(size["id"]))
-        row = conn.execute(
-            "SELECT id,run_id,workspace_id,kind,metric_id,state,version,payload,"
-            "validation_summary FROM extraction_proposals WHERE id=%s AND org_id=%s",
-            (size["id"], org),
-        ).fetchone()
-        if row is None:
-            raise api_error(409, "CONFLICT", "Extraction proposal changed during review.")
-        edges = conn.execute(
-            "SELECT source_span_id,document_version_id,role "
-            "FROM extraction_proposal_evidence WHERE proposal_id=%s AND org_id=%s "
-            "ORDER BY source_span_id,document_version_id,role LIMIT 201",
-            (row["id"], org),
-        ).fetchall()
-        if len(edges) > 200:
-            raise reads.too_large(str(row["id"]))
-        row["evidence"] = [{k: str(v) for k, v in edge.items()} for edge in edges]
-        rows.append(row)
+    ids = [size["id"] for size in sizes]
+    rows = conn.execute(
+        "SELECT id,run_id,workspace_id,kind,metric_id,state,version,payload,"
+        "validation_summary FROM extraction_proposals "
+        "WHERE id=ANY(%s::uuid[]) AND org_id=%s ORDER BY id",
+        (ids, org),
+    ).fetchall()
+    if {row["id"] for row in rows} != set(ids):
+        raise api_error(409, "CONFLICT", "Extraction proposal changed during review.")
+    # Each lateral scan retains the existing per-proposal201 sentinel. A global
+    # LIMIT would let early rows hide an oversized later proposal's evidence.
+    edges = conn.execute(
+        "SELECT p.id AS proposal_id,e.source_span_id,e.document_version_id,e.role "
+        "FROM unnest(%s::uuid[]) AS p(id) CROSS JOIN LATERAL ("
+        "SELECT source_span_id,document_version_id,role FROM extraction_proposal_evidence "
+        "WHERE proposal_id=p.id AND org_id=%s "
+        "ORDER BY source_span_id,document_version_id,role LIMIT 201) e "
+        "ORDER BY p.id,e.source_span_id,e.document_version_id,e.role",
+        (ids, org),
+    ).fetchall()
+    by_id: dict[Any, list[dict[str, str]]] = {pid: [] for pid in ids}
+    for edge in edges:
+        pid = edge["proposal_id"]
+        by_id[pid].append({k: str(v) for k, v in edge.items() if k != "proposal_id"})
+        if len(by_id[pid]) > 200:
+            raise reads.too_large(str(pid))
+    for row in rows:
+        row["evidence"] = by_id[row["id"]]
+
     return rows
 
 
@@ -243,26 +254,36 @@ def _apply(
                 )
             )
         else:
-            for pid in ids:
-                run = locked_runs[str(selected[pid]["run_id"])]
-                approvals.append(
-                    approved.create(
-                        conn,
-                        ctx,
-                        workspace_id,
-                        result.drafts[pid],
-                        validation.source_context({str(run["id"]): run}),
-                        body["reason"],
-                    )
+            approvals.extend(
+                approved.create_many(
+                    conn,
+                    ctx,
+                    workspace_id,
+                    [
+                        (
+                            result.drafts[pid],
+                            validation.source_context(
+                                {
+                                    str(selected[pid]["run_id"]): locked_runs[
+                                        str(selected[pid]["run_id"])
+                                    ]
+                                }
+                            ),
+                        )
+                        for pid in ids
+                    ],
+                    body["reason"],
                 )
+            )
+
     state = {"accept": "accepted", "edit": "accepted", "reject": "rejected", "merge": "superseded"}[
         body["action"]
     ]
-    for pid in ids:
-        conn.execute(
-            "UPDATE extraction_proposals SET state=%s,version=version+1 WHERE id=%s AND org_id=%s",
-            (state, pid, ctx.org_id),
-        )
+    conn.execute(
+        "UPDATE extraction_proposals SET state=%s,version=version+1 "
+        "WHERE id=ANY(%s::uuid[]) AND org_id=%s",
+        (state, ids, ctx.org_id),
+    )
     review_id = str(uuid4())
     resolutions = {}
     resolved_groups = []

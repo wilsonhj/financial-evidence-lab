@@ -43,6 +43,11 @@ def detail(
     ).fetchone()
     if row is None:
         raise api_error(404, "NOT_FOUND", "Approved extraction not found.")
+    return _project(row, record_id)
+
+
+def _project(row: dict[str, Any], record_id: str) -> dict[str, Any]:
+    """Same public bytes for single reads and freshly committed bulk versions."""
     edges = row.pop("evidence_manifest")
     if len(edges) > 200:
         raise reads.too_large(record_id)
@@ -136,3 +141,112 @@ def append_version(
         (version_id, version, record_id, ctx.org_id),
     )
     return detail(conn, ctx.org_id, record_id, version_id)
+
+
+def create_many(
+    conn: psycopg.Connection[dict[str, Any]],
+    ctx: TenantContext,
+    workspace_id: str,
+    drafts: list[tuple[ProposalDraft, dict[str, Any]]],
+    reason: str,
+) -> list[dict[str, Any]]:
+    """Create bounded initial approvals in the caller's locked review transaction.
+
+    All database triggers, RLS, provenance checks and deferred constraints still
+    execute for every row. Batching removes transport round trips, not checks.
+    Returned receipts retain caller order and the single-record public ETags.
+    """
+    if not 1 <= len(drafts) <= 100:
+        raise reads.too_large(workspace_id)
+    entries = []
+    for draft, context in drafts:
+        manifest = sorted(
+            draft.evidence,
+            key=lambda edge: (edge["source_span_id"], edge["document_version_id"], edge["role"]),
+        )
+        entries.append(
+            {
+                "record_id": str(uuid4()),
+                "version_id": str(uuid4()),
+                "kind": draft.kind,
+                "metric_id": draft.metric_id,
+                "entity_id": draft.payload["entity_id"],
+                "origin_proposal_id": draft.id,
+                "payload": {
+                    k: v for k, v in draft.payload.items() if k not in WORKER_EXTENSION_KEYS
+                },
+                "comparability_key": draft.comparability_key,
+                "evidence_manifest": manifest,
+                "evidence_manifest_hash": hash_json(manifest),
+                "ontology_version": context["source_runs"][0]["ontology_version"],
+                "validation_context": context,
+            }
+        )
+    data = Jsonb(entries)
+    # Financial payload/evidence/context belong only to the immutable version
+    # insertion. Keep identity/head bindings proportional to their own columns.
+    records = Jsonb(
+        [
+            {key: entry[key] for key in ("record_id", "kind", "metric_id", "entity_id")}
+            for entry in entries
+        ]
+    )
+    heads = Jsonb([{key: entry[key] for key in ("record_id", "version_id")} for entry in entries])
+    conn.execute(
+        "INSERT INTO approved_extraction_records(id,org_id,workspace_id,kind,metric_id,entity_id) "
+        "SELECT x.record_id,%s,%s,x.kind,x.metric_id,x.entity_id FROM jsonb_to_recordset(%s) "
+        "AS x(record_id uuid,kind text,metric_id text,entity_id uuid)",
+        (ctx.org_id, workspace_id, records),
+    )
+    conn.execute(
+        "INSERT INTO approved_extraction_versions(id,org_id,record_id,version,parent_version_id,"
+        "origin_proposal_id,payload,comparability_key,evidence_manifest,evidence_manifest_hash,"
+        "ontology_version,normalizer_version,validator_version,approved_by,approval_reason,"
+        "validation_context) "
+        "SELECT x.version_id,%s,x.record_id,1,NULL,x.origin_proposal_id,x.payload,"
+        "x.comparability_key,x.evidence_manifest,x.evidence_manifest_hash,x.ontology_version,"
+        "%s,%s,%s,%s,x.validation_context FROM jsonb_to_recordset(%s) AS x("
+        "record_id uuid,version_id uuid,origin_proposal_id uuid,payload jsonb,"
+        "comparability_key jsonb,evidence_manifest jsonb,evidence_manifest_hash text,"
+        "ontology_version text,validation_context jsonb)",
+        (ctx.org_id, NORMALIZER_VERSION, VALIDATOR_VERSION, ctx.user_id, reason, data),
+    )
+    conn.execute(
+        "UPDATE approved_extraction_records r SET current_version_id=x.version_id,version=1 "
+        "FROM jsonb_to_recordset(%s) AS x(record_id uuid,version_id uuid) "
+        "WHERE r.id=x.record_id AND r.org_id=%s",
+        (heads, ctx.org_id),
+    )
+    version_ids = [entry["version_id"] for entry in entries]
+    sizes = conn.execute(
+        "SELECT id,record_id,octet_length(payload::text)+octet_length(evidence_manifest::text)+"
+        "COALESCE(octet_length(validation_context::text),0) AS size "
+        "FROM approved_extraction_versions WHERE id=ANY(%s::uuid[]) AND org_id=%s",
+        (version_ids, ctx.org_id),
+    ).fetchall()
+    if len(sizes) != len(entries):
+        raise api_error(404, "NOT_FOUND", "Approved extraction not found.")
+    for size in sizes:
+        if size["size"] > 1048576:
+            raise reads.too_large(str(size["record_id"]))
+    rows = conn.execute(
+        "SELECT v.id AS version_id,v.record_id,v.parent_version_id,v.version,r.kind,r.metric_id,"
+        "v.payload,v.evidence_manifest,v.evidence_manifest_hash,v.ontology_version,v.approved_by,"
+        "v.created_at,v.approval_reason,v.normalizer_version,v.validator_version,"
+        "v.validation_context FROM approved_extraction_versions v "
+        "JOIN approved_extraction_records r ON r.id=v.record_id AND r.org_id=v.org_id "
+        "WHERE v.id=ANY(%s::uuid[]) AND v.org_id=%s",
+        (version_ids, ctx.org_id),
+    ).fetchall()
+    if len(rows) != len(entries):
+        raise api_error(404, "NOT_FOUND", "Approved extraction not found.")
+    bodies = {str(row["record_id"]): _project(row, str(row["record_id"])) for row in rows}
+    return [
+        {
+            "record_id": entry["record_id"],
+            "version_id": entry["version_id"],
+            "version": 1,
+            "etag": serializers.etag(bodies[entry["record_id"]]),
+        }
+        for entry in entries
+    ]
