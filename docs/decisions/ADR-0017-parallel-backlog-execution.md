@@ -211,3 +211,13 @@ No production edits are dispatched: a reproducible defect returns to the lead
 for a separately bounded fix. Publish its evidence map and test plan here.
 Neither these tests nor the sequential benchmark waive the reference-profile
 performance or live M3 release gates; no canonical checkbox changes.
+
+
+Reader hosting prerequisite ruling: issue #303 implements #108's accepted
+design addendum item 1 as a lead-owned offline configuration PR. Authorize
+infra/railway/web.json and the two adjacent infrastructure READMEs, plus the
+lead's registration/evidence files. Use existing workspace build/start scripts,
+Node/pnpm pins, injected PORT and /api/health; no application/dependency edits.
+The root integration lead serializes these shared scheduling changes with
+other control PRs. Local schema/build/start verification and independent review
+are required; no hosted environment or deployment is authorized by this change.

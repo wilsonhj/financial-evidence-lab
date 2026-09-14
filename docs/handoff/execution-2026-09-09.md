@@ -532,3 +532,19 @@ Issue #61 remains open for concrete acceptance proofs; its new lane owns only
 three test files and may not repair production code without a new lead ruling.
 The detailed evidence map and test plan distinguish these missing proofs from
 confirmed defects and from separately outstanding release-profile performance.
+
+
+## Reader web service configuration prerequisite — issue #303
+
+The lead prepared `infra/railway/web.json` from reviewed main 1b2da77. The
+configuration builds the existing @fel/web workspace and starts Next in
+production mode on the injected PORT, using the existing /api/health endpoint.
+Keep the repository root available for shared contracts. No hosted service,
+secret, application source, dependency or API/worker configuration was changed.
+
+Verification: official Railway draft-2020-12 schema validation passed using
+the existing Ajv 2020 validator; the workspace production build passed; the
+exact configured start command returned HTTP 200 with status=ok/service=fel-web
+on isolated local port 61786. The owned server was stopped after verification.
+These checks do not certify a Railway-built image or hosted reader acceptance.
+Independent review and final CI remain required before integration.

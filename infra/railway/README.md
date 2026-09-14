@@ -4,6 +4,7 @@ Config-as-code for the Railway services. Each service in the Railway
 dashboard points its "config file path" at the matching JSON file here.
 
 - `api.json` — FastAPI service (`uvicorn`, `/health` healthcheck).
+- `web.json` — Next.js production server (`@fel/web`, `/api/health` healthcheck).
 - `worker.json` — job-queue consumer (the role-pinned command in `worker.json`) with a
   `/health` startup check. Railway health checks gate deployments; they do
   not continuously restart an already deployed service. The worker therefore
@@ -13,7 +14,7 @@ dashboard points its "config file path" at the matching JSON file here.
 
 ## Builder
 
-Both files pin `"builder": "RAILPACK"`, per review, following the current
+The service files pin `"builder": "RAILPACK"`, per review, following the current
 Railway Config-as-Code reference (which lists `RAILPACK` and `DOCKERFILE`).
 Flagged as unverifiable from CI: the config schema is platform-validated at
 deploy time, not by this repo's checks.
@@ -101,3 +102,29 @@ long handler runs, so that job remains healthy. It cannot prove that the
 handler itself is advancing; provider and job-stage time bounds remain the
 separate control for that failure mode. Hosted restart acceptance still
 requires a Railway deployment with the real service environment.
+
+## Web service prerequisite for the reader smoke
+
+Select config file `/infra/railway/web.json` and keep the service root at the
+repository root, not `apps/web`: the application imports shared workspace
+contracts and uses the root pnpm lockfile. The existing Node 24 engine and
+pnpm version pins remain authoritative. Railpack installs workspace dependencies;
+the configured build command selects `@fel/web`. The start command explicitly
+sets production mode and binds to `0.0.0.0` on Railway's injected `PORT`.
+The existing `/api/health` endpoint checks web startup without contacting the API.
+
+This follows Railway's [shared-monorepo guidance](https://docs.railway.com/deployments/monorepo)
+and [Railpack start-command semantics](https://docs.railway.com/deployments/start-command).
+Railpack runs start commands in a shell, so `PORT` expansion is supported.
+
+For the separately approved #108 smoke, provision `FEL_EVIDENCE_SOURCE=http`,
+`FEL_API_BASE_URL`, `FEL_API_BEARER_TOKEN`, and `FEL_ENTITY_IDS` through service
+variables. The token is server-only; do not use a `NEXT_PUBLIC_` variable or
+commit its value. Missing HTTP configuration fails closed. The accepted smoke
+uses its separately scoped mock-auth environment; production identity rollout
+remains #292. Keep the web build free of hosted credentials.
+
+Issue #303 supplies this offline configuration prerequisite only. Local build,
+start and health checks do not validate a Railway-built image, provision an
+environment or complete #108's worker-to-browser acceptance. Hosted deployment,
+fixture ingestion, evidence screenshots and failure injection remain separate.
