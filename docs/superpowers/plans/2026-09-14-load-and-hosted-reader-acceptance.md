@@ -123,3 +123,30 @@ without protection rules; neither is assumed to be a disposable smoke target.
 The owner has been asked for the dedicated target names and access method,
 without requesting credential values in chat. Implementation and local proof
 can proceed while hosted access is resolved.
+
+## Measured baseline and bounded performance repair
+
+The unchanged 25-user baseline at load runner commit `4feb4ac` completed all
+100 observations per operation without errors and with 25-way overlap.
+Create p95 was 156.22 ms, waiting reconnect 152.43 ms and terminal reconnect
+115.66 ms. Bulk review p95 was 4147.19 ms and **failed** the 1000 ms gate.
+The raw baseline remains retained; it must not be replaced by a later pass.
+
+Profiling a 100-item review reproduced 829 SQL statements, consuming 704.93 ms
+of 759.89 ms total. Initial approvals account for 500 statements, proposal and
+evidence loading 201, and individual proposal updates 100. Deterministic
+validation took 14.68 ms. The integration lead authorizes bounded batching in
+`apps/api/app/extraction/review.py` and `approved.py` plus a meaningful query
+budget regression in `apps/api/tests/extraction/test_review_query_budget.py`.
+Preserve tenant predicates, ordered locks, transaction boundaries, immutable
+history, evidence verification, ETags, limits and financial rules. Run existing
+atomicity, concurrency, correction and tenant tests before repeating the same
+load profile. Pool sizing, thresholds and workload remain unchanged.
+
+The real reader fixture smoke can exercise only one derived version per
+accession with the current parser/normalizer release. A repeated identical
+job is a no-op and changed raw bytes are quarantined. Do not fabricate a
+parser-version override or insert evidence rows to claim competing-version
+selection. Corpus membership, explicit existing version selection and repeats
+are exercised now; competing derived-version acceptance remains unverified
+until a genuine parser/normalizer release exists.
