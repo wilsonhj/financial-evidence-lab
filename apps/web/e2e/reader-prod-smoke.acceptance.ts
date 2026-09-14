@@ -68,7 +68,6 @@ async function fault(action: "corrupt" | "restore") {
 
 test("real ingestion yields stable reader selections and terminal amendment authority", async ({
   page,
-  request,
 }, info) => {
   for (const pin of [undefined, seed.corpus]) {
     const first = await httpGet(reader(target.id, pin), { headers });
@@ -118,7 +117,6 @@ test("real ingestion yields stable reader selections and terminal amendment auth
 
 test("future filings and absent IDs share the same not-found result; auth stays typed", async ({
   page,
-  request,
 }) => {
   const missing = randomUUID();
   const future = await httpGet(reader(seed.documents.future.id), { headers });
@@ -172,10 +170,7 @@ test("canonical byte corruption fails closed and is restored", async ({ page }, 
   expect(recovered.status()).toBe(200);
 });
 
-test("real dedicated API outage shows unavailable and recovers", async ({
-  page,
-  request,
-}, info) => {
+test("real dedicated API outage shows unavailable and recovers", async ({ page }, info) => {
   const hosted = process.env.READER_SMOKE_HOSTED === "1";
   const remote = process.env.READER_SMOKE_REMOTE_EXEC;
   if (hosted && !remote) throw new Error("Hosted outage requires dedicated service control");
@@ -234,10 +229,7 @@ test("real dedicated API outage shows unavailable and recovers", async ({
   );
 });
 
-test("real upstream authentication failures remain typed in the browser", async ({
-  page,
-  request,
-}) => {
+test("real upstream authentication failures remain typed in the browser", async ({ page }) => {
   const hosted = process.env.READER_SMOKE_HOSTED === "1";
   const variants = [
     {
