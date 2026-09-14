@@ -12,8 +12,20 @@ import os
 import signal
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
+
+
+def write_control(path: Path, action: str) -> None:
+    """Readers see the previous or next complete command, never truncation."""
+    with tempfile.NamedTemporaryFile(mode="w", dir=path.parent, delete=False) as output:
+        temporary = Path(output.name)
+        output.write(action)
+    try:
+        temporary.replace(path)
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def main() -> None:
@@ -38,7 +50,7 @@ def main() -> None:
     if args.action != "serve":
         if not control.is_file():
             raise ValueError("Owned local service controller is not running")
-        control.write_text(args.action)
+        write_control(control, args.action)
         return
 
     def terminate(_signum: int, _frame: object) -> None:
@@ -48,14 +60,14 @@ def main() -> None:
     signal.signal(signal.SIGINT, terminate)
     if control.exists():
         raise ValueError("Refusing an existing service control file")
-    control.write_text("start")
+    write_control(control, "start")
     child: subprocess.Popen[bytes] | None = None
     stopped_at: float | None = None
     try:
         while True:
             action = control.read_text()
             if stopped_at is not None and time.monotonic() - stopped_at >= 60:
-                control.write_text("start")
+                write_control(control, "start")
                 action = "start"
             if action not in {"start", "stop"}:
                 raise ValueError("Invalid service control action")

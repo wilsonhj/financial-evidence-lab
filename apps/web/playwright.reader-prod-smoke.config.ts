@@ -11,6 +11,7 @@ const web = process.env.READER_SMOKE_WEB_URL ?? "http://127.0.0.1:3218";
 if (hosted && (!api.startsWith("https://") || !web.startsWith("https://"))) {
   throw new Error("Hosted smoke requires explicit HTTPS API and web URLs");
 }
+const quote = (value: string) => "'" + value.replaceAll("'", "'\"'\"'") + "'";
 const root = fileURLToPath(new URL("../..", import.meta.url));
 const token = `mock.${Buffer.from(JSON.stringify({ org_id: manifest.org, sub: manifest.user, role: "owner" })).toString("base64url")}`;
 const env = {
@@ -39,7 +40,7 @@ export default defineConfig({
     ? undefined
     : [
         {
-          command: `${process.env.FEL_ACCEPTANCE_PYTHON ?? "python"} -m evals.harness.reader_prod_smoke_service serve --manifest ${manifestPath} --dedicated-target ${process.env.FEL_READER_SMOKE_TARGET}`,
+          command: `${quote(process.env.FEL_ACCEPTANCE_PYTHON ?? "python")} -m evals.harness.reader_prod_smoke_service serve --manifest ${quote(manifestPath)} --dedicated-target ${quote(process.env.FEL_READER_SMOKE_TARGET ?? "")}`,
           cwd: root,
           url: `${api}/health`,
           reuseExistingServer: false,
