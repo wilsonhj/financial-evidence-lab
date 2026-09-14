@@ -20,6 +20,11 @@ for (const width of [320, 390]) {
     await page.setViewportSize({ width, height: 844 });
     await page.goto("/");
 
+    // A width assertion alone is satisfied by an error page or an empty
+    // render, so pin the content first: the defect only exists when the
+    // filings table is actually populated.
+    await expect(page.locator("table.doc-table tbody tr").first()).toBeVisible();
+
     const overflow = await page.evaluate(
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
     );
@@ -91,6 +96,10 @@ for (const width of [320, 390, 768, 1024, 1440]) {
     await page.setViewportSize({ width, height: 844 });
     await page.goto(RUN_PATH);
 
+    // Pin the content: an error page would satisfy the width check.
+    await expect(page.getByRole("heading", { name: "Retrieval lanes" })).toBeVisible();
+    await expect(page.locator(".obs-lane").first()).toBeVisible();
+
     const overflow = await page.evaluate(
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
     );
@@ -134,6 +143,11 @@ for (const width of [320, 390]) {
   test(`update desk does not scroll the document at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 844 });
     await page.goto("/desk");
+
+    // Pin the content: an error page would satisfy the width check.
+    await expect(
+      page.locator(".desk-sidebar nav").getByRole("button", { name: "Coverage" }),
+    ).toBeVisible();
 
     const overflow = await page.evaluate(
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth,

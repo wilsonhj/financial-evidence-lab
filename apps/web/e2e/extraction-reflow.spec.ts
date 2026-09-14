@@ -23,19 +23,26 @@ const PROPOSAL_ID = "eeeeeeee-0000-4000-8000-000000000003";
 const RUN_ID = "eeeeeeee-0000-4000-8000-000000000002";
 const APPROVED_ID = "eeeeeeee-0000-4000-8000-000000000007";
 
+/**
+ * Each route carries a content sentinel. A width assertion alone is satisfied
+ * by an error page or an empty render, so the sentinel proves the page that
+ * actually exhibited the overflow is the page under test.
+ */
 const ROUTES = [
-  ["review queue", "/extractions"],
-  ["proposal detail", `/extractions/${PROPOSAL_ID}`],
-  ["run history", "/extraction-runs"],
-  ["run detail", `/extraction-runs/${RUN_ID}`],
-  ["approved record", `/approved-extractions/${APPROVED_ID}`],
+  ["review queue", "/extractions", "Proposals on this page"],
+  ["proposal detail", `/extractions/${PROPOSAL_ID}`, "Proposals on this page"],
+  ["run history", "/extraction-runs", "Run history"],
+  ["run detail", `/extraction-runs/${RUN_ID}`, "Execution steps in order"],
+  ["approved record", `/approved-extractions/${APPROVED_ID}`, "Evidence manifest"],
 ] as const;
 
-for (const [name, path] of ROUTES) {
+for (const [name, path, sentinel] of ROUTES) {
   for (const width of [320, 390]) {
     test(`${name} does not scroll the document at ${width}px`, async ({ page }) => {
       await page.setViewportSize({ width, height: 844 });
       await page.goto(path);
+
+      await expect(page.getByText(sentinel, { exact: false }).first()).toBeVisible();
 
       const overflow = await page.evaluate(
         () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
