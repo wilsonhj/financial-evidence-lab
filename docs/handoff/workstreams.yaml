@@ -1220,6 +1220,9 @@ packages:
       - apps/api/benchmarks/**
       - apps/api/tests/test_extraction_load_report.py
       - apps/api/EXTRACTION_LOAD.md
+      - apps/api/app/extraction/review.py
+      - apps/api/app/extraction/approved.py
+      - apps/api/tests/extraction/test_review_query_budget.py
   - id: READER-SMOKE-PREPARATION
     issue: 108
     tasks: []
