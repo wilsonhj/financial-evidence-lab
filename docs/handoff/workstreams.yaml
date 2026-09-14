@@ -97,13 +97,14 @@ packages:
     tasks: []
     depends_on: []
     team: integration
-    branch: agent/188-review-reconcile
-    status: merged # September 14 lead reconciliation and bounded recovery integration; future dispatch requires a new live ownership check.
+    branch: agent/188-load-reader-plan
+    status: active # Owner requested #61 load and #108 implementation on September 14; coordinate bounded local preparation and separately gated hosted execution.
     allowed_paths:
       - specs/001-financial-evidence-lab/tasks.md # Lead-only verified checkbox/annotation updates.
       - docs/handoff/execution-2026-09-09.md
       - docs/handoff/STATUS.md
       - docs/handoff/workstreams.yaml
+      - docs/superpowers/plans/2026-09-14-load-and-hosted-reader-acceptance.md
       - docs/decisions/ADR-0017-parallel-backlog-execution.md
       - docs/superpowers/plans/2026-09-09-backlog-resolution.md
       - docs/superpowers/plans/2026-09-10-extraction-complexity-split.md
@@ -1207,3 +1208,37 @@ packages:
     allowed_paths:
       - apps/web/src/lib/extraction/fixture-actions.ts
       - apps/web/src/lib/extraction/fixture-actions.test.ts
+
+  - id: M3-REVIEW-LOAD-ACCEPTANCE
+    issue: 61
+    tasks: []
+    depends_on: [M3-REVIEW-API, M3-REVIEW-WEB]
+    team: trust
+    branch: agent/61-load-acceptance
+    status: ready # Scaled 25-user proof; full reference profile remains separately unproven.
+    allowed_paths:
+      - apps/api/benchmarks/**
+      - apps/api/tests/test_extraction_load_report.py
+      - apps/api/EXTRACTION_LOAD.md
+  - id: READER-SMOKE-PREPARATION
+    issue: 108
+    tasks: []
+    depends_on: [READER-INTEGRITY-CLASSIFICATION, READER-WEB-DEPLOY-CONFIG]
+    team: trust
+    branch: test/reader-prod-smoke
+    status: ready # Local implementation under accepted #108 addendum; parent hosted acceptance stays blocked until dedicated access exists.
+    credentials: mock-only
+    allowed_paths:
+      - workers/src/fel_workers/ingestion/fixture_sec_client.py
+      - workers/src/fel_workers/__main__.py
+      - workers/src/fel_workers/consumer.py
+      - workers/tests/test_fixture_sec_client.py
+      - workers/tests/test_entrypoint.py
+      - workers/tests/test_consumer.py
+      - evals/datasets/reader-prod-smoke/**
+      - evals/harness/reader_prod_smoke*.py
+      - evals/tests/test_reader_prod_smoke.py
+      - evals/reports/reader-prod-smoke/**
+      - apps/web/playwright.reader-prod-smoke.config.ts
+      - apps/web/e2e/reader-prod-smoke.acceptance.ts
+      - .github/workflows/reader-prod-smoke.yml # Existing named shared-path exception in #108 accepted addendum.
