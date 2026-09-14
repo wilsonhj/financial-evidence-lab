@@ -183,11 +183,20 @@ def create_many(
             }
         )
     data = Jsonb(entries)
+    # Financial payload/evidence/context belong only to the immutable version
+    # insertion. Keep identity/head bindings proportional to their own columns.
+    records = Jsonb(
+        [
+            {key: entry[key] for key in ("record_id", "kind", "metric_id", "entity_id")}
+            for entry in entries
+        ]
+    )
+    heads = Jsonb([{key: entry[key] for key in ("record_id", "version_id")} for entry in entries])
     conn.execute(
         "INSERT INTO approved_extraction_records(id,org_id,workspace_id,kind,metric_id,entity_id) "
         "SELECT x.record_id,%s,%s,x.kind,x.metric_id,x.entity_id FROM jsonb_to_recordset(%s) "
         "AS x(record_id uuid,kind text,metric_id text,entity_id uuid)",
-        (ctx.org_id, workspace_id, data),
+        (ctx.org_id, workspace_id, records),
     )
     conn.execute(
         "INSERT INTO approved_extraction_versions(id,org_id,record_id,version,parent_version_id,"
@@ -206,7 +215,7 @@ def create_many(
         "UPDATE approved_extraction_records r SET current_version_id=x.version_id,version=1 "
         "FROM jsonb_to_recordset(%s) AS x(record_id uuid,version_id uuid) "
         "WHERE r.id=x.record_id AND r.org_id=%s",
-        (data, ctx.org_id),
+        (heads, ctx.org_id),
     )
     version_ids = [entry["version_id"] for entry in entries]
     sizes = conn.execute(

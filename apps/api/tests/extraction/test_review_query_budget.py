@@ -1,9 +1,11 @@
 """Bulk review must not issue a database round trip for every row and field."""
 
+import json
 from pathlib import Path
 from uuid import uuid4
 
 import psycopg
+from psycopg.types.json import Jsonb
 
 from app.auth import make_mock_token
 from benchmarks.extraction_load_fixture import BulkMock, seed, state, verify
@@ -60,10 +62,17 @@ def test_100_item_review_has_bounded_sql_round_trips(
             ).fetchall()
         }
     calls = []
+    record_binding_bytes = []
     original = psycopg.Connection.execute
 
     def counted(conn, query, *args, **kwargs):
         calls.append(str(query))
+        if str(query).startswith(
+            ("INSERT INTO approved_extraction_records", "UPDATE approved_extraction_records")
+        ):
+            record_binding_bytes.extend(
+                len(json.dumps(value.obj).encode()) for value in args[0] if isinstance(value, Jsonb)
+            )
         return original(conn, query, *args, **kwargs)
 
     with monkeypatch.context() as scoped:
@@ -92,6 +101,9 @@ def test_100_item_review_has_bounded_sql_round_trips(
     # This is an operation budget, not a machine-dependent latency assertion.
     # 60 permits bounded safety/provenance probes, but rejects the observed829.
     assert len(calls) <= 60, f"100-item review issued {len(calls)} SQL operations"
+    # Record identity/head writes need no financial payload, evidence or context.
+    # A bounded binding budget prevents resending those large version-only fields.
+    assert sum(record_binding_bytes) <= 50_000, record_binding_bytes
 
 
 def test_bulk_insert_failure_rolls_back_records_versions_and_receipt(
