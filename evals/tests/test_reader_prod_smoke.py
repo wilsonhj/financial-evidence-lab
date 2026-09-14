@@ -156,3 +156,182 @@ def test_real_worker_setup_and_blob_recovery(database, monkeypatch, tmp_path):
     blob_fault(manifest, tmp_path, "local-reader", restore=True)
     with pytest.raises(ValueError, match="empty evidence database"):
         setup(database, tmp_path, "local-reader")
+
+
+@pytest.mark.parametrize(
+    "module,action",
+    [
+        ("os", "stop"),
+        ("evals.harness.reader_prod_smoke", "setup"),
+        ("evals.harness.reader_prod_smoke_service", "serve"),
+        ("evals.harness.reader_prod_smoke", "corrupt; rm -rf /"),
+    ],
+)
+def test_remote_rejects_non_allowlisted_operations(module, action, tmp_path):
+    from harness.reader_prod_smoke_remote import parse_operation
+
+    config = {"TARGET": "dedicated-smoke", "MANIFEST": str(tmp_path / "manifest")}
+    args = [
+        "-m",
+        module,
+        action,
+        "--manifest",
+        config["MANIFEST"],
+        "--dedicated-target",
+        config["TARGET"],
+    ]
+    with pytest.raises(ValueError, match="allowlisted"):
+        parse_operation(args, config)
+
+
+def test_remote_operation_binds_both_target_and_local_manifest(tmp_path):
+    from harness.reader_prod_smoke_remote import parse_operation
+
+    config = {"TARGET": "dedicated-smoke", "MANIFEST": str(tmp_path / "manifest")}
+    args = [
+        "-m",
+        "evals.harness.reader_prod_smoke",
+        "corrupt",
+        "--manifest",
+        config["MANIFEST"],
+        "--dedicated-target",
+        config["TARGET"],
+    ]
+    assert parse_operation(args, config) == ("evals.harness.reader_prod_smoke", "corrupt")
+    args[6] = "other-target"
+    with pytest.raises(ValueError, match="target mismatch"):
+        parse_operation(args, config)
+    args[6] = config["TARGET"]
+    args[4] = str(tmp_path / "different")
+    with pytest.raises(ValueError, match="manifest path"):
+        parse_operation(args, config)
+    with pytest.raises(ValueError, match="interface"):
+        parse_operation(["anything"], config)
+
+
+def test_remote_shell_arguments_never_become_commands(tmp_path):
+    import subprocess
+    import sys
+
+    from harness.reader_prod_smoke_remote import remote_command
+
+    directory = tmp_path / "spaces ' and $(touch SHOULD_NOT_EXIST)"
+    directory.mkdir()
+    payload = "quote '; touch SHOULD_NOT_EXIST; $(echo injected) `echo nope`"
+    command = remote_command(
+        str(directory),
+        sys.executable,
+        [
+            "-c",
+            "import json,sys; print(json.dumps(sys.argv[1:]))",
+            payload,
+        ],
+    )
+    result = subprocess.run(["/bin/sh", "-c", command], capture_output=True, text=True, check=True)
+    assert json.loads(result.stdout) == [payload]
+    assert not list(tmp_path.rglob("SHOULD_NOT_EXIST"))
+
+
+def test_remote_ssh_failure_does_not_echo_secret_output(monkeypatch):
+    from types import SimpleNamespace
+
+    from harness import reader_prod_smoke_remote as remote
+
+    monkeypatch.setattr(
+        remote.subprocess,
+        "run",
+        lambda *args, **kwargs: SimpleNamespace(
+            returncode=1,
+            stdout=b"secret stdout",
+            stderr=b"secret stderr",
+        ),
+    )
+    with pytest.raises(RuntimeError) as error:
+        remote.ssh({"SSH_KEY": "key", "KNOWN_HOSTS": "hosts"}, str(uuid4()), "fixed")
+    assert "secret" not in str(error.value)
+
+
+@pytest.mark.parametrize("wrong", ["revision", "target", "domain"])
+def test_remote_preflight_fails_before_mutation_for_wrong_deployment(tmp_path, wrong):
+    import subprocess
+    import sys
+
+    from harness.reader_prod_smoke_remote import API_PROGRAM
+
+    environment = os.environ.copy()
+    environment.update(
+        RAILWAY_GIT_COMMIT_SHA="a" * 40,
+        FEL_READER_SMOKE_TARGET="dedicated-smoke",
+        RAILWAY_PUBLIC_DOMAIN="api.example.test",
+        PYTHONOPTIMIZE="1",
+    )
+    if wrong == "revision":
+        environment["RAILWAY_GIT_COMMIT_SHA"] = "b" * 40
+    elif wrong == "target":
+        environment["FEL_READER_SMOKE_TARGET"] = "other-target"
+    else:
+        environment["RAILWAY_PUBLIC_DOMAIN"] = "wrong.example.test"
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-I",
+            "-c",
+            API_PROGRAM,
+            "a" * 40,
+            "dedicated-smoke",
+            str(tmp_path / "manifest-does-not-exist"),
+            "https://api.example.test",
+            "",
+            "inspect",
+        ],
+        env=environment,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode != 0
+    assert b"AssertionError" in result.stderr
+    assert b"FileNotFoundError" not in result.stderr
+
+
+def test_service_control_never_exposes_a_partial_command(monkeypatch, tmp_path):
+    import io
+
+    from harness.reader_prod_smoke_service import write_control
+
+    control = tmp_path / "manifest.api-control"
+    control.write_text("start")
+    original_open = io.open
+    observations = []
+
+    def observe_after_open(file, mode="r", *args, **kwargs):
+        opened = original_open(file, mode, *args, **kwargs)
+        if "w" in mode:
+            # Model a scheduler switch immediately after a writer opens its
+            # destination. An in-place write has already truncated it here.
+            with original_open(control) as reader:
+                observations.append(reader.read())
+        return opened
+
+    monkeypatch.setattr(io, "open", observe_after_open)
+    write_control(control, "stop")
+    assert observations and all(value == "start" for value in observations)
+    assert control.read_text() == "stop"
+    assert list(tmp_path.iterdir()) == [control]
+
+
+def test_service_control_failed_replacement_preserves_previous_command(monkeypatch, tmp_path):
+    from pathlib import Path
+
+    from harness.reader_prod_smoke_service import write_control
+
+    control = tmp_path / "manifest.api-control"
+    control.write_text("start")
+
+    def fail_replace(source, destination):
+        raise OSError("replacement refused")
+
+    monkeypatch.setattr(Path, "replace", fail_replace)
+    with pytest.raises(OSError, match="replacement refused"):
+        write_control(control, "stop")
+    assert control.read_text() == "start"
+    assert list(tmp_path.iterdir()) == [control]

@@ -1,0 +1,116 @@
+name: Dedicated hosted reader smoke
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dedicated-reader-smoke
+  cancel-in-progress: false
+
+jobs:
+  reader-smoke:
+    environment: reader-smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      READER_SMOKE_HOSTED: "1"
+      FEL_READER_SMOKE_TARGET: ${{ vars.READER_SMOKE_TARGET }}
+      READER_SMOKE_TARGET: ${{ vars.READER_SMOKE_TARGET }}
+      READER_SMOKE_REVISION: ${{ vars.READER_SMOKE_REVISION }}
+      READER_SMOKE_API_URL: ${{ vars.READER_SMOKE_API_URL }}
+      READER_SMOKE_WEB_URL: ${{ vars.READER_SMOKE_WEB_URL }}
+      READER_SMOKE_UNAUTHORIZED_WEB_URL: ${{ vars.READER_SMOKE_UNAUTHORIZED_WEB_URL }}
+      READER_SMOKE_FORBIDDEN_WEB_URL: ${{ vars.READER_SMOKE_FORBIDDEN_WEB_URL }}
+      READER_SMOKE_API_INSTANCE: ${{ secrets.READER_SMOKE_API_INSTANCE }}
+      READER_SMOKE_WEB_INSTANCE: ${{ secrets.READER_SMOKE_WEB_INSTANCE }}
+      READER_SMOKE_UNAUTHORIZED_WEB_INSTANCE: ${{ secrets.READER_SMOKE_UNAUTHORIZED_WEB_INSTANCE }}
+      READER_SMOKE_FORBIDDEN_WEB_INSTANCE: ${{ secrets.READER_SMOKE_FORBIDDEN_WEB_INSTANCE }}
+      READER_SMOKE_REMOTE_CWD: ${{ vars.READER_SMOKE_REMOTE_CWD }}
+      READER_SMOKE_REMOTE_PYTHON: ${{ vars.READER_SMOKE_REMOTE_PYTHON }}
+      READER_SMOKE_REMOTE_MANIFEST: ${{ vars.READER_SMOKE_REMOTE_MANIFEST }}
+      READER_SMOKE_SSH_KEY: ${{ runner.temp }}/reader-smoke-key
+      READER_SMOKE_KNOWN_HOSTS: ${{ runner.temp }}/reader-smoke-known-hosts
+      READER_SMOKE_MANIFEST: ${{ github.workspace }}/.reader-smoke/manifest.json
+      READER_SMOKE_REMOTE_EXEC: ${{ github.workspace }}/evals/harness/reader_prod_smoke_remote.py
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require protected environment and the approved deployed revision
+        env:
+          GH_TOKEN: ${{ secrets.READER_SMOKE_ENVIRONMENT_READ_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          test -n "$GH_TOKEN"
+          test "$READER_SMOKE_REVISION" = "$GITHUB_SHA"
+          gh api "repos/$GH_REPO/environments/reader-smoke" > "$RUNNER_TEMP/reader-environment.json"
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          value = json.loads((Path(os.environ['RUNNER_TEMP']) / 'reader-environment.json').read_text())
+          rules = value.get('protection_rules', [])
+          protected = any(
+              (r.get('type') == 'required_reviewers' and bool(r.get('reviewers')))
+              or (r.get('type') == 'wait_timer' and r.get('wait_timer', 0) > 0)
+              for r in rules
+          )
+          if not protected:
+              raise SystemExit('reader-smoke must have reviewers or a nonzero wait timer')
+          PY
+      - uses: actions/setup-python@v5
+        with:
+          python-version-file: .python-version
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @fel/web exec playwright install --with-deps chromium
+      - name: Install independently pinned SSH material
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.READER_SMOKE_SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.READER_SMOKE_SSH_KNOWN_HOSTS }}
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          for source, destination in [('SSH_PRIVATE_KEY', 'READER_SMOKE_SSH_KEY'), ('SSH_KNOWN_HOSTS', 'READER_SMOKE_KNOWN_HOSTS')]:
+              value = os.environ[source]
+              if not value.strip():
+                  raise SystemExit('Missing pinned SSH material')
+              path = Path(os.environ[destination])
+              path.write_text(value.rstrip() + '\n')
+              path.chmod(0o600)
+          PY
+      - name: Verify actual service revisions, targets and web bindings; fetch public manifest
+        id: prepared
+        run: python evals/harness/reader_prod_smoke_remote.py --prepare
+      - name: Exercise real hosted reader and reversible faults
+        run: pnpm --filter @fel/web exec playwright test --config playwright.reader-prod-smoke.config.ts
+      - name: Restore dedicated API and canonical blob after every outcome
+        if: always() && steps.prepared.outcome == 'success'
+        run: python evals/harness/reader_prod_smoke_remote.py --recover
+      - name: Build public artifact digest
+        if: always() && steps.prepared.outcome == 'success'
+        run: |
+          python - <<'PY'
+          import hashlib, json
+          from pathlib import Path
+          roots = [Path('.reader-smoke'), Path('apps/web/test-results')]
+          entries = {str(p): hashlib.sha256(p.read_bytes()).hexdigest() for root in roots for p in sorted(root.rglob('*')) if p.is_file()}
+          Path('.reader-smoke/digests.json').write_text(json.dumps(entries, indent=2) + '\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always() && steps.prepared.outcome == 'success'
+        with:
+          name: hosted-reader-smoke-${{ github.sha }}
+          path: |
+            .reader-smoke/
+            apps/web/test-results/
+          if-no-files-found: error
+          retention-days: 30
+      - name: Remove private SSH material
+        if: always()
+        run: rm -f "$READER_SMOKE_SSH_KEY" "$READER_SMOKE_KNOWN_HOSTS"
