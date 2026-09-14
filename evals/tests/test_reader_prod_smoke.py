@@ -3,6 +3,8 @@
 import hashlib
 import json
 import os
+import re
+from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 from uuid import uuid4
 
@@ -11,6 +13,7 @@ import pytest
 from psycopg import sql
 
 from harness.reader_prod_smoke import FIXTURES, blob_fault, checked_outcomes, require_target, setup
+from harness.reader_prod_smoke_service import WATCHDOG_HEAL_DELAY_S, should_auto_heal
 from migrate import main as migrate
 
 
@@ -459,3 +462,19 @@ def test_recovery_attempts_blob_restore_when_api_restart_fails(monkeypatch, tmp_
     with pytest.raises(RuntimeError, match="recovery was incomplete"):
         exec(API_PROGRAM, {})
     assert actions == ["start", "restore"]
+
+
+def test_watchdog_heal_delay_outlasts_playwright_outage_budget():
+    root = Path(__file__).resolve().parents[2]
+    config = (root / "apps/web/playwright.reader-prod-smoke.config.ts").read_text()
+    match = re.search(r"^  timeout: ([0-9_]+),$", config, flags=re.MULTILINE)
+    assert match is not None
+    playwright_test_timeout_s = int(match.group(1).replace("_", "")) / 1000
+    assert WATCHDOG_HEAL_DELAY_S > playwright_test_timeout_s
+    assert not should_auto_heal(stopped_at=0.0, now=60.0)
+    assert not should_auto_heal(stopped_at=0.0, now=playwright_test_timeout_s)
+    assert not should_auto_heal(stopped_at=0.0, now=WATCHDOG_HEAL_DELAY_S - 0.1)
+    assert should_auto_heal(stopped_at=0.0, now=WATCHDOG_HEAL_DELAY_S)
+    assert not should_auto_heal(stopped_at=None, now=WATCHDOG_HEAL_DELAY_S)
+    source = (root / "evals/harness/reader_prod_smoke_service.py").read_text()
+    assert "if should_auto_heal(stopped_at, time.monotonic()):" in source
