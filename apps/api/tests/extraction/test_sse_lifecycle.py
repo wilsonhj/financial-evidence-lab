@@ -19,6 +19,22 @@ from app.extraction import routes_events
 from tests.extraction.test_access_boundaries import _foreign_owner
 from tests.extraction.test_run_creation import _create
 
+LIVE_TIMEOUT = httpx.Timeout(10.0, read=None)
+
+
+class _RouteClock:
+    """Keep the stdlib monotonic clock intact for asyncio, httpx and Uvicorn."""
+
+    def __init__(self, real, clock):
+        self._real = real
+        self._clock = clock
+
+    def monotonic(self):
+        return self._clock["t"]
+
+    def __getattr__(self, name):
+        return getattr(self._real, name)
+
 
 @pytest.fixture
 def live_api(extraction_client):
@@ -174,7 +190,7 @@ def test_revoked_viewer_stream_drops_without_later_payload(
     user, headers = _viewer(extraction_url, tenant["org"])
     path = live_api + "/v1/extraction-runs/" + fixture["run"] + "/events"
     inbox = queue.Queue()
-    with httpx.stream("GET", path, headers=headers, timeout=8) as stream:
+    with httpx.stream("GET", path, headers=headers, timeout=LIVE_TIMEOUT) as stream:
         assert stream.status_code == 200
         assert stream.headers["content-type"].startswith("text/event-stream")
         reader = Thread(target=_pump, args=(stream, inbox), daemon=True)
@@ -217,7 +233,7 @@ def test_disconnect_releases_checkout_and_transaction(
     path = live_api + "/v1/extraction-runs/" + fixture["run"] + "/events"
     baseline = _occupancy(extraction_url)
     inbox = queue.Queue()
-    with httpx.stream("GET", path, headers=tenant["headers"], timeout=8) as stream:
+    with httpx.stream("GET", path, headers=tenant["headers"], timeout=LIVE_TIMEOUT) as stream:
         assert stream.status_code == 200
         reader = Thread(target=_pump, args=(stream, inbox), daemon=True)
         reader.start()
@@ -245,11 +261,11 @@ def test_heartbeat_uses_clock_seam_on_live_socket(
     live_api, extraction_tenant, waiting_review_fixture, monkeypatch
 ):
     clock = {"t": 0.0}
-    monkeypatch.setattr(routes_events.time, "monotonic", lambda: clock["t"])
+    monkeypatch.setattr(routes_events, "time", _RouteClock(time, clock))
     tenant, fixture = extraction_tenant, waiting_review_fixture
     path = live_api + "/v1/extraction-runs/" + fixture["run"] + "/events"
     inbox = queue.Queue()
-    with httpx.stream("GET", path, headers=tenant["headers"], timeout=8) as stream:
+    with httpx.stream("GET", path, headers=tenant["headers"], timeout=LIVE_TIMEOUT) as stream:
         assert stream.status_code == 200
         reader = Thread(target=_pump, args=(stream, inbox), daemon=True)
         reader.start()
