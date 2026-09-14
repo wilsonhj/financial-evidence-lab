@@ -20,9 +20,11 @@ python -m evals.harness.reader_prod_smoke_service serve \
 
 The supervisor must stay alive while its owned API child is stopped. This creates
 a real unavailable upstream at Railway's edge while preserving SSH recovery.
-The service controller's watchdog must restart the child after the bounded fault
-window; explicit `start` restores it sooner. Record the actual edge 502/503
-observed, never substitute middleware or assume both statuses were exercised.
+The service controller's watchdog must restart the child 600 seconds after
+an owned stop; explicit `start` restores it sooner. The delay outlasts the
+Playwright outage test budget so hosted health/UI assertions cannot race a
+premature restart. Record the actual edge 502/503 observed, never substitute
+middleware or assume both statuses were exercised.
 This does not scale the whole container to zero.
 
 Configure every Next service with the production HTTP evidence source, API URL,
