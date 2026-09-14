@@ -50,12 +50,16 @@ class MockTokenVerifier:
             raise TokenVerificationError("unsupported token format")
         try:
             payload = json.loads(base64.urlsafe_b64decode(token[5:] + "=="))
-        except (ValueError, binascii.Error) as exc:
+        except (ValueError, binascii.Error, RecursionError) as exc:
             raise TokenVerificationError("undecodable token") from exc
+        if not isinstance(payload, dict):
+            raise TokenVerificationError("claims must be an object")
         try:
             org_id, user_id, role = payload["org_id"], payload["sub"], payload["role"]
         except KeyError as exc:
             raise TokenVerificationError(f"missing claim: {exc}") from exc
+        if not all(isinstance(value, str) and value.strip() for value in (org_id, user_id, role)):
+            raise TokenVerificationError("claims must be nonempty strings")
         if role not in ROLES:
             raise TokenVerificationError("unknown role")
         return TenantContext(org_id=org_id, user_id=user_id, role=role)
