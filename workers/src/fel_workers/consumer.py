@@ -23,10 +23,11 @@ entrypoint.
 from __future__ import annotations
 
 import logging
+import re
 import threading
 import time
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from functools import partial
 from typing import Any
 
@@ -170,6 +171,24 @@ def handle_sec_filing_fetch(
         # Discovery records the EDGAR filing DATE; midnight UTC is the
         # earliest conservative instant for point-in-time filtering.
         filed_at = filed_at.replace(tzinfo=UTC)
+    # These are explicit producer-supplied dates, never inferred from filing
+    # time or document text. An incomplete/invalid pair must fail before I/O.
+    period_start = period_end = None
+    if "period_start" in payload or "period_end" in payload:
+        start, end = payload.get("period_start"), payload.get("period_end")
+        if (
+            not isinstance(start, str)
+            or not isinstance(end, str)
+            or not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", start)
+            or not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", end)
+        ):
+            raise ValueError("reporting period requires a pair of YYYY-MM-DD dates")
+        try:
+            period_start, period_end = date.fromisoformat(start), date.fromisoformat(end)
+        except ValueError as exc:
+            raise ValueError("reporting period contains an invalid date") from exc
+        if period_start > period_end:
+            raise ValueError("reporting period start must not follow end")
     raw = sec.fetch_document(url)
     return ingest_filing(
         conn,
@@ -181,6 +200,8 @@ def handle_sec_filing_fetch(
         published_at=filed_at,
         form=form,
         filed_at=filed_at,
+        period_start=period_start,
+        period_end=period_end,
     )
 
 
