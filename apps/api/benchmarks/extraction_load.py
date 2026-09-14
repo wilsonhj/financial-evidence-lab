@@ -13,7 +13,9 @@ import json
 import os
 import platform
 import socket
-import subprocess
+
+# Local benchmark launches only fixed executable/argument allowlists, never a shell.
+import subprocess  # nosec B404
 import sys
 import threading
 import time
@@ -214,7 +216,8 @@ def main() -> int:
         unfinished = conn.execute(
             "SELECT count(*) AS n FROM jobs WHERE status IN ('queued','running')"
         ).fetchone()
-        assert unfinished is not None
+        if unfinished is None:
+            raise RuntimeError("Missing queue count result")
         if unfinished["n"]:
             parser.error("Dedicated database has unfinished jobs")
         pg = {}
@@ -226,18 +229,21 @@ def main() -> int:
             "max_connections",
         ):
             setting = conn.execute("SELECT current_setting(%s) AS value", (key,)).fetchone()
-            assert setting is not None
+            if setting is None:
+                raise RuntimeError("Missing PostgreSQL setting result")
             pg[key] = setting["value"]
     config = settings()
+    if sys.platform == "darwin":
+        # Fixed read-only macOS command from the local toolchain; no shell or user arguments.
+        raw = subprocess.check_output(["sysctl", "-n", "hw.memsize"], text=True)  # nosec B603, B607
+        memory_bytes = int(raw)
+    else:
+        memory_bytes = os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES")
     metadata = dict(
         platform=platform.platform(),
         started_at_unix=time.time(),
         host_load=os.getloadavg(),
-        physical_memory_bytes=(
-            int(subprocess.check_output(["sysctl", "-n", "hw.memsize"], text=True))
-            if sys.platform == "darwin"
-            else os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES")
-        ),
+        physical_memory_bytes=memory_bytes,
         harness_sha256={
             p.name: hashlib.sha256(p.read_bytes()).hexdigest()
             for p in Path(__file__).parent.glob("*.py")
@@ -262,7 +268,9 @@ def main() -> int:
         ("tree", ["git", "rev-parse", "HEAD^{tree}"]),
         ("worktree_status", ["git", "status", "--porcelain"]),
     ):
-        metadata[name] = subprocess.check_output(command, text=True).strip()
+        # Commands above are fixed git metadata queries, without user arguments or shell.
+        git_value = subprocess.check_output(command, text=True)  # nosec B603
+        metadata[name] = git_value.strip()
     (args.output / "metadata.json").write_text(json.dumps(metadata, indent=2))
     rows: list[dict[str, Any]] = []
     failure = None
@@ -270,7 +278,8 @@ def main() -> int:
     with socket.socket() as listener, (args.output / "server.log").open("w") as log:
         listener.bind(("127.0.0.1", args.port))
         listener.listen(128)
-        process = subprocess.Popen(
+        # Same Python interpreter, fixed module, and our own integer socket FD; no shell.
+        process = subprocess.Popen(  # nosec B603
             [
                 sys.executable,
                 "-m",
