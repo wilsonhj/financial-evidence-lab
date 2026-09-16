@@ -5,6 +5,10 @@ Research baseline: `255145435a88d133e5095057a3debeef08db0724` (`main`).
 Independent PR review target: #320, `e9ddc0bfe1450fc5de40987bf0fbe3f1b656e14f`.
 PR #320 has since merged as `69ed8b9`; the PR head above was independently reviewed.
 Card 08 is optional historical revalidation, not an open-PR merge assignment.
+Current implementation checkpoint: explicit-key OpenAI adapters merged in
+#328/#329 and the offline cipher in #331. Read `docs/handoff/STATUS.md`; statements
+about absent adapters at the research baseline are historical. Runtime/live proof
+remains outstanding; external agents must not redispatch these merged packages.
 
 This is a standalone dispatch brief for bounded external research and review.
 Cards 01–08 are ready for read-only work. Cards 09–10 are **proposed implementation
@@ -319,7 +323,10 @@ still describes a project-funded provider credential:
   for cost/capability; no substitution is approved by a research card.
 - OpenRouter PKCE is the first credential onboarding flow. Store its resulting
   user-bound credential encrypted server-side; direct OpenAI/Anthropic BYOK is a
-  follow-up. Use a secret store or envelope encryption with KMS outside the DB.
+  follow-up. ADR-0026 selects the existing locked Fernet/MultiFernet library with
+  an explicit deployment keyring outside the DB. This is symmetric authenticated
+  encryption, not envelope encryption; the offline primitive does not implement
+  authorization, storage, revocation or hosted acceptance.
   Never place keys in public assets, `NEXT_PUBLIC_*`, queue payloads or logs.
   Queued work carries a credential reference only; workers revalidate ownership
   and revocation before calls. Arbitrary provider base URLs are not supported.

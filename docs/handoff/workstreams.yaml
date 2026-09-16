@@ -127,7 +127,7 @@ packages:
     depends_on: [M3-EXTRACTION-CORE]
     team: providers
     branch: agent/openai-structured-baseline
-    status: ready # Explicit-key offline adapter authorized by ADR-0002 and ADR-0026.
+    status: merged # PR #328 @ 750aede; exact-head review, all required CI and HTTP acceptance passed. Runtime wiring/live proof remain separate.
     allowed_paths:
       - packages/providers/fel_providers/openai_structured.py
       - packages/providers/tests/test_openai_structured.py
@@ -138,7 +138,7 @@ packages:
     depends_on: []
     team: integration
     branch: agent/public-auth-byok-contract
-    status: blocked # ADR-0026 accepts direction; exact additive API/storage/session contract remains prerequisite.
+    status: blocked # Proposal/primitive decision merged in PR #330 @ aef6d33. Runtime/API/storage/session freeze and hosted acceptance remain prerequisites.
     allowed_paths:
       - docs/research/public-auth-byok-contract.md
   - id: OPENAI-EMBEDDING-BASELINE
@@ -147,7 +147,7 @@ packages:
     depends_on: [M3-EXTRACTION-CORE]
     team: providers
     branch: agent/openai-embedding-baseline
-    status: ready # ADR-0002 baseline, explicit credential, no default runtime activation.
+    status: merged # PR #329 @ 05141ae; exact-head review, required CI and HTTP acceptance passed. No default runtime activation or paid calls.
     allowed_paths:
       - packages/providers/fel_providers/openai_embeddings.py
       - packages/providers/tests/test_openai_embeddings.py
@@ -158,7 +158,7 @@ packages:
     depends_on: []
     team: security
     branch: agent/credential-cipher
-    status: ready # Explicit library keyring and authenticated identity payload; no platform addition.
+    status: merged # PR #331 @ 450c250; identity-bound offline cipher, exact-head review and required CI passed. Custody and hosted BYOK remain separate.
     allowed_paths:
       - packages/providers/fel_providers/credential_cipher.py
       - packages/providers/tests/test_credential_cipher.py
@@ -963,7 +963,7 @@ packages:
     depends_on: [M3-EXTRACTION-CORE]
     team: contracts
     branch: agent/arch-provider-adr # not yet created
-    status: blocked # Blocked on a lead DECISION, not on code. ADR-0002 (Accepted) pins OpenAI; #132 directs claude-opus-4-8; ADR-0012 (Proposed via PR #186 @ 491cd67, splitting the decision by role) ratifies nothing. Constitution principle V requires benchmark evidence plus an accepted ADR for any substitution. No live adapter exists for either provider: packages/providers/fel_providers/mocks.py holds the only StructuredLLMProvider, so extraction cannot run anywhere today without FEL_ALLOW_MOCK_LLM. Gates RELEASE-LIVE-CUTOVER (#177) and M3-CONFIDENCE-GATE (#62) in practice; no depends_on edge is added because the decision is the lead's, not a package.
+    status: blocked # ADR-0002 OpenAI baseline remains accepted; ADR-0012 is Proposed and substitutions require benchmark evidence plus an accepted ADR. Offline explicit-key OpenAI structured/embedding adapters merged in #328/#329; user-bound runtime authorization, durable usage wiring and live acceptance remain unfinished. #177/#62 retain their gates; no paid or alternative-provider approval is implied.
     allowed_paths:
       - docs/decisions/**
       - packages/providers/**

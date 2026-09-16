@@ -1,5 +1,48 @@
 # Implementation status
 
+## September 16 provider and public-access prerequisites
+
+The completion specification, staged implementation plan and bounded external-agent
+brief merged in #325 (`7a08df9`). PR #320's watchdog repair merged at `69ed8b9`
+after review of exact rebased head `e9ddc0b`; it preserves immediate explicit runs
+and does not establish hosted #108 acceptance.
+
+- Explicit-key OpenAI structured generation merged in #328 (`750aede`). The adapter
+  preserves known billable usage on invalid output, rejects unsafe/malformed results
+  and includes a regression for a slow-drip response deadline. It performs no
+  environment-key lookup or automatic runtime registration.
+- Explicit-key 512-dimension OpenAI embeddings merged in #329 (`05141ae`). Bounded
+  indexed batches, finite-vector validation and safe per-attempt usage reporting
+  pass 140 combined provider tests with structured generation. Both PRs passed
+  independent review, required CI and extraction HTTP/worker/browser acceptance.
+- Public-session/BYOK proposal and narrowed cipher decision merged in #330
+  (`aef6d33`). Full session, persistence and admission interfaces remain Proposed.
+  Public signup, confidential workspaces and all-user-funded inference govern;
+  no owner-key fallback, free owner-funded allowance or provider promotion exists.
+
+- Offline credential encryption merged in #331 (`450c250`). Authenticated identity
+  binding, key rotation and worst-case escaped-input bounds pass all 186 combined
+  provider tests. Independent review reproduced a round-trip size defect; its
+  regression now passes. Final required CI and HTTP/worker/browser acceptance
+  passed. No storage, caller authorization or runtime key provisioning is implied.
+
+These are prerequisites. Public web identity is not request-scoped yet; deployment
+bearer use remains a release blocker. Before dispatching the deployment guard,
+freeze an explicit mode for the existing synthetic extraction HTTP/load workflow
+and the request-boundary mechanism for literal page-level HTTP 503. Merely throwing
+from a configuration loader does not establish that response contract. Session
+custody, bootstrap, encrypted storage, PKCE, durable billable admission and hosted
+two-user isolation remain separate registered contract/runtime work.
+
+The original #61 performance threshold remains unmet and #108 needs its dedicated
+hosted target. Live corpus/provider evaluation still requires approved user-funded
+credentials, budgets and exact routes; human-adjudicated calibration and the
+model/scenario/forecast product retain their completion-plan dependencies. No
+canonical task state or release threshold changed, and no paid inference call
+was made in this implementation wave. Earlier dated claims that no OpenAI adapter
+exists are superseded by this checkpoint; runtime/live proof remains absent.
+
+
 ## September 14 load and reader implementation results
 
 The spec-driven implementation and measured repair plan merged in #315/#317.
