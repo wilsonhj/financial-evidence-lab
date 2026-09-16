@@ -1,5 +1,35 @@
 # Implementation status
 
+## September 16 public deployment guard and external implementation handoff
+
+PR #338 integrates the public guard, explicit synthetic-harness configuration and
+accepted ADR-0027. Missing mode is public: business web routes return 503 without
+using a deployment bearer, while health remains reachable. Public API clients
+continue through the existing Supabase verifier; mock API identity requires an
+explicit dedicated synthetic mode and matching target/storage proof. This is a
+safe unavailable state until request-scoped sessions exist, not completed signup.
+
+Local verification passed the combined API/database and harness tests, all six
+real reader browser cases (including auth failures, corruption and API outage
+recovery), the extraction HTTP/worker/review/correction/SSE workflow, and the
+production HTTP public-refusal test with zero upstream requests. Independent
+review found two malformed-input issues—BOM-prefixed canonical manifests and
+coerced array roles—which have regression-tested repairs. Required CI remains
+a merge condition. None of these local results establishes hosted #108 or #61
+performance acceptance.
+
+External agents may implement #336 (dataset validation) and #337 (pure isotonic
+calibration) concurrently using the immutable contract pin and exact exclusive
+paths in [the implementation handoff](implementation-agents-2026-09-16.md).
+Those files are reserved for external owners and are not implemented by #338.
+ADR-0028 freezes offline interfaces/numerics only; synthetic fixtures are not human
+adjudication, live calibration or runtime confidence integration. Canonical task
+states and all parent milestone dependencies remain unchanged.
+
+Next local contract work is session/identity/bootstrap/custody and durable
+user-funded admission under #324. No public shared-bearer escape, owner-key
+fallback, paid model call or alternative model promotion is authorized.
+
 ## September 16 provider and public-access prerequisites
 
 The completion specification, staged implementation plan and bounded external-agent

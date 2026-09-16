@@ -10,7 +10,7 @@ const sources = [{ run_id: run.id, as_of: run.as_of, corpus_version_id: run.corp
 afterEach(() => vi.unstubAllEnvs());
 describe("immutable source navigation", () => {
   it("resolves distinct document/version IDs only under the artifact cutoff and corpus", async () => {
-    vi.stubEnv("FEL_EVIDENCE_SOURCE", "fixture");
+    vi.stubEnv("FEL_DEPLOYMENT_MODE", "fixture").stubEnv("FEL_EVIDENCE_SOURCE", "fixture");
     const html = renderToStaticMarkup(await SourceLinks({ evidence: proposal.evidence, sources }));
     expect(html).toContain("Read evidence span");
     expect(html).toContain("as_of=2026-07-01T00%3A00%3A00Z");
@@ -23,7 +23,7 @@ describe("immutable source navigation", () => {
   ])(
     "preserves $name historical scope through the reader despite a configured corpus",
     async ({ corpus }) => {
-      vi.stubEnv("FEL_EVIDENCE_SOURCE", "fixture");
+      vi.stubEnv("FEL_DEPLOYMENT_MODE", "fixture").stubEnv("FEL_EVIDENCE_SOURCE", "fixture");
       const html = renderToStaticMarkup(
         await SourceLinks({
           evidence: proposal.evidence,

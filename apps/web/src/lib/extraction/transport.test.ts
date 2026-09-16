@@ -16,7 +16,9 @@ const page = { items: [proposal], limit: 50, next_cursor: null, previous_cursor:
 describe("extraction server transport", () => {
   it("requires explicit source selection and reuses strict workspace configuration", () => {
     expect(() => loadConfig({})).toThrow();
-    expect(loadConfig({ FEL_EVIDENCE_SOURCE: "fixture" })).toEqual({ mode: "fixture" });
+    expect(loadConfig({ FEL_DEPLOYMENT_MODE: "fixture", FEL_EVIDENCE_SOURCE: "fixture" })).toEqual({
+      mode: "fixture",
+    });
     expect(() => loadConfig({ FEL_EVIDENCE_SOURCE: "http" })).toThrow();
   });
   it("uses a fixed trusted route, configured bearer, no-store and manual redirects", async () => {

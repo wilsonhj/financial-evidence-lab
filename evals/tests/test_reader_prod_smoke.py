@@ -264,6 +264,8 @@ def test_remote_preflight_fails_before_mutation_for_wrong_deployment(tmp_path, w
     environment = os.environ.copy()
     environment.update(
         RAILWAY_GIT_COMMIT_SHA="a" * 40,
+        FEL_DEPLOYMENT_MODE="reader-smoke",
+        FEL_AUTH_MODE="mock",
         FEL_READER_SMOKE_TARGET="dedicated-smoke",
         RAILWAY_PUBLIC_DOMAIN="api.example.test",
         PYTHONOPTIMIZE="1",
@@ -431,6 +433,7 @@ def test_recovery_attempts_blob_restore_when_api_restart_fails(monkeypatch, tmp_
         "RAILWAY_GIT_COMMIT_SHA": "a" * 40,
         "FEL_READER_SMOKE_TARGET": target,
         "FEL_READER_SMOKE_SERVICE_HOSTED": "1",
+        "FEL_DEPLOYMENT_MODE": "reader-smoke",
         "FEL_AUTH_MODE": "mock",
         "FEL_STORAGE_DIR": str(tmp_path),
     }.items():

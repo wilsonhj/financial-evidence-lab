@@ -36,6 +36,7 @@ assert os.environ.get("RAILWAY_PUBLIC_DOMAIN")==urlsplit(api_url).hostname
 assert os.environ.get("RAILWAY_GIT_COMMIT_SHA")==revision, "deployed revision mismatch"
 assert os.environ.get("FEL_READER_SMOKE_TARGET")==target, "dedicated target mismatch"
 assert os.environ.get("FEL_READER_SMOKE_SERVICE_HOSTED")=="1", "hosted controller is not enabled"
+assert os.environ.get("FEL_DEPLOYMENT_MODE")=="reader-smoke", "smoke deployment mode mismatch"
 assert os.environ.get("FEL_AUTH_MODE")=="mock", "smoke auth mode mismatch"
 path=pathlib.Path(manifest_path)
 manifest=json.loads(path.read_text())
@@ -69,6 +70,8 @@ const assert=require('node:assert/strict');
 assert.equal(process.env.RAILWAY_PUBLIC_DOMAIN,new URL(web).hostname);
 assert.equal(process.env.RAILWAY_GIT_COMMIT_SHA,revision);
 assert.equal(process.env.FEL_READER_SMOKE_TARGET,target);
+assert.equal(process.env.FEL_DEPLOYMENT_MODE,'reader-smoke');
+assert.equal(process.env.FEL_AUTH_MODE,'mock');
 assert.equal(process.env.FEL_EVIDENCE_SOURCE,'http');
 assert.equal(process.env.FEL_API_BASE_URL,api);
 assert.equal(process.env.FEL_WORKSPACE_ID,workspace);

@@ -1,4 +1,4 @@
-"""Environment-driven settings (mock-first: every external service optional)."""
+"""Environment-driven settings; authentication deployment proof is request-scoped."""
 
 from __future__ import annotations
 
@@ -11,6 +11,18 @@ from decimal import Decimal
 class Settings:
     """Runtime configuration; values come from the environment only."""
 
+    deployment_mode: str = field(
+        default_factory=lambda: os.environ.get("FEL_DEPLOYMENT_MODE", "public")
+    )
+    reader_smoke_target: str = field(
+        default_factory=lambda: os.environ.get("FEL_READER_SMOKE_TARGET", "")
+    )
+    synthetic_http_target: str = field(
+        default_factory=lambda: os.environ.get("FEL_SYNTHETIC_HTTP_TARGET", "")
+    )
+    allow_mock_llm: str = field(default_factory=lambda: os.environ.get("FEL_ALLOW_MOCK_LLM", ""))
+    postgres_hostaddr: str | None = field(default_factory=lambda: os.environ.get("PGHOSTADDR"))
+    postgres_service: str | None = field(default_factory=lambda: os.environ.get("PGSERVICE"))
     database_url: str | None = field(default_factory=lambda: os.environ.get("FEL_DATABASE_URL"))
     storage_dir: str | None = field(default_factory=lambda: os.environ.get("FEL_STORAGE_DIR"))
     auth_mode: str = field(default_factory=lambda: os.environ.get("FEL_AUTH_MODE", "mock"))

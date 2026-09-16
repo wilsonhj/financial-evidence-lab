@@ -68,7 +68,7 @@ def acceptance_database(monkeypatch, tmp_path):
         if os.environ.get("FEL_REQUIRE_DB") == "1":
             pytest.fail("FEL_REQUIRE_DB=1 requires TEST_DATABASE_URL for acceptance regression")
         pytest.skip("TEST_DATABASE_URL not configured")
-    name = "acceptance_" + uuid4().hex
+    name = "fel_extraction_acceptance_" + uuid4().hex
     parsed = urlsplit(base)
     url = urlunsplit(parsed._replace(path="/" + name))
     with psycopg.connect(base, autocommit=True) as conn:
@@ -77,6 +77,10 @@ def acceptance_database(monkeypatch, tmp_path):
         assert migrate(["--database-url", url]) == 0
         monkeypatch.setenv("FEL_DATABASE_URL", url)
         monkeypatch.setenv("FEL_STORAGE_DIR", str(tmp_path / "storage"))
+        monkeypatch.setenv("FEL_DEPLOYMENT_MODE", "synthetic-http")
+        monkeypatch.setenv("FEL_SYNTHETIC_HTTP_TARGET", "extraction-cross-stack-tests")
+        monkeypatch.delenv("PGHOSTADDR", raising=False)
+        monkeypatch.delenv("PGSERVICE", raising=False)
         monkeypatch.setenv("FEL_AUTH_MODE", "mock")
         monkeypatch.setenv("FEL_ALLOW_MOCK_LLM", "1")
         monkeypatch.setenv("FEL_WORKER_DB_ROLE", "fel_worker")

@@ -117,7 +117,13 @@ This follows Railway's [shared-monorepo guidance](https://docs.railway.com/deplo
 and [Railpack start-command semantics](https://docs.railway.com/deployments/start-command).
 Railpack runs start commands in a shell, so `PORT` expansion is supported.
 
-For the separately approved #108 smoke, provision `FEL_EVIDENCE_SOURCE=http`,
+Public is the default deployment mode. Until request-scoped sessions are
+implemented, public web business routes return503 while `/api/health` remains
+available. Do not use a smoke mode to expose ordinary public data. Public API
+clients continue with `FEL_AUTH_MODE=supabase` and verified tenant membership.
+
+For the separately approved #108 smoke, provision `FEL_DEPLOYMENT_MODE=reader-smoke`,
+`FEL_AUTH_MODE=mock`, matching `FEL_READER_SMOKE_TARGET`, `FEL_EVIDENCE_SOURCE=http`,
 `FEL_API_BASE_URL`, `FEL_API_BEARER_TOKEN`, and `FEL_ENTITY_IDS` through service
 variables. The token is server-only; do not use a `NEXT_PUBLIC_` variable or
 commit its value. Missing HTTP configuration fails closed. The accepted smoke

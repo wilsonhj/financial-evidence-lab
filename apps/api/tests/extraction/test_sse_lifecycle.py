@@ -203,10 +203,12 @@ def test_revoked_viewer_stream_drops_without_later_payload(
                 (tenant["org"], user),
             )
         _wait_until(
-            lambda: extraction_client.get(
-                "/v1/extraction-runs/" + fixture["run"] + "/events", headers=headers
-            ).status_code
-            == 403,
+            lambda: (
+                extraction_client.get(
+                    "/v1/extraction-runs/" + fixture["run"] + "/events", headers=headers
+                ).status_code
+                == 403
+            ),
             5,
             "revoked membership still authorized a new events request",
         )
@@ -282,39 +284,68 @@ def test_disconnect_releases_checkout_and_transaction(
 def test_heartbeat_uses_clock_seam_on_live_socket(
     live_api, extraction_tenant, waiting_review_fixture, monkeypatch
 ):
+    completed = Event()
+
+    class ObservedResponse(routes_events.StreamingResponse):
+        async def __call__(self, scope, receive, send):
+            try:
+                await super().__call__(scope, receive, send)
+            finally:
+                completed.set()
+
+    monkeypatch.setattr(routes_events, "StreamingResponse", ObservedResponse)
     clock = {"t": 0.0}
     monkeypatch.setattr(routes_events, "time", _RouteClock(time, clock))
     tenant, fixture = extraction_tenant, waiting_review_fixture
     path = live_api + "/v1/extraction-runs/" + fixture["run"] + "/events"
     inbox = queue.Queue()
-    with httpx.stream("GET", path, headers=tenant["headers"], timeout=LIVE_TIMEOUT) as stream:
-        assert stream.status_code == 200
-        reader = Thread(target=_pump, args=(stream, inbox), daemon=True)
-        reader.start()
-        replayed = _drain_authorized(inbox)
-        assert replayed
-        leftover_deadline = time.monotonic() + 0.5
-        while time.monotonic() < leftover_deadline:
+    reader = None
+    try:
+        with httpx.stream("GET", path, headers=tenant["headers"], timeout=LIVE_TIMEOUT) as stream:
+            assert stream.status_code == 200
+            reader = Thread(target=_pump, args=(stream, inbox), daemon=True)
+            reader.start()
             try:
-                item = inbox.get(timeout=0.05)
-            except queue.Empty:
-                continue
-            if isinstance(item, str) and item.startswith(": heartbeat"):
-                pytest.fail("heartbeat emitted before the clock seam advanced")
-            if not isinstance(item, str):
-                pytest.fail(f"stream ended before heartbeat: {item!r}")
-        clock["t"] = 21.0
-        beat_deadline = time.monotonic() + 5
-        while time.monotonic() < beat_deadline:
-            try:
-                item = inbox.get(timeout=0.2)
-            except queue.Empty:
-                continue
-            if isinstance(item, str) and item.startswith(": heartbeat"):
-                return
-            if not isinstance(item, str):
-                pytest.fail(f"stream ended before heartbeat: {item!r}")
-        pytest.fail("heartbeat comment was not emitted after the clock seam advanced")
+                replayed = _drain_authorized(inbox)
+                assert replayed
+                leftover_deadline = time.monotonic() + 0.5
+                while time.monotonic() < leftover_deadline:
+                    try:
+                        item = inbox.get(timeout=0.05)
+                    except queue.Empty:
+                        continue
+                    if isinstance(item, str) and item.startswith(": heartbeat"):
+                        pytest.fail("heartbeat emitted before the clock seam advanced")
+                    if not isinstance(item, str):
+                        pytest.fail(f"stream ended before heartbeat: {item!r}")
+                clock["t"] = 21.0
+                beat_deadline = time.monotonic() + 5
+                while time.monotonic() < beat_deadline:
+                    try:
+                        item = inbox.get(timeout=0.2)
+                    except queue.Empty:
+                        continue
+                    if isinstance(item, str) and item.startswith(": heartbeat"):
+                        break
+                    if not isinstance(item, str):
+                        pytest.fail(f"stream ended before heartbeat: {item!r}")
+                else:
+                    pytest.fail("heartbeat comment was not emitted after the clock seam advanced")
+            finally:
+                # A close in another thread need not wake a blocked recv on Linux.
+                # Shutdown before closing, including when a heartbeat assertion fails.
+                network = stream.extensions["network_stream"]
+                try:
+                    network.get_extra_info("socket").shutdown(socket.SHUT_RDWR)
+                except OSError:
+                    # A peer-closed socket may already be disconnected. Completion
+                    # checks below still require both client and server to terminate.
+                    assert completed.wait(5), "server did not finish after socket closed"
+    finally:
+        if reader is not None:
+            reader.join(5)
+            assert not reader.is_alive(), "heartbeat client reader survived disconnect"
+            assert completed.wait(5), "heartbeat server response survived disconnect"
 
 
 def test_foreign_and_other_run_resume_ids_are_404(

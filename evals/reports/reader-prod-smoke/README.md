@@ -11,7 +11,7 @@ commit. Never point fault commands at an ordinary production deployment. Run the
 real fixture setup once in the API container against migrated empty evidence
 storage. Keep the resulting manifest and local storage on that service. Configure
 the API supervisor with `FEL_READER_SMOKE_SERVICE_HOSTED=1`, its matching
-`FEL_READER_SMOKE_TARGET`, `FEL_AUTH_MODE=mock`, and the actual Railway `PORT`:
+`FEL_READER_SMOKE_TARGET`, `FEL_DEPLOYMENT_MODE=reader-smoke`, `FEL_AUTH_MODE=mock`, and the actual Railway `PORT`:
 
 ```sh
 python -m evals.harness.reader_prod_smoke_service serve \
@@ -27,7 +27,8 @@ premature restart. Record the actual edge 502/503 observed, never substitute
 middleware or assume both statuses were exercised.
 This does not scale the whole container to zero.
 
-Configure every Next service with the production HTTP evidence source, API URL,
+Configure every Next service with `FEL_DEPLOYMENT_MODE=reader-smoke` and
+`FEL_AUTH_MODE=mock`, the production HTTP evidence source, API URL,
 workspace/entity/as-of values from the same manifest and matching target name.
 The normal service uses the manifest owner's mock token; the unauthorized variant
 uses literal `invalid`; the forbidden variant uses a mock owner claim for the

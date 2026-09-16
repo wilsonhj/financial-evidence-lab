@@ -24,6 +24,7 @@ from app.auth import (
 )
 from app.config import settings
 from app.db import tenant_connection
+from app.deployment import require_auth_deployment
 from app.errors import api_error
 
 _verifier_creation_lock = Lock()
@@ -31,6 +32,7 @@ _verifier_creation_lock = Lock()
 
 def get_verifier() -> TokenVerifier:
     config = settings()
+    require_auth_deployment(config)
     mode = config.auth_mode
     if mode == "mock":
         return MockTokenVerifier()

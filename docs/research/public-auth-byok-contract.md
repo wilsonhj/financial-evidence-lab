@@ -12,6 +12,8 @@ Next forwards the verified session's Supabase access token only to its fixed con
 
 ## First independently dispatchable slice: deployment guard
 
+**Guard supersession:** ADR-0027 and `deployment-guard-contract.md` now freeze the four-mode implementation, including local synthetic HTTP acceptance and a literal HTTP503 request boundary. The three-mode table below is the original proposal, not the current dispatch contract. All other session/custody proposals remain unfrozen.
+
 Proposed new environment discriminator `FEL_DEPLOYMENT_MODE=public|fixture|reader-smoke`. Missing value resolves to `public`; unknown values fail closed. Do not derive trust from NODE_ENV, a request header, hostname or a query string.
 
 | Mode | Allowed behavior |

@@ -20,6 +20,7 @@ from uuid import UUID, uuid4
 import psycopg
 from psycopg.rows import dict_row
 
+from benchmarks.synthetic_target import prepare_synthetic_target
 from fel_providers.interfaces import StructuredGenerationRequest, StructuredModelResult
 from fel_providers.mocks import MockSecClient, MockStructuredLLMProvider
 from fel_workers.consumer import run_worker
@@ -188,9 +189,16 @@ def main() -> None:
     storage = Path(os.environ["FEL_STORAGE_DIR"])
     if os.environ.get("FEL_AUTH_MODE") != "mock" or os.environ.get("FEL_ALLOW_MOCK_LLM") != "1":
         parser.error("Acceptance requires explicit mock auth and model opt-in")
+    target = os.environ.get("FEL_SYNTHETIC_HTTP_TARGET", "")
+    prepare_synthetic_target(database_url, storage, target, "fel_extraction_acceptance")
     if args.action == "seed":
         args.manifest.parent.mkdir(parents=True, exist_ok=True)
-        args.manifest.write_text(json.dumps(seed(database_url, storage)))
+        manifest = {
+            **seed(database_url, storage),
+            "schema_version": "extraction-cross-stack/v1",
+            "target": target,
+        }
+        args.manifest.write_text(json.dumps(manifest, sort_keys=True, separators=(",", ":")))
     elif args.action == "work":
         work(database_url, storage, json.loads(args.manifest.read_text()))
     else:
