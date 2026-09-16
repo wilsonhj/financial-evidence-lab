@@ -43,7 +43,8 @@ function mockClaims(token: string | undefined): Record<string, unknown> {
     !UUID.test(claims.org_id) ||
     typeof claims.sub !== "string" ||
     !UUID.test(claims.sub) ||
-    !["owner", "editor", "reviewer", "viewer"].includes(String(claims.role))
+    typeof claims.role !== "string" ||
+    !["owner", "editor", "reviewer", "viewer"].includes(claims.role)
   )
     refuse();
   return claims;

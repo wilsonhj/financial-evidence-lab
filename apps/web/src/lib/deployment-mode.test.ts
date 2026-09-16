@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { assertDeploymentMode, type DeploymentEnvironment } from "./deployment-mode";
 const id = "11111111-1111-4111-8111-111111111111";
-const token = (role = "owner") =>
+const token = (role: unknown = "owner") =>
   `mock.${Buffer.from(JSON.stringify({ org_id: id, sub: id, role })).toString("base64url")}`;
 const reader = {
   FEL_DEPLOYMENT_MODE: "reader-smoke",
@@ -74,6 +74,12 @@ describe("deployment gate", () => {
     });
     denied({ ...reader, FEL_DEPLOYMENT_MODE: "fixture" });
   });
+  it.each([["owner"], ["viewer"], null, 1, {}].map((role) => ({ role })))(
+    "rejects a non-string mock role",
+    ({ role }) => {
+      denied({ ...reader, FEL_API_BEARER_TOKEN: token(role) });
+    },
+  );
   it("preserves explicit reader and denied-user/invalid smoke variants", () => {
     for (const bearer of [token(), token("viewer"), "invalid"])
       expect(assertDeploymentMode({ ...reader, FEL_API_BEARER_TOKEN: bearer })).toBe(
