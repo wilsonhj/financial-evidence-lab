@@ -25,8 +25,13 @@ not certify public readiness, grant a paid budget, or promote another model.
   fail before a provider call. Infrastructure quotas still apply to BYOK users.
 - Initial public credential flow is OpenRouter S256 PKCE with server code exchange;
   direct OpenAI and Anthropic keys are a later independently reviewed package.
-  Credential encryption uses a maintained secret store or envelope encryption
-  with wrapping key outside the database. Queue messages carry references only.
+  Credential encryption uses the already locked cryptography Fernet/MultiFernet
+  library with an explicit deployment-managed keyring outside the database.
+  The authenticated encrypted payload binds purpose, credential, user and
+  organization identity, checked on decrypt. This deliberately narrows the
+  generic envelope/KMS proposal: it adds neither AWS nor a home-grown cipher.
+  Queue messages carry references only. #327 owns the offline primitive;
+  persistence, authorization, key delivery and hosted acceptance stay separate.
 - Credential metadata can be read by its owner; plaintext cannot be read back.
   Secrets are excluded from prompts, logs, errors, URLs, traces and artifacts.
   Routing endpoints are fixed/allowlisted; no user-supplied upstream URLs.
