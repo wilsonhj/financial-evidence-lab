@@ -44,9 +44,10 @@ their migration and least-privilege proof in a separate reviewed contract PR.
 The existing verifier, deterministic financial engine, human review requirement,
 tenant anti-oracle semantics and immutable evidence identities remain binding.
 
-Offline OpenAI adapter #323 is independently dispatchable under ADR-0002. It
+Offline OpenAI adapters #323 (structured) and #326 (embeddings) are independently
+dispatchable under ADR-0002. Each
 accepts an explicit key, pinned model and prices; it never reads deployment keys.
-It changes no frozen interface, automatically activates no provider, and performs
+changes no frozen interface, automatically activates no provider, and performs
 no paid call during tests. Usage and worker/API wiring require subsequent review.
 
 ## Validation and rollout

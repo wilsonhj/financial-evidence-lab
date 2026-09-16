@@ -141,6 +141,17 @@ packages:
     status: blocked # ADR-0026 accepts direction; exact additive API/storage/session contract remains prerequisite.
     allowed_paths:
       - docs/research/public-auth-byok-contract.md
+  - id: OPENAI-EMBEDDING-BASELINE
+    issue: 326
+    tasks: [] # Offline prerequisite only; live index and usage acceptance remain separate.
+    depends_on: [M3-EXTRACTION-CORE]
+    team: providers
+    branch: agent/openai-embedding-baseline
+    status: ready # ADR-0002 baseline, explicit credential, no default runtime activation.
+    allowed_paths:
+      - packages/providers/fel_providers/openai_embeddings.py
+      - packages/providers/tests/test_openai_embeddings.py
+      - packages/providers/OPENAI_EMBEDDINGS.md
   - id: PLATFORM-NODE24
     issue: 249
     tasks: [] # Runtime maintenance; canonical task completion is unchanged.
