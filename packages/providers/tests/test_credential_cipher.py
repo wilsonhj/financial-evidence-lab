@@ -88,7 +88,7 @@ def test_utf8_exact_limit():
     assert cipher.open(cipher.seal(secret, CONTEXT), CONTEXT) == secret
 
 
-@pytest.mark.parametrize("token", [b"", b"bad", b"x" * 16385, "text", None])
+@pytest.mark.parametrize("token", [b"", b"bad", b"x" * 45057, "text", None])
 def test_bad_tokens(token):
     with pytest.raises(CredentialCipherError):
         CredentialCipher([Fernet.generate_key()]).open(token, CONTEXT)
@@ -175,3 +175,20 @@ def test_read_exception_chain_is_redacted(monkeypatch, operation):
     assert caught.value.__context__ is None
     assert caught.value.__cause__ is None
     assert SECRET not in "".join(traceback.format_exception(caught.value))
+
+
+def test_maximum_escaped_secret_roundtrips():
+    cipher = CredentialCipher([Fernet.generate_key()])
+    secret = "\x00" * 4096
+    token = cipher.seal(secret, CONTEXT)
+    assert cipher.open(token, CONTEXT) == secret
+    assert cipher.open(cipher.rotate(token, CONTEXT), CONTEXT) == secret
+
+
+def test_oversized_escaped_secret_rejected_before_encryption(monkeypatch):
+    cipher = CredentialCipher([Fernet.generate_key()])
+    calls = []
+    monkeypatch.setattr(MultiFernet, "encrypt", lambda *args: calls.append(args))
+    with pytest.raises(CredentialCipherError):
+        cipher.seal("\x00" * 4097, CONTEXT)
+    assert calls == []

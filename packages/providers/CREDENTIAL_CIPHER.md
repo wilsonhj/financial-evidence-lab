@@ -16,8 +16,10 @@ primary key while preserving the original Fernet timestamp.
 and credential, positive integer credential version (at most 2^31−1), and purpose
 and provider identifiers of 1–64 lowercase ASCII letters/digits/underscore/hyphen,
 starting with a letter. Purpose is caller-defined and must match exactly. Secrets
-are nonempty UTF-8 strings of at most 4096 bytes; tokens are bytes at most 16384
-bytes. These are defensive primitive bounds, not public HTTP/financial policy.
+are nonempty UTF-8 strings of at most 4096 bytes; tokens are bytes at most 45056
+bytes. Serialized plaintext is bounded to 32768 bytes before encryption and
+after decryption, accommodating JSON escaping of every allowed control byte
+without reducing the documented 4096-byte UTF-8 secret limit. These are defensive primitive bounds, not public HTTP/financial policy.
 
 The encrypted JSON has schema `credential-cipher/v1`, exact identity and secret.
 Strict decoding rejects duplicate/unknown fields, malformed Unicode, unsupported

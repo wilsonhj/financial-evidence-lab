@@ -8,6 +8,11 @@ from dataclasses import asdict, dataclass
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
+# JSON may expand each control byte to six ASCII bytes. These bounds cover
+# the full 4096-byte secret plus bounded identity and Fernet/base64 overhead.
+_MAX_PAYLOAD_BYTES = 32768
+_MAX_TOKEN_BYTES = 45056
+
 if TYPE_CHECKING:
     from cryptography.fernet import MultiFernet
 
@@ -100,6 +105,8 @@ class CredentialCipher:
                 allow_nan=False,
                 separators=(",", ":"),
             ).encode("utf-8")
+            if len(payload) > _MAX_PAYLOAD_BYTES:
+                raise ValueError("payload")
             return self._cipher.encrypt(payload)
         except Exception:
             failure = CredentialCipherError()
@@ -107,10 +114,10 @@ class CredentialCipher:
 
     def _decode(self, token: bytes, context: CipherContext) -> str:
         expected = _context(context)
-        if type(token) is not bytes or not 1 <= len(token) <= 16384:
+        if type(token) is not bytes or not 1 <= len(token) <= _MAX_TOKEN_BYTES:
             raise ValueError("token")
         plaintext = self._cipher.decrypt(token)
-        if len(plaintext) > 8192:
+        if len(plaintext) > _MAX_PAYLOAD_BYTES:
             raise ValueError("payload")
         value = json.loads(plaintext.decode("utf-8"), object_pairs_hook=_object)
         if (
