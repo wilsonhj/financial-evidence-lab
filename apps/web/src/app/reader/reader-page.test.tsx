@@ -14,7 +14,7 @@ async function renderPageElement(documentId: string): Promise<ReactElement> {
 
 describe("ReaderPage", () => {
   beforeEach(() => {
-    vi.stubEnv("FEL_EVIDENCE_SOURCE", "fixture");
+    vi.stubEnv("FEL_DEPLOYMENT_MODE", "fixture").stubEnv("FEL_EVIDENCE_SOURCE", "fixture");
   });
 
   // Regression (finding 5), updated for issue #198: the reader used to leak

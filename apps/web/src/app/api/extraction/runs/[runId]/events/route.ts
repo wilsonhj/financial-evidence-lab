@@ -1,3 +1,4 @@
+import { DeploymentGuardError } from "../../../../../../lib/deployment-mode";
 import { getExtractionSource } from "../../../../../../lib/extraction/source";
 import { failure } from "../../../../../../lib/extraction/transport";
 export const dynamic = "force-dynamic";
@@ -7,7 +8,10 @@ export async function GET(request: Request, context: { params: Promise<{ runId: 
       `runs/${(await context.params).runId}/events`,
       request,
     );
-  } catch {
-    return failure(503, "EXTRACTION_UNAVAILABLE");
+  } catch (error) {
+    return failure(
+      503,
+      error instanceof DeploymentGuardError ? "PUBLIC_AUTH_NOT_READY" : "EXTRACTION_UNAVAILABLE",
+    );
   }
 }

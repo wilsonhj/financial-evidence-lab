@@ -35,7 +35,9 @@ const pages = [
       Version({ params: Promise.resolve({ recordId: FIXTURE_RECORD, versionId: fixtureId(8) }) }),
   ],
 ] as const;
-beforeEach(() => vi.stubEnv("FEL_EVIDENCE_SOURCE", "fixture"));
+beforeEach(() =>
+  vi.stubEnv("FEL_DEPLOYMENT_MODE", "fixture").stubEnv("FEL_EVIDENCE_SOURCE", "fixture"),
+);
 afterEach(() => vi.unstubAllEnvs());
 describe("mounted extraction pages", () => {
   it("links a run to the bounded workspace queue using the published contract", async () => {

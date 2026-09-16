@@ -1,3 +1,4 @@
+import { assertDeploymentMode } from "../deployment-mode";
 import { env as serverEnvironment } from "node:process";
 
 // The Node-only import is deliberate: a future Client Component import fails at
@@ -25,6 +26,7 @@ function required(env: Readonly<Record<string, string | undefined>>, name: strin
 export function loadObservatoryRuntimeConfig(
   env: Readonly<Record<string, string | undefined>> = serverEnvironment,
 ): ObservatoryRuntimeConfig {
+  assertDeploymentMode(env);
   const mode = env.FEL_EVIDENCE_SOURCE?.trim();
   if (mode === "fixture") return { mode: "mock" };
   if (mode !== "http") {
@@ -51,7 +53,7 @@ export function loadObservatoryRuntimeConfig(
       "FEL_API_BASE_URL must be an HTTP(S) URL without credentials, query, or fragment",
     );
   }
-  const loopback = ["localhost", "127.0.0.1", "::1"].includes(url.hostname);
+  const loopback = ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
   if (env.NODE_ENV === "production" && url.protocol !== "https:" && !loopback) {
     throw new EvidenceConfigurationError(
       "FEL_API_BASE_URL must use HTTPS outside local development",
