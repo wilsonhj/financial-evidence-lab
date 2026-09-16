@@ -54,6 +54,16 @@ def response():
 
 
 def provider(handler, **kwargs):
+    def streamed(request):
+        result = handler(request)
+        # Real HTTP transports return an unread stream; Response(json=...) in
+        # test handlers is eagerly consumed, so present the same wire lifecycle.
+        if result.is_stream_consumed:
+            return httpx.Response(
+                result.status_code, headers=result.headers, stream=httpx.ByteStream(result.content)
+            )
+        return result
+
     return OpenAIStructuredProvider(
         api_key=SECRET,
         model=MODEL,
@@ -61,7 +71,7 @@ def provider(handler, **kwargs):
         cached_input_price_per_million=Decimal("1"),
         output_price_per_million=Decimal("8"),
         validate_output=validate,
-        transport=httpx.MockTransport(handler),
+        transport=httpx.MockTransport(streamed),
         **kwargs,
     )
 
@@ -316,3 +326,21 @@ def test_compressed_response_is_rejected():
         provider(
             lambda _: httpx.Response(200, json=response(), headers={"content-encoding": "br"})
         ).generate_structured(REQUEST)
+
+
+def test_slow_drip_checks_deadline_on_each_transport_chunk(monkeypatch):
+    from fel_providers import openai_structured
+
+    elapsed = [0]
+
+    class SlowStream(httpx.SyncByteStream):
+        def __iter__(self):
+            for _ in range(5000):
+                elapsed[0] += 1
+                yield b" "
+
+    monkeypatch.setattr(openai_structured.time, "monotonic", lambda: elapsed[0])
+    with pytest.raises(OpenAIStructuredError) as caught:
+        provider(lambda _: httpx.Response(200, stream=SlowStream())).generate_structured(REQUEST)
+    assert caught.value.code == "response_timeout"
+    assert elapsed[0] == 61

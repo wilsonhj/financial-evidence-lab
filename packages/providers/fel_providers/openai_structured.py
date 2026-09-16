@@ -226,7 +226,7 @@ class OpenAIStructuredProvider:
                         code = "invalid_response"
                     else:
                         chunks = bytearray()
-                        for chunk in response.iter_bytes(chunk_size=4096):
+                        for chunk in response.iter_raw():
                             if len(chunks) + len(chunk) > self._max_response_bytes:
                                 code = "response_too_large"
                                 break
