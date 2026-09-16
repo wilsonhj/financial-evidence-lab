@@ -168,6 +168,8 @@ def test_real_preflight_cli_writes_metadata_and_all_verified_operations(tmp_path
             **os.environ,
             "FEL_DATABASE_URL": url,
             "FEL_STORAGE_DIR": str(tmp_path / "storage"),
+            "FEL_DEPLOYMENT_MODE": "synthetic-http",
+            "FEL_SYNTHETIC_HTTP_TARGET": "local-load-test",
             "FEL_AUTH_MODE": "mock",
             "FEL_ALLOW_MOCK_LLM": "1",
             "FEL_WORKER_DB_ROLE": "fel_worker",

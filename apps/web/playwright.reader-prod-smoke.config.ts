@@ -15,6 +15,8 @@ const quote = (value: string) => "'" + value.replaceAll("'", "'\"'\"'") + "'";
 const root = fileURLToPath(new URL("../..", import.meta.url));
 const token = `mock.${Buffer.from(JSON.stringify({ org_id: manifest.org, sub: manifest.user, role: "owner" })).toString("base64url")}`;
 const env = {
+  FEL_DEPLOYMENT_MODE: "reader-smoke",
+  FEL_READER_SMOKE_TARGET: manifest.target,
   FEL_AUTH_MODE: "mock",
   FEL_EVIDENCE_SOURCE: "http",
   FEL_API_BASE_URL: api,

@@ -17,6 +17,8 @@ jobs:
     timeout-minutes: 20
     env:
       READER_SMOKE_HOSTED: "1"
+      FEL_DEPLOYMENT_MODE: reader-smoke
+      FEL_AUTH_MODE: mock
       FEL_READER_SMOKE_TARGET: ${{ vars.READER_SMOKE_TARGET }}
       READER_SMOKE_TARGET: ${{ vars.READER_SMOKE_TARGET }}
       READER_SMOKE_REVISION: ${{ vars.READER_SMOKE_REVISION }}

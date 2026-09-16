@@ -122,8 +122,12 @@ command output and exit status; distinguish tests not run from passes.
 ## Return and integration protocol
 
 Commit only your three allowed files. Push the assigned branch and open a draft
-PR against main if your environment has repository write authorization; otherwise
-return a `git format-patch` file from the pinned base. Do not merge, deploy, close
+PR if your environment has repository write authorization; otherwise
+return a `git format-patch` file from the pinned base. If integration PR #338 is
+still open, use `agent/public-guard-control` as the draft PR base so the review
+shows only your three files. After #338 merges, the lead integrates current main
+and retargets the draft to main. If #338 is already merged, target main directly.
+Do not merge, deploy, close
 issues or post unrelated comments/messages. Include:
 
 1. Issue/card and exact base/contract/head SHAs; changed-file list.

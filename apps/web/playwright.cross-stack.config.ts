@@ -13,6 +13,9 @@ const token = `mock.${Buffer.from(
   JSON.stringify({ org_id: manifest.org, sub: manifest.user, role: "owner" }),
 ).toString("base64url")}`;
 const env = {
+  FEL_DEPLOYMENT_MODE: "synthetic-http",
+  FEL_SYNTHETIC_HTTP_TARGET: manifest.target!,
+  CROSS_STACK_MANIFEST: manifestPath,
   FEL_AUTH_MODE: "mock",
   FEL_ALLOW_MOCK_LLM: "1",
   FEL_EVIDENCE_SOURCE: "http",

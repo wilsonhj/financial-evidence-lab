@@ -32,6 +32,7 @@ from app.auth import make_mock_token
 from app.config import settings
 from benchmarks.extraction_load_fixture import DIGEST, SOURCE_TEXT, seed, state, verify, work
 from benchmarks.extraction_load_report import report
+from benchmarks.synthetic_target import prepare_synthetic_target
 
 
 def measure(
@@ -213,6 +214,9 @@ def main() -> int:
         parser.error("Requires explicit mock auth/model and fel_worker role")
     args.output.mkdir(parents=True, exist_ok=False)
     storage = Path(os.environ["FEL_STORAGE_DIR"])
+    prepare_synthetic_target(
+        database, storage, os.environ.get("FEL_SYNTHETIC_HTTP_TARGET", ""), "fel_load"
+    )
     with psycopg.connect(database, row_factory=dict_row) as conn:
         unfinished = conn.execute(
             "SELECT count(*) AS n FROM jobs WHERE status IN ('queued','running')"

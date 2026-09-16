@@ -256,6 +256,9 @@ test("real upstream authentication failures remain typed in the browser", async 
           detached: true,
           env: {
             ...process.env,
+            FEL_DEPLOYMENT_MODE: "reader-smoke",
+            FEL_READER_SMOKE_TARGET: process.env.FEL_READER_SMOKE_TARGET,
+            FEL_AUTH_MODE: "mock",
             FEL_EVIDENCE_SOURCE: "http",
             FEL_API_BASE_URL: api,
             FEL_API_BEARER_TOKEN: variant.token,

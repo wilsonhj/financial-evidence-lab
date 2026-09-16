@@ -34,6 +34,8 @@ jobs:
           --health-retries 10
     env:
       FEL_DATABASE_URL: postgresql://fel:fel-ci-only@localhost:5432/fel_extraction_acceptance
+      FEL_DEPLOYMENT_MODE: synthetic-http
+      FEL_SYNTHETIC_HTTP_TARGET: extraction-ci
       FEL_AUTH_MODE: mock
       FEL_ALLOW_MOCK_LLM: "1"
       FEL_WORKER_DB_ROLE: fel_worker
