@@ -3,7 +3,7 @@
 ## September 16 public deployment guard and external implementation handoff
 
 PR #338 integrates the public guard, explicit synthetic-harness configuration and
-accepted ADR-0027. Missing mode is public: business web routes return503 without
+accepted ADR-0027. Missing mode is public: business web routes return 503 without
 using a deployment bearer, while health remains reachable. Public API clients
 continue through the existing Supabase verifier; mock API identity requires an
 explicit dedicated synthetic mode and matching target/storage proof. This is a

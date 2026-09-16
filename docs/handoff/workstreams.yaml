@@ -189,6 +189,10 @@ packages:
       - evals/harness/extraction_cross_stack.py
       - apps/api/benchmarks/synthetic_target.py
       - evals/tests/test_synthetic_target.py
+      - workers/tests/test_temporal_cutoff_suite.py
+      - evals/tests/test_reader_cross_stack.py
+      - evals/tests/test_extraction_cross_stack.py
+      - apps/api/tests/extraction/test_sse_lifecycle.py
       - evals/harness/reader_prod_smoke_remote.py
       - evals/harness/reader_prod_smoke_service.py
       - evals/tests/test_reader_prod_smoke.py

@@ -423,6 +423,10 @@ def stack_reader(qa_database_url: str, tmp_path: Path, monkeypatch: pytest.Monke
 
     monkeypatch.setenv("FEL_DATABASE_URL", qa_database_url)
     monkeypatch.setenv("FEL_STORAGE_DIR", str(tmp_path))
+    monkeypatch.setenv("FEL_DEPLOYMENT_MODE", "reader-smoke")
+    monkeypatch.setenv("FEL_AUTH_MODE", "mock")
+    monkeypatch.setenv("FEL_READER_SMOKE_TARGET", "reader-cross-stack-tests")
+    (tmp_path / ".reader-smoke-target").write_bytes(b"reader-cross-stack-tests")
 
     org_id, user_id = str(uuid.uuid4()), str(uuid.uuid4())
     with psycopg.connect(qa_database_url) as conn:

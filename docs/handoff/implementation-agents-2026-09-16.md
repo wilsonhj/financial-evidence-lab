@@ -85,7 +85,7 @@ insufficient-data states. Evaluation never refits. No model training or inferenc
 
 Write failing tests first for weighted pooling/ties, known rational oracles,
 permutation/monotonicity, endpoint/gap predictions, support thresholds, hostile
-artifacts, decimal context and metric/bin edges. Respect the contract's16-container
+artifacts, decimal context and metric/bin edges. Respect the contract's 16-container
 limit where applicable, exact output shapes and error/status precedence.
 
 ## Shared prohibitions and acceptance
