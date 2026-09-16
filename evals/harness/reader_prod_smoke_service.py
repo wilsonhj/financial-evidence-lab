@@ -18,6 +18,17 @@ import tempfile
 import time
 from pathlib import Path
 
+# Hosted `stop` returns after the control file is written. Playwright then
+# polls health, renders the unavailable page, and asserts inside the 120s
+# smoke test budget. Auto-heal inside that window restarts the owned API
+# while the outage assertion is still in flight. Abandoned stops are still
+# recovered after this delay; explicit `start` restores sooner.
+WATCHDOG_HEAL_DELAY_S = 600.0
+
+
+def should_auto_heal(stopped_at: float | None, now: float) -> bool:
+    return stopped_at is not None and now - stopped_at >= WATCHDOG_HEAL_DELAY_S
+
 
 def write_control(path: Path, action: str) -> None:
     """Readers see the previous or next complete command, never truncation."""
@@ -69,7 +80,7 @@ def main() -> None:
     try:
         while True:
             action = control.read_text()
-            if stopped_at is not None and time.monotonic() - stopped_at >= 60:
+            if should_auto_heal(stopped_at, time.monotonic()):
                 write_control(control, "start")
                 action = "start"
             if action not in {"start", "stop"}:
