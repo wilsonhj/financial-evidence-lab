@@ -169,7 +169,7 @@ packages:
     depends_on: []
     team: integration
     branch: agent/public-guard-control
-    status: active # Accepted ADR-0027; guard children integrated together, no public-session acceptance.
+    status: merged # PR #338 integrates ADR-0027 guard children and harnesses together; no public-session acceptance.
     allowed_paths:
       - docs/decisions/ADR-0027-deployment-modes.md
       - docs/decisions/ADR-0028-offline-calibration-primitives.md
@@ -203,7 +203,7 @@ packages:
     depends_on: []
     team: api
     branch: agent/public-api-guard
-    status: ready # ADR-0027 frozen guard contract; integration-only merge with #333/#335.
+    status: merged # PR #338: explicit modes/proofs before verifier selection; public Supabase preserved.
     allowed_paths:
       - apps/api/app/config.py
       - apps/api/app/dependencies.py
@@ -220,7 +220,7 @@ packages:
     depends_on: []
     team: web
     branch: agent/public-web-guard
-    status: ready # ADR-0027 frozen guard contract; integration-only merge with #333/#334.
+    status: merged # PR #338: public HTTP503 plus factory refusal, explicit synthetic compatibility.
     allowed_paths:
       - apps/web/src/lib/deployment-mode.ts
       - apps/web/src/lib/deployment-mode.test.ts
