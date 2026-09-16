@@ -152,6 +152,17 @@ packages:
       - packages/providers/fel_providers/openai_embeddings.py
       - packages/providers/tests/test_openai_embeddings.py
       - packages/providers/OPENAI_EMBEDDINGS.md
+  - id: BYOK-CREDENTIAL-CIPHER
+    issue: 327
+    tasks: [] # Internal primitive only; no public runtime or credential storage acceptance.
+    depends_on: []
+    team: security
+    branch: agent/credential-cipher
+    status: ready # Explicit library keyring and authenticated identity payload; no platform addition.
+    allowed_paths:
+      - packages/providers/fel_providers/credential_cipher.py
+      - packages/providers/tests/test_credential_cipher.py
+      - packages/providers/CREDENTIAL_CIPHER.md
   - id: PLATFORM-NODE24
     issue: 249
     tasks: [] # Runtime maintenance; canonical task completion is unchanged.
