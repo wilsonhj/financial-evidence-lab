@@ -240,6 +240,28 @@ packages:
       - apps/web/src/app/extractions/pages.test.tsx
       - apps/web/playwright.deployment-guard.config.ts
       - apps/web/e2e/deployment-guard.acceptance.ts
+  - id: OFFLINE-CALIBRATION-DATASET
+    issue: 336
+    tasks: [] # Preparation only; #62 milestone/live dependencies remain unchanged.
+    depends_on: []
+    team: external-evals
+    branch: agent/offline-calibration-dataset
+    status: ready # Reserved external owner; immutable ADR-0028 contract pin in implementation handoff.
+    allowed_paths:
+      - evals/harness/calibration_dataset.py
+      - evals/tests/test_calibration_dataset.py
+      - evals/datasets/calibration/README.md
+  - id: OFFLINE-ISOTONIC-CALIBRATOR
+    issue: 337
+    tasks: [] # Pure offline primitive; no runtime scoring or live accuracy claim.
+    depends_on: []
+    team: external-calibration
+    branch: agent/offline-isotonic-calibrator
+    status: ready # Reserved external owner; independent of dataset implementation, consumes frozen tuples.
+    allowed_paths:
+      - workers/src/fel_workers/extraction/isotonic.py
+      - workers/tests/extraction/test_isotonic.py
+      - workers/src/fel_workers/extraction/ISOTONIC.md
   - id: PLATFORM-NODE24
     issue: 249
     tasks: [] # Runtime maintenance; canonical task completion is unchanged.
