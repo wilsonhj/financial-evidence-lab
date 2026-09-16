@@ -80,6 +80,7 @@ def verifier(signing, *, handler=None):
 
 
 def test_supabase_mode_selects_production_boundary(monkeypatch):
+    monkeypatch.setenv("FEL_DEPLOYMENT_MODE", "public")
     monkeypatch.setenv("FEL_AUTH_MODE", "supabase")
     monkeypatch.setenv("FEL_AUTH_ISSUER", "https://identity.example/auth/v1")
     verifier = get_verifier()
@@ -326,6 +327,7 @@ def test_unknown_key_cooldown_rotation_and_failed_refresh(signing, monkeypatch):
 def test_bad_configuration_is_safe(monkeypatch, issuer):
     from fastapi import HTTPException
 
+    monkeypatch.setenv("FEL_DEPLOYMENT_MODE", "public")
     monkeypatch.setenv("FEL_AUTH_MODE", "supabase")
     monkeypatch.setenv("FEL_AUTH_ISSUER", issuer)
     with pytest.raises(HTTPException) as error:
@@ -348,6 +350,7 @@ def test_factory_initialization_is_shared_under_concurrent_requests(monkeypatch)
         assert release.wait(2)
         return original(*args)
 
+    monkeypatch.setenv("FEL_DEPLOYMENT_MODE", "public")
     monkeypatch.setenv("FEL_AUTH_MODE", "supabase")
     monkeypatch.setenv("FEL_AUTH_ISSUER", ISSUER)
     monkeypatch.setattr(supabase_auth, "SupabaseTokenVerifier", construct)

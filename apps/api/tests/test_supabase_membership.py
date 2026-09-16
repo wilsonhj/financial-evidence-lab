@@ -34,6 +34,7 @@ def authenticated(monkeypatch):
             )
         ),
     )
+    monkeypatch.setenv("FEL_DEPLOYMENT_MODE", "public")
     monkeypatch.setenv("FEL_AUTH_MODE", "supabase")
     monkeypatch.setenv("FEL_AUTH_ISSUER", ISSUER)
     monkeypatch.setattr(dependencies, "_supabase_verifier", lambda *_: verifier)

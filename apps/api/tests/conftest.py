@@ -92,3 +92,20 @@ def client() -> TestClient:
     from app.main import app
 
     return TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def synthetic_deployment(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Explicit local synthetic authentication; never bypass deployment enforcement."""
+    storage = tmp_path
+    (storage / ".synthetic-http-target").write_bytes(b"api-unit-tests")
+    monkeypatch.setenv("FEL_DEPLOYMENT_MODE", "synthetic-http")
+    monkeypatch.setenv("FEL_SYNTHETIC_HTTP_TARGET", "api-unit-tests")
+    monkeypatch.setenv("FEL_STORAGE_DIR", str(storage))
+    monkeypatch.setenv("FEL_AUTH_MODE", "mock")
+    monkeypatch.setenv("FEL_ALLOW_MOCK_LLM", "1")
+    monkeypatch.setenv(
+        "FEL_DATABASE_URL", TEST_DATABASE_URL or "postgresql://localhost/fel_unit_tests"
+    )
+    monkeypatch.delenv("PGHOSTADDR", raising=False)
+    monkeypatch.delenv("PGSERVICE", raising=False)
