@@ -187,6 +187,8 @@ packages:
       - apps/web/playwright.reader-prod-smoke.config.ts
       - apps/web/e2e/reader-prod-smoke.acceptance.ts
       - evals/harness/extraction_cross_stack.py
+      - evals/harness/synthetic_target.py
+      - evals/tests/test_synthetic_target.py
       - evals/harness/reader_prod_smoke_remote.py
       - evals/harness/reader_prod_smoke_service.py
       - evals/tests/test_reader_prod_smoke.py
