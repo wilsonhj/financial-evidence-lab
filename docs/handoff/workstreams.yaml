@@ -163,6 +163,83 @@ packages:
       - packages/providers/fel_providers/credential_cipher.py
       - packages/providers/tests/test_credential_cipher.py
       - packages/providers/CREDENTIAL_CIPHER.md
+  - id: PUBLIC-GUARD-CONTROL
+    issue: 333
+    tasks: []
+    depends_on: []
+    team: integration
+    branch: agent/public-guard-control
+    status: active # Accepted ADR-0027; guard children integrated together, no public-session acceptance.
+    allowed_paths:
+      - docs/decisions/ADR-0027-deployment-modes.md
+      - docs/decisions/ADR-0028-offline-calibration-primitives.md
+      - docs/research/deployment-guard-contract.md
+      - docs/research/offline-calibration-contract.md
+      - docs/handoff/implementation-agents-2026-09-16.md
+      - docs/handoff/workstreams.yaml
+      - docs/handoff/STATUS.md
+      - docs/research/public-auth-byok-contract.md
+      - .github/workflows/ci.yml
+      - .github/workflows/extraction-acceptance.yml
+      - .github/workflows/reader-prod-smoke.yml
+      - apps/web/playwright.config.ts
+      - apps/web/playwright.cross-stack.config.ts
+      - apps/web/playwright.reader-prod-smoke.config.ts
+      - apps/web/e2e/reader-prod-smoke.acceptance.ts
+      - evals/harness/extraction_cross_stack.py
+      - evals/harness/reader_prod_smoke_remote.py
+      - evals/harness/reader_prod_smoke_service.py
+      - evals/tests/test_reader_prod_smoke.py
+      - apps/api/benchmarks/extraction_load.py
+      - apps/api/tests/test_extraction_load_report.py
+      - evals/reports/reader-prod-smoke/README.md
+      - infra/railway/README.md
+      - docs/development/local.md
+  - id: PUBLIC-API-GUARD
+    issue: 334
+    tasks: []
+    depends_on: []
+    team: api
+    branch: agent/public-api-guard
+    status: ready # ADR-0027 frozen guard contract; integration-only merge with #333/#335.
+    allowed_paths:
+      - apps/api/app/config.py
+      - apps/api/app/dependencies.py
+      - apps/api/app/deployment.py
+      - apps/api/tests/test_deployment.py
+      - apps/api/tests/conftest.py
+      - apps/api/tests/test_auth.py
+      - apps/api/tests/test_supabase_auth.py
+      - apps/api/tests/test_supabase_membership.py
+      - apps/api/tests/extraction/conftest.py
+  - id: PUBLIC-WEB-GUARD
+    issue: 335
+    tasks: []
+    depends_on: []
+    team: web
+    branch: agent/public-web-guard
+    status: ready # ADR-0027 frozen guard contract; integration-only merge with #333/#334.
+    allowed_paths:
+      - apps/web/src/lib/deployment-mode.ts
+      - apps/web/src/lib/deployment-mode.test.ts
+      - apps/web/src/lib/data/runtime-config.ts
+      - apps/web/src/lib/data/runtime-config.test.ts
+      - apps/web/src/lib/observatory/runtime-config.ts
+      - apps/web/src/lib/observatory/runtime-config.test.ts
+      - apps/web/src/lib/extraction/transport.ts
+      - apps/web/src/lib/extraction/transport.test.ts
+      - apps/web/src/lib/deployment-entrypoints.test.ts
+      - apps/web/src/proxy.ts
+      - apps/web/src/proxy.test.ts
+      - apps/web/src/app/api/extraction/[...path]/route.ts
+      - apps/web/src/app/api/extraction/[...path]/route.test.ts
+      - apps/web/src/app/api/extraction/runs/[runId]/events/route.ts
+      - apps/web/src/app/api/extraction/runs/[runId]/events/route.test.ts
+      - apps/web/src/app/reader/reader-page.test.tsx
+      - apps/web/src/components/extraction/source-links.test.tsx
+      - apps/web/src/app/extractions/pages.test.tsx
+      - apps/web/playwright.deployment-guard.config.ts
+      - apps/web/e2e/deployment-guard.acceptance.ts
   - id: PLATFORM-NODE24
     issue: 249
     tasks: [] # Runtime maintenance; canonical task completion is unchanged.
