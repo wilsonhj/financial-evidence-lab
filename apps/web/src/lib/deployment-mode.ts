@@ -77,7 +77,10 @@ function manifest(path: string | undefined): Record<string, string> {
     closeSync(fd);
   }
   if (size > 16384) refuse();
-  const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes.subarray(0, size));
+  // Preserve any BOM so it cannot disappear before the exact canonical comparison.
+  const text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(
+    bytes.subarray(0, size),
+  );
   const value: unknown = JSON.parse(text);
   if (!value || typeof value !== "object" || Array.isArray(value)) refuse();
   const data = value as Record<string, string>;

@@ -110,21 +110,28 @@ describe("deployment gate", () => {
   ])("rejects synthetic proof mismatch without diagnostics", (patch) =>
     denied({ ...synthetic().env, ...patch }),
   );
-  it.each(["newline", "duplicate", "extra", "uppercase", "oversize", "invalid-utf8", "malformed"])(
-    "rejects %s manifest",
-    (variant) => {
-      const { path, raw, env } = synthetic();
-      const values: Record<string, string | Buffer> = {
-        newline: raw + "\n",
-        duplicate: raw.replace("{", `{"org":"${id}",`),
-        extra: raw.replace("{", '{"extra":1,'),
-        uppercase: raw.replace(id, "AAAAAAAA-1111-4111-8111-111111111111"),
-        oversize: " ".repeat(16385),
-        "invalid-utf8": Buffer.from([255]),
-        malformed: "{",
-      };
-      writeFileSync(path, values[variant]!);
-      denied(env);
-    },
-  );
+  it.each([
+    "newline",
+    "duplicate",
+    "extra",
+    "uppercase",
+    "oversize",
+    "invalid-utf8",
+    "bom",
+    "malformed",
+  ])("rejects %s manifest", (variant) => {
+    const { path, raw, env } = synthetic();
+    const values: Record<string, string | Buffer> = {
+      newline: raw + "\n",
+      duplicate: raw.replace("{", `{"org":"${id}",`),
+      extra: raw.replace("{", '{"extra":1,'),
+      uppercase: raw.replace(id, "AAAAAAAA-1111-4111-8111-111111111111"),
+      oversize: " ".repeat(16385),
+      "invalid-utf8": Buffer.from([255]),
+      bom: Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from(raw)]),
+      malformed: "{",
+    };
+    writeFileSync(path, values[variant]!);
+    denied(env);
+  });
 });
