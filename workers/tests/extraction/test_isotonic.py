@@ -10,7 +10,7 @@ from decimal import (
     DivisionByZero,
     InvalidOperation,
     Overflow,
-    getcontext,
+    localcontext,
 )
 from fractions import Fraction
 from pathlib import Path
@@ -42,15 +42,6 @@ def _code_fit(samples: object, code: str) -> None:
     assert caught.value.__cause__ is None
     assert caught.value.__context__ is None
     assert "traceback" not in str(caught.value).lower()
-
-
-def _poison_decimal() -> None:
-    ctx = getcontext()
-    ctx.prec = 1
-    ctx.rounding = ROUND_FLOOR
-    ctx.traps[Overflow] = True
-    ctx.traps[DivisionByZero] = True
-    ctx.traps[InvalidOperation] = True
 
 
 def test_module_does_not_import_dataset_or_runtime() -> None:
@@ -221,11 +212,16 @@ def test_ambient_decimal_context_does_not_affect_outputs() -> None:
     baseline = fit(samples)
     base_predict = predict(baseline, "0.15")
     base_eval = evaluate(baseline, _rows("0.1", 50, 50))
-    _poison_decimal()
-    poisoned = fit(samples)
-    assert poisoned == baseline
-    assert predict(poisoned, "0.15") == base_predict
-    assert evaluate(poisoned, _rows("0.1", 50, 50)) == base_eval
+    with localcontext() as ctx:
+        ctx.prec = 1
+        ctx.rounding = ROUND_FLOOR
+        ctx.traps[Overflow] = True
+        ctx.traps[DivisionByZero] = True
+        ctx.traps[InvalidOperation] = True
+        poisoned = fit(samples)
+        assert poisoned == baseline
+        assert predict(poisoned, "0.15") == base_predict
+        assert evaluate(poisoned, _rows("0.1", 50, 50)) == base_eval
 
 
 def test_inputs_are_not_mutated() -> None:
