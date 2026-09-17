@@ -124,13 +124,15 @@ def _reject_constant(_text: str) -> None:
 
 
 def _check_depth(value: object, depth: int) -> None:
-    if depth > _MAX_DEPTH:
-        _fail("limit_exceeded")
     kind = type(value)
     if kind is dict:
+        if depth > _MAX_DEPTH:
+            _fail("limit_exceeded")
         for inner in cast(dict[str, object], value).values():
             _check_depth(inner, depth + 1)
     elif kind is list:
+        if depth > _MAX_DEPTH:
+            _fail("limit_exceeded")
         for inner in cast(list[object], value):
             _check_depth(inner, depth + 1)
 
@@ -249,7 +251,13 @@ def _canonical_stamp(value: object) -> tuple[str, datetime]:
         instant = datetime(year, month, day, hour, minute, second, tzinfo=UTC)
     except ValueError:
         invalid = True
-    if invalid or instant is None or instant.strftime("%Y-%m-%dT%H:%M:%SZ") != text:
+    if invalid or instant is None:
+        _fail("invalid_time")
+    canonical = (
+        f"{instant.year:04d}-{instant.month:02d}-{instant.day:02d}"
+        f"T{instant.hour:02d}:{instant.minute:02d}:{instant.second:02d}Z"
+    )
+    if canonical != text:
         _fail("invalid_time")
     return text, instant
 
@@ -460,6 +468,9 @@ def _cross_split_cutoff(records: list[dict[str, object]]) -> None:
     if calibration_as_of is not None and evaluation_published is not None:
         if not (calibration_as_of < evaluation_published):
             _fail("invalid_time")
+    if train_as_of is not None and evaluation_published is not None:
+        if not (train_as_of < evaluation_published):
+            _fail("invalid_time")
 
 
 def _validate(payload: object) -> dict[str, object]:
@@ -509,6 +520,18 @@ def _validate(payload: object) -> dict[str, object]:
     }
 
 
+def _reject_dict_floats(value: object) -> None:
+    if type(value) is float:
+        _fail("invalid_json")
+    kind = type(value)
+    if kind is dict:
+        for inner in cast(dict[str, object], value).values():
+            _reject_dict_floats(inner)
+    elif kind is list:
+        for inner in cast(list[object], value):
+            _reject_dict_floats(inner)
+
+
 def _validated(dataset: object) -> dict[str, object]:
     depth_failed = False
     try:
@@ -517,6 +540,7 @@ def _validated(dataset: object) -> dict[str, object]:
         depth_failed = True
     if depth_failed:
         _fail("limit_exceeded")
+    _reject_dict_floats(dataset)
     return _validate(dataset)
 
 

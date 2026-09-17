@@ -569,3 +569,58 @@ def test_error_codes_are_closed_and_messages_omit_payloads() -> None:
     assert "not-a-uuid" not in str(caught.value)
     assert caught.value.__cause__ is None
     assert caught.value.__context__ is None
+
+
+def test_train_as_of_crossing_evaluation_with_empty_calibration_is_rejected() -> None:
+    train = _record(
+        sample=_uuid("empty-cal-train"),
+        split="train",
+        as_of="2021-05-01T00:00:00Z",
+        adjudicated_at="2021-05-02T00:00:00Z",
+    )
+    evaluation = _record(sample=_uuid("empty-cal-eval"), split="evaluation")
+    _code(_dumps(_dataset([train, evaluation])), "invalid_time")
+
+
+def test_dict_float_values_are_invalid_json() -> None:
+    record = _record(sample=_uuid("dict-float"), split="train")
+    payload = _dataset([record])
+    assert isinstance(payload["records"], list)
+    records = payload["records"]
+    assert isinstance(records, list)
+    first = dict(records[0])  # type: ignore[union-attr]
+    first["outcome"] = 1.5
+    payload["records"] = [first]
+    _code(payload, "invalid_json")
+    first["outcome"] = 1
+    first["score"] = 0.5
+    payload["records"] = [first]
+    _code(payload, "invalid_json")
+
+
+def test_nesting_limit_counts_containers_not_scalar_leaves() -> None:
+    sixteen: Any = None
+    for _ in range(16):
+        sixteen = [sixteen]
+    # 16 containers + scalar leaf is within the 16-container bound:
+    # depth passes, then shape fails because the root is not an object.
+    _code(json.dumps(sixteen).encode(), "invalid_shape")
+
+
+def test_early_utc_year_formats_without_platform_strftime() -> None:
+    manifest = _split_manifest()
+    manifest["train"]["start_at"] = "0001-01-01T00:00:00Z"
+    manifest["train"]["end_at"] = "0001-06-30T23:59:59Z"
+    manifest["calibration"]["start_at"] = "0001-07-01T00:00:00Z"
+    manifest["calibration"]["end_at"] = "0001-12-31T23:59:59Z"
+    manifest["evaluation"]["start_at"] = "0002-01-01T00:00:00Z"
+    manifest["evaluation"]["end_at"] = "0002-06-30T23:59:59Z"
+    record = _record(
+        sample=_uuid("year-0001"),
+        split="train",
+        published_at="0001-03-01T00:00:00Z",
+        as_of="0001-03-02T00:00:00Z",
+        adjudicated_at="0001-03-03T00:00:00Z",
+    )
+    loaded = load_dataset(_dumps(_dataset([record], split_manifest=manifest)))
+    assert loaded["records"][0]["published_at"] == "0001-03-01T00:00:00Z"
