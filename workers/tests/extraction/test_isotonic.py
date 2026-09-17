@@ -331,3 +331,45 @@ def test_nesting_limit_on_artifacts() -> None:
     with pytest.raises(CalibrationError) as caught:
         predict(nested, "0.5")  # type: ignore[arg-type]
     assert caught.value.code == "limit_exceeded"
+
+
+def test_insufficient_zero_is_string_distinct_but_equal_to_fitted_zero() -> None:
+    insufficient = fit(_rows("0.5", 5, 5))
+    assert insufficient["status"] == "insufficient_data"
+    predicted = predict(insufficient, "0.5")
+    assert predicted == Decimal("0")
+    assert format(predicted, "f") == "0"
+    # Fitted probabilities are 12-place; insufficient is unquantized.
+    fitted = fit(_rows("0.2", 20, 80) + _rows("0.8", 80, 20))
+    assert fitted["status"] == "fitted"
+    sample_prob = predict(fitted, "0.2")
+    assert format(sample_prob, "f") != "0" or sample_prob.as_tuple().exponent == -12
+    # Document the trap: == cannot distinguish insufficient from fitted zero.
+    assert predicted == Decimal("0.000000000000")
+    assert predicted.as_tuple().exponent != Decimal("0.000000000000").as_tuple().exponent
+
+
+def test_canonical_score_grammar_rejects_trailing_zeros() -> None:
+    for bad in ["0.10", "0.0", "0.100000000000"]:
+        _code_fit([(bad, 0)], "invalid_sample")
+    artifact = fit(_rows("0.5", 50, 50))
+    with pytest.raises(CalibrationError) as caught:
+        predict(artifact, "0.10")
+    assert caught.value.code == "invalid_sample"
+
+
+def test_left_step_empty_blocks_is_invalid_artifact() -> None:
+    from fel_workers.extraction.isotonic import _left_step
+
+    with pytest.raises(CalibrationError) as caught:
+        _left_step([], "0.5")
+    assert caught.value.code == "invalid_artifact"
+
+
+def test_isolated_context_traps_float_operation() -> None:
+    import fel_workers.extraction.isotonic as module
+
+    ctx = module._isolated()
+    from decimal import FloatOperation
+
+    assert ctx.traps[FloatOperation] is True

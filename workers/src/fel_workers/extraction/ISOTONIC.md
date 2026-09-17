@@ -16,13 +16,20 @@ context must not affect results. Integer cross-products decide PAV merges;
 ties are grouped by exact score before pooling; adjacent equal means are
 coalesced.
 
+Scores use canonical spelling: `0`, `1`, or `0.` followed by 1-12 digits
+with a nonzero last digit (for example `0.1` is accepted but `0.10`,
+`0.0`, and `0.100000000000` are rejected as `invalid_sample`). Emitted
+12-place strings such as `0.100000000000` must not be fed back as scores.
+
 ## Insufficient support
 
 Per-stratum calibration support is at least 100 rows with 20 of each outcome.
 Below that, `fit` returns `status=insufficient_data` and empty blocks.
-`predict` on that artifact returns `Decimal("0")`. This is attempted but
-insufficient scoring, distinct from historical runtime `NULL` confidence, and
-must not be written onto existing proposals.
+`predict` on that artifact returns unquantized `Decimal("0")` (formats as
+`"0"`, distinct string from fitted `"0.000000000000"` though `==`-equal).
+This is attempted but insufficient scoring, distinct from historical runtime
+`NULL` confidence, and must not be written onto existing proposals. Callers
+must branch on `status`, never on the predicted value.
 
 `evaluate` validates the artifact and the held-out rows first. If the artifact
 is insufficient, status is `insufficient_calibration` even when evaluation

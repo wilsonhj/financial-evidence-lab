@@ -76,7 +76,13 @@ def _fail(code: str) -> NoReturn:
 def _isolated() -> Context:
     ctx = Context(prec=50, rounding=ROUND_HALF_EVEN)
     for signal in _SIGNALS:
-        ctx.traps[signal] = False
+        # Keep FloatOperation trapped as a tripwire: current code never
+        # converts float, so this changes no behavior but fails loudly
+        # if a future edit introduces float->Decimal leakage.
+        if signal is FloatOperation:
+            ctx.traps[signal] = True
+        else:
+            ctx.traps[signal] = False
     return ctx
 
 
@@ -259,6 +265,8 @@ def _validate_artifact(artifact: object) -> dict[str, object]:
         "positive": positive,
         "negative": negative,
         "blocks": _public_blocks(blocks),
+        # Internal only: validated tuples for predict/evaluate. Never persist
+        # or return this key to callers; fit() returns the clean shape above.
         "_raw_blocks": blocks,
     }
 
@@ -268,6 +276,8 @@ def _mean(block: tuple[str, str, int, int]) -> Decimal:
 
 
 def _left_step(blocks: list[tuple[str, str, int, int]], score: str) -> Decimal:
+    if not blocks:
+        _fail("invalid_artifact")
     query = Decimal(score)
     first = blocks[0]
     last = blocks[-1]
@@ -285,10 +295,12 @@ def _left_step(blocks: list[tuple[str, str, int, int]], score: str) -> Decimal:
             chosen = block
         elif Decimal(chosen[1]) < query < lower:
             return _mean(chosen)
+    # Defensive: reached only if query falls exactly on a gap already
+    # handled above; return the greatest lower block (left step).
     return _mean(chosen)
 
 
-def fit(samples: Sequence[tuple[str, int]]) -> dict[str, object]:
+def fit(samples: list[tuple[str, int]] | tuple[tuple[str, int], ...]) -> dict[str, object]:
     """Fit a weighted PAV artifact for one stratum of score/outcome tuples."""
     parsed = _parse_samples(samples)
     n = len(parsed)
@@ -308,7 +320,13 @@ def fit(samples: Sequence[tuple[str, int]]) -> dict[str, object]:
 
 
 def predict(artifact: dict[str, object], score: str) -> Decimal:
-    """Return a 12-place probability, or zero for an insufficient artifact."""
+    """Return a fitted 12-place probability, or unquantized zero if insufficient.
+
+    The insufficient return is ``Decimal("0")`` (formats as ``"0"``), which
+    compares equal to a fitted zero under ``==``. Callers must branch on
+    ``artifact["status"]``, never on the predicted value, to distinguish
+    attempted-but-insufficient scoring from confident negatives.
+    """
     validated = _validate_artifact(artifact)
     canonical = _canonical_score(score, code="invalid_sample")
     status = cast(FitStatus, validated["status"])
