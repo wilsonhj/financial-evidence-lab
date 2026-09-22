@@ -1,5 +1,11 @@
 # Architecture overview
 
+For a current executive readout and system diagrams, see the
+[executive architecture brief](./executive-brief.md) and
+[source-linked engineering reference](./engineering-reference.md). These
+documents distinguish implemented components from release and hosted-acceptance
+gates. Some status statements below describe an earlier implementation snapshot.
+
 This document describes the architecture that is present on `main`, not only
 the target product. Planned components are labeled so a new contributor can
 tell which paths are safe to run, extend, or depend on.
