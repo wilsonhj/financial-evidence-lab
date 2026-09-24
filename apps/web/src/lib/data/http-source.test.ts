@@ -355,3 +355,95 @@ describe("HttpEvidenceSource document listing", () => {
     ).rejects.toBeInstanceOf(EvidenceContractError);
   });
 });
+
+describe("reader integrity error classification", () => {
+  const fields = {
+    code: "INTEGRITY_ERROR",
+    message: "private upstream message",
+    request_id: "req-integrity",
+  };
+  const sourceFor = (body: unknown, status = 500) =>
+    makeSource(async () => jsonResponse(body, status));
+
+  it.each([500, 502, 503, 599])("classifies a parsed integrity envelope at %i", async (status) => {
+    const error = await sourceFor({ error: fields }, status)
+      .getReader(DOCUMENT_ID)
+      .catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(EvidenceApiError);
+    expect(error).toMatchObject({
+      kind: "integrity",
+      status,
+      code: fields.code,
+      requestId: fields.request_id,
+    });
+    expect((error as Error).message).not.toContain(fields.message);
+    expect((error as Error).message).not.toContain("test-token");
+  });
+
+  it.each([
+    null,
+    [],
+    {},
+    { error: null },
+    { error: [] },
+    ...["code", "message", "request_id"].flatMap((key) => [
+      { error: Object.fromEntries(Object.entries(fields).filter(([name]) => name !== key)) },
+      { error: { ...fields, [key]: 7 } },
+    ]),
+    { error: { ...fields, code: "integrity_error" } },
+    { error: { ...fields, code: "OTHER", details: { code: "INTEGRITY_ERROR" } } },
+  ])("does not classify malformed or unrelated fields as integrity: %j", async (body) => {
+    await expect(sourceFor(body).getReader(DOCUMENT_ID)).rejects.toMatchObject({
+      kind: "unavailable",
+    });
+  });
+
+  it.each([500, 502, 503])("preserves ordinary and non-JSON outages at %i", async (status) => {
+    await expect(
+      sourceFor({ error: { ...fields, code: "UNAVAILABLE" } }, status).getReader(DOCUMENT_ID),
+    ).rejects.toMatchObject({ kind: "unavailable" });
+    for (const body of ["", "<html>outage</html>", "{"]) {
+      await expect(
+        makeSource(async () => new Response(body, { status })).getReader(DOCUMENT_ID),
+      ).rejects.toMatchObject({ kind: "unavailable" });
+    }
+  });
+
+  it.each([
+    {
+      extra: "private root",
+      error: { ...fields, extra: "private field", details: ["private details"] },
+    },
+    { error: { ...fields, message: "", request_id: "", details: null } },
+  ])("retains parser tolerance without claiming full schema validity: %j", async (body) => {
+    await expect(sourceFor(body).getReader(DOCUMENT_ID)).rejects.toMatchObject({
+      kind: "integrity",
+    });
+  });
+
+  it.each([
+    [401, "authentication"],
+    [403, "forbidden"],
+    [409, "conflict"],
+    [413, "too_large"],
+    [422, "invalid_scope"],
+    [429, "unavailable"],
+  ])("preserves status %i precedence over code", async (status, kind) => {
+    await expect(
+      sourceFor({ error: fields }, status as number).getReader(DOCUMENT_ID),
+    ).rejects.toMatchObject({ kind });
+  });
+
+  it("keeps every reader 404 as null and validates successful bodies normally", async () => {
+    for (const body of [
+      { error: fields },
+      { error: { ...fields, details: { resource: "corpus_version" } } },
+      null,
+    ]) {
+      await expect(sourceFor(body, 404).getReader(DOCUMENT_ID)).resolves.toBeNull();
+    }
+    await expect(sourceFor({ error: fields }, 200).getReader(DOCUMENT_ID)).rejects.toBeInstanceOf(
+      EvidenceContractError,
+    );
+  });
+});

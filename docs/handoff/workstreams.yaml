@@ -97,12 +97,18 @@ packages:
     tasks: []
     depends_on: []
     team: integration
-    branch: agent/188-execution-wave10
-    status: active # Reconcile verified prerequisites and coordinate disjoint #61 implementation under ADR-0024.
+    branch: agent/188-completion-execution
+    status: active # September 16 owner-approved completion plan; staged disjoint implementation and separately gated live acceptance.
     allowed_paths:
+      - docs/research/2026-09-16-completion-spec.md
+      - docs/superpowers/plans/2026-09-16-completion-implementation.md
+      - docs/handoff/external-agents-2026-09-16.md
+      - docs/decisions/ADR-0026-public-workspaces-and-user-funded-inference.md
       - specs/001-financial-evidence-lab/tasks.md # Lead-only verified checkbox/annotation updates.
       - docs/handoff/execution-2026-09-09.md
+      - docs/handoff/STATUS.md
       - docs/handoff/workstreams.yaml
+      - docs/superpowers/plans/2026-09-14-load-and-hosted-reader-acceptance.md
       - docs/decisions/ADR-0017-parallel-backlog-execution.md
       - docs/superpowers/plans/2026-09-09-backlog-resolution.md
       - docs/superpowers/plans/2026-09-10-extraction-complexity-split.md
@@ -111,8 +117,157 @@ packages:
       - docs/superpowers/plans/2026-09-11-extraction-event-ordering.md
       - docs/superpowers/plans/2026-09-11-extraction-review-backend.md
       - docs/superpowers/plans/2026-09-11-extraction-review-web.md
+      - docs/superpowers/plans/2026-09-13-reader-integrity-classification.md
+      - docs/superpowers/plans/2026-09-13-extraction-acceptance-proofs.md
       - docs/research/2026-09-11-model-scenario-design.md # Read-only future design findings; no #64 dispatch or domain-policy acceptance.
       - .github/required-checks.md # Reconcile verified September 10 protection settings only.
+  - id: OPENAI-STRUCTURED-BASELINE
+    issue: 323
+    tasks: [] # Prerequisite only; #195/#177 retain live acceptance.
+    depends_on: [M3-EXTRACTION-CORE]
+    team: providers
+    branch: agent/openai-structured-baseline
+    status: merged # PR #328 @ 750aede; exact-head review, all required CI and HTTP acceptance passed. Runtime wiring/live proof remain separate.
+    allowed_paths:
+      - packages/providers/fel_providers/openai_structured.py
+      - packages/providers/tests/test_openai_structured.py
+      - packages/providers/OPENAI.md
+  - id: PUBLIC-AUTH-BYOK
+    issue: 324
+    tasks: [] # New scope; contract children must be registered before runtime dispatch.
+    depends_on: []
+    team: integration
+    branch: agent/public-auth-byok-contract
+    status: blocked # Proposal/primitive decision merged in PR #330 @ aef6d33. Runtime/API/storage/session freeze and hosted acceptance remain prerequisites.
+    allowed_paths:
+      - docs/research/public-auth-byok-contract.md
+  - id: OPENAI-EMBEDDING-BASELINE
+    issue: 326
+    tasks: [] # Offline prerequisite only; live index and usage acceptance remain separate.
+    depends_on: [M3-EXTRACTION-CORE]
+    team: providers
+    branch: agent/openai-embedding-baseline
+    status: merged # PR #329 @ 05141ae; exact-head review, required CI and HTTP acceptance passed. No default runtime activation or paid calls.
+    allowed_paths:
+      - packages/providers/fel_providers/openai_embeddings.py
+      - packages/providers/tests/test_openai_embeddings.py
+      - packages/providers/OPENAI_EMBEDDINGS.md
+  - id: BYOK-CREDENTIAL-CIPHER
+    issue: 327
+    tasks: [] # Internal primitive only; no public runtime or credential storage acceptance.
+    depends_on: []
+    team: security
+    branch: agent/credential-cipher
+    status: merged # PR #331 @ 450c250; identity-bound offline cipher, exact-head review and required CI passed. Custody and hosted BYOK remain separate.
+    allowed_paths:
+      - packages/providers/fel_providers/credential_cipher.py
+      - packages/providers/tests/test_credential_cipher.py
+      - packages/providers/CREDENTIAL_CIPHER.md
+  - id: PUBLIC-GUARD-CONTROL
+    issue: 333
+    tasks: []
+    depends_on: []
+    team: integration
+    branch: agent/public-guard-control
+    status: merged # PR #338 integrates ADR-0027 guard children and harnesses together; no public-session acceptance.
+    allowed_paths:
+      - docs/decisions/ADR-0027-deployment-modes.md
+      - docs/decisions/ADR-0028-offline-calibration-primitives.md
+      - docs/research/deployment-guard-contract.md
+      - docs/research/offline-calibration-contract.md
+      - docs/handoff/implementation-agents-2026-09-16.md
+      - docs/handoff/workstreams.yaml
+      - docs/handoff/STATUS.md
+      - docs/research/public-auth-byok-contract.md
+      - .github/workflows/ci.yml
+      - .github/workflows/extraction-acceptance.yml
+      - .github/workflows/reader-prod-smoke.yml
+      - apps/web/playwright.config.ts
+      - apps/web/playwright.cross-stack.config.ts
+      - apps/web/playwright.reader-prod-smoke.config.ts
+      - apps/web/e2e/reader-prod-smoke.acceptance.ts
+      - evals/harness/extraction_cross_stack.py
+      - apps/api/benchmarks/synthetic_target.py
+      - evals/tests/test_synthetic_target.py
+      - workers/tests/test_temporal_cutoff_suite.py
+      - evals/tests/test_reader_cross_stack.py
+      - evals/tests/test_extraction_cross_stack.py
+      - apps/api/tests/extraction/test_sse_lifecycle.py
+      - evals/harness/reader_prod_smoke_remote.py
+      - evals/harness/reader_prod_smoke_service.py
+      - evals/tests/test_reader_prod_smoke.py
+      - apps/api/benchmarks/extraction_load.py
+      - apps/api/tests/test_extraction_load_report.py
+      - evals/reports/reader-prod-smoke/README.md
+      - infra/railway/README.md
+      - docs/development/local.md
+  - id: PUBLIC-API-GUARD
+    issue: 334
+    tasks: []
+    depends_on: []
+    team: api
+    branch: agent/public-api-guard
+    status: merged # PR #338: explicit modes/proofs before verifier selection; public Supabase preserved.
+    allowed_paths:
+      - apps/api/app/config.py
+      - apps/api/app/dependencies.py
+      - apps/api/app/deployment.py
+      - apps/api/tests/test_deployment.py
+      - apps/api/tests/conftest.py
+      - apps/api/tests/test_auth.py
+      - apps/api/tests/test_supabase_auth.py
+      - apps/api/tests/test_supabase_membership.py
+      - apps/api/tests/extraction/conftest.py
+  - id: PUBLIC-WEB-GUARD
+    issue: 335
+    tasks: []
+    depends_on: []
+    team: web
+    branch: agent/public-web-guard
+    status: merged # PR #338: public HTTP503 plus factory refusal, explicit synthetic compatibility.
+    allowed_paths:
+      - apps/web/src/lib/deployment-mode.ts
+      - apps/web/src/lib/deployment-mode.test.ts
+      - apps/web/src/lib/data/runtime-config.ts
+      - apps/web/src/lib/data/runtime-config.test.ts
+      - apps/web/src/lib/observatory/runtime-config.ts
+      - apps/web/src/lib/observatory/runtime-config.test.ts
+      - apps/web/src/lib/extraction/transport.ts
+      - apps/web/src/lib/extraction/transport.test.ts
+      - apps/web/src/lib/deployment-entrypoints.test.ts
+      - apps/web/src/proxy.ts
+      - apps/web/src/proxy.test.ts
+      - apps/web/src/app/api/extraction/[...path]/route.ts
+      - apps/web/src/app/api/extraction/[...path]/route.test.ts
+      - apps/web/src/app/api/extraction/runs/[runId]/events/route.ts
+      - apps/web/src/app/api/extraction/runs/[runId]/events/route.test.ts
+      - apps/web/src/app/reader/reader-page.test.tsx
+      - apps/web/src/components/extraction/source-links.test.tsx
+      - apps/web/src/app/extractions/pages.test.tsx
+      - apps/web/playwright.deployment-guard.config.ts
+      - apps/web/e2e/deployment-guard.acceptance.ts
+  - id: OFFLINE-CALIBRATION-DATASET
+    issue: 336
+    tasks: [] # Preparation only; #62 milestone/live dependencies remain unchanged.
+    depends_on: []
+    team: external-evals
+    branch: agent/offline-calibration-dataset
+    status: ready # Reserved external owner; immutable ADR-0028 contract pin in implementation handoff.
+    allowed_paths:
+      - evals/harness/calibration_dataset.py
+      - evals/tests/test_calibration_dataset.py
+      - evals/datasets/calibration/README.md
+  - id: OFFLINE-ISOTONIC-CALIBRATOR
+    issue: 337
+    tasks: [] # Pure offline primitive; no runtime scoring or live accuracy claim.
+    depends_on: []
+    team: external-calibration
+    branch: agent/offline-isotonic-calibrator
+    status: ready # Reserved external owner; independent of dataset implementation, consumes frozen tuples.
+    allowed_paths:
+      - workers/src/fel_workers/extraction/isotonic.py
+      - workers/tests/extraction/test_isotonic.py
+      - workers/src/fel_workers/extraction/ISOTONIC.md
   - id: PLATFORM-NODE24
     issue: 249
     tasks: [] # Runtime maintenance; canonical task completion is unchanged.
@@ -275,10 +430,15 @@ packages:
   - id: READER-PROD-SMOKE # child F of #87; owns #96 criterion #11
     issue: 108
     tasks: []
-    depends_on: [READER-CROSS-STACK, M2-CONTRACT] # #105+#106; READER-WEB-HTTP inherited via READER-CROSS-STACK
+    depends_on: [
+        READER-CROSS-STACK,
+        M2-CONTRACT,
+        READER-INTEGRITY-CLASSIFICATION,
+        READER-WEB-DEPLOY-CONFIG,
+      ] # Hosted credentials and infra prerequisites remain blocked.
     team: trust
     branch: test/reader-prod-smoke
-    status: blocked # registered after #105/#106; NOT ready — hosted deployment credentials not provisioned; INTEGRITY_ERROR→unavailable residual blocks integrity-alert UI acceptance
+    status: blocked # #304 fixes integrity classification and #311 supplies web configuration; hosted provisioning and actual ingestion-to-reader smoke remain unverified.
     credentials: hosted-required # override defaults.credentials mock-only; names only until lead provisions
     allowed_paths:
       - evals/** # hosted-smoke harness + evidence capture
@@ -286,6 +446,35 @@ packages:
       - apps/api/**
       - workers/**
       - .github/** # gated hosted-smoke workflow; shared — integration-lead authorization required
+  - id: READER-INTEGRITY-CLASSIFICATION
+    issue: 301
+    tasks: [] # Dedicated prerequisite for hosted #108, not hosted acceptance.
+    depends_on: [READER-WEB-HTTP, READER-CROSS-STACK, M2-OBSERVATORY-UI]
+    team: experience
+    branch: agent/301-reader-integrity
+    status: merged # PR #304 @ 5dc48f0; explicit integrity classification verified. #108 retains hosted acceptance.
+    allowed_paths:
+      - apps/web/src/lib/data/http-source.ts
+      - apps/web/src/lib/data/http-source.test.ts
+      - apps/web/src/components/EvidenceFailureState.tsx
+      - apps/web/src/components/EvidenceFailureState.test.tsx
+      - apps/web/src/app/reader/reader-pagination.test.tsx
+      - evals/harness/reader_cross_stack.py
+      - evals/tests/test_reader_cross_stack.py
+  - id: READER-WEB-DEPLOY-CONFIG
+    issue: 303
+    tasks: []
+    depends_on: [READER-WEB-HTTP]
+    team: integration
+    branch: agent/303-railway-web
+    status: merged # PR #311 @ df1f85a; offline configuration/build/start verification only, no hosted deployment.
+    allowed_paths:
+      - infra/railway/web.json
+      - infra/README.md
+      - infra/railway/README.md
+      - docs/handoff/workstreams.yaml # Lead registration only.
+      - docs/decisions/ADR-0017-parallel-backlog-execution.md # Lead authorization only.
+      - docs/handoff/execution-2026-09-09.md # Verified evidence only.
   - id: INFRA-WORKER-DEPLOY # Railway worker startCommand -> consumer mode (issue #84)
     issue: 84
     tasks: []
@@ -481,7 +670,7 @@ packages:
     depends_on: [M3-REVIEW-API, M3-REVIEW-WEB]
     team: experience
     branch: agent/m3-review # Integration acceptance only; implementation uses the disjoint children below.
-    status: blocked # Lead verifies combined backend/web and worker-to-browser acceptance before closing #61 or canonical tasks.
+    status: blocked # #290/#306/#313 supply functional and teardown evidence; the documented load-acceptance boundary still precedes closure. Do not redispatch implementation.
     allowed_paths: []
   - id: EXTRACTION-EVENT-ORDERING
     issue: 135
@@ -516,23 +705,19 @@ packages:
     tasks: []
     depends_on: [M3-REVIEW-CANDIDATE-CONTRACT]
     team: platform
-    branch: agent/61-extraction-review-api
-    status: ready # Contract/event prerequisites merged; root dispatches the backend plan in a dedicated worktree and database.
+    branch: cursor/61-acceptance-proofs-97f4
+    status: merged # PR #306 @ 1b2da77 plus #313 @ 8c7d2d5; real PG/CI/HTTP acceptance passed, including actual disconnect termination. #61 remains open.
     allowed_paths:
-      - apps/api/app/extraction/**
-      - apps/api/tests/extraction/**
-      - apps/api/app/main.py
-      - apps/api/app/pagination.py
-      - apps/api/tests/test_pagination.py
-      - packages/contracts/openapi/openapi.yaml # Lead-owned removal of implemented extraction x-fel-status markers only, with router mount.
-      - specs/003-agentic-extraction/contracts/extraction-api.yaml # Same implementation-marker alignment only.
+      - apps/api/tests/extraction/test_correction_concurrency.py
+      - apps/api/tests/extraction/test_access_boundaries.py
+      - apps/api/tests/extraction/test_sse_lifecycle.py
   - id: M3-REVIEW-WEB
     issue: 61
     tasks: []
     depends_on: [M3-REVIEW-CANDIDATE-CONTRACT]
     team: experience
-    branch: agent/61-extraction-review-web
-    status: ready # Dispatch alongside backend under the published disjoint web plan; actual HTTP streaming still requires proof.
+    branch: agent/61-review-patch-boundary
+    status: merged # PR288/290 plus PR291/cde9cea, PR294/c4ffc2e, PR297/73a7d2b and PR305/18f510e historical source-scope repair.
     allowed_paths:
       - apps/web/src/lib/extraction/**
       - apps/web/src/components/extraction/**
@@ -542,6 +727,28 @@ packages:
       - apps/web/src/app/api/extraction/**
       - apps/web/src/app/desk/page.tsx
       - apps/web/e2e/extraction-review.spec.ts
+  - id: PRODUCTION-AUTH-VERIFIER
+    issue: 292
+    tasks: [] # Historical T0004 production-auth residual; no duplicate task ledger.
+    depends_on: []
+    team: platform
+    branch: agent/292-production-auth-api
+    status: merged # PR #300 @ e66fb6b implements accepted ADR0025; #310 @ 0230338 hardens mock claims. Hosted identity acceptance remains #292-owned.
+    allowed_paths:
+      - apps/api/app/auth.py
+      - apps/api/app/dependencies.py
+      - apps/api/app/config.py
+      - apps/api/app/supabase_auth.py
+      - apps/api/tests/test_supabase_auth.py
+      - apps/api/tests/test_supabase_membership.py
+      - apps/api/pyproject.toml
+      - requirements.txt
+      - requirements.lock
+      - requirements-dev.lock
+      - docs/decisions/ADR-0025-production-token-verification.md
+      - docs/superpowers/plans/2026-09-13-production-auth-verifier.md
+      - docs/handoff/workstreams.yaml
+      - docs/handoff/production-auth.md
   - id: M3-CONFIDENCE-GATE # confidence scoring + extraction quality gate
     issue: 62
     tasks: [T0306, T0307, T0310]
@@ -861,7 +1068,7 @@ packages:
     depends_on: [M3-EXTRACTION-CORE]
     team: contracts
     branch: agent/arch-provider-adr # not yet created
-    status: blocked # Blocked on a lead DECISION, not on code. ADR-0002 (Accepted) pins OpenAI; #132 directs claude-opus-4-8; ADR-0012 (Proposed via PR #186 @ 491cd67, splitting the decision by role) ratifies nothing. Constitution principle V requires benchmark evidence plus an accepted ADR for any substitution. No live adapter exists for either provider: packages/providers/fel_providers/mocks.py holds the only StructuredLLMProvider, so extraction cannot run anywhere today without FEL_ALLOW_MOCK_LLM. Gates RELEASE-LIVE-CUTOVER (#177) and M3-CONFIDENCE-GATE (#62) in practice; no depends_on edge is added because the decision is the lead's, not a package.
+    status: blocked # ADR-0002 OpenAI baseline remains accepted; ADR-0012 is Proposed and substitutions require benchmark evidence plus an accepted ADR. Offline explicit-key OpenAI structured/embedding adapters merged in #328/#329; user-bound runtime authorization, durable usage wiring and live acceptance remain unfinished. #177/#62 retain their gates; no paid or alternative-provider approval is implied.
     allowed_paths:
       - docs/decisions/**
       - packages/providers/**
@@ -1129,3 +1336,63 @@ packages:
     # Old #76 validator/excerpt/amendment acceptance debt precedes supplements.
     # Keep 20-issuer cohort read-only and >=8 actual byte-verified features;
     # 3-6 supplemental issuers must come from fetched SEC discovery evidence.
+
+  # Owner-authorized bounded recovery, issue #61 comment 5660038952.
+  # Disjoint from the already merged Cursor proof package; no credential or
+  # milestone dependency policy changes.
+  - id: M3-REVIEW-DISCONNECT-PROOF
+    issue: 61
+    tasks: []
+    depends_on: [M3-REVIEW-API]
+    team: trust
+    branch: agent/61-disconnect-proof
+    status: merged # PR #313 @ 8c7d2d5; real PostgreSQL and HTTP acceptance passed.
+    allowed_paths:
+      - apps/api/tests/extraction/test_sse_lifecycle.py
+  - id: M3-REVIEW-FIXTURE-PARITY
+    issue: 61
+    tasks: []
+    depends_on: [M3-REVIEW-WEB]
+    team: experience
+    branch: agent/61-fixture-contract-parity
+    status: merged # Reviewed PR #314 head a3d57df integrated with the lead reconciliation; three fixture-only defects repaired.
+    allowed_paths:
+      - apps/web/src/lib/extraction/fixture-actions.ts
+      - apps/web/src/lib/extraction/fixture-actions.test.ts
+
+  - id: M3-REVIEW-LOAD-ACCEPTANCE
+    issue: 61
+    tasks: []
+    depends_on: [M3-REVIEW-API, M3-REVIEW-WEB]
+    team: trust
+    branch: agent/61-load-acceptance
+    status: blocked # PR #316 implements the runner and batching repair; latest measured bulk p95 1501.91 ms still fails 1000 ms. WAL/storage contention and missing reference resources remain.
+    allowed_paths:
+      - apps/api/benchmarks/**
+      - apps/api/tests/test_extraction_load_report.py
+      - apps/api/EXTRACTION_LOAD.md
+      - apps/api/app/extraction/review.py
+      - apps/api/app/extraction/approved.py
+      - apps/api/tests/extraction/test_review_query_budget.py
+  - id: READER-SMOKE-PREPARATION
+    issue: 108
+    tasks: []
+    depends_on: [READER-INTEGRITY-CLASSIFICATION, READER-WEB-DEPLOY-CONFIG]
+    team: trust
+    branch: test/reader-prod-smoke
+    status: merged # PR #318 @ 1a0de4b; real worker and local production-browser proof pass. Parent hosted acceptance remains blocked.
+    credentials: mock-only
+    allowed_paths:
+      - workers/src/fel_workers/ingestion/fixture_sec_client.py
+      - workers/src/fel_workers/__main__.py
+      - workers/src/fel_workers/consumer.py
+      - workers/tests/test_fixture_sec_client.py
+      - workers/tests/test_entrypoint.py
+      - workers/tests/test_consumer.py
+      - evals/datasets/reader-prod-smoke/**
+      - evals/harness/reader_prod_smoke*.py
+      - evals/tests/test_reader_prod_smoke.py
+      - evals/reports/reader-prod-smoke/**
+      - apps/web/playwright.reader-prod-smoke.config.ts
+      - apps/web/e2e/reader-prod-smoke.acceptance.ts
+      - .github/workflows/reader-prod-smoke.yml # Existing named shared-path exception in #108 accepted addendum.

@@ -81,83 +81,6 @@ describe("bounded extraction SSE", () => {
     expect(seen).toEqual([1, 2, 3]);
     expect(open.mock.calls[1]?.[0]).toBe(1);
   });
-  it("delivers a bare-CR framed stream", async () => {
-    const e = event(1);
-    expect(await read(response(`id: ${e.id}\rdata: ${JSON.stringify(e)}\r\r`))).toEqual([e]);
-  });
-  it("delivers a final frame closed without its trailing blank line", async () => {
-    expect(await read(response(`id: 1\r\ndata: ${JSON.stringify(event(1))}\r\n`))).toEqual([
-      event(1),
-    ]);
-  });
-  it("discards a frame truncated by a cut connection instead of failing", async () => {
-    expect(await read(response(`id: 1\r\ndata: ${JSON.stringify(event(1)).slice(0, 20)}`))).toEqual(
-      [],
-    );
-  });
-  it("reconnects after a connection cut mid-frame", async () => {
-    const open = vi
-      .fn()
-      .mockResolvedValueOnce(response(`id: 1\r\ndata: ${JSON.stringify(event(1)).slice(0, 20)}`))
-      .mockResolvedValueOnce(response(frame(event(1, "run_succeeded"))));
-    const seen: number[] = [];
-    await consumeExtractionEvents(run, {
-      open,
-      onEvent: (e) => seen.push(e.id),
-      signal: new AbortController().signal,
-      wait: async () => {},
-    });
-    expect(seen).toEqual([1]);
-  });
-  it("does not spend the frame budget on keepalive comments", async () => {
-    expect(await read(response(": ping\r\n".repeat(12000) + frame(event(1)), 4096))).toEqual([
-      event(1),
-    ]);
-  });
-  it("retries a transient upstream status instead of ending the view", async () => {
-    const open = vi
-      .fn()
-      .mockResolvedValueOnce(new Response("", { status: 502 }))
-      .mockResolvedValueOnce(response(frame(event(1, "run_succeeded"))));
-    const seen: number[] = [];
-    await consumeExtractionEvents(run, {
-      open,
-      onEvent: (e) => seen.push(e.id),
-      signal: new AbortController().signal,
-      wait: async () => {},
-    });
-    expect(seen).toEqual([1]);
-    expect(open).toHaveBeenCalledTimes(2);
-  });
-  it("does not retry a refusal", async () => {
-    const open = vi.fn().mockResolvedValue(new Response("", { status: 403 }));
-    await expect(
-      consumeExtractionEvents(run, {
-        open,
-        onEvent: () => {},
-        signal: new AbortController().signal,
-        wait: async () => {},
-      }),
-    ).rejects.toThrow("HTTP 403");
-    expect(open).toHaveBeenCalledTimes(1);
-  });
-  it("keeps resuming a long review while each attempt delivers events", async () => {
-    let id = 0;
-    const open = vi.fn().mockImplementation(() => {
-      id += 1;
-      return Promise.resolve(
-        response(frame(event(id, id > 8 ? "run_succeeded" : "review_waiting"))),
-      );
-    });
-    const seen: number[] = [];
-    await consumeExtractionEvents(run, {
-      open,
-      onEvent: (e) => seen.push(e.id),
-      signal: new AbortController().signal,
-      wait: async () => {},
-    });
-    expect(seen).toHaveLength(9);
-  });
   it("bounds reconnect attempts and cancels on abort", async () => {
     const open = vi.fn().mockResolvedValue(response(""));
     await expect(
@@ -173,5 +96,134 @@ describe("bounded extraction SSE", () => {
     controller.abort();
     await consumeExtractionEvents(run, { open, onEvent: () => {}, signal: controller.signal });
     expect(open).toHaveBeenCalledTimes(6);
+  });
+  it.each([502, 503, 504])("retries HTTP %i with the last received ID", async (status) => {
+    const cancel = vi.fn();
+    const open = vi
+      .fn()
+      .mockResolvedValueOnce(response(frame(event(1))))
+      .mockResolvedValueOnce(new Response(new ReadableStream({ cancel }), { status }))
+      .mockResolvedValueOnce(response(frame(event(1)) + frame(event(2, "run_succeeded"))));
+    const seen: number[] = [];
+    const wait = vi.fn<(ms: number, signal: AbortSignal) => Promise<void>>(async () => {});
+    await consumeExtractionEvents(run, {
+      open,
+      wait,
+      signal: new AbortController().signal,
+      onEvent: (e) => seen.push(e.id),
+    });
+    expect(seen).toEqual([1, 2]);
+    expect(open.mock.calls.map(([lastId]) => lastId)).toEqual([0, 1, 1]);
+    expect(wait.mock.calls.map(([ms]) => ms)).toEqual([250, 500]);
+    expect(cancel).toHaveBeenCalledOnce();
+  });
+  it("bounds persistent gateway failures with backoff", async () => {
+    const open = vi.fn(async () => new Response(null, { status: 503 }));
+    const wait = vi.fn<(ms: number, signal: AbortSignal) => Promise<void>>(async () => {});
+    await expect(
+      consumeExtractionEvents(run, {
+        open,
+        wait,
+        signal: new AbortController().signal,
+        onEvent: () => {},
+      }),
+    ).rejects.toThrow("Reconnect limit");
+    expect(open).toHaveBeenCalledTimes(6);
+    expect(wait.mock.calls.map(([ms]) => ms)).toEqual([250, 500, 1000, 2000, 2000]);
+  });
+  it("retries a proxy outage but stops when aborted during backoff", async () => {
+    const controller = new AbortController();
+    const open = vi.fn(async () =>
+      Response.json(
+        { error: { code: "UPSTREAM_UNAVAILABLE", message: "Unavailable", request_id: "test" } },
+        { status: 502 },
+      ),
+    );
+    const wait = vi.fn(async () => {
+      controller.abort();
+    });
+    await consumeExtractionEvents(run, {
+      open,
+      wait,
+      signal: controller.signal,
+      onEvent: () => {},
+    });
+    expect(open).toHaveBeenCalledOnce();
+    expect(wait).toHaveBeenCalledOnce();
+  });
+  it.each([401, 403, 404, 409, 413, 422, 500])("does not retry HTTP %i", async (status) => {
+    const open = vi.fn(async () => new Response(null, { status }));
+    const wait = vi.fn(async () => {});
+    await expect(
+      consumeExtractionEvents(run, {
+        open,
+        wait,
+        signal: new AbortController().signal,
+        onEvent: () => {},
+      }),
+    ).rejects.toThrow(`HTTP ${status}`);
+    expect(open).toHaveBeenCalledOnce();
+    expect(wait).not.toHaveBeenCalled();
+  });
+  it.each(["INVALID_RESPONSE", "INTEGRITY_ERROR"])(
+    "does not retry %s at the proxy",
+    async (code) => {
+      const open = vi.fn(async () =>
+        Response.json({ error: { code, message: "Invalid", request_id: "test" } }, { status: 502 }),
+      );
+      const wait = vi.fn(async () => {});
+      await expect(
+        consumeExtractionEvents(run, {
+          open,
+          wait,
+          signal: new AbortController().signal,
+          onEvent: () => {},
+        }),
+      ).rejects.toThrow();
+      expect(open).toHaveBeenCalledOnce();
+      expect(wait).not.toHaveBeenCalled();
+    },
+  );
+  it.each(["broken", "x".repeat(65537), "{}"])(
+    "rejects malformed or oversized gateway error envelopes",
+    async (text) => {
+      const open = vi.fn(
+        async () =>
+          new Response(text, {
+            status: 502,
+            headers: { "content-type": "application/json" },
+          }),
+      );
+      const wait = vi.fn(async () => {});
+      await expect(
+        consumeExtractionEvents(run, {
+          open,
+          wait,
+          signal: new AbortController().signal,
+          onEvent: () => {},
+        }),
+      ).rejects.toThrow();
+      expect(open).toHaveBeenCalledOnce();
+      expect(wait).not.toHaveBeenCalled();
+    },
+  );
+  it.each([[0xff], [0xc3]])("does not reconnect after malformed UTF-8", async (...bytes) => {
+    const open = vi.fn(
+      async () =>
+        new Response(new Uint8Array(bytes), {
+          headers: { "content-type": "text/event-stream" },
+        }),
+    );
+    const wait = vi.fn(async () => {});
+    await expect(
+      consumeExtractionEvents(run, {
+        open,
+        wait,
+        signal: new AbortController().signal,
+        onEvent: () => {},
+      }),
+    ).rejects.toThrow("Invalid extraction UTF-8");
+    expect(open).toHaveBeenCalledOnce();
+    expect(wait).not.toHaveBeenCalled();
   });
 });

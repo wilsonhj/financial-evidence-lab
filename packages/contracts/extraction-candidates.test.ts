@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import Ajv2020 from "ajv/dist/2020";
+import Ajv2020, { type ValidateFunction } from "ajv/dist/2020";
 import addFormats from "ajv-formats";
 import openapiTS, { type SchemaObject } from "openapi-typescript";
 import { beforeAll, describe, expect, it } from "vitest";
@@ -30,8 +30,21 @@ async function validators(path: string) {
   );
   const ajv = new Ajv2020({ strict: false, allErrors: true });
   addFormats(ajv);
-  return (name: string) =>
-    ajv.compile({ components: { schemas: bundled }, $ref: `#/components/schemas/${name}` });
+  // AJV caches by schema object identity. Reusing a validator by component name
+  // avoids recompiling the whole bundle for every negative fixture. Keep this
+  // cache local so root and reference contracts are still checked independently.
+  const compiled = new Map<string, ValidateFunction>();
+  return (name: string) => {
+    let validator = compiled.get(name);
+    if (!validator) {
+      validator = ajv.compile({
+        components: { schemas: bundled },
+        $ref: `#/components/schemas/${name}`,
+      });
+      compiled.set(name, validator);
+    }
+    return validator;
+  };
 }
 
 describe("read-only extraction candidates (ADR-0024 Amendment 1)", () => {

@@ -5,7 +5,7 @@ import { FIXTURE_RUN } from "../../../../lib/extraction/fixture";
 afterEach(() => vi.unstubAllEnvs());
 describe("mounted extraction proxy", () => {
   it("binds explicit source and refuses missing configuration", async () => {
-    vi.stubEnv("FEL_EVIDENCE_SOURCE", "fixture");
+    vi.stubEnv("FEL_DEPLOYMENT_MODE", "fixture").stubEnv("FEL_EVIDENCE_SOURCE", "fixture");
     expect(
       (
         await GET(new Request("http://web.test/api/extraction/permissions"), {
@@ -31,7 +31,7 @@ describe("mounted extraction proxy", () => {
     ).toBe(503);
   });
   it("mounts an incremental stream and releases it on client cancellation", async () => {
-    vi.stubEnv("FEL_EVIDENCE_SOURCE", "fixture");
+    vi.stubEnv("FEL_DEPLOYMENT_MODE", "fixture").stubEnv("FEL_EVIDENCE_SOURCE", "fixture");
     const response = await stream(
       new Request(`http://web.test/api/extraction/runs/${FIXTURE_RUN}/events`),
       { params: Promise.resolve({ runId: FIXTURE_RUN }) },
@@ -41,4 +41,14 @@ describe("mounted extraction proxy", () => {
     expect(new TextDecoder().decode((await reader.read()).value)).toContain("review_waiting");
     await reader.cancel();
   });
+});
+it("refuses every direct mutation/read alias in public mode", async () => {
+  vi.stubEnv("FEL_DEPLOYMENT_MODE", "public");
+  for (const handler of [GET, POST, DELETE]) {
+    const response = await handler(new Request("http://web.test/api/extraction/permissions"), {
+      params: Promise.resolve({ path: ["permissions"] }),
+    });
+    expect(response.status).toBe(503);
+    expect((await response.json()).error.code).toBe("PUBLIC_AUTH_NOT_READY");
+  }
 });

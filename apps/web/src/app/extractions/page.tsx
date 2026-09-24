@@ -17,6 +17,7 @@ export default async function ExtractionsPage({
   try {
     const source = getExtractionSource(),
       query = pageQuery(await searchParams);
+    if (!query.has("state")) query.set("state", "needs_review");
     const [page, permissions] = await Promise.all([
       source.read("proposals", guards.proposals, query),
       source.read("permissions", guards.permissions),
@@ -29,8 +30,7 @@ export default async function ExtractionsPage({
         </p>
         <form method="get">
           <label htmlFor="queue-state">State</label>
-          <select name="state" id="queue-state" defaultValue={query.get("state") ?? ""}>
-            <option value="">All states</option>
+          <select name="state" id="queue-state" defaultValue={query.get("state") ?? "needs_review"}>
             {["proposed", "needs_review", "accepted", "rejected", "superseded"].map((s) => (
               <option key={s}>{s}</option>
             ))}

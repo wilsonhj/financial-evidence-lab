@@ -1,6 +1,5 @@
 import "node:process";
 import { fixtureStream } from "./fixture-stream";
-import { fixturePage } from "../data/pagination";
 import { fixtureAction } from "./fixture-actions";
 import { MOCK_CORPUS_VERSION_ID } from "../observatory/fixtures/synthetic-trace";
 import rawPayload from "@fel/contracts/fixtures/extraction-payload.json";
@@ -140,28 +139,22 @@ export function initialFixture() {
   };
 }
 export type FixtureState = ReturnType<typeof initialFixture>;
-class FixturePage extends Error {}
-/** The active filters belong in the scope so a cursor cannot outlive them. */
-const scopeFor = (base: string, query: URLSearchParams, keys: string[]) =>
-  [base, ...keys.map((key) => `${key}=${query.get(key) ?? ""}`)].join("|");
-/** Reuses the reader surface's scope-bound cursor so one token format exists. */
 function page<T>(items: T[], query: URLSearchParams, scope: string) {
-  const limit = query.get("limit"),
-    cursor = query.get("cursor");
-  const result = fixturePage(
-    items,
-    {
-      ...(limit === null ? {} : { limit: Number(limit) }),
-      ...(cursor === null ? {} : { cursor }),
-    },
-    scope,
-    FixturePage,
-  );
+  const limit = Number(query.get("limit") ?? 50);
+  const cursor = query.get("cursor");
+  let offset = 0;
+  if (cursor) {
+    const [tag, index] = cursor.split(":");
+    if (tag !== scope || !index || !/^\d+$/.test(index)) throw new Error("Invalid fixture cursor");
+    offset = Number(index);
+    if (!Number.isSafeInteger(offset) || offset >= items.length)
+      throw new Error("Invalid fixture cursor");
+  }
   return {
-    items: result.items,
-    limit: result.limit,
-    next_cursor: result.nextCursor,
-    previous_cursor: result.previousCursor,
+    items: items.slice(offset, offset + limit),
+    limit,
+    next_cursor: offset + limit < items.length ? `${scope}:${offset + limit}` : null,
+    previous_cursor: offset > 0 ? `${scope}:${Math.max(0, offset - limit)}` : null,
   };
 }
 const json = (value: unknown, tag?: string) =>
@@ -186,25 +179,17 @@ export function fixtureFetch(state: FixtureState): typeof fetch {
       if (path === `${workspace}/extractions`)
         return json(
           page(
-            state.proposals.filter(
-              (p) =>
-                (!query.has("run_id") || p.run_id === query.get("run_id")) &&
-                (!query.has("state") || p.state === query.get("state")),
-            ),
+            state.proposals.filter((p) => !query.has("state") || p.state === query.get("state")),
             query,
-            scopeFor("proposals", query, ["state", "run_id"]),
+            "proposals",
           ),
         );
       if (path === `${workspace}/extraction-conflicts`)
         return json(
           page(
-            state.conflicts.filter(
-              (c) =>
-                (!query.has("run_id") || c.occurrence_run_id === query.get("run_id")) &&
-                (!query.has("status") || c.status === query.get("status")),
-            ),
+            state.conflicts.filter((c) => !query.has("status") || c.status === query.get("status")),
             query,
-            scopeFor("conflicts", query, ["status", "run_id"]),
+            "conflicts",
           ),
         );
       const [, , resource, id, action, versionId] = path.split("/");
@@ -243,7 +228,7 @@ export function fixtureFetch(state: FixtureState): typeof fetch {
             ...page(
               state.events.filter((e) => e.run_id === id),
               query,
-              `events|run=${id}`,
+              "events",
             ),
             run_id: id,
           });
@@ -260,8 +245,7 @@ export function fixtureFetch(state: FixtureState): typeof fetch {
         const versions = state.versions
           .filter((v) => v.record_id === id)
           .sort((a, b) => b.version - a.version);
-        if (action === "versions" && !versionId)
-          return json(page(versions, query, `versions|record=${id}`));
+        if (action === "versions" && !versionId) return json(page(versions, query, "versions"));
         const approved = versionId ? versions.find((v) => v.version_id === versionId) : versions[0];
         if (approved) return json(approved, `"${approved.version}"`);
       }

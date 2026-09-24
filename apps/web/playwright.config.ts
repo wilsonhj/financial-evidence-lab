@@ -39,6 +39,8 @@ export default defineConfig({
       // Fixture mode binds both the Observatory mock source and the reader
       // evidence source to the committed synthetic trace/filing — no network,
       // no bearer token. This is the only env the suite needs.
+      FEL_DEPLOYMENT_MODE: "fixture",
+      FEL_API_BEARER_TOKEN: "",
       FEL_EVIDENCE_SOURCE: "fixture",
     },
   },

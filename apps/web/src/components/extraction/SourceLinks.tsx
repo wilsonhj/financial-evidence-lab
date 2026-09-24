@@ -67,6 +67,8 @@ export async function SourceLinks({
             source &&
             new URLSearchParams({
               as_of: source.as_of,
+              // Empty explicitly overrides a configured reader corpus. Omitting
+              // this key would substitute today's deployment pin for history.
               corpus_version_id: source.corpus_version_id ?? "",
               document_version_id: edge.document_version_id,
               span: edge.source_span_id,

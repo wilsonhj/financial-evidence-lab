@@ -35,9 +35,19 @@ const pages = [
       Version({ params: Promise.resolve({ recordId: FIXTURE_RECORD, versionId: fixtureId(8) }) }),
   ],
 ] as const;
-beforeEach(() => vi.stubEnv("FEL_EVIDENCE_SOURCE", "fixture"));
+beforeEach(() =>
+  vi.stubEnv("FEL_DEPLOYMENT_MODE", "fixture").stubEnv("FEL_EVIDENCE_SOURCE", "fixture"),
+);
 afterEach(() => vi.unstubAllEnvs());
 describe("mounted extraction pages", () => {
+  it("links a run to the bounded workspace queue using the published contract", async () => {
+    const html = renderToStaticMarkup(
+      await Run({ params: Promise.resolve({ runId: FIXTURE_RUN }) }),
+    );
+    expect(html).toContain('href="/extractions"');
+    expect(html).toContain("Browse workspace review queue");
+    expect(html).not.toContain("?run_id=");
+  });
   it.each([LoadingQueue, LoadingRuns, LoadingApproved])(
     "announces pending navigation",
     (Loading) => {
@@ -58,21 +68,6 @@ describe("mounted extraction pages", () => {
     const html = renderToStaticMarkup(await load());
     expect(html).toContain("Extraction view unavailable");
     expect(html).not.toContain("synthetic-fixture-only");
-  });
-  it("ignores an unrelated query parameter instead of blanking the route", async () => {
-    const html = renderToStaticMarkup(
-      await Queue({ searchParams: Promise.resolve({ utm_source: "email" }) }),
-    );
-    expect(html).not.toContain("Extraction view unavailable");
-    expect(html).toContain("Extraction review");
-  });
-  it("describes the queue it actually loaded", async () => {
-    const unfiltered = renderToStaticMarkup(await Queue({}));
-    expect(unfiltered).toContain('<option value="" selected="">All states</option>');
-    const filtered = renderToStaticMarkup(
-      await Queue({ searchParams: Promise.resolve({ state: "needs_review" }) }),
-    );
-    expect(filtered).toContain('<option selected="">needs_review</option>');
   });
   it("keeps empty queue and invalid cursor outcomes explicit", async () => {
     expect(

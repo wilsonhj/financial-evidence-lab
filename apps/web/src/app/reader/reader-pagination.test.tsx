@@ -14,7 +14,11 @@ import ReaderPage from "./[documentId]/page";
 import { EvidenceReader } from "../../components/EvidenceReader";
 import { getEvidenceSource } from "../../lib/data/server";
 import { FixtureEvidenceSource } from "../../lib/data/fixture-source";
-import { EvidenceApiError, EvidenceContractError } from "../../lib/data/http-source";
+import {
+  EvidenceApiError,
+  EvidenceContractError,
+  HttpEvidenceSource,
+} from "../../lib/data/http-source";
 import { DOC_10Q_ID, DOC_10QA_ID } from "../../lib/fixtures/synthetic-filing";
 import { findOne } from "../../lib/test-support/shallow-tree";
 
@@ -205,4 +209,34 @@ describe("reader page scope and bounded history", () => {
     read.mockRejectedValueOnce(error);
     await expect(ReaderPage({ params: params() })).rejects.toBe(error);
   });
+});
+
+it("renders an actual HTTP integrity failure without verified reader content", async () => {
+  vi.mocked(getEvidenceSource).mockReturnValue(
+    new HttpEvidenceSource({
+      baseUrl: "https://api.example.test",
+      entityIds: [],
+      token: "private-token",
+      fetchImpl: async () =>
+        new Response(
+          JSON.stringify({
+            error: {
+              code: "INTEGRITY_ERROR",
+              message: "private-message",
+              request_id: "private-request",
+              details: { secret: "private-details" },
+            },
+          }),
+          { status: 500, headers: { "Content-Type": "application/json" } },
+        ),
+    }),
+  );
+  const html = renderToStaticMarkup(await ReaderPage({ params: params() }));
+  expect(html).toContain('role="alert"');
+  expect(html).toContain("Evidence response rejected");
+  expect(html).toContain("No verified quote is shown.");
+  expect(html).toContain("Try again");
+  expect(html).not.toContain("Cited source span");
+  expect(html).not.toContain("Related filing history");
+  expect(html).not.toContain("private-");
 });

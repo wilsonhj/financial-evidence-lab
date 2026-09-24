@@ -60,8 +60,13 @@ P3 = datetime(2026, 7, 1, 0, 0, tzinfo=UTC)
 
 
 @pytest.fixture()
-def api_client(monkeypatch: pytest.MonkeyPatch):
+def api_client(monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path):
     monkeypatch.setenv("FEL_DATABASE_URL", os.environ["TEST_DATABASE_URL"])
+    monkeypatch.setenv("FEL_DEPLOYMENT_MODE", "reader-smoke")
+    monkeypatch.setenv("FEL_AUTH_MODE", "mock")
+    monkeypatch.setenv("FEL_READER_SMOKE_TARGET", "temporal-tests")
+    monkeypatch.setenv("FEL_STORAGE_DIR", str(tmp_path))
+    (tmp_path / ".reader-smoke-target").write_bytes(b"temporal-tests")
     from fastapi.testclient import TestClient
 
     from app.main import app

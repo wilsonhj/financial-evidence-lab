@@ -18,6 +18,33 @@ import {
 } from "../../lib/extraction/review-state";
 import { PayloadFields } from "./display";
 
+function isReviewableState(state: Proposal["state"]): boolean {
+  switch (state) {
+    case "proposed":
+    case "needs_review":
+      return true;
+    case "accepted":
+    case "rejected":
+    case "superseded":
+      return false;
+    default: {
+      const _never: never = state;
+      return _never;
+    }
+  }
+}
+
+function keepReviewableIds(
+  ids: string[],
+  rows: Proposal[],
+  states: Record<string, string> = {},
+): string[] {
+  return ids.filter((id) => {
+    const state = states[id] ?? rows.find((row) => row.id === id)?.state;
+    return state === "proposed" || state === "needs_review" ? isReviewableState(state) : false;
+  });
+}
+
 export function ReviewQueue({
   proposals,
   permissions: initialPermissions,
@@ -80,15 +107,25 @@ export function ReviewQueue({
       );
       setGroups(conflicts);
       if (!contextOnly) {
-        setRows(rows.map((p) => current.find((c) => c.id === p.id) ?? p));
-        setCompared(true);
+        const nextRows = rows.map((p) => current.find((c) => c.id === p.id) ?? p);
+        const remaining = keepReviewableIds(selectedIds, nextRows);
+        setRows(nextRows);
+        setSelectedIds(remaining);
+        setCompared(remaining.length > 0);
+        setWinners((ids) => ids.filter((id) => remaining.includes(id)));
+        if (!remaining.length) {
+          setGroups([]);
+          setStale(false);
+        }
         pending.current = undefined;
+        setMessage(
+          remaining.length
+            ? "Current versions loaded below. Compare them with your preserved draft, then use the refreshed versions explicitly."
+            : "Selected proposals are no longer reviewable. Choose another pending proposal.",
+        );
+      } else {
+        setMessage("Complete conflict membership loaded. Choose the winners explicitly.");
       }
-      setMessage(
-        contextOnly
-          ? "Complete conflict membership loaded. Choose the winners explicitly."
-          : "Current versions loaded below. Compare them with your preserved draft, then use the refreshed versions explicitly.",
-      );
     } catch (e) {
       setMessage(e instanceof Error ? e.message : "Unable to refresh comparison");
     } finally {
@@ -122,13 +159,19 @@ export function ReviewQueue({
       )
         throw new Error("Invalid review receipt; refresh before proceeding");
       setResult(value);
-      setRows(
-        rows.map((p) =>
-          value.proposal_states[p.id]
-            ? { ...p, state: value.proposal_states[p.id]!, version: value.proposal_versions[p.id]! }
-            : p,
-        ),
+      const nextRows = rows.map((p) =>
+        value.proposal_states[p.id]
+          ? { ...p, state: value.proposal_states[p.id]!, version: value.proposal_versions[p.id]! }
+          : p,
       );
+      const remaining = keepReviewableIds(selectedIds, nextRows, value.proposal_states);
+      setRows(nextRows);
+      setSelectedIds(remaining);
+      setCompared(false);
+      setWinners((ids) => ids.filter((id) => remaining.includes(id)));
+      if (!remaining.length) {
+        setGroups([]);
+      }
       setMessage(
         `Atomic ${action} completed for ${selected.length} selected proposals. Unselected proposals were not submitted.`,
       );
@@ -155,6 +198,7 @@ export function ReviewQueue({
               <th>Select</th>
               <th>Metric</th>
               <th>Kind</th>
+              <th>Source run</th>
               <th>State</th>
               <th>Confidence</th>
               <th>Blockers</th>
@@ -185,6 +229,9 @@ export function ReviewQueue({
                   <Link href={`/extractions/${p.id}`}>{p.metric_id}</Link>
                 </td>
                 <td>{p.kind}</td>
+                <td>
+                  <Link href={`/extraction-runs/${p.run_id}`}>Run {p.run_id}</Link>
+                </td>
                 <td>
                   {p.state} (v{p.version})
                 </td>

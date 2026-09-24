@@ -1,0 +1,45 @@
+{
+  "profile": "scaled-local-25-users",
+  "full_reference_profile_verified": false,
+  "passed": false,
+  "setup_and_warmup_passed": true,
+  "operations": {
+    "create": {
+      "samples": 100,
+      "complete": true,
+      "failures": 0,
+      "p95_ms": 131.302458,
+      "threshold_ms": 500,
+      "min_wave_overlap": 25,
+      "passed": true
+    },
+    "review": {
+      "samples": 100,
+      "complete": true,
+      "failures": 0,
+      "p95_ms": 1002.227875,
+      "threshold_ms": 1000,
+      "min_wave_overlap": 25,
+      "passed": false
+    },
+    "waiting_reconnect": {
+      "samples": 100,
+      "complete": true,
+      "failures": 0,
+      "p95_ms": 127.150375,
+      "threshold_ms": 2000,
+      "min_wave_overlap": 25,
+      "passed": true
+    },
+    "terminal_reconnect": {
+      "samples": 100,
+      "complete": true,
+      "failures": 0,
+      "p95_ms": 120.131833,
+      "threshold_ms": 2000,
+      "min_wave_overlap": 25,
+      "passed": true
+    }
+  },
+  "execution_error": null
+}

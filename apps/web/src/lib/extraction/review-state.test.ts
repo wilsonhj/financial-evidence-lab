@@ -3,6 +3,31 @@ import command from "@fel/contracts/fixtures/extraction-review-command.json";
 import { buildReview, prepareRequest } from "./review-state";
 import { initialFixture } from "./fixture";
 describe("intentional extraction review", () => {
+  it.each([
+    ["edit", "expected_versions"],
+    ["edit", "action"],
+    ["merge", "expected_versions"],
+    ["merge", "action"],
+  ] as const)("rejects trailing %s replacement command member %s", (action, member) => {
+    const selected = initialFixture()
+      .proposals.slice(0, 2)
+      .map((p) => ({ ...p, conflict_ids: [] }));
+    const p = selected[0]!;
+    const edit = JSON.stringify(
+      selected.map((p) => ({ extraction_id: p.id, payload: p.payload, evidence: p.evidence })),
+    );
+    const merge = JSON.stringify({ payload_source_id: p.id });
+    const patch = action === "edit" ? edit : merge;
+    const overrideAction = action === "edit" ? "merge" : "edit";
+    const overridePatch = action === "edit" ? merge : edit;
+    const trailing =
+      member === "expected_versions"
+        ? `,"expected_versions":${JSON.stringify(Object.fromEntries(selected.map((p) => [p.id, p.version + 1])))}`
+        : `,"action":"${overrideAction}","patch":${overridePatch}`;
+    expect(() =>
+      buildReview(selected, action, "Reviewed version", patch + trailing, [], []),
+    ).toThrow();
+  });
   it("names only selected IDs/versions and preserves explicit full replacement JSON bytes", () => {
     const p = initialFixture().proposals[0]!;
     const edit = JSON.stringify([
@@ -44,25 +69,6 @@ describe("intentional extraction review", () => {
     expect(JSON.parse(body).conflict_resolution[0].member_versions).toEqual(
       state.conflicts[0]!.member_versions,
     );
-  });
-  it("rejects replacement JSON that redefines the command's own targets", () => {
-    const state = initialFixture();
-    const [a, b] = [state.proposals[0]!, state.proposals[1]!];
-    const injected =
-      JSON.stringify([{ extraction_id: a.id, payload: a.payload, evidence: a.evidence }]) +
-      `, "extraction_ids": ["${b.id}"], "expected_versions": {"${b.id}": ${b.version}}`;
-    expect(() =>
-      buildReview([a], "edit", "Source rechecked", injected, state.conflicts, [a.id]),
-    ).toThrow("must not redefine");
-  });
-  it("rejects replacement JSON that appends an unrelated top-level key", () => {
-    const p = initialFixture().proposals[0]!;
-    const injected =
-      JSON.stringify([{ extraction_id: p.id, payload: p.payload, evidence: p.evidence }]) +
-      ', "reason": "silently replaced"';
-    expect(() =>
-      buildReview([p], "edit", "Source rechecked", injected, initialFixture().conflicts, [p.id]),
-    ).toThrow("must not redefine");
   });
   it("reuses a key only for identical path/method/preconditions/body", () => {
     const first = prepareRequest("review", "POST", JSON.stringify(command), null);

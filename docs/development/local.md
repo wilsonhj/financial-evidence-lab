@@ -59,7 +59,7 @@ pinned to 3.11 because CI builds against it.
 ## Option A: fixture UI
 
 ```sh
-FEL_EVIDENCE_SOURCE=fixture corepack pnpm --filter @fel/web dev
+FEL_DEPLOYMENT_MODE=fixture FEL_API_BEARER_TOKEN= FEL_EVIDENCE_SOURCE=fixture corepack pnpm --filter @fel/web dev
 ```
 
 Open <http://localhost:3000>. The filing reader and Search Observatory use
@@ -146,9 +146,12 @@ up in PostgreSQL; the role embedded in a token is not trusted as authorization.
 ### Start the API
 
 ```sh
+export FEL_DEPLOYMENT_MODE=synthetic-http
+export FEL_SYNTHETIC_HTTP_TARGET=local-development
 export FEL_AUTH_MODE=mock
+export FEL_ALLOW_MOCK_LLM=1
 export FEL_STORAGE_DIR="$PWD/.local/evidence"
-mkdir -p "$FEL_STORAGE_DIR"
+PYTHONPATH=apps/api .venv/bin/python -c 'import os; from pathlib import Path; from benchmarks.synthetic_target import prepare_synthetic_target; prepare_synthetic_target(os.environ["FEL_DATABASE_URL"], Path(os.environ["FEL_STORAGE_DIR"]), os.environ["FEL_SYNTHETIC_HTTP_TARGET"], "fel_dev")'
 
 PYTHONPATH=apps/api:packages/providers:packages/retrieval:packages/ontology:workers/src \
   .venv/bin/uvicorn app.main:app \
@@ -240,59 +243,43 @@ extraction output to in-memory stores that are discarded on exit, for
 smoke-testing the pipeline without seeding an `extraction_runs` row; see the
 runbook for when that applies.
 
-## Option C: Next.js against the real API
+## Option C: dedicated HTTP acceptance
 
-The HTTP source calls the composite reader endpoint from the Next.js server.
-It requires one or more entity UUIDs already present in the corpus. There is
-no `entities` table to look up directly; entity UUIDs live on ingested rows.
-Against a populated `FEL_DATABASE_URL`, find one with:
+The public web default deliberately returns503 until per-user sessions exist.
+A deployment bearer is no longer a way to serve an ordinary public reader.
+Use fixture UI for normal offline development, or a dedicated synthetic workflow
+for actual API/browser integration. Never switch a real user's deployment to a
+smoke mode to bypass the guard.
 
-```sh
-psql "$FEL_DATABASE_URL" -c "SELECT DISTINCT entity_id FROM documents ORDER BY entity_id LIMIT 5;"
-```
-
-**This returns zero rows if you have only followed the steps above, and that is
-not a mistake on your part.** Two things stand between Option B and a populated
-corpus, and neither is a step this guide can give you:
-
-1. Nothing here enqueues a job. `python -m fel_workers run` drains the `jobs`
-   table and exits; after the Option B steps that table is empty, so the worker
-   correctly reports `0 job(s) completed`.
-2. Mock mode cannot produce documents even with a job queued.
-   `MockSecClient.submissions` (`packages/providers/fel_providers/mocks.py:354`)
-   returns an empty `accessionNumber` list for every CIK by design, so discovery
-   finds nothing to fetch and `documents` is never written.
-
-Populating the corpus therefore requires live SEC ingestion, which needs the
-configured compliant identity and rate limiter — see the `FEL_SEC_LIVE` section
-above, and note that casual use is discouraged. If you only want to see the
-reader render, use **Option A (fixture mode)**, which needs no database and no
-entity ids at all. Option C is for verifying the real HTTP path once you already
-have a populated database.
+For local reader acceptance, allocate a new migrated empty evidence database and
+empty storage directory; keep its DSN in FEL_DATABASE_URL without printing it.
+Then select the explicit target and run the existing worker/browser harness:
 
 ```sh
-export FEL_EVIDENCE_SOURCE=http
-export FEL_API_BASE_URL=http://localhost:8000
-export FEL_API_BEARER_TOKEN="$FEL_API_BEARER_TOKEN"
-export FEL_ENTITY_IDS=33333333-3333-4333-8333-333333333333
-
-# Optional point-in-time/version pins:
-export FEL_AS_OF=2025-12-31T23:59:59Z
-export FEL_CORPUS_VERSION_ID=44444444-4444-4444-8444-444444444444
-
-corepack pnpm --filter @fel/web dev
+export FEL_DEPLOYMENT_MODE=reader-smoke
+export FEL_AUTH_MODE=mock
+export FEL_READER_SMOKE_TARGET=local-reader
+export FEL_STORAGE_DIR="$PWD/.local/reader-smoke"
+export READER_SMOKE_MANIFEST="$PWD/.local/reader-manifest.json"
+export FEL_ACCEPTANCE_PYTHON="$PWD/.venv/bin/python"
+export PYTHONPATH=.:apps/api:workers/src:packages/providers:packages/ontology:packages/retrieval:packages/retrieval-evals
+.venv/bin/python -m evals.harness.reader_prod_smoke setup --manifest "$READER_SMOKE_MANIFEST" --dedicated-target "$FEL_READER_SMOKE_TARGET"
+corepack pnpm --filter @fel/web exec playwright test --config playwright.reader-prod-smoke.config.ts
 ```
 
-All these variables are server-only. Do not prefix bearer tokens with
-`NEXT_PUBLIC_` or import runtime configuration into client components.
+The setup creates the dedicated storage marker and real immutable fixture data.
+Playwright propagates mode/target to its API and all reader variants. Hosted
+acceptance has additional protected target/revision checks in the reader-smoke
+report README; local tests do not prove hosted readiness.
 
-The HTTP source fails **closed at request time** when required configuration is
-absent — it does not fail at startup. `FEL_EVIDENCE_SOURCE=http` with nothing
-else set still reaches "Ready"; the first request then renders an explicit
-"Evidence source is not configured" state rather than falling back to fixture
-data. The guarantee is that there is no silent fixture fallback in production,
-not that the process refuses to boot. In production, non-loopback API URLs must
-use HTTPS.
+Extraction cross-stack uses synthetic-http, an explicit FEL_SYNTHETIC_HTTP_TARGET,
+local fel_extraction_acceptance* database and the canonical CROSS_STACK_MANIFEST
+emitted by its seeder. Load acceptance retains its local fel_load* database rule;
+set the same explicit mode/target and use fresh empty storage so its runner can
+create the matching marker. Existing nonempty unmarked storage is never adopted.
+See the extraction acceptance workflow and apps/api/EXTRACTION_LOAD.md for their
+unchanged workloads and thresholds. These synthetic modes cannot authorize live
+provider calls or replace public Supabase identity.
 
 ## Useful environment variables
 

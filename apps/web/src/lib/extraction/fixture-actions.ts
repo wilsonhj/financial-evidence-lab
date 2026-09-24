@@ -75,16 +75,18 @@ export async function fixtureAction(
   } catch {
     return fixtureError(422, "VALIDATION_ERROR");
   }
-  // The endpoint alone decides the operation. Letting a failed body guard fall
-  // through would check the wrong capability and enter the wrong branch.
-  let action: "correct" | "rerun" | "cancel" | "create" | Schemas["ReviewCommand"]["action"];
-  if (path.endsWith("/review")) {
-    if (!guards.review(input)) return fixtureError(422, "VALIDATION_ERROR");
-    action = input.action;
-  } else if (path.endsWith("/corrections")) action = "correct";
-  else if (path.endsWith("/rerun")) action = "rerun";
-  else if (init.method === "DELETE") action = "cancel";
-  else action = "create";
+  if (path.endsWith("/review") && !guards.review(input))
+    return fixtureError(422, "VALIDATION_ERROR");
+  const action =
+    path.endsWith("/review") && guards.review(input)
+      ? input.action
+      : path.endsWith("/corrections")
+        ? "correct"
+        : path.endsWith("/rerun")
+          ? "rerun"
+          : init.method === "DELETE"
+            ? "cancel"
+            : "create";
   if (!state.permissions.allowed_actions.includes(action)) return fixtureError(403, "FORBIDDEN");
   const ledger = receipts.get(state) ?? new Map();
   receipts.set(state, ledger);
@@ -125,7 +127,7 @@ export async function fixtureAction(
             as_of: input.as_of,
             modes: input.modes,
             corpus_version_id: input.corpus_version_id ?? parent.corpus_version_id,
-            ...(input.limits ? { limits: input.limits } : {}),
+            limits: input.limits ?? parent.limits,
           }
         : {}),
     };
@@ -156,18 +158,28 @@ export async function fixtureAction(
     if (!prior) return fixtureError(404, "NOT_FOUND");
     if (headers.get("if-match") !== `"${prior.version}"`)
       return fixtureError(412, "PRECONDITION_FAILED");
-    // A correction has no source run of its own. Pinning an arbitrary run would
-    // invent provenance, so the prior version's own context carries forward.
     const current = {
-      ...approved(input.payload, input.evidence, input.reason, draft.runs[0]!),
-      record_id: prior.record_id,
+      ...prior,
+      version_id: crypto.randomUUID(),
       version: prior.version + 1,
       parent_version_id: prior.version_id,
-      ontology_version: prior.ontology_version,
-      validation_context: prior.validation_context,
+      kind: input.payload.kind,
+      metric_id: input.payload.metric_id,
+      payload: structuredClone(input.payload),
+      evidence: structuredClone(input.evidence),
+      evidence_manifest_hash: `sha256:${"b".repeat(64)}`,
+      approved_by: fixtureId(9),
+      created_at: new Date().toISOString(),
+      approval_reason: input.reason,
     };
     draft.versions.push(current);
-    response = Response.json(current, { status: 201, headers: { etag: `"${current.version}"` } });
+    response = Response.json(current, {
+      status: 201,
+      headers: {
+        etag: `"${current.version}"`,
+        location: `/v1/approved-extractions/${current.record_id}/versions/${current.version_id}`,
+      },
+    });
   } else if (resource === "extractions" && id === "review") {
     if (!guards.review(input)) return fixtureError(422, "VALIDATION_ERROR");
     const selected = input.extraction_ids.map((id) => draft.proposals.find((p) => p.id === id));

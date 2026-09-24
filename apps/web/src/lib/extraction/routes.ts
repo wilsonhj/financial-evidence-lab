@@ -42,13 +42,13 @@ export function resolveRoute(path: string, method: string, workspace: string): R
         return {
           upstream: `/v1/workspaces/${workspace}/extractions`,
           output: guards.proposals,
-          query: [...paging, "state", "run_id"],
+          query: [...paging, "state"],
         };
       if (resource === "conflicts")
         return {
           upstream: `/v1/workspaces/${workspace}/extraction-conflicts`,
           output: guards.conflicts,
-          query: [...paging, "run_id", "status"],
+          query: [...paging, "status"],
         };
     }
     if (id && parts.length === 2) {
@@ -143,7 +143,6 @@ export function queryFor(route: Route, params: URLSearchParams): string {
     if (key === "cursor" && !cursor(value)) throw new Error("Invalid cursor");
     if (key === "limit" && (!/^[1-9]\d{0,2}$/.test(value) || Number(value) > 200))
       throw new Error("Invalid limit");
-    if (key === "run_id" && !uuid(value)) throw new Error("Invalid run");
     if (
       key === "state" &&
       !["proposed", "needs_review", "accepted", "rejected", "superseded"].includes(value)
@@ -182,8 +181,6 @@ export function matchesResource(
       if (!object(item)) return false;
       if (route.workspace && !sameId(item.workspace_id, route.workspace)) return false;
       if (route.record && !sameId(item.record_id, route.record)) return false;
-      const run = query.get("run_id");
-      if (run && !sameId(item.run_id ?? item.occurrence_run_id, run)) return false;
       for (const filter of ["state", "status"])
         if (query.has(filter) && item[filter] !== query.get(filter)) return false;
       const id = String(item.version_id ?? item.id).toLowerCase();

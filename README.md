@@ -1,5 +1,7 @@
 # Financial Evidence Lab
 
+**Author:** [Hirokazu J Wilson](https://github.com/wilsonhj)
+
 [![CI](https://github.com/wilsonhj/financial-evidence-lab/actions/workflows/ci.yml/badge.svg)](https://github.com/wilsonhj/financial-evidence-lab/actions/workflows/ci.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](./LICENSE)
 

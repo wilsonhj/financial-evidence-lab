@@ -2,10 +2,18 @@ import { describe, expect, it } from "vitest";
 
 import { EvidenceConfigurationError, loadEvidenceRuntimeConfig } from "./runtime-config";
 
+const TOKEN = `mock.${Buffer.from(JSON.stringify({ org_id: "11111111-1111-4111-8111-111111111111", sub: "22222222-2222-4222-8222-222222222222", role: "owner" })).toString("base64url")}`;
+const SMOKE = {
+  FEL_DEPLOYMENT_MODE: "reader-smoke",
+  FEL_AUTH_MODE: "mock",
+  FEL_READER_SMOKE_TARGET: "unit-reader",
+};
+
 const HTTP_ENV = {
+  ...SMOKE,
   FEL_EVIDENCE_SOURCE: "http",
   FEL_API_BASE_URL: "https://api.example.test/",
-  FEL_API_BEARER_TOKEN: "server-secret",
+  FEL_API_BEARER_TOKEN: TOKEN,
   FEL_ENTITY_IDS: "11111111-1111-4111-8111-111111111111, 22222222-2222-4222-8222-222222222222",
 };
 
@@ -15,7 +23,9 @@ describe("loadEvidenceRuntimeConfig", () => {
     expect(() => loadEvidenceRuntimeConfig({ FEL_EVIDENCE_SOURCE: "auto" })).toThrow(
       EvidenceConfigurationError,
     );
-    expect(loadEvidenceRuntimeConfig({ FEL_EVIDENCE_SOURCE: "fixture" })).toEqual({
+    expect(
+      loadEvidenceRuntimeConfig({ FEL_DEPLOYMENT_MODE: "fixture", FEL_EVIDENCE_SOURCE: "fixture" }),
+    ).toEqual({
       mode: "fixture",
     });
   });
@@ -38,7 +48,7 @@ describe("loadEvidenceRuntimeConfig", () => {
     ).toEqual({
       mode: "http",
       baseUrl: "https://api.example.test",
-      token: "server-secret",
+      token: TOKEN,
       entityIds: ["11111111-1111-4111-8111-111111111111", "22222222-2222-4222-8222-222222222222"],
       asOf: "2026-07-01T00:00:00Z",
       corpusVersionId: "33333333-3333-4333-8333-333333333333",

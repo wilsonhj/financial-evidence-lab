@@ -1,9 +1,9 @@
 """Authentication boundary.
 
 TokenVerifier is the frozen seam: the mock verifier decodes unsigned
-development tokens; the Supabase implementation (JWKS signature checks
-against SUPABASE_URL) is integration-credentialed work and plugs in behind
-the same protocol without touching callers. Membership/role is checked
+development tokens; the Supabase implementation verifies asymmetric signatures
+against the explicitly configured issuer behind the same protocol.
+Membership/role is checked
 against the memberships table, never trusted from the claim alone, and
 user_metadata is never consulted.
 """
@@ -33,6 +33,10 @@ class TokenVerificationError(Exception):
     pass
 
 
+class TokenVerifierUnavailable(Exception):
+    """Trusted identity material is unavailable; never fall back to mock."""
+
+
 class TokenVerifier(Protocol):
     def verify(self, token: str) -> TenantContext: ...
 
@@ -46,12 +50,16 @@ class MockTokenVerifier:
             raise TokenVerificationError("unsupported token format")
         try:
             payload = json.loads(base64.urlsafe_b64decode(token[5:] + "=="))
-        except (ValueError, binascii.Error) as exc:
+        except (ValueError, binascii.Error, RecursionError) as exc:
             raise TokenVerificationError("undecodable token") from exc
+        if not isinstance(payload, dict):
+            raise TokenVerificationError("claims must be an object")
         try:
             org_id, user_id, role = payload["org_id"], payload["sub"], payload["role"]
         except KeyError as exc:
             raise TokenVerificationError(f"missing claim: {exc}") from exc
+        if not all(isinstance(value, str) and value.strip() for value in (org_id, user_id, role)):
+            raise TokenVerificationError("claims must be nonempty strings")
         if role not in ROLES:
             raise TokenVerificationError("unknown role")
         return TenantContext(org_id=org_id, user_id=user_id, role=role)

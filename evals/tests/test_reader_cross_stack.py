@@ -144,7 +144,7 @@ def test_401_403_5xx_never_surface_as_404() -> None:
     assert "not_found" not in kinds
     assert "authentication" in kinds
     assert "forbidden" in kinds
-    assert "unavailable" in kinds
+    assert "integrity" in kinds
 
 
 def test_http_mode_cannot_fall_back_to_fixtures_when_stack_available() -> None:
@@ -423,6 +423,10 @@ def stack_reader(qa_database_url: str, tmp_path: Path, monkeypatch: pytest.Monke
 
     monkeypatch.setenv("FEL_DATABASE_URL", qa_database_url)
     monkeypatch.setenv("FEL_STORAGE_DIR", str(tmp_path))
+    monkeypatch.setenv("FEL_DEPLOYMENT_MODE", "reader-smoke")
+    monkeypatch.setenv("FEL_AUTH_MODE", "mock")
+    monkeypatch.setenv("FEL_READER_SMOKE_TARGET", "reader-cross-stack-tests")
+    (tmp_path / ".reader-smoke-target").write_bytes(b"reader-cross-stack-tests")
 
     org_id, user_id = str(uuid.uuid4()), str(uuid.uuid4())
     with psycopg.connect(qa_database_url) as conn:
@@ -560,6 +564,7 @@ def test_stack_corrupt_span_hash_returns_integrity_error_not_404(
     response = client.get(f"/v1/documents/{ids['target_id']}/reader", headers=_auth_headers(org))
     assert response.status_code == 500
     assert response.json()["error"]["code"] == "INTEGRITY_ERROR"
+    assert rcs.classify_http_failure(response.status_code, response.json()) == "integrity"
     assert response.status_code != 404
 
 
@@ -583,3 +588,52 @@ def test_reader_page_coverage_never_claims_unloaded_history():
 
 def test_reader_413_is_explicit_size_failure():
     assert rcs.classify_http_failure(413) == "too_large"
+
+
+@pytest.mark.parametrize("status", [500, 502, 503, 599])
+def test_integrity_classifier_uses_validated_fields_at_server_errors(status):
+    fields = {"code": "INTEGRITY_ERROR", "message": "private", "request_id": "req"}
+    assert rcs.classify_http_failure(status, {"error": fields}) == "integrity"
+    assert (
+        rcs.classify_http_failure(
+            status, {"extra": "ignored", "error": {**fields, "details": ["private"]}}
+        )
+        == "integrity"
+    )
+    assert (
+        rcs.classify_http_failure(status, {"error": {**fields, "message": "", "request_id": ""}})
+        == "integrity"
+    )
+    malformed = [None, [], {}, {"error": None}, {"error": []}, "<html>outage</html>"]
+    for key in fields:
+        malformed.extend(
+            [
+                {"error": {name: value for name, value in fields.items() if name != key}},
+                {"error": {**fields, key: 7}},
+            ]
+        )
+    malformed.extend(
+        [
+            {"error": {**fields, "code": "integrity_error"}},
+            {"error": {**fields, "code": "OTHER", "details": {"code": "INTEGRITY_ERROR"}}},
+        ]
+    )
+    for body in malformed:
+        assert rcs.classify_http_failure(status, body) == "unavailable"
+
+
+@pytest.mark.parametrize(
+    "status,expected",
+    [
+        (401, "authentication"),
+        (403, "forbidden"),
+        (404, "not_found"),
+        (409, "conflict"),
+        (413, "too_large"),
+        (422, "invalid_scope"),
+        (429, "unavailable"),
+    ],
+)
+def test_integrity_classifier_preserves_status_precedence(status, expected):
+    envelope = {"error": {"code": "INTEGRITY_ERROR", "message": "", "request_id": ""}}
+    assert rcs.classify_http_failure(status, envelope) == expected

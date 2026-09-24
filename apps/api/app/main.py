@@ -20,6 +20,7 @@ from pydantic import BaseModel
 from app import __version__
 from app.corpus import router as corpus_router
 from app.db import close_pools, open_pool
+from app.extraction import router as extraction_router
 from app.observability import (
     RequestContextMiddleware,
     configure_error_reporting,
@@ -56,6 +57,7 @@ app.include_router(workspaces_router)
 app.include_router(corpus_router)
 app.include_router(reader_router)
 app.include_router(retrieval_router)
+app.include_router(extraction_router)
 
 
 def _envelope(

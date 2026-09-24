@@ -426,3 +426,98 @@ def test_run_main_rejects_a_bad_health_port(monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.setenv("FEL_WORKER_HEALTH_PORT", "not-a-port")
     _capture_run_worker_kwargs(monkeypatch)
     assert run_main(["--max-iterations", "1"]) == 2
+
+
+@pytest.mark.parametrize("other", ["FEL_SEC_LIVE", "FEL_MOCK_SMOKE"])
+def test_fixture_mode_conflicts_fail_before_database(
+    monkeypatch: pytest.MonkeyPatch, other: str
+) -> None:
+    from fel_workers.__main__ import run_entry
+
+    monkeypatch.setenv("FEL_FIXTURE_INGEST", "1")
+    monkeypatch.setenv(other, "1")
+    monkeypatch.setenv("FEL_DATABASE_URL", "postgresql://unused.invalid/never-connected")
+    monkeypatch.setattr(psycopg, "connect", lambda *a, **kw: pytest.fail("connected"))
+    assert run_entry(["--max-iterations", "1"]) == 2
+    with pytest.raises(RuntimeError, match="ambiguous"):
+        build_run_providers()
+
+
+@pytest.mark.parametrize("flag", ["0", "false", "ture"])
+def test_fixture_flag_is_strict(monkeypatch: pytest.MonkeyPatch, flag: str) -> None:
+    from fel_workers.__main__ import resolve_provider_mode
+
+    monkeypatch.setenv("FEL_FIXTURE_INGEST", flag)
+    monkeypatch.setenv("FEL_MOCK_SMOKE", "1")
+    with pytest.raises(RuntimeError, match="FEL_FIXTURE_INGEST"):
+        resolve_provider_mode()
+
+
+def test_fixture_mode_uses_pinned_transport_and_durable_storage(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
+) -> None:
+    import hashlib
+    import json
+
+    from fel_workers.__main__ import resolve_provider_mode
+    from fel_workers.ingestion.fixture_sec_client import FixtureSecClient
+
+    raw = b"<html>original</html>"
+    (tmp_path / "filing.htm").write_bytes(raw)
+    (tmp_path / "manifest.json").write_text(
+        json.dumps(
+            {
+                "schema_version": "sec-fixture-transport/v1",
+                "documents": [
+                    {
+                        "url": "https://example.invalid/filing.htm",
+                        "path": "filing.htm",
+                        "sha256": hashlib.sha256(raw).hexdigest(),
+                    }
+                ],
+                "submissions": [],
+            }
+        )
+    )
+    monkeypatch.delenv("FEL_SEC_LIVE", raising=False)
+    monkeypatch.delenv("FEL_MOCK_SMOKE", raising=False)
+    monkeypatch.delenv("FEL_SEC_USER_AGENT", raising=False)
+    monkeypatch.setenv("FEL_FIXTURE_INGEST", " TrUe ")
+    monkeypatch.setenv("FEL_FIXTURE_DIR", str(tmp_path))
+    monkeypatch.setenv("FEL_STORAGE_DIR", str(tmp_path / "storage"))
+    assert resolve_provider_mode() == "fixture"
+    sec, storage = build_run_providers()
+    assert isinstance(sec, FixtureSecClient)
+    assert isinstance(storage, LocalDirStorageProvider)
+    assert sec.fetch_document("https://example.invalid/filing.htm") == raw
+
+
+@pytest.mark.parametrize("missing", ["FEL_FIXTURE_DIR", "FEL_STORAGE_DIR"])
+def test_fixture_mode_requires_directories_before_database(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path, missing: str
+) -> None:
+    monkeypatch.delenv("FEL_SEC_LIVE", raising=False)
+    monkeypatch.delenv("FEL_MOCK_SMOKE", raising=False)
+    monkeypatch.setenv("FEL_FIXTURE_INGEST", "1")
+    monkeypatch.setenv("FEL_FIXTURE_DIR", str(tmp_path))
+    monkeypatch.setenv("FEL_STORAGE_DIR", str(tmp_path / "storage"))
+    monkeypatch.delenv(missing)
+    monkeypatch.setenv("FEL_DATABASE_URL", "postgresql://unused.invalid/never-connected")
+    monkeypatch.setattr(psycopg, "connect", lambda *a, **kw: pytest.fail("connected"))
+    assert run_main(["--max-iterations", "1"]) == 2
+
+
+def test_fixture_invalid_manifest_fails_before_database(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
+) -> None:
+    from fel_workers.__main__ import run_entry
+
+    (tmp_path / "manifest.json").write_text("not JSON")
+    monkeypatch.delenv("FEL_SEC_LIVE", raising=False)
+    monkeypatch.delenv("FEL_MOCK_SMOKE", raising=False)
+    monkeypatch.setenv("FEL_FIXTURE_INGEST", "1")
+    monkeypatch.setenv("FEL_FIXTURE_DIR", str(tmp_path))
+    monkeypatch.setenv("FEL_STORAGE_DIR", str(tmp_path / "storage"))
+    monkeypatch.setenv("FEL_DATABASE_URL", "postgresql://unused.invalid/never-connected")
+    monkeypatch.setattr(psycopg, "connect", lambda *a, **kw: pytest.fail("connected"))
+    assert run_entry(["--max-iterations", "1"]) == 2

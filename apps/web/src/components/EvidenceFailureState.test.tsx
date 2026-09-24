@@ -40,3 +40,12 @@ describe("EvidenceFailureState rendering", () => {
     expect(markup).not.toContain("undefined");
   });
 });
+
+it("explains API integrity and reader-contract rejection without a verified quote", () => {
+  const markup = renderToStaticMarkup(<EvidenceFailureState kind="integrity" />);
+  expect(markup).toContain(
+    "The evidence failed an integrity or reader-contract check. No verified quote is shown.",
+  );
+  expect(markup).toContain('role="alert"');
+  expect(markup).toContain("Try again");
+});

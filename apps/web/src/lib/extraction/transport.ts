@@ -22,19 +22,12 @@ export function failure(status: number, code: string): Response {
   );
 }
 class BodyTooLarge extends Error {}
-/**
- * Next derives `request.url`'s protocol from the local socket, so behind a TLS
- * terminator it is `http:` while the browser sends an `https:` Origin. The
- * same-origin property this gate needs lives in the host, which is compared
- * against the incoming Host header; a forwarded host is never trusted.
- */
-function originHost(value: string | null): string | null {
-  if (!value) return null;
+class InvalidResponse extends Error {}
+function decode(decoder: TextDecoder, bytes?: Uint8Array): string {
   try {
-    const url = new URL(value);
-    return url.protocol === "http:" || url.protocol === "https:" ? url.host : null;
+    return decoder.decode(bytes, { stream: bytes !== undefined });
   } catch {
-    return null;
+    throw new InvalidResponse("Invalid response encoding");
   }
 }
 export async function boundedText(
@@ -49,10 +42,10 @@ export async function boundedText(
   try {
     while (true) {
       const { value, done } = await reader.read();
-      if (done) return result + decoder.decode();
+      if (done) return result + decode(decoder);
       size += value.byteLength;
       if (size > limit) throw new BodyTooLarge("Body exceeds limit");
-      result += decoder.decode(value, { stream: true });
+      result += decode(decoder, value);
     }
   } finally {
     await reader.cancel().catch(() => {});
@@ -80,9 +73,9 @@ export async function requestExtraction(
   });
   let body: string | undefined;
   if (request.method !== "GET") {
-    const host = request.headers.get("host") ?? new URL(request.url).host;
     if (
-      originHost(request.headers.get("origin")) !== host ||
+      request.headers.get("origin") !==
+        `${new URL(request.url).protocol}//${request.headers.get("host") ?? new URL(request.url).host}` ||
       (request.headers.has("sec-fetch-site") &&
         request.headers.get("sec-fetch-site") !== "same-origin")
     )
@@ -155,12 +148,19 @@ export async function requestExtraction(
       return new Response(upstream.body, { status: upstream.status, headers: outputHeaders });
     }
     if (!upstream.headers.get("content-type")?.startsWith("application/json")) {
-      await upstream.body?.cancel();
-      return failure(502, "INVALID_RESPONSE");
+      await upstream.body?.cancel().catch(() => {});
+      return failure(
+        502,
+        [502, 503, 504].includes(upstream.status) ? "UPSTREAM_UNAVAILABLE" : "INVALID_RESPONSE",
+      );
     }
-    const data: unknown = JSON.parse(
-      await boundedText(upstream.body, upstream.ok ? 8 * 1024 * 1024 : 65536),
-    );
+    const text = await boundedText(upstream.body, upstream.ok ? 8 * 1024 * 1024 : 65536);
+    let data: unknown;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      throw new InvalidResponse("Malformed upstream JSON");
+    }
     if (!upstream.ok) {
       if (!guards.error(data)) return failure(502, "INVALID_RESPONSE");
       return Response.json(
@@ -186,9 +186,10 @@ export async function requestExtraction(
     if (location) {
       const target = new URL(location, config.baseUrl);
       const base = new URL(config.baseUrl);
-      const match = /^\/v1\/(extraction-runs|approved-extractions)\/([0-9a-f-]+)$/i.exec(
-        target.pathname,
-      );
+      const match =
+        /^\/v1\/(extraction-runs|approved-extractions)\/([0-9a-f-]+)(?:\/versions\/([0-9a-f-]+))?$/i.exec(
+          target.pathname,
+        );
       if (
         target.origin !== base.origin ||
         target.username ||
@@ -197,20 +198,26 @@ export async function requestExtraction(
         target.hash ||
         !match ||
         !uuid(match[2]) ||
+        (match[3] !== undefined && !uuid(match[3])) ||
         !(match[1] === "extraction-runs"
-          ? guards.run(data) && data.id.toLowerCase() === match[2].toLowerCase()
-          : guards.approved(data) && data.record_id.toLowerCase() === match[2].toLowerCase())
+          ? guards.run(data) && !match[3] && data.id.toLowerCase() === match[2].toLowerCase()
+          : guards.approved(data) &&
+            data.record_id.toLowerCase() === match[2].toLowerCase() &&
+            (!match[3] || data.version_id.toLowerCase() === match[3].toLowerCase()))
       )
         return failure(502, "INVALID_RESPONSE");
       outputHeaders.set(
         "location",
-        `/api/extraction/${match[1] === "extraction-runs" ? "runs" : "approved"}/${match[2]}`,
+        `/api/extraction/${match[1] === "extraction-runs" ? "runs" : "approved"}/${match[2]}${match[3] ? `/versions/${match[3]}` : ""}`,
       );
     }
     return Response.json(data, { status: upstream.status, headers: outputHeaders });
   } catch (error) {
     return error instanceof BodyTooLarge
       ? failure(413, "EXTRACTION_TOO_LARGE")
-      : failure(502, "UPSTREAM_UNAVAILABLE");
+      : failure(
+          502,
+          error instanceof InvalidResponse ? "INVALID_RESPONSE" : "UPSTREAM_UNAVAILABLE",
+        );
   }
 }

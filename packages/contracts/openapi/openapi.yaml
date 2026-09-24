@@ -644,7 +644,6 @@ paths:
         default:
           $ref: "#/components/responses/Error"
   /v1/workspaces/{workspaceId}/extraction-permissions:
-    x-fel-status: planned
     get:
       operationId: getExtractionPermissions
       summary: Read current extraction permissions for a visible workspace
@@ -673,7 +672,6 @@ paths:
         default:
           $ref: "#/components/responses/Error"
   /v1/workspaces/{workspaceId}/extraction-runs:
-    x-fel-status: planned
     post:
       operationId: createExtractionRun
       summary: Create a bounded extraction run
@@ -798,7 +796,6 @@ paths:
         Explicit bounded page. Cursor binds endpoint, tenant, resource, cutoff/corpus and filters;
         reauthorize every page. Deterministic before/after order is not a cross-request MVCC snapshot.
   /v1/extraction-runs/{runId}:
-    x-fel-status: planned
     parameters:
       - $ref: "#/components/parameters/RunId"
     get:
@@ -911,7 +908,6 @@ paths:
         terminal state; preserve proposal history. Fresh terminal cancellation is 409. Identical successful
         idempotency replay returns prior body/status/ETag before stale checks.
   /v1/extraction-runs/{runId}/events:
-    x-fel-status: planned
     parameters:
       - $ref: "#/components/parameters/RunId"
     get:
@@ -980,7 +976,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
   /v1/extraction-runs/{runId}/rerun:
-    x-fel-status: planned
     post:
       operationId: rerunExtraction
       summary: Create a child extraction run from a parent
@@ -1052,7 +1047,6 @@ paths:
         conflict_occurrence_policy=run/v1 in hashed immutable manifest; create independent open occurrences
         even after parent adjudication. Never mutate parent or inherit human decisions.
   /v1/workspaces/{workspaceId}/extractions:
-    x-fel-status: planned
     get:
       operationId: listExtractions
       summary: List extraction proposals for a workspace
@@ -1118,7 +1112,6 @@ paths:
         Explicit bounded page. Cursor binds endpoint, tenant, resource, cutoff/corpus and filters;
         reauthorize every page. Deterministic before/after order is not a cross-request MVCC snapshot.
   /v1/extractions/{extractionId}:
-    x-fel-status: planned
     parameters:
       - $ref: "#/components/parameters/ExtractionId"
     get:
@@ -1171,7 +1164,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
   /v1/extractions/review:
-    x-fel-status: planned
     post:
       operationId: reviewExtractions
       summary: Apply an atomic review command
@@ -1236,7 +1228,6 @@ paths:
         is 409; successful same-key replay returns exact prior semantic body/status/ETag before stale checks.
         Store immutable review, approved versions, audit, states and receipt in one transaction.
   /v1/approved-extractions/{recordId}:
-    x-fel-status: planned
     get:
       operationId: getApprovedExtraction
       summary: Read the current approved extraction version
@@ -1294,7 +1285,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
   /v1/approved-extractions/{recordId}/versions:
-    x-fel-status: planned
     get:
       operationId: listApprovedExtractionVersions
       summary: List immutable approved extraction versions
@@ -1361,7 +1351,6 @@ paths:
         Explicit bounded page. Cursor binds endpoint, tenant, resource, cutoff/corpus and filters;
         reauthorize every page. Deterministic before/after order is not a cross-request MVCC snapshot.
   /v1/approved-extractions/{recordId}/corrections:
-    x-fel-status: planned
     post:
       operationId: correctApprovedExtraction
       summary: Append an immutable corrected approved version
@@ -1432,7 +1421,6 @@ paths:
         or invent a proposal-review action. Lock head and compare If-Match (412 on stale). Same-key successful
         replay returns original response even after later versions; changed request reusing key is 409.
   /v1/extraction-runs/{runId}/steps:
-    x-fel-status: planned
     get:
       operationId: listExtractionSteps
       summary: listExtractionSteps
@@ -1491,7 +1479,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
   /v1/extraction-runs/{runId}/event-history:
-    x-fel-status: planned
     get:
       operationId: listExtractionEvents
       summary: listExtractionEvents
@@ -1550,7 +1537,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
   /v1/workspaces/{workspaceId}/extraction-conflicts:
-    x-fel-status: planned
     get:
       operationId: listExtractionConflicts
       summary: listExtractionConflicts
@@ -1616,7 +1602,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
   /v1/extraction-conflicts/{conflictId}:
-    x-fel-status: planned
     get:
       operationId: getExtractionConflict
       summary: getExtractionConflict
@@ -1674,7 +1659,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
   /v1/approved-extractions/{recordId}/versions/{versionId}:
-    x-fel-status: planned
     get:
       operationId: getApprovedExtractionVersion
       summary: getApprovedExtractionVersion

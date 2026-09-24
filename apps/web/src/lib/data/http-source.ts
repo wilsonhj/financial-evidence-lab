@@ -22,7 +22,13 @@ import { matchesReaderResponseSchema } from "./reader-contract-validator";
 
 export type ErrorEnvelope = components["schemas"]["Error"];
 export type EvidenceFailureKind =
-  "authentication" | "forbidden" | "conflict" | "invalid_scope" | "unavailable" | "too_large";
+  | "authentication"
+  | "forbidden"
+  | "conflict"
+  | "invalid_scope"
+  | "unavailable"
+  | "too_large"
+  | "integrity";
 
 /** Safe, UI-facing classification of an API or transport failure. */
 export class EvidenceApiError extends Error {
@@ -72,12 +78,13 @@ export interface HttpEvidenceSourceOptions {
   fetchImpl?: typeof fetch;
 }
 
-function failureKind(status: number): EvidenceFailureKind {
+function failureKind(status: number, code?: string): EvidenceFailureKind {
   if (status === 401) return "authentication";
   if (status === 403) return "forbidden";
   if (status === 409) return "conflict";
   if (status === 413) return "too_large";
   if (status === 422) return "invalid_scope";
+  if (status >= 500 && status < 600 && code === "INTEGRITY_ERROR") return "integrity";
   return "unavailable";
 }
 
@@ -414,7 +421,12 @@ export class HttpEvidenceSource implements EvidenceSource {
     } catch {
       // Status classification is sufficient when the body is not JSON.
     }
-    return new EvidenceApiError(response.status, path, failureKind(response.status), envelope);
+    return new EvidenceApiError(
+      response.status,
+      path,
+      failureKind(response.status, envelope?.error.code),
+      envelope,
+    );
   }
 
   private async json(response: Response, path: string): Promise<unknown> {

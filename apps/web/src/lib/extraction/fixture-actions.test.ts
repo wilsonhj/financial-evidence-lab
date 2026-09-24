@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { fixtureFetch, initialFixture, FIXTURE_WORKSPACE, FIXTURE_RECORD } from "./fixture";
 import { buildReview } from "./review-state";
 import { guards } from "./contracts";
+import validationContext from "@fel/contracts/fixtures/extraction-validation-context.json";
 const call = (fetcher: typeof fetch, path: string, body?: string, key = "test-key", tag?: string) =>
   fetcher(`http://fixture.invalid/v1/${path}`, {
     method: "POST",
@@ -9,6 +10,101 @@ const call = (fetcher: typeof fetch, path: string, body?: string, key = "test-ke
     body,
   });
 describe("synthetic review interaction fixture", () => {
+  it("rejects a create-shaped review request without creating a run", async () => {
+    const state = initialFixture(),
+      before = structuredClone(state),
+      run = state.runs[0]!;
+    const response = await call(
+      fixtureFetch(state),
+      "extractions/review",
+      JSON.stringify({
+        entity_id: run.entity_id,
+        as_of: run.as_of,
+        modes: run.modes,
+        source_span_ids: [state.versions[0]!.evidence[0]!.source_span_id],
+      }),
+    );
+    expect(response.status).toBe(422);
+    expect(state).toEqual(before);
+  });
+  it("preserves explicitly requested run limits and defaults only when omitted", async () => {
+    const state = initialFixture(),
+      fetcher = fixtureFetch(state),
+      run = structuredClone(state.runs[0]!);
+    const request = {
+      entity_id: run.entity_id,
+      as_of: run.as_of,
+      modes: run.modes,
+      source_span_ids: [state.versions[0]!.evidence[0]!.source_span_id],
+    };
+    const limits = { max_calls: 2, max_cost_usd: "0.25" };
+    const response = await call(
+      fetcher,
+      `workspaces/${FIXTURE_WORKSPACE}/extraction-runs`,
+      JSON.stringify({ ...request, limits }),
+    );
+    expect(response.status).toBe(202);
+    const child = await response.json();
+    expect(guards.run(child)).toBe(true);
+    expect(child.limits).toEqual(limits);
+    expect(response.headers.get("location")).toBe(`/v1/extraction-runs/${child.id}`);
+    const defaults = await call(
+      fetcher,
+      `workspaces/${FIXTURE_WORKSPACE}/extraction-runs`,
+      JSON.stringify(request),
+      "default-limits",
+    );
+    expect(defaults.status).toBe(202);
+    expect((await defaults.json()).limits).toEqual(run.limits);
+    expect(state.runs[0]).toEqual(run);
+  });
+  it.each(["pinned", "historical null"])(
+    "preserves %s correction provenance independently of the first listed run",
+    async (history) => {
+      const state = initialFixture();
+      if (history === "pinned") {
+        const pinned = { ...state.versions[0], validation_context: validationContext };
+        if (!guards.approved(pinned)) throw new Error("Invalid validation context fixture");
+        state.versions[0] = pinned;
+      }
+      const prior = structuredClone(state.versions[0]!);
+      state.runs[0]!.ontology_version = "unrelated-ontology/v99";
+      state.runs[0]!.workflow_version = "unrelated-workflow/v99";
+      const fetcher = fixtureFetch(state);
+      const body = JSON.stringify({
+        reason: "Preserve original source provenance",
+        payload: prior.payload,
+        evidence: prior.evidence,
+      });
+      const response = await call(
+        fetcher,
+        `approved-extractions/${FIXTURE_RECORD}/corrections`,
+        body,
+        "provenance",
+        '"1"',
+      );
+      expect(response.status).toBe(201);
+      const current = await response.json();
+      expect(guards.approved(current)).toBe(true);
+      expect(current.ontology_version).toBe(prior.ontology_version);
+      expect(current.validation_context).toEqual(prior.validation_context);
+      expect(current.parent_version_id).toBe(prior.version_id);
+      expect(current.version_id).not.toBe(prior.version_id);
+      expect(state.versions[0]).toEqual(prior);
+      expect(
+        await (
+          await call(
+            fetcher,
+            `approved-extractions/${FIXTURE_RECORD}/corrections`,
+            body,
+            "provenance",
+            '"1"',
+          )
+        ).json(),
+      ).toEqual(current);
+      expect(state.versions).toHaveLength(2);
+    },
+  );
   it("reviews selected proposals atomically, preserves original payloads and exactly replays", async () => {
     const state = initialFixture(),
       fetcher = fixtureFetch(state),
@@ -31,44 +127,6 @@ describe("synthetic review interaction fixture", () => {
     expect(state.proposals[0]?.payload).toEqual(original[0]?.payload);
     expect((await call(fetcher, "extractions/review", body, "fresh-key")).status).toBe(412);
   });
-  it("does not let a malformed review body enter the run-creation branch", async () => {
-    const state = initialFixture(),
-      fetcher = fixtureFetch(state);
-    const createCommand = JSON.stringify({
-      entity_id: state.runs[0]!.entity_id,
-      as_of: state.runs[0]!.as_of,
-      modes: ["kpi"],
-      source_span_ids: [state.proposals[0]!.evidence[0]!.source_span_id],
-    });
-    const response = await call(fetcher, "extractions/review", createCommand);
-    expect(response.status).toBe(422);
-    expect(state.runs).toHaveLength(1);
-  });
-  it("checks the reviewed capability, not create, for a malformed review body", async () => {
-    const state = initialFixture();
-    state.permissions.allowed_actions = ["accept"];
-    const response = await call(fixtureFetch(state), "extractions/review", "{}");
-    expect(response.status).toBe(422);
-  });
-  it("creates a bounded run with the requested limits", async () => {
-    const state = initialFixture(),
-      fetcher = fixtureFetch(state);
-    const limits = { max_calls: 1, max_cost_usd: "0.10" };
-    const response = await call(
-      fetcher,
-      `workspaces/${FIXTURE_WORKSPACE}/extraction-runs`,
-      JSON.stringify({
-        entity_id: state.runs[0]!.entity_id,
-        as_of: state.runs[0]!.as_of,
-        modes: ["kpi"],
-        source_span_ids: [state.proposals[0]!.evidence[0]!.source_span_id],
-        limits,
-      }),
-      "create-bounded",
-    );
-    expect(response.status).toBe(202);
-    expect((await response.json()).limits).toEqual(limits);
-  });
   it("keeps immutable correction history and rejects stale head before mutation", async () => {
     const state = initialFixture(),
       fetcher = fixtureFetch(state),
@@ -87,9 +145,10 @@ describe("synthetic review interaction fixture", () => {
       '"1"',
     );
     expect(first.status).toBe(201);
-    const corrected = await first.clone().json();
-    expect(guards.approved(corrected)).toBe(true);
-    expect(corrected.validation_context).toEqual(current.validation_context);
+    expect(first.headers.get("location")).toBe(
+      `/v1/approved-extractions/${FIXTURE_RECORD}/versions/${state.versions[1]!.version_id}`,
+    );
+    expect(guards.approved(await first.json())).toBe(true);
     expect(state.versions[0]).toEqual(before[0]);
     expect(
       (

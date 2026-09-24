@@ -53,7 +53,8 @@ const COPY: Record<
   },
   integrity: {
     heading: "Evidence response rejected",
-    description: "The service returned evidence that did not match the frozen reader contract.",
+    description:
+      "The evidence failed an integrity or reader-contract check. No verified quote is shown.",
     retry: true,
   },
 };

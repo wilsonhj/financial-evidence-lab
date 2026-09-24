@@ -54,7 +54,6 @@ PR validates unique workstream IDs, resolved acyclic dependencies and pairwise
 non-overlap of the dispatched paths. Durable completion evidence lives in
 GitHub and the execution record, separate from the canonical task ledger.
 
-
 #196 extraction ruling: after #154 merges, narrow the existing refactor dispatch
 to the exact workflow/stage/checkpoint/store modules in workstreams.yaml. Keep
 all tests/goldens, financial logic, hashes, version pins and SQL unchanged.
@@ -65,7 +64,6 @@ The existing 510-line accounting validator is within the issue's approximate
 #196. The lead may publish its bounded plan and reconcile verified branch
 protection settings in .github/required-checks.md within the control PR.
 
-
 Wave 7 ruling: #196's extraction portion is verified and merged; register its
 remaining API portion separately, blocked until #191 merges and a concrete
 split design narrows ownership. #197's hygiene/design issue is closed after
@@ -75,7 +73,6 @@ changing metering expectations. Register #81 dataset-only recovery as blocked:
 its historical source is available, but fresh byte verification, original
 acceptance debt and fetched supplemental discovery remain. No SEC request uses
 the historical contact without a current approved FEL_SEC_USER_AGENT.
-
 
 Wave 8 ruling: PR #272 merged at fa4cfa2 after independent final-head approval,
 local PostgreSQL regressions and all required CI. Register #196's remaining API
@@ -145,3 +142,96 @@ on this reviewed baseline. Keep their existing allowed paths disjoint, retain
 lead-only contract marker changes with the API mount, and require real local HTTP
 worker/browser streaming acceptance in addition to fixture-mode browser tests.
 No live-provider or milestone acceptance is inferred by enabling implementation.
+
+Wave 11 reconciliation (September 13): current main 10d2ca4 includes externally
+merged PR287, PR288 and integration PR290. Preserve their reviewed repairs and
+committed real HTTP/worker/browser acceptance; do not resume merged branches.
+The lead replaces the API child branch with agent/61-review-peer-boundary for
+three bounded residuals: unrelated malformed comparison peers blocking valid
+selected review, per-group approval references leaking unrelated batch results,
+and correction discovery expansion while waiting for group locks (only if a
+real concurrency regression reproduces it). Existing deterministic financial
+rules, relevant-peer completeness and sorted resource locks remain binding.
+
+Replace the web child branch with agent/61-review-patch-boundary, restricted in
+this dispatch to lib/extraction/review-state.ts and its existing focused tests.
+Validate user patch text as one standalone JSON value before raw interpolation;
+preserve numeric lexemes and prevent top-level command/precondition overrides.
+PR291 independently owns its five component/test files. These source claims are
+disjoint. No shared implementation, contract shape, migration, provider choice,
+credential policy, threshold or canonical completion changes are authorized.
+The control branch is agent/188-execution-wave11. Independent review, explicit
+lead approval and exact-head checks precede every remaining merge.
+
+Issue292 records the separately unowned production token-verifier prerequisite.
+It is design/tracking only until a bounded design and workstream are accepted;
+no auth implementation/dependency dispatch is made here. Preserve #108's
+accepted July21 mock-auth hosted-reader smoke exception. That exception and
+local #61 acceptance do not establish production identity verification.
+
+Wave 12 ruling: PR295 merged at e6e24b after independent final-head approval
+and all required checks plus real HTTP acceptance. A scratch actual-API/PG
+audit then reproduced four nonfinite JSON inputs accepted with qualifiers
+silently persisted as null, and two UUID version-map alias inputs collapsing
+conflicting versions before completeness checks. Authorize the #61 API child
+on replacement branch agent/61-command-boundary, limited in this dispatch to
+extraction/routes_runs.py, extraction/models.py and focused extraction tests.
+Reject non-JSON constants and float overflow before command normalization;
+reject canonical UUID collisions in expected_versions and member_versions
+before Pydantic coalesces keys. Preserve ordinary numeric strings/finite JSON,
+uppercase UUID support without collisions, existing errors, financial rules,
+contracts and all other loaders. Require real no-mutation/receipt regressions
+and independent final-head review/CI. The control branch is
+agent/188-execution-wave12; no canonical or live gate changes.
+
+Wave 13 reader prerequisite ruling: issue #301 implements #108's accepted
+design addendum item 9 as a dedicated offline repair. Register exactly seven
+web/eval files on agent/301-reader-integrity. Reuse the existing error parser
+and integrity view: only parsed INTEGRITY_ERROR on HTTP 500–599 selects the
+new internal kind. Preserve parser tolerance, all 404/anti-oracle behavior,
+other status classes, fixed public copy and the existing wire contract.
+No new dependency, hosted work or API/worker changes are authorized. The
+accepted #108 mock-auth exception remains valid for that separately provisioned
+smoke; production auth #292 does not replace its environment requirements.
+The lead may publish the bounded reader plan in this control package.
+
+Wave 13 extraction acceptance ruling: PR299 merged at 19e5b9a after independent
+review, all seven required checks and real HTTP/worker/browser acceptance.
+Replace the completed command-fix branch with agent/61-acceptance-proofs,
+restricted to three named test files. Prove same-head correction serialization
+and receipt replay, real foreign-tenant resources and denied actions, and
+stream revocation/disconnect/resume/size limits using isolated PostgreSQL.
+No production edits are dispatched: a reproducible defect returns to the lead
+for a separately bounded fix. Publish its evidence map and test plan here.
+Neither these tests nor the sequential benchmark waive the reference-profile
+performance or live M3 release gates; no canonical checkbox changes.
+
+Reader hosting prerequisite ruling: issue #303 implements #108's accepted
+design addendum item 1 as a lead-owned offline configuration PR. Authorize
+infra/railway/web.json and the two adjacent infrastructure READMEs, plus the
+lead's registration/evidence files. Use existing workspace build/start scripts,
+Node/pnpm pins, injected PORT and /api/health; no application/dependency edits.
+The root integration lead serializes these shared scheduling changes with
+other control PRs. Local schema/build/start verification and independent review
+are required; no hosted environment or deployment is authorized by this change.
+
+### September 14 load and hosted reader execution ruling
+
+The owner's subsequent request explicitly directs implementation of #61 load
+acceptance and #108. The integration lead ratifies the bounded plan in
+`docs/superpowers/plans/2026-09-14-load-and-hosted-reader-acceptance.md` and its
+two disjoint local-preparation registrations. Existing hosted credentials and
+release gates are preserved: local preparation is not hosted acceptance, and
+scaled 25-user measurements are not the full reference profile. No canonical
+task mapping or checkbox changes are authorized by preparation alone.
+
+For #108, the accepted design already authorizes fixture SEC transport, real
+consumer ingestion, colocated worker/API startup, blob fault injection and the
+named dispatch-only workflow. Authorize the minimal consumer correction to
+forward an explicitly supplied, validated reporting-period pair into the
+existing ingestion API, after a failing regression demonstrates the loss. No
+period inference algorithm or direct-SQL evidence mutation is introduced.
+Production corpus publication helpers may publish worker-produced versions;
+the harness must verify successful jobs and ingestion before starting the API.
+Hosted fault injection requires an identified dedicated smoke service and
+restoration on failure; existing production services are not fallback targets.

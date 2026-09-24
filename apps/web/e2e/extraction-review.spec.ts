@@ -111,7 +111,7 @@ test.describe.serial("extraction review fixture browser acceptance", () => {
     await expect(
       page
         .getByRole("region", { name: "Live extraction events" })
-        .getByText("review_waiting", { exact: true }),
+        .getByRole("cell", { name: "review_waiting", exact: true }),
     ).toBeVisible();
     const reviewPage = await context.newPage();
     await reviewPage.goto("/extractions");
@@ -132,7 +132,7 @@ test.describe.serial("extraction review fixture browser acceptance", () => {
     await expect(
       page
         .getByRole("region", { name: "Live extraction events" })
-        .getByText("run_succeeded", { exact: true }),
+        .getByRole("cell", { name: "run_succeeded", exact: true }),
     ).toBeVisible();
     await page.getByLabel("Rerun reason").fill("Start unchanged child after adjudication");
     await page.getByRole("button", { name: "Create unchanged child run" }).click();
@@ -147,7 +147,7 @@ test.describe.serial("extraction review fixture browser acceptance", () => {
     await expect(
       page
         .getByRole("region", { name: "Live extraction events" })
-        .getByText("run_cancelled", { exact: true }),
+        .getByRole("cell", { name: "run_cancelled", exact: true }),
     ).toBeVisible();
     await reviewPage.close();
   });

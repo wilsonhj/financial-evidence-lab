@@ -30,6 +30,7 @@ EvidenceFailureKind = Literal[
     "unavailable",
     "not_found",
     "too_large",
+    "integrity",
 ]
 
 
@@ -211,7 +212,7 @@ def non_first_section_verified_quote(body: dict[str, Any]) -> str:
     raise ReaderCrossStackError("no verified non-first-section citation found")
 
 
-def classify_http_failure(status: int) -> EvidenceFailureKind:
+def classify_http_failure(status: int, envelope: Any = None) -> EvidenceFailureKind:
     """Mirror HttpEvidenceSource failureKind — 401/403/5xx are never not_found."""
     if status == 401:
         return "authentication"
@@ -225,6 +226,14 @@ def classify_http_failure(status: int) -> EvidenceFailureKind:
         return "too_large"
     if status == 422:
         return "invalid_scope"
+    error = envelope.get("error") if isinstance(envelope, dict) else None
+    if (
+        500 <= status < 600
+        and isinstance(error, dict)
+        and all(isinstance(error.get(field), str) for field in ("code", "message", "request_id"))
+        and error["code"] == "INTEGRITY_ERROR"
+    ):
+        return "integrity"
     return "unavailable"
 
 
@@ -238,7 +247,7 @@ def assert_auth_errors_are_not_404(envelopes: dict[str, Any]) -> list[EvidenceAp
     for key, status in mapping.items():
         envelope = envelopes[key]
         code = envelope["error"]["code"]
-        kind = classify_http_failure(status)
+        kind = classify_http_failure(status, envelope)
         if kind == "not_found" or status == 404:
             raise ReaderCrossStackError(f"{key} incorrectly classified as 404")
         if code == "NOT_FOUND":
@@ -380,7 +389,7 @@ class MockHttpEvidenceTransport:
         if status == 404:
             return None
         if status != 200:
-            kind = classify_http_failure(status)
+            kind = classify_http_failure(status, body)
             code = None
             if isinstance(body, dict) and isinstance(body.get("error"), dict):
                 code = body["error"].get("code")
