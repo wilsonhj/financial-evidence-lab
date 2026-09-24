@@ -81,6 +81,55 @@ describe("bounded extraction SSE", () => {
     expect(seen).toEqual([1, 2, 3]);
     expect(open.mock.calls[1]?.[0]).toBe(1);
   });
+  it("delivers a bare-CR framed stream", async () => {
+    const e = event(1);
+    expect(await read(response(`id: ${e.id}\rdata: ${JSON.stringify(e)}\r\r`))).toEqual([e]);
+  });
+  it("delivers a final frame closed without its trailing blank line", async () => {
+    expect(await read(response(`id: 1\r\ndata: ${JSON.stringify(event(1))}\r\n`))).toEqual([
+      event(1),
+    ]);
+  });
+  it("discards a frame truncated by a cut connection instead of failing", async () => {
+    const cut = `id: 1\r\ndata: ${JSON.stringify(event(1)).slice(0, 20)}`;
+    expect(await read(response(cut))).toEqual([]);
+  });
+  it("reconnects after a connection cut mid-frame", async () => {
+    const open = vi
+      .fn()
+      .mockResolvedValueOnce(response(`id: 1\r\ndata: ${JSON.stringify(event(1)).slice(0, 20)}`))
+      .mockResolvedValueOnce(response(frame(event(1, "run_succeeded"))));
+    const seen: number[] = [];
+    await consumeExtractionEvents(run, {
+      open,
+      onEvent: (e) => seen.push(e.id),
+      signal: new AbortController().signal,
+      wait: async () => {},
+    });
+    expect(seen).toEqual([1]);
+  });
+  it("does not spend the frame budget on keepalive comments", async () => {
+    expect(await read(response(": ping\r\n".repeat(12000) + frame(event(1)), 4096))).toEqual([
+      event(1),
+    ]);
+  });
+  it("keeps resuming a long review while each attempt delivers events", async () => {
+    let id = 0;
+    const open = vi.fn().mockImplementation(() => {
+      id += 1;
+      return Promise.resolve(
+        response(frame(event(id, id > 8 ? "run_succeeded" : "review_waiting"))),
+      );
+    });
+    const seen: number[] = [];
+    await consumeExtractionEvents(run, {
+      open,
+      onEvent: (e) => seen.push(e.id),
+      signal: new AbortController().signal,
+      wait: async () => {},
+    });
+    expect(seen).toHaveLength(9);
+  });
   it("bounds reconnect attempts and cancels on abort", async () => {
     const open = vi.fn().mockResolvedValue(response(""));
     await expect(
