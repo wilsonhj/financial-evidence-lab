@@ -131,6 +131,15 @@ def test_live_client_rejects_malformed_payload() -> None:
         client.series_vintage("CPIAUCSL", as_of=datetime(2026, 3, 15, tzinfo=UTC))
 
 
+def test_live_client_wraps_non_json_body() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=b"<html>maintenance</html>")
+
+    client = LiveFredClient("test-key-not-a-secret", transport=httpx.MockTransport(handler))
+    with pytest.raises(FredIngestionError, match="not valid JSON"):
+        client.series_vintage("CPIAUCSL", as_of=datetime(2026, 3, 15, tzinfo=UTC))
+
+
 def test_live_client_surfaces_http_errors() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(500)
