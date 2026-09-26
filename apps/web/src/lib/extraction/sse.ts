@@ -2,6 +2,8 @@ import { guards, uuid, type Event } from "./contracts";
 
 class InvalidStream extends Error {}
 const FRAME_BYTES = 65536;
+/** Longer than the server's 20 s heartbeat interval. */
+const HEALTHY_CONNECTION_MS = 30_000;
 const terminal = new Set<Event["type"]>(["run_succeeded", "run_failed", "run_cancelled"]);
 function decode(decoder: TextDecoder, bytes?: Uint8Array): string {
   try {
@@ -65,6 +67,7 @@ export async function* parseExtractionEvents(
   const decoder = new TextDecoder("utf-8", { fatal: true });
   const encoder = new TextEncoder();
   let pending = "",
+    skipLf = false,
     data: string[] = [],
     id: string | undefined,
     bytes = 0;
@@ -106,21 +109,26 @@ export async function* parseExtractionEvents(
     }
   };
   /** SSE terminates a line with CRLF, a bare LF or a bare CR. */
-  function* drain(final: boolean): Generator<Event> {
+  function* drain(): Generator<Event> {
     for (;;) {
+      // A CR that ended the previous chunk may be the first half of CRLF.
+      if (skipLf && pending.length > 0) {
+        if (pending[0] === "\n") pending = pending.slice(1);
+        skipLf = false;
+      }
       const cr = pending.indexOf("\r"),
         lf = pending.indexOf("\n");
       let end: number, next: number;
       if (cr >= 0 && (lf < 0 || cr < lf)) {
-        // A trailing CR may still be the first half of a CRLF pair.
-        if (cr === pending.length - 1 && !final) return;
         end = cr;
-        next = pending[cr + 1] === "\n" ? cr + 2 : cr + 1;
+        if (cr === pending.length - 1) {
+          // Dispatch now rather than holding the frame for a possible LF.
+          next = cr + 1;
+          skipLf = true;
+        } else next = pending[cr + 1] === "\n" ? cr + 2 : cr + 1;
       } else if (lf >= 0) {
         end = lf;
         next = lf + 1;
-      } else if (final && pending.length > 0) {
-        end = next = pending.length;
       } else return;
       const event = line(pending.slice(0, end));
       pending = pending.slice(next);
@@ -131,26 +139,17 @@ export async function* parseExtractionEvents(
     while (true) {
       const chunk = await reader.read();
       if (chunk.done) {
-        pending += decode(decoder);
-        yield* drain(true);
-        // A peer that closes right after the last frame without its trailing
-        // blank line would otherwise drop that frame — including a terminal one.
-        // A genuinely truncated frame is discarded instead, so a connection cut
-        // mid-frame reconnects rather than failing the view outright.
-        let tail: Event | undefined;
-        try {
-          tail = line("");
-        } catch {
-          tail = undefined;
-        }
-        if (tail) yield tail;
+        // An incomplete line or frame at end of stream is never dispatched (SSE
+        // discards it) and the caller reconnects from lastId. A cut multi-byte
+        // sequence stays fatal, as main's malformed-UTF-8 contract requires.
+        decode(decoder);
         return;
       }
       // A large network chunk may contain many legal small frames. Decode in
       // bounded pieces instead of retaining an arbitrary chunk as one string.
       for (let offset = 0; offset < chunk.value.length; offset += 4096) {
         pending += decode(decoder, chunk.value.subarray(offset, offset + 4096));
-        yield* drain(false);
+        yield* drain();
         if (bytes + encoder.encode(pending).length > FRAME_BYTES)
           throw new InvalidStream("Extraction frame exceeds 64 KiB");
       }
@@ -183,6 +182,7 @@ export async function consumeExtractionEvents(
     lastId?: number;
     open?: (lastId: number, signal: AbortSignal) => Promise<Response>;
     wait?: typeof pause;
+    now?: () => number;
   },
 ): Promise<void> {
   if (!uuid(runId)) throw new InvalidStream("Invalid run ID");
@@ -195,9 +195,11 @@ export async function consumeExtractionEvents(
         headers: lastId ? { "last-event-id": String(lastId) } : {},
       }));
   let lastId = options.lastId ?? 0;
+  const now = options.now ?? Date.now;
   let attempt = 0;
   while (!options.signal.aborted) {
     let progressed = false;
+    const openedAt = now();
     try {
       const response = await open(lastId, options.signal);
       if (!response.ok) {
@@ -221,7 +223,9 @@ export async function consumeExtractionEvents(
     }
     // A reconnect that delivered events starts a fresh budget, so a long human
     // review is not ended merely by lasting.
-    if (progressed) attempt = 0;
+    // While a run waits for review the server sends only heartbeat comments,
+    // so a connection that stayed up long enough to be healthy also counts.
+    if (progressed || now() - openedAt >= HEALTHY_CONNECTION_MS) attempt = 0;
     if (attempt === 5) throw new Error("Reconnect limit reached; reconnect explicitly");
     options.onStatus?.("reconnecting");
     await (options.wait ?? pause)(Math.min(250 * 2 ** attempt, 2000), options.signal);

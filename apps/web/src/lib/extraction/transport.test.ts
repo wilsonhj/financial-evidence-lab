@@ -374,6 +374,7 @@ describe("Next request host origin boundary", () => {
       method: "POST",
       headers: {
         host: "web.example",
+        "x-forwarded-proto": "https",
         origin: "https://web.example",
         "sec-fetch-site": "same-origin",
         "content-type": "application/json",
@@ -382,6 +383,25 @@ describe("Next request host origin boundary", () => {
       body: JSON.stringify(command),
     });
     expect((await requestExtraction(config, "review", request, fetcher)).status).toBe(200);
+  });
+  it.each([
+    ["http://web.example/api/extraction/review", { "x-forwarded-proto": "https" }],
+    ["https://web.example/api/extraction/review", {}],
+  ])("rejects a plain-http Origin on an https deployment (%s)", async (url, extra) => {
+    const fetcher = vi.fn();
+    const request = new Request(url, {
+      method: "POST",
+      headers: {
+        host: "web.example",
+        ...extra,
+        origin: "http://web.example",
+        "content-type": "application/json",
+        "idempotency-key": "browser-test",
+      },
+      body: JSON.stringify(command),
+    });
+    expect((await requestExtraction(config, "review", request, fetcher)).status).toBe(403);
+    expect(fetcher).not.toHaveBeenCalled();
   });
   it.each(["null", "https://web.example.evil", "javascript:alert(1)", ""])(
     "rejects opaque or foreign origin %s",

@@ -85,10 +85,61 @@ describe("bounded extraction SSE", () => {
     const e = event(1);
     expect(await read(response(`id: ${e.id}\rdata: ${JSON.stringify(e)}\r\r`))).toEqual([e]);
   });
-  it("delivers a final frame closed without its trailing blank line", async () => {
-    expect(await read(response(`id: 1\r\ndata: ${JSON.stringify(event(1))}\r\n`))).toEqual([
-      event(1),
-    ]);
+  it("does not dispatch a frame left unterminated at end of stream", async () => {
+    expect(await read(response(`id: 1\r\ndata: ${JSON.stringify(event(1))}\r\n`))).toEqual([]);
+  });
+  it("reconnects after a connection cut inside an id line", async () => {
+    const open = vi
+      .fn()
+      .mockResolvedValueOnce(response(frame(event(1)) + "id"))
+      .mockResolvedValueOnce(response(frame(event(2, "run_succeeded"))));
+    const seen: number[] = [];
+    await consumeExtractionEvents(run, {
+      open,
+      onEvent: (e) => seen.push(e.id),
+      signal: new AbortController().signal,
+      wait: async () => {},
+    });
+    expect(seen).toEqual([1, 2]);
+  });
+  it("dispatches a bare-CR frame without waiting for more bytes", async () => {
+    const e = event(1);
+    const encoder = new TextEncoder();
+    let pulls = 0;
+    const stream = new ReadableStream<Uint8Array>({
+      pull(c) {
+        pulls += 1;
+        if (pulls === 1) c.enqueue(encoder.encode(`id: 1\rdata: ${JSON.stringify(e)}\r\r`));
+        // Never close: a held frame would never be yielded.
+      },
+    });
+    const events = parseExtractionEvents(
+      new Response(stream, { headers: { "content-type": "text/event-stream" } }),
+      run,
+    );
+    expect((await events.next()).value).toEqual(e);
+    await events.return(undefined);
+  });
+  it("keeps a heartbeat-only waiting connection within the reconnect budget", async () => {
+    let clock = 0;
+    let opens = 0;
+    const open = vi.fn(async () => {
+      opens += 1;
+      clock += 31_000; // each healthy connection lasts past a heartbeat interval
+      return response(
+        opens > 8 ? frame(event(1, "run_succeeded")) : ": connected\n\n: heartbeat\n\n",
+      );
+    });
+    const seen: number[] = [];
+    await consumeExtractionEvents(run, {
+      open,
+      now: () => clock,
+      onEvent: (e) => seen.push(e.id),
+      signal: new AbortController().signal,
+      wait: async () => {},
+    });
+    expect(seen).toEqual([1]);
+    expect(open).toHaveBeenCalledTimes(9);
   });
   it("discards a frame truncated by a cut connection instead of failing", async () => {
     const cut = `id: 1\r\ndata: ${JSON.stringify(event(1)).slice(0, 20)}`;

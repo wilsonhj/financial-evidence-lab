@@ -25,17 +25,14 @@ class BodyTooLarge extends Error {}
 /**
  * Next derives `request.url`'s protocol from the local socket, so behind a TLS
  * terminator it is `http:` while the browser sends an `https:` Origin. The
- * same-origin property this gate needs lives in the host, which is compared
- * against the incoming Host header; a forwarded host is never trusted.
+ * terminator's X-Forwarded-Proto supplies the public scheme; a browser cannot
+ * set it cross-origin without a preflight. A forwarded host is never trusted.
  */
-function originHost(value: string | null): string | null {
-  if (!value) return null;
-  try {
-    const url = new URL(value);
-    return url.protocol === "http:" || url.protocol === "https:" ? url.host : null;
-  } catch {
-    return null;
-  }
+function expectedOrigin(request: Request): string {
+  const url = new URL(request.url);
+  const forwarded = request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim();
+  const scheme = forwarded === "https" || forwarded === "http" ? `${forwarded}:` : url.protocol;
+  return `${scheme}//${request.headers.get("host") ?? url.host}`;
 }
 class InvalidResponse extends Error {}
 function decode(decoder: TextDecoder, bytes?: Uint8Array): string {
@@ -88,9 +85,8 @@ export async function requestExtraction(
   });
   let body: string | undefined;
   if (request.method !== "GET") {
-    const host = request.headers.get("host") ?? new URL(request.url).host;
     if (
-      originHost(request.headers.get("origin")) !== host ||
+      request.headers.get("origin") !== expectedOrigin(request) ||
       (request.headers.has("sec-fetch-site") &&
         request.headers.get("sec-fetch-site") !== "same-origin")
     )
