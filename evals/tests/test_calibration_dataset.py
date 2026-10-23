@@ -297,6 +297,21 @@ def test_whitespace_input_canonicalizes_without_whitespace() -> None:
     assert dataset_digest(loaded) == hashlib.sha256(canonical).hexdigest()
 
 
+@pytest.mark.parametrize("pad", [b" ", b"\t", b"\n", b"\r\n"])
+def test_leading_and_trailing_json_whitespace_is_accepted(pad: bytes) -> None:
+    raw = _dumps(_dataset(_ready_records()))
+    expected = canonical_dataset_bytes(load_dataset(raw))
+    assert canonical_dataset_bytes(load_dataset(pad + raw + pad)) == expected
+
+
+@pytest.mark.parametrize(
+    "suffix",
+    ["\x0b", "\x0c", "\x1c", "\x85", "\u00a0", "\u2028", "\u3000"],
+)
+def test_trailing_non_json_whitespace_is_invalid_json(suffix: str) -> None:
+    _code(_dumps(_dataset()) + suffix.encode("utf-8"), "invalid_json")
+
+
 @pytest.mark.parametrize(
     "raw",
     [

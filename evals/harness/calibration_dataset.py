@@ -195,10 +195,11 @@ def _decode(raw: bytes) -> object:
         strict=True,
     )
     payload: object = None
-    index = 0
     failure: str | None = None
     try:
-        payload, index = decoder.raw_decode(text)
+        # ``decode`` (unlike ``raw_decode``) skips leading JSON whitespace and
+        # rejects trailing data other than JSON whitespace (space/tab/LF/CR).
+        payload = decoder.decode(text)
     except _DuplicateKeys:
         failure = "invalid_json"
     except RecursionError:
@@ -209,8 +210,6 @@ def _decode(raw: bytes) -> object:
         failure = "invalid_json"
     if failure is not None:
         _fail(failure)
-    if text[index:].strip() != "":
-        _fail("invalid_json")
     depth_failed = False
     try:
         _check_depth(payload, 1)
