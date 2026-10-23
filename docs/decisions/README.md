@@ -10,7 +10,7 @@ The Status column below is abbreviated. Many ADRs qualify their status with a lo
 | [ADR-0002](ADR-0002-mvp-stack.md) | Locked MVP technology stack | Accepted | 2026-07-12 | — |
 | [ADR-0003](ADR-0003-root-config-edits.md) | Mechanical root-config edits ride with the owning package | Accepted | 2026-07-13 | — |
 | [ADR-0004](ADR-0004-public-corpus-tenancy.md) | Public corpus tables carry no org_id and no RLS | Accepted | 2026-07-13 | — |
-| [ADR-0005](ADR-0005-reader-composite-endpoint.md) | Composite version-pinned evidence reader endpoint | Accepted | 2026-07-15 | — |
+| [ADR-0005](ADR-0005-reader-composite-endpoint.md) | Composite version-pinned evidence reader endpoint | Accepted | 2026-07-15 | Superseded in part (oversized-reader posture) by [ADR-0021](ADR-0021-bounded-api-pagination-and-reader.md) |
 | [ADR-0006](ADR-0006-observable-retrieval.md) | Versioned observable retrieval and trace replay | Accepted | 2026-07-16 | — |
 | [ADR-0007](ADR-0007-agentic-extraction-contract.md) | Bounded agentic-extraction contract and persistence | Accepted | 2026-07-16 | — |
 | [ADR-0008](ADR-0008-python-package-scaffold-edits.md) | New first-party package scaffold wiring rides with the owning package | Accepted | 2026-07-19 | — |
@@ -26,7 +26,7 @@ The Status column below is abbreviated. Many ADRs qualify their status with a lo
 | [ADR-0018](ADR-0018-formula-ast-and-explicit-iteration.md) | Formula AST and explicit iterative calculation groups | Accepted (qualified) | 2026-09-10 | — |
 | [ADR-0019](ADR-0019-unit-comparison-policy.md) | Consistent unit comparison without rewriting source payloads | Accepted (qualified) | 2026-09-10 | — |
 | [ADR-0020](ADR-0020-worker-role-rollout.md) | Select the worker database role in Railway startup | Accepted (qualified) | 2026-09-10 | — |
-| [ADR-0021](ADR-0021-bounded-api-pagination-and-reader.md) | Bounded API pagination and evidence reads | Accepted (qualified) | 2026-09-10 | — |
+| [ADR-0021](ADR-0021-bounded-api-pagination-and-reader.md) | Bounded API pagination and evidence reads | Accepted (qualified) | 2026-09-10 | Supersedes in part [ADR-0005](ADR-0005-reader-composite-endpoint.md) (oversized-reader posture) |
 | [ADR-0022](ADR-0022-guidance-range-ordering.md) | Signed guidance range ordering | Accepted (qualified) | 2026-09-10 | — |
 | [ADR-0023](ADR-0023-model-and-forecast-storage-boundaries.md) | Model and forecast storage boundaries | Accepted (qualified) | 2026-09-10 | — |
 | [ADR-0024](ADR-0024-extraction-review-and-conflict-occurrences.md) | Extraction review and conflict occurrences | Accepted (qualified) | 2026-09-10 | — |

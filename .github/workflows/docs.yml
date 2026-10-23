@@ -28,7 +28,7 @@ jobs:
       - uses: lycheeverse/lychee-action@v2
         with:
           args: >-
-            --offline --include-fragments --no-progress
+            --offline --include-fragments --no-progress --hidden
             --exclude-path node_modules --exclude-path .venv --exclude-path .next
             './**/*.md'
           fail: true
@@ -49,7 +49,7 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
-          mapfile -t files < <(git diff --name-only --diff-filter=ACMR "$BASE_SHA" "$HEAD_SHA" -- '*.md')
+          mapfile -t files < <(git diff --name-only --diff-filter=ACMR "$BASE_SHA...$HEAD_SHA" -- '*.md')
           if [ "${#files[@]}" -eq 0 ]; then
             echo "No changed Markdown files."
             exit 0
