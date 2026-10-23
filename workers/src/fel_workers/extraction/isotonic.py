@@ -75,7 +75,8 @@ def _fail(code: str) -> NoReturn:
 
 
 def _isolated() -> Context:
-    ctx = Context(prec=50, rounding=ROUND_HALF_EVEN)
+    # Pin every field so a mutated decimal.DefaultContext cannot leak in.
+    ctx = Context(prec=50, rounding=ROUND_HALF_EVEN, Emax=999999, Emin=-999999, clamp=0)
     for signal in _SIGNALS:
         # Keep FloatOperation trapped as a tripwire: current code never
         # converts float, so this changes no behavior but fails loudly
@@ -226,7 +227,7 @@ def _validate_artifact(artifact: object) -> tuple[FitStatus, list[tuple[str, str
     if typed["schema_version"] != _SCHEMA:
         _fail("invalid_artifact")
     status_value = typed["status"]
-    if status_value not in _FIT_STATUSES:
+    if type(status_value) is not str or status_value not in _FIT_STATUSES:
         _fail("invalid_artifact")
     status = cast(FitStatus, status_value)
     n = _bounded_count(typed["n"], code="invalid_artifact")

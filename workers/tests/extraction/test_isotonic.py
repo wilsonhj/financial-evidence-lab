@@ -7,6 +7,7 @@ from copy import deepcopy
 from decimal import (
     ROUND_FLOOR,
     Decimal,
+    DefaultContext,
     DivisionByZero,
     InvalidOperation,
     Overflow,
@@ -407,3 +408,28 @@ def test_left_step_boundaries_across_multi_score_blocks() -> None:
     }
     for score, probability in expected.items():
         assert str(predict(artifact, score)) == probability, score
+
+
+@pytest.mark.parametrize("status", [[], {}, ["fitted"]])
+def test_unhashable_artifact_status_is_invalid_artifact(status: object) -> None:
+    artifact = fit(_rows("0.5", 50, 50))
+    artifact["status"] = status
+    with pytest.raises(CalibrationError) as caught:
+        predict(artifact, "0.5")
+    assert caught.value.code == "invalid_artifact"
+
+
+def test_mutated_default_context_does_not_affect_outputs() -> None:
+    artifact = fit(_rows("0.2", 20, 60) + _rows("0.8", 60, 20))
+    held_out = _rows("0.5", 50, 50)
+    base_predict = str(predict(artifact, "0.5"))
+    base_eval = evaluate(artifact, held_out)
+    saved = (DefaultContext.Emax, DefaultContext.Emin, DefaultContext.clamp)
+    try:
+        DefaultContext.Emax = 0
+        DefaultContext.Emin = 0
+        DefaultContext.clamp = 1
+        assert str(predict(artifact, "0.5")) == base_predict
+        assert evaluate(artifact, held_out) == base_eval
+    finally:
+        DefaultContext.Emax, DefaultContext.Emin, DefaultContext.clamp = saved
