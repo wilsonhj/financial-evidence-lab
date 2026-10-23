@@ -373,3 +373,37 @@ def test_isolated_context_traps_float_operation() -> None:
     from decimal import FloatOperation
 
     assert ctx.traps[FloatOperation] is True
+
+
+def test_left_step_boundaries_across_multi_score_blocks() -> None:
+    samples = (
+        _rows("0.1", 15, 35)
+        + _rows("0.2", 10, 40)
+        + _rows("0.5", 25, 25)
+        + _rows("0.6", 20, 30)
+        + _rows("0.9", 45, 5)
+    )
+    artifact = fit(samples)
+    assert artifact["blocks"] == [
+        {"lower_score": "0.1", "upper_score": "0.2", "count": 100, "positive": 25},
+        {"lower_score": "0.5", "upper_score": "0.6", "count": 100, "positive": 45},
+        {"lower_score": "0.9", "upper_score": "0.9", "count": 50, "positive": 45},
+    ]
+    expected = {
+        "0": "0.250000000000",
+        "0.05": "0.250000000000",
+        "0.1": "0.250000000000",
+        "0.15": "0.250000000000",
+        "0.2": "0.250000000000",
+        "0.3": "0.250000000000",
+        "0.499999999999": "0.250000000000",
+        "0.5": "0.450000000000",
+        "0.55": "0.450000000000",
+        "0.6": "0.450000000000",
+        "0.7": "0.450000000000",
+        "0.9": "0.900000000000",
+        "0.95": "0.900000000000",
+        "1": "0.900000000000",
+    }
+    for score, probability in expected.items():
+        assert str(predict(artifact, score)) == probability, score

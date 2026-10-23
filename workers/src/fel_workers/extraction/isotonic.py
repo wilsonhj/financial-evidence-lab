@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from bisect import bisect_right
 from collections.abc import Sequence
 from decimal import (
     ROUND_HALF_EVEN,
@@ -211,7 +212,7 @@ def _block_tuple(value: object) -> tuple[str, str, int, int]:
     return (lower, upper, count, positive)
 
 
-def _validate_artifact(artifact: object) -> dict[str, object]:
+def _validate_artifact(artifact: object) -> tuple[FitStatus, list[tuple[str, str, int, int]]]:
     depth_failed = False
     try:
         _check_depth(artifact, 1)
@@ -249,26 +250,12 @@ def _validate_artifact(artifact: object) -> dict[str, object]:
         previous: tuple[str, str, int, int] | None = None
         for block in blocks:
             if previous is not None:
-                if Decimal(previous[1]) >= Decimal(block[0]):
-                    _fail("invalid_artifact")
-                left_pos, left_count = previous[3], previous[2]
-                right_pos, right_count = block[3], block[2]
-                if left_pos * right_count >= right_pos * left_count:
+                if Decimal(previous[1]) >= Decimal(block[0]) or _should_merge(previous, block):
                     _fail("invalid_artifact")
             previous = block
     else:
         assert_never(status)
-    return {
-        "schema_version": _SCHEMA,
-        "status": status,
-        "n": n,
-        "positive": positive,
-        "negative": negative,
-        "blocks": _public_blocks(blocks),
-        # Internal only: validated tuples for predict/evaluate. Never persist
-        # or return this key to callers; fit() returns the clean shape above.
-        "_raw_blocks": blocks,
-    }
+    return status, blocks
 
 
 def _mean(block: tuple[str, str, int, int]) -> Decimal:
@@ -278,26 +265,10 @@ def _mean(block: tuple[str, str, int, int]) -> Decimal:
 def _left_step(blocks: list[tuple[str, str, int, int]], score: str) -> Decimal:
     if not blocks:
         _fail("invalid_artifact")
-    query = Decimal(score)
-    first = blocks[0]
-    last = blocks[-1]
-    if query < Decimal(first[0]):
-        return _mean(first)
-    if query > Decimal(last[1]):
-        return _mean(last)
-    chosen = first
-    for block in blocks:
-        lower = Decimal(block[0])
-        upper = Decimal(block[1])
-        if lower <= query <= upper:
-            return _mean(block)
-        if lower <= query:
-            chosen = block
-        elif Decimal(chosen[1]) < query < lower:
-            return _mean(chosen)
-    # Defensive: reached only if query falls exactly on a gap already
-    # handled above; return the greatest lower block (left step).
-    return _mean(chosen)
+    # Validated and fitted blocks are ordered and disjoint, so the left step is
+    # the rightmost block whose lower_score <= query, else the first block.
+    index = bisect_right(blocks, Decimal(score), key=lambda block: Decimal(block[0]))
+    return _mean(blocks[max(index - 1, 0)])
 
 
 def fit(samples: list[tuple[str, int]] | tuple[tuple[str, int], ...]) -> dict[str, object]:
@@ -327,13 +298,11 @@ def predict(artifact: dict[str, object], score: str) -> Decimal:
     ``artifact["status"]``, never on the predicted value, to distinguish
     attempted-but-insufficient scoring from confident negatives.
     """
-    validated = _validate_artifact(artifact)
+    status, blocks = _validate_artifact(artifact)
     canonical = _canonical_score(score, code="invalid_sample")
-    status = cast(FitStatus, validated["status"])
     if status == "insufficient_data":
         return Decimal("0")
     if status == "fitted":
-        blocks = cast(list[tuple[str, str, int, int]], validated["_raw_blocks"])
         return _left_step(blocks, canonical)
     assert_never(status)
 
@@ -343,12 +312,14 @@ def _bin_index(probability: Decimal) -> int:
     return min(9, scaled.numerator // scaled.denominator)
 
 
-def _evaluation(artifact: dict[str, object], samples: list[tuple[str, int]]) -> dict[str, object]:
+def _evaluation(
+    status: FitStatus,
+    blocks: list[tuple[str, str, int, int]],
+    samples: list[tuple[str, int]],
+) -> dict[str, object]:
     n = len(samples)
     positive = sum(outcome for _score, outcome in samples)
     negative = n - positive
-    status_value = artifact["status"]
-    status = cast(FitStatus, status_value)
     eval_status: EvalStatus
     if status == "insufficient_data":
         eval_status = "insufficient_calibration"
@@ -368,7 +339,6 @@ def _evaluation(artifact: dict[str, object], samples: list[tuple[str, int]]) -> 
             "ece": None,
             "bins": [],
         }
-    blocks = cast(list[tuple[str, str, int, int]], artifact["_raw_blocks"])
     predictions = [_left_step(blocks, score) for score, _outcome in samples]
     brier_sum = Fraction(0)
     bin_counts = [0] * 10
@@ -421,9 +391,9 @@ def _evaluation(artifact: dict[str, object], samples: list[tuple[str, int]]) -> 
 
 def evaluate(artifact: dict[str, object], samples: Sequence[tuple[str, int]]) -> dict[str, object]:
     """Evaluate a frozen artifact on held-out tuples without refitting."""
-    validated = _validate_artifact(artifact)
+    status, blocks = _validate_artifact(artifact)
     parsed = _parse_samples(samples)
-    return _evaluation(validated, parsed)
+    return _evaluation(status, blocks, parsed)
 
 
 __all__ = ["CalibrationError", "evaluate", "fit", "predict"]
