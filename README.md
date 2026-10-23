@@ -83,8 +83,7 @@ Three rules shape the design:
 Read the [architecture overview](./docs/architecture/overview.md) for component
 boundaries and the [system design](./docs/architecture/system-design.md) for
 data flow, tenancy, temporal behavior, and failure semantics.
-For a leadership readout, see the [executive architecture brief](./docs/architecture/executive-brief.md)
-and its [source-linked engineering reference](./docs/architecture/engineering-reference.md).
+For a leadership readout, see the [executive architecture brief](./docs/architecture/executive-brief.md).
 
 ## Repository map
 

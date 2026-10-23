@@ -902,7 +902,7 @@ packages:
       - README.md
       - docs/architecture/**
       - docs/development/**
-  - id: DOCS-EXECUTIVE-ARCHITECTURE # executive brief, engineering reference, and importable diagram
+  - id: DOCS-EXECUTIVE-ARCHITECTURE # executive brief, living architecture-doc corrections, and importable diagram
     issue: 341
     tasks: [] # Documentation only; no duplicate Spec Kit ledger.
     depends_on: [DOCS-ONBOARDING]
