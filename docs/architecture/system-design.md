@@ -1,8 +1,44 @@
 # System design
 
+<details>
+<summary>Relevant source files</summary>
+
+- [apps/api/app/dependencies.py](../../apps/api/app/dependencies.py) — verifier selection and membership lookup
+- [apps/api/app/db.py](../../apps/api/app/db.py) — transaction-local request claims and `SET LOCAL ROLE fel_app`
+- [apps/api/app/reader.py](../../apps/api/app/reader.py) — composite reader endpoint and cutoff predicates
+- [workers/src/fel_workers/queue.py](../../workers/src/fel_workers/queue.py) — `SKIP LOCKED` job queue, leases and reaping
+- [packages/retrieval/fel_retrieval/fusion.py](../../packages/retrieval/fel_retrieval/fusion.py) — lane fusion and RRF
+- [packages/ontology/fel_ontology/](../../packages/ontology/fel_ontology/) — saas-metrics/v1 ontology
+- [workers/src/fel_workers/extraction/workflow.py](../../workers/src/fel_workers/extraction/workflow.py) — durable extraction workflow FSM
+- [workers/src/fel_workers/extraction/budget.py](../../workers/src/fel_workers/extraction/budget.py) — extraction budget enforcement
+- [workers/src/fel_workers/extraction/normalize/](../../workers/src/fel_workers/extraction/normalize/) — payload normalization
+- [workers/src/fel_workers/extraction/validate/](../../workers/src/fel_workers/extraction/validate/) — deterministic validators
+- [workers/src/fel_workers/redact.py](../../workers/src/fel_workers/redact.py) — job error redaction
+- [db/migrations/0004_extraction_core.sql](../../db/migrations/0004_extraction_core.sql) — extraction tables, RLS and transition guards
+
+</details>
+
+Source references verified against commit `437ce55`.
+
 This guide explains how Financial Evidence Lab preserves tenant, temporal, and
 evidence correctness across ingestion, retrieval, and review. It is aimed at a
 developer changing runtime behavior, schemas, or service boundaries.
+
+## Contents
+
+- [Design goals](#design-goals)
+- [Identity, tenancy, and authorization](#identity-tenancy-and-authorization)
+- [Temporal model](#temporal-model)
+- [Ingestion and evidence storage](#ingestion-and-evidence-storage)
+- [Reader request path](#reader-request-path)
+- [Retrieval pipeline](#retrieval-pipeline)
+- [Extraction boundary](#extraction-boundary)
+- [Failure, concurrency, and idempotency semantics](#failure-concurrency-and-idempotency-semantics)
+- [Cost and observability](#cost-and-observability)
+- [Deployment modes](#deployment-modes)
+- [Known gaps and open decisions](#known-gaps-and-open-decisions)
+- [Change rules](#change-rules)
+- [Related pages](#related-pages)
 
 ## Design goals
 
@@ -57,8 +93,8 @@ Important properties:
 - The source corpus is shared and application-read-only by design. Workers
   curate it; organizations create private analysis over it.
 
-`FEL_AUTH_MODE=mock` is the only implemented verifier. Production Supabase/JWKS
-verification is still required.
+`FEL_AUTH_MODE` supports `mock` and `supabase`. The Supabase verifier checks
+bearer tokens against the issuer's JWKS; it merged in #300 under ADR-0025.
 
 ## Temporal model
 
@@ -397,7 +433,7 @@ changing it alone would do nothing.
 - `range.py` checks Decimal-parseability and a scale bound (`0`–`12`), plus
   `check_range`'s low ≤ high ordering for `guidance`/`range` payloads — see
   [issue #154](https://github.com/wilsonhj/financial-evidence-lab/issues/154)
-  under Known gaps for two open defects in that specific check.
+  under Known gaps for two defects in that specific check, fixed in #270.
 - `citations.py` blocks a proposal that cites no evidence and one whose every
   citation is membership-only (`partial`): only an asserted `text_hash` that
   matches the pinned span proves the citing role actually opened it.
@@ -516,7 +552,7 @@ lands the payload stays exempt from redaction entirely.
 | Web fixture        | UI development and deterministic demos            | No API/database/provider coverage                                                    |
 | Local mock stack   | API/worker/RLS integration without live providers | Requires PostgreSQL and shared local storage                                         |
 | Live SEC ingestion | Corpus acceptance and parser testing              | Requires durable storage, SEC identity, and network access                           |
-| Hosted production  | Target deployment                                 | Not complete; auth, storage, web deployment, telemetry, and hosted smoke remain open |
+| Hosted production  | Target deployment                                 | Not complete; request-scoped web sessions, storage, web deployment, telemetry, and hosted smoke remain open |
 
 ## Known gaps and open decisions
 
@@ -529,7 +565,8 @@ conflict identity, worker routing, audit exposure) are fixed. What remains
 open:
 
 - [Issue #153](https://github.com/wilsonhj/financial-evidence-lab/issues/153)
-  — `unit` case handling is inconsistent across the identity
+  — **Fixed in #264 (2026-09-10) under ADR-0019; the text below is the original
+  gap record.** `unit` case handling is inconsistent across the identity
   (`validate/accounting.py::_facts`), duplicate/conflict
   (`validate/duplicates.py::comparability_key_for`), and definition
   (`validate/definitions.py::_unit_errors`) checkers. A one-sided fold
@@ -543,7 +580,8 @@ open:
   proposal/conflict ids may shift), hence an issue rather than a one-line
   edit.
 - [Issue #154](https://github.com/wilsonhj/financial-evidence-lab/issues/154)
-  — two defects in guidance-range ordering. `validate/range.py::check_range`
+  — **Fixed in #270 (2026-09-10) under ADR-0022; the text below is the original
+  gap record.** Two defects in guidance-range ordering. `validate/range.py::check_range`
   compares raw signed Decimal bounds; since `low`/`high` route through the
   same parens-aware parser as every other numeric field, an ordinary
   worsening margin range (e.g. `svc_gm` guidance of `-5%` to `-15%`, written
@@ -646,3 +684,14 @@ Before changing contracts, migrations, or architecture:
    each category concretely requires (its "Required tests by change type"
    table) and how to run the database-backed suite locally;
 6. attach exact verification evidence to the pull request.
+
+## Related pages
+
+- [Architecture overview](overview.md)
+- [API](../../apps/api/README.md)
+- [Workers](../../workers/README.md)
+- [Ontology](../../packages/ontology/README.md)
+- [Retrieval evals](../../packages/retrieval-evals/README.md)
+- [Extraction worker runbook](../runbooks/extraction-worker.md)
+- [Testing guide](../development/testing.md)
+- [Architecture decisions](../decisions/)

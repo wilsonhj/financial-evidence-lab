@@ -20,30 +20,40 @@ when you need the complete data path.
 
 ## What works today
 
-Status as of **2026-07-30** on `main` (`61058e4`):
+This section summarizes capabilities, not delivery state. For what is merged,
+open, or blocked right now, read [`docs/handoff/STATUS.md`](./docs/handoff/STATUS.md)
+— the only live status source in this repository — and the GitHub issues and
+pull requests it cites.
 
-| Area                          | State                             | What that means                                                                                                                                                                                                                                                                                                                                                 |
-| ----------------------------- | --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Platform foundation           | Implemented                       | Workspace APIs, mock authentication, tenant-scoped RLS, audit/cost primitives, PostgreSQL jobs, and CI are in place.                                                                                                                                                                                                                                            |
-| Evidence ingestion and reader | Implemented, with live gates open | SEC ingestion, immutable document versions, canonical spans/facts, a composite reader API, and the Next.js evidence reader work in tests and mock mode. The 20-issuer live corpus gate and hosted end-to-end smoke are still open.                                                                                                                              |
-| Hybrid retrieval and claims   | Implemented, mock-first           | Dense, lexical, fact, and table lanes, deterministic planning/RRF, replayable traces, feedback, claim decomposition, and the Search Observatory are present. Live embedding/generation selection and the 65-question acceptance run remain open.                                                                                                                |
-| Structured extraction         | Implemented, mock-first           | The v0.4 API/database/provider foundation, the `packages/ontology` SaaS metric ontology, and the durable extraction worker are all on `main`: typed extraction roles, a checkpointed workflow FSM, normalization, deterministic validators, hard budget enforcement, and atomic persistence. Live-provider extraction and the confidence/review gates are open. |
-| Modeling and forecasting      | Not implemented                   | M4 and M5 are specified but should not be treated as runnable product features.                                                                                                                                                                                                                                                                                 |
+Delivery is organized into six milestones, M0 (platform and contracts) through
+M5 (Forecast Lab and MVP release); see the [glossary](./docs/glossary.md#milestones-m0m5)
+and the [canonical plan](./specs/001-financial-evidence-lab/plan.md#3-milestones).
+
+| Area                          | What it does                                                                                                                                                                                                                  |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Platform foundation           | Workspace APIs, mock and Supabase token verification behind database-authoritative membership, tenant-scoped RLS, audit/cost primitives, a PostgreSQL job queue, explicit deployment modes, and CI.                          |
+| Evidence ingestion and reader | SEC ingestion, immutable document versions, canonical spans and facts, a version-pinned composite reader API, and the Next.js evidence reader.                                                                                |
+| Hybrid retrieval and claims   | Dense, lexical, fact, and table lanes with deterministic planning and reciprocal-rank fusion, replayable traces, feedback, claim decomposition with citation verification, and the Search Observatory.                       |
+| Structured extraction         | The `packages/ontology` SaaS metric ontology and a durable extraction worker: typed roles, a checkpointed workflow, normalization, deterministic validators, hard budgets, atomic persistence, and human review of proposals. |
+| Providers                     | Provider protocols with deterministic mocks, plus explicit-key OpenAI structured-generation and embedding adapters and an offline credential cipher. Runtime wiring of live providers is separate work.                      |
+| Modeling and forecasting      | The `packages/calculation-engine` typed model graph and Decimal calculation engine. Model, scenario, and forecast product workflows (M4/M5) are specified but are not runnable product features.                             |
+
+Live acceptance gates (hosted reader smoke, live corpus and retrieval gates,
+load targets, calibration) are tracked separately from merged code; a merged
+package does not certify its milestone's live gate.
 
 The authoritative product requirements live in
 [`specs/001-financial-evidence-lab/`](./specs/001-financial-evidence-lab/).
-GitHub issues and pull requests are the live source for delivery state; the
-handoff snapshots can lag recent merges.
 
 ## Try the UI in five minutes
 
-You need Node 22 and Corepack. The fixture mode does not require Python,
-PostgreSQL, or API keys.
+You need Node 24.20.0 (see `.node-version`) and Corepack. The fixture mode does
+not require Python, PostgreSQL, or API keys.
 
 ```sh
 corepack enable
 corepack pnpm install --frozen-lockfile
-FEL_EVIDENCE_SOURCE=fixture corepack pnpm --filter @fel/web dev
+FEL_DEPLOYMENT_MODE=fixture FEL_API_BEARER_TOKEN= FEL_EVIDENCE_SOURCE=fixture corepack pnpm --filter @fel/web dev
 ```
 
 Open:
@@ -52,6 +62,9 @@ Open:
 - <http://localhost:3000/observatory> for retrieval inspection
 
 Fixture mode is explicit by design; there is no silent production fallback.
+If `FEL_DEPLOYMENT_MODE` is unset the web app runs in public mode, where
+business routes return HTTP 503 until request-scoped sessions exist
+([ADR-0027](./docs/decisions/ADR-0027-deployment-modes.md)).
 For a database-backed setup, see
 [`docs/development/local.md`](./docs/development/local.md).
 
@@ -90,6 +103,7 @@ data flow, tenancy, temporal behavior, and failure semantics.
 apps/api/                    FastAPI routes and database-backed services
 apps/web/                    Next.js reader and Search Observatory
 workers/                     Job consumer, ingestion pipelines, extraction runtime
+packages/calculation-engine/ Typed model graph and Decimal calculation engine
 packages/contracts/          Versioned JSON Schema/OpenAPI contracts
 packages/ontology/           SaaS metric ontology, comparability keys, loader
 packages/providers/          Provider protocols and deterministic mocks
@@ -158,9 +172,14 @@ The implemented API includes:
 - retrieval query, rerun, event, result, and feedback endpoints
 - health and structured error responses
 
-Authentication is currently development-only: `FEL_AUTH_MODE=mock` uses
-unsigned mock tokens while database membership remains authoritative. A production
-Supabase/JWKS verifier has not shipped.
+The API has two token verifiers. `FEL_AUTH_MODE=mock` accepts unsigned mock
+tokens for local fixtures and explicitly configured smoke modes.
+`FEL_AUTH_MODE=supabase` verifies asymmetric Supabase access tokens against the
+configured issuer's JWKS
+([ADR-0025](./docs/decisions/ADR-0025-production-token-verification.md),
+[deployment notes](./docs/handoff/production-auth.md)). In both modes database
+membership, not the token, decides the caller's role. Public sign-up and
+request-scoped web sessions have not shipped.
 
 The web reader has two explicit server-side modes:
 
@@ -173,40 +192,11 @@ configuration is documented in
 
 ## Current blockers and open decisions
 
-The nearest critical path is:
-
-1. Settle two extraction-validation gaps deferred out of the M3 runtime, both of
-   which move persisted identity keys and therefore need an ADR before
-   implementation: unit-case handling is inconsistent across the identity,
-   duplicate, and definition checks
-   ([#153](https://github.com/wilsonhj/financial-evidence-lab/issues/153)), and
-   guidance-range ordering is polarity-blind while never firing at all for
-   free-text metric ids
-   ([#154](https://github.com/wilsonhj/financial-evidence-lab/issues/154)).
-2. Decide how a terminal extraction run relates to queue retries in
-   [issue #146](https://github.com/wilsonhj/financial-evidence-lab/issues/146).
-3. Finish the production reader smoke
-   ([#108](https://github.com/wilsonhj/financial-evidence-lab/issues/108)) and
-   preserve integrity errors instead of flattening every server error into a
-   generic outage.
-4. Run the live SEC corpus gates
-   ([#56](https://github.com/wilsonhj/financial-evidence-lab/issues/56),
-   [#81](https://github.com/wilsonhj/financial-evidence-lab/issues/81)).
-5. Select live embedding/generation providers and execute the checksum-pinned
-   65-question retrieval gate
-   ([#132](https://github.com/wilsonhj/financial-evidence-lab/issues/132)).
-   This may require an ADR update because current provider direction is not
-   fully reconciled with ADR-0002.
-6. Complete M3 review/confidence work, then begin M4 modeling and M5
-   forecasting.
-
-There are also repository-governance decisions for dependency-only shared-path
-changes ([#141](https://github.com/wilsonhj/financial-evidence-lab/issues/141))
-and scheduled dependency auditing
-([#143](https://github.com/wilsonhj/financial-evidence-lab/issues/143)).
-
-See [system design: known gaps](./docs/architecture/system-design.md#known-gaps-and-open-decisions)
-for details.
+Blockers, open decisions, and the critical path change with every merge, so
+this README does not list them. Read
+[`docs/handoff/STATUS.md`](./docs/handoff/STATUS.md) (newest section first) and
+[`docs/handoff/workstreams.yaml`](./docs/handoff/workstreams.yaml), then
+re-query GitHub before acting on any dated statement there.
 
 ## Contributing
 
@@ -233,6 +223,16 @@ public exploit report.
 - [Canonical specification](./specs/001-financial-evidence-lab/spec.md)
 - [MVP stack ADR](./docs/decisions/ADR-0002-mvp-stack.md)
 - [Contract package](./packages/contracts/README.md)
+- [Documentation index](./docs/README.md) — every doc, grouped by audience
+- [Glossary](./docs/glossary.md) — milestones, task IDs, governance terms
+- [Architecture decision records](./docs/decisions/README.md)
+- [Measured quality gates](./docs/development/quality-gates.md)
+- [Operator runbooks](./docs/runbooks/)
+- [API service](./apps/api/README.md), with
+  [hardening](./apps/api/HARDENING.md),
+  [performance](./apps/api/PERFORMANCE.md), and
+  [extraction load](./apps/api/EXTRACTION_LOAD.md) notes
+- [Shared packages](./packages/README.md)
 
 `SPEC.md`, `PLAN.md`, and `TASKS.md` at the repository root are pointer stubs
 into [`specs/001-financial-evidence-lab/`](./specs/001-financial-evidence-lab/).

@@ -1,5 +1,19 @@
 # Measured quality gates
 
+<details>
+<summary>Relevant source files</summary>
+
+- [pyproject.toml](../../pyproject.toml) — Python coverage source and `fail_under` floor
+- [vitest.config.ts](../../vitest.config.ts) — JavaScript coverage thresholds
+- [.github/workflows/ci.yml](../../.github/workflows/ci.yml) — required CI jobs
+- [.github/required-checks.md](../../.github/required-checks.md) — required-checks manifest
+- [apps/api/app/observability.py](../../apps/api/app/observability.py) — API Sentry initialization
+- [workers/src/fel_workers/\_\_main\_\_.py](../../workers/src/fel_workers/__main__.py) — worker Sentry initialization (`init_sentry`)
+
+</details>
+
+Source references verified against commit `437ce55`.
+
 Issue #203 adds regression floors to the existing required Python and JavaScript
 jobs. These are measured coverage baselines, not proof of financial accuracy or
 live release acceptance. Source inclusion is explicit so unimported production
@@ -76,3 +90,9 @@ manifest alone does not protect a branch. Apply and read back the GitHub setting
 once the implementation passes review and CI; never claim configured protection
 from this document alone. Existing CODEOWNERS remains unchanged pending an
 identified additional reviewer with repository access.
+
+## Related pages
+
+- [Testing guide](testing.md)
+- [Local development](local.md)
+- [Architecture overview](../architecture/overview.md)

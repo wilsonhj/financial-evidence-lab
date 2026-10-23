@@ -1,5 +1,21 @@
 # Extraction worker operator runbook (M3-107)
 
+<details>
+<summary>Relevant source files</summary>
+
+- [workers/src/fel_workers/extraction/handler.py](../../workers/src/fel_workers/extraction/handler.py) — `extraction_run` job handler
+- [workers/src/fel_workers/\_\_main\_\_.py](../../workers/src/fel_workers/__main__.py) — `FEL_ALLOW_MOCK_LLM` and memory-store opt-ins
+- [workers/src/fel_workers/queue.py](../../workers/src/fel_workers/queue.py) — dead-letter and cancel writes
+- [workers/src/fel_workers/extraction/budget.py](../../workers/src/fel_workers/extraction/budget.py) — run budget caps
+- [workers/src/fel_workers/extraction/persist_checkpoint.py](../../workers/src/fel_workers/extraction/persist_checkpoint.py) — durable stage output and checkpoint reads
+- [workers/src/fel_workers/extraction/events.py](../../workers/src/fel_workers/extraction/events.py) — event payload redaction
+- [workers/src/fel_workers/extraction/telemetry.py](../../workers/src/fel_workers/extraction/telemetry.py) — redacted telemetry
+- [workers/src/fel_workers/extraction/OPERATOR.md](../../workers/src/fel_workers/extraction/OPERATOR.md) — in-package operator notes
+
+</details>
+
+Source references verified against commit `437ce55`.
+
 ## Job kind
 
 Enqueue `extraction_run` jobs on the `extraction` queue. That queue name is
@@ -161,3 +177,13 @@ Migration 0006 gives it the column, so the carve-out in
 `extraction/events.py::redact_event_payload` is deleted rather than narrowed and
 the event sink now has exactly one mode. An operator or consumer granted the
 event stream on the strength of its metadata-only label receives metadata.
+
+## Related pages
+
+- [Workers](../../workers/README.md)
+- [Extraction operator notes](../../workers/src/fel_workers/extraction/OPERATOR.md)
+- [System design: extraction boundary](../architecture/system-design.md#extraction-boundary)
+- [Local development: extraction worker](../development/local.md#extraction-worker)
+- [Unit comparison policy deployment](unit-policy-migration.md)
+- [Signed guidance range policy deployment](guidance-range-policy-migration.md)
+- [ADR-0007: agentic extraction contract](../decisions/ADR-0007-agentic-extraction-contract.md)
