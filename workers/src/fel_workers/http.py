@@ -14,12 +14,17 @@ Retrieval is also bounded, because some request URLs (e.g. the
 - ``allowed_hosts`` pins every hop, including each redirect hop *before* it
   is sent, to HTTPS on an exact host set. A redirect off the allowlist is
   refused, not followed and then checked.
+- Redirects are followed here, hop by hop, rather than by httpx, which would
+  read each redirect body in full outside these bounds. A redirect body is
+  never read, at most ``MAX_REDIRECTS`` hops are followed, and every hop is
+  charged to the attempt deadline.
 - A 3xx response when redirects are not followed is an error, never a
   successful response whose body a caller then tries to parse.
 - The decoded body is capped at ``max_response_bytes``. The cap counts
   decompressed bytes, so a small gzip body cannot expand past it.
-- Each attempt has a total ``deadline_seconds``; httpx's own timeout is
-  per socket operation, so a slow-drip body could otherwise run unbounded.
+- Each attempt, redirect hops included, has a total ``deadline_seconds``;
+  httpx's own timeout is per socket operation, so a slow-drip body could
+  otherwise run unbounded.
 """
 
 from __future__ import annotations
@@ -33,6 +38,7 @@ RETRYABLE_STATUS = frozenset({429, 500, 502, 503, 504})
 _BACKOFF_BASE_SECONDS = 0.5
 DEFAULT_MAX_RESPONSE_BYTES = 64 * 1024 * 1024
 DEFAULT_DEADLINE_SECONDS = 300.0
+MAX_REDIRECTS = 20  # httpx's own default
 # Describe the stored body, not the wire encoding it was decoded from.
 _WIRE_HEADERS = frozenset({"content-encoding", "content-length", "transfer-encoding"})
 
@@ -77,6 +83,7 @@ class ThrottledRetryingClient:
             raise ValueError("deadline_seconds must be positive")
         self._min_interval = min_interval_seconds
         self._max_retries = max_retries
+        self._follow_redirects = follow_redirects
         self._max_response_bytes = max_response_bytes
         self._deadline_seconds = deadline_seconds
         self._sleep = sleep
@@ -91,7 +98,6 @@ class ThrottledRetryingClient:
             headers=dict(headers) if headers else None,
             transport=transport,
             timeout=timeout_seconds,
-            follow_redirects=follow_redirects,
             event_hooks={"request": [self._check_destination]},
         )
 
@@ -115,6 +121,23 @@ class ThrottledRetryingClient:
         if wait > 0:
             self._sleep(wait)
         self._last_request_at = self._monotonic()
+
+    def _open(self, url: str, params: Mapping[str, str] | None, started: float) -> httpx.Response:
+        """Send the GET, following redirects if enabled; the result is unread.
+
+        The caller must close the returned response.
+        """
+        request = self._client.build_request("GET", url, params=params)
+        for _ in range(MAX_REDIRECTS + 1):
+            response = self._client.send(request, stream=True)
+            next_request = response.next_request
+            if not self._follow_redirects or next_request is None:
+                return response
+            response.close()  # the redirect body is never read
+            if self._monotonic() - started > self._deadline_seconds:
+                raise _DeadlineExceeded
+            request = next_request
+        raise HttpRequestError(f"GET {url} was redirected more than {MAX_REDIRECTS} times")
 
     def _read_bounded(self, response: httpx.Response, url: str, started: float) -> bytes:
         declared = response.headers.get("content-length")
@@ -151,7 +174,8 @@ class ThrottledRetryingClient:
             self._throttle()
             started = self._monotonic()
             try:
-                with self._client.stream("GET", url, params=params) as response:
+                response = self._open(url, params, started)
+                try:
                     status = response.status_code
                     if status in RETRYABLE_STATUS:
                         last_error = f"retryable status {status}"
@@ -174,6 +198,8 @@ class ThrottledRetryingClient:
                         content=body,
                         request=response.request,
                     )
+                finally:
+                    response.close()
             except httpx.TransportError as exc:
                 last_error = f"transport error: {exc}"
                 continue

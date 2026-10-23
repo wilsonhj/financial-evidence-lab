@@ -192,6 +192,72 @@ def test_allowlist_permits_redirect_within_the_allowlist() -> None:
     assert client.get("https://www.sec.gov/x").content == b"ok"
 
 
+def test_redirect_body_is_never_read() -> None:
+    redirect_chunks_read: list[int] = []
+
+    def ten_megabytes():
+        for _ in range(10):
+            redirect_chunks_read.append(1)
+            yield b"x" * (1024 * 1024)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/x":
+            return httpx.Response(302, headers={"Location": "/y"}, content=ten_megabytes())
+        return httpx.Response(200, content=b"ok")
+
+    client = _client(
+        handler,
+        FakeClock(),
+        allowed_hosts={"www.sec.gov"},
+        follow_redirects=True,
+        max_response_bytes=1024,
+    )
+    assert client.get("https://www.sec.gov/x").content == b"ok"
+    assert redirect_chunks_read == []
+
+
+def test_followed_redirect_final_body_is_still_capped() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/x":
+            return httpx.Response(301, headers={"Location": "/y"})
+        return httpx.Response(200, content=b"x" * 11)
+
+    client = _client(handler, FakeClock(), follow_redirects=True, max_response_bytes=10)
+    with pytest.raises(HttpRequestError, match="10-byte response limit"):
+        client.get("https://www.sec.gov/x")
+
+
+def test_redirect_chain_over_the_hop_limit_is_a_request_error() -> None:
+    calls: list[int] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(1)
+        return httpx.Response(302, headers={"Location": f"/hop{len(calls)}"})
+
+    client = _client(handler, FakeClock(), follow_redirects=True)
+    with pytest.raises(HttpRequestError, match="redirected more than 20 times"):
+        client.get("https://www.sec.gov/x")
+    # 20 redirects followed (21 requests), then refused; not retried.
+    assert len(calls) == 21
+
+
+def test_redirect_hops_are_charged_to_the_attempt_deadline() -> None:
+    clock = FakeClock()
+    calls: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(request.url.path)
+        if request.url.path == "/x":
+            clock.now += 10.0  # a slow hop
+            return httpx.Response(302, headers={"Location": "/y"})
+        return httpx.Response(200)  # empty final body: no chunk-level check
+
+    client = _client(handler, clock, follow_redirects=True, deadline_seconds=5.0, max_retries=0)
+    with pytest.raises(HttpRequestError, match="5.0s deadline"):
+        client.get("https://www.sec.gov/x")
+    assert calls == ["/x"]
+
+
 def test_unfollowed_redirect_is_an_error_not_a_response() -> None:
     calls: list[int] = []
 
