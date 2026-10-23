@@ -6,6 +6,7 @@ import hashlib
 import json
 import re
 import uuid
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import NoReturn, cast
 
@@ -94,6 +95,41 @@ class CalibrationDatasetError(Exception):
 
 class _DuplicateKeys(ValueError):
     """JSON object contained a repeated key."""
+
+
+@dataclass(frozen=True, slots=True)
+class _Window:
+    issuer_ids: frozenset[str]
+    start_at: datetime
+    end_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class _Record:
+    sample_id: str
+    proposal_sha256: str
+    issuer_id: str
+    source_sha256: str
+    published_at: datetime
+    as_of: datetime
+    adjudicated_at: datetime
+    split: str
+    family: str
+    field: str
+    score: str
+    outcome: int
+    reviewer_ids: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class _Dataset:
+    """Parsed dataset; ``pins`` follow ``_PIN_KEYS`` and ``records`` are sample-id sorted."""
+
+    dataset_id: str
+    evidence_kind: str
+    pins: tuple[str, ...]
+    splits: dict[str, _Window]
+    records: tuple[_Record, ...]
 
 
 def _fail(code: str) -> NoReturn:
@@ -239,7 +275,14 @@ def _canonical_score(value: object) -> str:
     return text
 
 
-def _canonical_stamp(value: object) -> tuple[str, datetime]:
+def _format_stamp(instant: datetime) -> str:
+    return (
+        f"{instant.year:04d}-{instant.month:02d}-{instant.day:02d}"
+        f"T{instant.hour:02d}:{instant.minute:02d}:{instant.second:02d}Z"
+    )
+
+
+def _canonical_stamp(value: object) -> datetime:
     text = _require_str(value, code="invalid_time")
     matched = _STAMP.fullmatch(text)
     if matched is None:
@@ -253,13 +296,9 @@ def _canonical_stamp(value: object) -> tuple[str, datetime]:
         invalid = True
     if invalid or instant is None:
         _fail("invalid_time")
-    canonical = (
-        f"{instant.year:04d}-{instant.month:02d}-{instant.day:02d}"
-        f"T{instant.hour:02d}:{instant.minute:02d}:{instant.second:02d}Z"
-    )
-    if canonical != text:
+    if _format_stamp(instant) != text:
         _fail("invalid_time")
-    return text, instant
+    return instant
 
 
 def _unique_uuids(values: object, *, limit: int) -> list[str]:
@@ -274,53 +313,34 @@ def _unique_uuids(values: object, *, limit: int) -> list[str]:
     return sorted(parsed)
 
 
-def _pins(value: object) -> dict[str, str]:
+def _pins(value: object) -> tuple[str, ...]:
     pins = _require_dict(value)
     if set(pins) != _PIN_KEY_SET:
         _fail("invalid_shape")
-    return {key: _canonical_hash(pins[key]) for key in _PIN_KEYS}
+    return tuple(_canonical_hash(pins[key]) for key in _PIN_KEYS)
 
 
-def _split_window(value: object) -> dict[str, object]:
+def _split_window(value: object) -> _Window:
     block = _require_dict(value)
     if set(block) != _SPLIT_KEYS:
         _fail("invalid_shape")
     issuers = _unique_uuids(block["issuer_ids"], limit=_MAX_ISSUERS)
-    start_text, start_at = _canonical_stamp(block["start_at"])
-    end_text, end_at = _canonical_stamp(block["end_at"])
+    start_at = _canonical_stamp(block["start_at"])
+    end_at = _canonical_stamp(block["end_at"])
     if start_at > end_at:
         _fail("invalid_time")
-    return {
-        "issuer_ids": issuers,
-        "start_at": start_text,
-        "end_at": end_text,
-        "_start": start_at,
-        "_end": end_at,
-        "_issuers": set(issuers),
-    }
+    return _Window(issuer_ids=frozenset(issuers), start_at=start_at, end_at=end_at)
 
 
-def _split_manifest(value: object) -> dict[str, dict[str, object]]:
+def _split_manifest(value: object) -> dict[str, _Window]:
     manifest = _require_dict(value)
     if set(manifest) != _SPLIT_SET:
         _fail("invalid_shape")
     parsed = {name: _split_window(manifest[name]) for name in _SPLITS}
-    train_end = parsed["train"]["_end"]
-    calibration_start = parsed["calibration"]["_start"]
-    calibration_end = parsed["calibration"]["_end"]
-    evaluation_start = parsed["evaluation"]["_start"]
-    if not isinstance(train_end, datetime) or not isinstance(calibration_start, datetime):
+    train, calibration, evaluation = (parsed[name] for name in _SPLITS)
+    if not (train.end_at < calibration.start_at and calibration.end_at < evaluation.start_at):
         _fail("invalid_time")
-    if not isinstance(calibration_end, datetime) or not isinstance(evaluation_start, datetime):
-        _fail("invalid_time")
-    if not (train_end < calibration_start and calibration_end < evaluation_start):
-        _fail("invalid_time")
-    issuer_sets = []
-    for name in _SPLITS:
-        issuers = parsed[name]["_issuers"]
-        if not isinstance(issuers, set):
-            _fail("invalid_shape")
-        issuer_sets.append(issuers)
+    issuer_sets = [parsed[name].issuer_ids for name in _SPLITS]
     for index, left in enumerate(issuer_sets):
         for right in issuer_sets[index + 1 :]:
             if left & right:
@@ -328,7 +348,7 @@ def _split_manifest(value: object) -> dict[str, dict[str, object]]:
     return parsed
 
 
-def _reviewers(value: object, *, evidence_kind: str) -> list[str]:
+def _reviewers(value: object, *, evidence_kind: str) -> tuple[str, ...]:
     items = _require_list(value)
     parsed = [_canonical_uuid(item) for item in items]
     if len(set(parsed)) != len(parsed):
@@ -336,24 +356,24 @@ def _reviewers(value: object, *, evidence_kind: str) -> list[str]:
     if evidence_kind == "synthetic":
         if parsed:
             _fail("invalid_identity")
-        return []
+        return ()
     if len(parsed) != 2:
         _fail("invalid_identity")
-    return sorted(parsed)
+    return tuple(sorted(parsed))
 
 
 def _record(
     value: object,
     *,
     evidence_kind: str,
-    splits: dict[str, dict[str, object]],
+    splits: dict[str, _Window],
     sample_ids: set[str],
     proposal_fields: set[tuple[str, str, str]],
     proposal_split: dict[str, str],
-    proposal_meta: dict[str, tuple[str, str, str, str, str, str]],
+    proposal_meta: dict[str, tuple[str, str, datetime, datetime, datetime, str]],
     source_split: dict[str, str],
     strata: set[tuple[str, str]],
-) -> dict[str, object]:
+) -> _Record:
     record = _require_dict(value)
     if set(record) != _RECORD_KEYS:
         _fail("invalid_shape")
@@ -364,9 +384,9 @@ def _record(
     proposal = _canonical_hash(record["proposal_sha256"])
     issuer_id = _canonical_uuid(record["issuer_id"])
     source = _canonical_hash(record["source_sha256"])
-    published, published_at = _canonical_stamp(record["published_at"])
-    as_of_text, as_of = _canonical_stamp(record["as_of"])
-    adjudicated, adjudicated_at = _canonical_stamp(record["adjudicated_at"])
+    published_at = _canonical_stamp(record["published_at"])
+    as_of = _canonical_stamp(record["as_of"])
+    adjudicated_at = _canonical_stamp(record["adjudicated_at"])
     if not (published_at <= as_of <= adjudicated_at):
         _fail("invalid_time")
     split = _require_str(record["split"])
@@ -389,7 +409,7 @@ def _record(
     proposal_fields.add(key)
     if proposal in proposal_split and proposal_split[proposal] != split:
         _fail("split_leakage")
-    meta = (issuer_id, source, published, as_of_text, adjudicated, split)
+    meta = (issuer_id, source, published_at, as_of, adjudicated_at, split)
     if proposal in proposal_meta and proposal_meta[proposal] != meta:
         _fail("invalid_identity")
     proposal_split[proposal] = split
@@ -398,65 +418,40 @@ def _record(
         _fail("split_leakage")
     source_split[source] = split
     window = splits[split]
-    issuers = window["_issuers"]
-    start_at = window["_start"]
-    end_at = window["_end"]
-    if not isinstance(issuers, set) or issuer_id not in issuers:
+    if issuer_id not in window.issuer_ids:
         _fail("split_leakage")
-    if not isinstance(start_at, datetime) or not isinstance(end_at, datetime):
-        _fail("invalid_time")
-    if not (start_at <= published_at <= end_at):
+    if not (window.start_at <= published_at <= window.end_at):
         _fail("invalid_time")
     strata.add((family, field))
     if len(strata) > _MAX_STRATA:
         _fail("limit_exceeded")
-    return {
-        "sample_id": sample_id,
-        "proposal_sha256": proposal,
-        "issuer_id": issuer_id,
-        "source_sha256": source,
-        "published_at": published,
-        "as_of": as_of_text,
-        "adjudicated_at": adjudicated,
-        "split": split,
-        "family": family,
-        "field": field,
-        "score": score,
-        "outcome": outcome,
-        "reviewer_ids": reviewers,
-    }
+    return _Record(
+        sample_id=sample_id,
+        proposal_sha256=proposal,
+        issuer_id=issuer_id,
+        source_sha256=source,
+        published_at=published_at,
+        as_of=as_of,
+        adjudicated_at=adjudicated_at,
+        split=split,
+        family=family,
+        field=field,
+        score=score,
+        outcome=outcome,
+        reviewer_ids=reviewers,
+    )
 
 
-def _public_split(block: dict[str, object]) -> dict[str, object]:
-    issuers = block["issuer_ids"]
-    if not isinstance(issuers, list):
-        _fail("invalid_shape")
-    return {
-        "issuer_ids": list(issuers),
-        "start_at": block["start_at"],
-        "end_at": block["end_at"],
-    }
-
-
-def _cross_split_cutoff(records: list[dict[str, object]]) -> None:
-    grouped: dict[str, list[dict[str, object]]] = {name: [] for name in _SPLITS}
+def _cross_split_cutoff(records: tuple[_Record, ...]) -> None:
+    grouped: dict[str, list[_Record]] = {name: [] for name in _SPLITS}
     for record in records:
-        split = record["split"]
-        if not isinstance(split, str):
-            _fail("invalid_shape")
-        grouped[split].append(record)
+        grouped[record.split].append(record)
 
     def _max_as_of(name: str) -> datetime | None:
-        rows = grouped[name]
-        if not rows:
-            return None
-        return max(_canonical_stamp(row["as_of"])[1] for row in rows)
+        return max((row.as_of for row in grouped[name]), default=None)
 
     def _min_published(name: str) -> datetime | None:
-        rows = grouped[name]
-        if not rows:
-            return None
-        return min(_canonical_stamp(row["published_at"])[1] for row in rows)
+        return min((row.published_at for row in grouped[name]), default=None)
 
     train_as_of = _max_as_of("train")
     calibration_published = _min_published("calibration")
@@ -473,7 +468,7 @@ def _cross_split_cutoff(records: list[dict[str, object]]) -> None:
             _fail("invalid_time")
 
 
-def _validate(payload: object) -> dict[str, object]:
+def _parse(payload: object) -> _Dataset:
     dataset = _require_dict(payload)
     if set(dataset) != _DATASET_KEYS:
         _fail("invalid_shape")
@@ -491,7 +486,7 @@ def _validate(payload: object) -> dict[str, object]:
     sample_ids: set[str] = set()
     proposal_fields: set[tuple[str, str, str]] = set()
     proposal_split: dict[str, str] = {}
-    proposal_meta: dict[str, tuple[str, str, str, str, str, str]] = {}
+    proposal_meta: dict[str, tuple[str, str, datetime, datetime, datetime, str]] = {}
     source_split: dict[str, str] = {}
     strata: set[tuple[str, str]] = set()
     records = [
@@ -508,15 +503,51 @@ def _validate(payload: object) -> dict[str, object]:
         )
         for item in raw_records
     ]
-    records.sort(key=lambda row: str(row["sample_id"]))
-    _cross_split_cutoff(records)
+    records.sort(key=lambda row: row.sample_id)
+    parsed = _Dataset(
+        dataset_id=dataset_id,
+        evidence_kind=evidence_kind,
+        pins=pins,
+        splits=splits,
+        records=tuple(records),
+    )
+    _cross_split_cutoff(parsed.records)
+    return parsed
+
+
+def _project(dataset: _Dataset) -> dict[str, object]:
+    """Return the public ``extraction-calibration-dataset/v1`` interchange dict."""
     return {
         "schema_version": _SCHEMA,
-        "dataset_id": dataset_id,
-        "evidence_kind": evidence_kind,
-        "pins": pins,
-        "split_manifest": {name: _public_split(splits[name]) for name in _SPLITS},
-        "records": records,
+        "dataset_id": dataset.dataset_id,
+        "evidence_kind": dataset.evidence_kind,
+        "pins": dict(zip(_PIN_KEYS, dataset.pins, strict=True)),
+        "split_manifest": {
+            name: {
+                "issuer_ids": sorted(dataset.splits[name].issuer_ids),
+                "start_at": _format_stamp(dataset.splits[name].start_at),
+                "end_at": _format_stamp(dataset.splits[name].end_at),
+            }
+            for name in _SPLITS
+        },
+        "records": [
+            {
+                "sample_id": record.sample_id,
+                "proposal_sha256": record.proposal_sha256,
+                "issuer_id": record.issuer_id,
+                "source_sha256": record.source_sha256,
+                "published_at": _format_stamp(record.published_at),
+                "as_of": _format_stamp(record.as_of),
+                "adjudicated_at": _format_stamp(record.adjudicated_at),
+                "split": record.split,
+                "family": record.family,
+                "field": record.field,
+                "score": record.score,
+                "outcome": record.outcome,
+                "reviewer_ids": list(record.reviewer_ids),
+            }
+            for record in dataset.records
+        ],
     }
 
 
@@ -532,7 +563,7 @@ def _reject_dict_floats(value: object) -> None:
             _reject_dict_floats(inner)
 
 
-def _validated(dataset: object) -> dict[str, object]:
+def _validated(dataset: object) -> _Dataset:
     depth_failed = False
     try:
         _check_depth(dataset, 1)
@@ -541,7 +572,7 @@ def _validated(dataset: object) -> dict[str, object]:
     if depth_failed:
         _fail("limit_exceeded")
     _reject_dict_floats(dataset)
-    return _validate(dataset)
+    return _parse(dataset)
 
 
 def _dump(dataset: dict[str, object]) -> bytes:
@@ -556,12 +587,12 @@ def _dump(dataset: dict[str, object]) -> bytes:
 
 def load_dataset(raw: bytes) -> dict[str, object]:
     """Return a normalized, fully validated dataset from UTF-8 JSON bytes."""
-    return _validate(_decode(raw))
+    return _project(_parse(_decode(raw)))
 
 
 def canonical_dataset_bytes(dataset: dict[str, object]) -> bytes:
     """Return canonical UTF-8 JSON bytes for a validated dataset object."""
-    return _dump(_validated(dataset))
+    return _dump(_project(_validated(dataset)))
 
 
 def dataset_digest(dataset: dict[str, object]) -> str:
@@ -575,32 +606,24 @@ def _sufficient(n: int, positive: int, negative: int) -> bool:
 
 def support_report(dataset: dict[str, object]) -> dict[str, object]:
     """Return the frozen per-stratum support report for a validated dataset."""
-    normalized = _validated(dataset)
-    records_value = normalized["records"]
-    if not isinstance(records_value, list):
-        _fail("invalid_shape")
-    digest = hashlib.sha256(_dump(normalized)).hexdigest()
+    parsed = _validated(dataset)
+    digest = hashlib.sha256(_dump(_project(parsed))).hexdigest()
     strata: set[tuple[str, str]] = set()
     counts: dict[tuple[str, str, str], list[int]] = {}
-    for item in records_value:
-        record = _require_dict(item)
-        family = _require_str(record["family"])
-        field = _require_str(record["field"])
-        split = _require_str(record["split"])
-        outcome = _require_int(record["outcome"])
-        strata.add((family, field))
-        key = (family, field, split)
-        bucket = counts.setdefault(key, [0, 0])
+    for record in parsed.records:
+        strata.add((record.family, record.field))
+        bucket = counts.setdefault((record.family, record.field, record.split), [0, 0])
         bucket[0] += 1
-        if outcome == 1:
-            bucket[1] += 1
+        bucket[1] += record.outcome
     cells: list[dict[str, object]] = []
-    ready = True
+    ready = bool(strata)
     for family, field in sorted(strata):
-        for split in _SPLITS:
+        for split in sorted(_SPLITS):
             n, positive = counts.get((family, field, split), [0, 0])
             negative = n - positive
             enough = _sufficient(n, positive, negative)
+            if split != "train" and not enough:
+                ready = False
             cells.append(
                 {
                     "family": family,
@@ -612,16 +635,7 @@ def support_report(dataset: dict[str, object]) -> dict[str, object]:
                     "sufficient": enough,
                 }
             )
-        calibration = counts.get((family, field, "calibration"), [0, 0])
-        evaluation = counts.get((family, field, "evaluation"), [0, 0])
-        if not (
-            _sufficient(calibration[0], calibration[1], calibration[0] - calibration[1])
-            and _sufficient(evaluation[0], evaluation[1], evaluation[0] - evaluation[1])
-        ):
-            ready = False
-    cells.sort(key=lambda cell: (str(cell["family"]), str(cell["field"]), str(cell["split"])))
     if not strata:
-        ready = False
         reason: str | None = "empty_dataset"
     elif ready:
         reason = None
@@ -630,7 +644,7 @@ def support_report(dataset: dict[str, object]) -> dict[str, object]:
     return {
         "schema_version": _SUPPORT_SCHEMA,
         "dataset_sha256": digest,
-        "evidence_kind": normalized["evidence_kind"],
+        "evidence_kind": parsed.evidence_kind,
         "ready": ready,
         "cells": cells,
         "reason": reason,
