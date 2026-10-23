@@ -81,6 +81,106 @@ describe("bounded extraction SSE", () => {
     expect(seen).toEqual([1, 2, 3]);
     expect(open.mock.calls[1]?.[0]).toBe(1);
   });
+  it("delivers a bare-CR framed stream", async () => {
+    const e = event(1);
+    expect(await read(response(`id: ${e.id}\rdata: ${JSON.stringify(e)}\r\r`))).toEqual([e]);
+  });
+  it("does not dispatch a frame left unterminated at end of stream", async () => {
+    expect(await read(response(`id: 1\r\ndata: ${JSON.stringify(event(1))}\r\n`))).toEqual([]);
+  });
+  it("reconnects after a connection cut inside an id line", async () => {
+    const open = vi
+      .fn()
+      .mockResolvedValueOnce(response(frame(event(1)) + "id"))
+      .mockResolvedValueOnce(response(frame(event(2, "run_succeeded"))));
+    const seen: number[] = [];
+    await consumeExtractionEvents(run, {
+      open,
+      onEvent: (e) => seen.push(e.id),
+      signal: new AbortController().signal,
+      wait: async () => {},
+    });
+    expect(seen).toEqual([1, 2]);
+  });
+  it("dispatches a bare-CR frame without waiting for more bytes", async () => {
+    const e = event(1);
+    const encoder = new TextEncoder();
+    let pulls = 0;
+    const stream = new ReadableStream<Uint8Array>({
+      pull(c) {
+        pulls += 1;
+        if (pulls === 1) c.enqueue(encoder.encode(`id: 1\rdata: ${JSON.stringify(e)}\r\r`));
+        // Never close: a held frame would never be yielded.
+      },
+    });
+    const events = parseExtractionEvents(
+      new Response(stream, { headers: { "content-type": "text/event-stream" } }),
+      run,
+    );
+    expect((await events.next()).value).toEqual(e);
+    await events.return(undefined);
+  });
+  it("keeps a heartbeat-only waiting connection within the reconnect budget", async () => {
+    let clock = 0;
+    let opens = 0;
+    const open = vi.fn(async () => {
+      opens += 1;
+      clock += 31_000; // each healthy connection lasts past a heartbeat interval
+      return response(
+        opens > 8 ? frame(event(1, "run_succeeded")) : ": connected\n\n: heartbeat\n\n",
+      );
+    });
+    const seen: number[] = [];
+    await consumeExtractionEvents(run, {
+      open,
+      now: () => clock,
+      onEvent: (e) => seen.push(e.id),
+      signal: new AbortController().signal,
+      wait: async () => {},
+    });
+    expect(seen).toEqual([1]);
+    expect(open).toHaveBeenCalledTimes(9);
+  });
+  it("discards a frame truncated by a cut connection instead of failing", async () => {
+    const cut = `id: 1\r\ndata: ${JSON.stringify(event(1)).slice(0, 20)}`;
+    expect(await read(response(cut))).toEqual([]);
+  });
+  it("reconnects after a connection cut mid-frame", async () => {
+    const open = vi
+      .fn()
+      .mockResolvedValueOnce(response(`id: 1\r\ndata: ${JSON.stringify(event(1)).slice(0, 20)}`))
+      .mockResolvedValueOnce(response(frame(event(1, "run_succeeded"))));
+    const seen: number[] = [];
+    await consumeExtractionEvents(run, {
+      open,
+      onEvent: (e) => seen.push(e.id),
+      signal: new AbortController().signal,
+      wait: async () => {},
+    });
+    expect(seen).toEqual([1]);
+  });
+  it("does not spend the frame budget on keepalive comments", async () => {
+    expect(await read(response(": ping\r\n".repeat(12000) + frame(event(1)), 4096))).toEqual([
+      event(1),
+    ]);
+  });
+  it("keeps resuming a long review while each attempt delivers events", async () => {
+    let id = 0;
+    const open = vi.fn().mockImplementation(() => {
+      id += 1;
+      return Promise.resolve(
+        response(frame(event(id, id > 8 ? "run_succeeded" : "review_waiting"))),
+      );
+    });
+    const seen: number[] = [];
+    await consumeExtractionEvents(run, {
+      open,
+      onEvent: (e) => seen.push(e.id),
+      signal: new AbortController().signal,
+      wait: async () => {},
+    });
+    expect(seen).toHaveLength(9);
+  });
   it("bounds reconnect attempts and cancels on abort", async () => {
     const open = vi.fn().mockResolvedValue(response(""));
     await expect(
