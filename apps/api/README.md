@@ -47,7 +47,7 @@ PYTHONPATH=apps/api:packages/providers:packages/retrieval:packages/ontology:work
 ```
 
 The explicit `PYTHONPATH` is required: the route modules import the sibling
-`fel_providers`, `fel_retrieval`, and `fel_ontology` packages.
+`fel_providers`, `fel_retrieval`, `fel_ontology`, and `fel_workers` packages.
 
 ## Test
 

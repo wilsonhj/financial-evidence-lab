@@ -42,6 +42,7 @@ GitHub. Terms are defined in the [glossary](glossary.md).
 | [Local development](development/local.md) | Toolchain, fixture UI, local PostgreSQL/API setup, and environment variables | **core** |
 | [Testing guide](development/testing.md) | Test boundaries, the suite matrix, and developer loops | **core** |
 | [Quality gates](development/quality-gates.md) | Measured regression floors for the Python and JavaScript gates | supporting |
+| [Doc page template](templates/doc-page.md) | Header, footer and section conventions for documentation pages | supporting |
 
 ## Runbooks
 
@@ -98,6 +99,7 @@ Root `SPEC.md`, `PLAN.md`, and `TASKS.md` are pointer stubs only.
 
 | Doc | Description | Tier |
 |---|---|---|
+| [Research index](research/README.md) | Every research note with its date and status | supporting |
 | [Completion spec, 2026-09-16](research/2026-09-16-completion-spec.md) | Owner-requested completion specification | supporting |
 | [Model and scenario design, 2026-09-11](research/2026-09-11-model-scenario-design.md) | Research note for #64 models and sparse scenarios | reference |
 | [Backlog resolution spec, 2026-09-09](research/2026-09-09-backlog-resolution-spec.md) | Open-backlog resolution specification | reference |

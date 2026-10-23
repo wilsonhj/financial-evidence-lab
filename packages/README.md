@@ -14,4 +14,4 @@ package is registered per work package in
 | `providers/` | Provider protocols and deterministic mocks, plus explicit-key OpenAI adapters and an offline credential cipher | Python (`fel-providers`) | [OpenAI structured](./providers/OPENAI.md), [OpenAI embeddings](./providers/OPENAI_EMBEDDINGS.md), [credential cipher](./providers/CREDENTIAL_CIPHER.md) |
 | `retrieval/` | Versioned hybrid retrieval backend: item building, index publish, cutoff-safe lanes, planning, RRF fusion, and persisted traces (M2) | Python (`fel-retrieval`) | [README](./retrieval/README.md), [acceptance](./retrieval/ACCEPTANCE.md) |
 | `retrieval-evals/` | Retrieval smoke-benchmark tooling: checksum-pinned manifest compiler and release-gate metrics | Python | [README](./retrieval-evals/README.md) |
-| `ui/` | Reserved for shared React UI; currently contains only `.gitkeep` | — | [README](./ui/README.md) |
+| `ui/` | Reserved for shared React UI; currently contains only `.gitkeep` and its README | — | [README](./ui/README.md) |

@@ -74,8 +74,9 @@ changes comparison semantics and requires a reviewed rollout; see the
 
 - API extraction validation: `apps/api/app/extraction/runs.py`,
   `validation.py`, `validation_peers.py`.
-- Worker extraction: `workers/src/fel_workers/extraction/workflow_context.py`
-  and `validate/checks.py`.
+- Worker extraction: `workers/src/fel_workers/extraction/workflow.py`,
+  `workflow_context.py`, `roles/base.py`, `normalize/currency.py`, and the
+  validators under `validate/`.
 
 Because the worker imports this package at startup, `packages/ontology` must be
 on `PYTHONPATH` for both services.

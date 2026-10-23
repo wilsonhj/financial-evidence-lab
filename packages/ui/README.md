@@ -3,7 +3,7 @@
 <details>
 <summary>Relevant source files</summary>
 
-- [.gitkeep](.gitkeep) — the only file in this package; it keeps the directory in git
+- [.gitkeep](.gitkeep) — the only file in this package besides this README; it keeps the directory in git
 - [pnpm-workspace.yaml](../../pnpm-workspace.yaml) — includes `packages/*` in the pnpm workspace
 - [apps/web/src/components/](../../apps/web/src/components/) — where the current UI components live
 
@@ -14,7 +14,7 @@ Source references verified against commit `437ce55`.
 `packages/ui` is a reserved location for a shared UI package. It holds no code
 and no `package.json` yet, so pnpm does not treat it as a workspace package and
 nothing imports from it. This page exists so contributors know the directory is
-intentionally empty.
+intentionally empty of code.
 
 ## Where UI code lives today
 
