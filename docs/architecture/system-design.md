@@ -87,8 +87,10 @@ published_at <= effective_as_of
 ```
 
 `published_at` is the real column name — on `documents` (`db/migrations/0002_corpus_core.sql`)
-and in every cutoff predicate (`apps/api/app/reader.py`). There is no
-`available_at` anywhere in the schema or the code; grep for the name you see here.
+and in every cutoff predicate (`apps/api/app/reader.py`). The only
+`available_at` column is `jobs.available_at` (migration `0007`), a retry
+schedule; the calculation engine's node `available_at` is an in-memory model
+bound. Neither is a document cutoff column; grep for the name you see here.
 
 The rule applies to both collection endpoints and direct reads. A user must not
 be able to bypass a cutoff by guessing a document or version URL.
@@ -225,9 +227,10 @@ specific run and candidate.
 
 The current API executes the pipeline before returning its nominal `202`
 response. Runs are therefore synchronous-terminal today. The event endpoint
-replays committed events; it is not a live asynchronous SSE producer. A true
-live producer/consumer is deferred and must be added before M3 depends on
-real-time progress semantics.
+replays committed events; it is not a live asynchronous SSE producer.
+Extraction runs differ: they execute as worker jobs, and
+`apps/api/app/extraction/routes_events.py` streams their committed events live
+over SSE (issue #135, PR #288).
 
 ### Current provider limitation
 
@@ -608,11 +611,13 @@ What remains open:
   checksum-pinned 65-question gate.
 - Provider direction in the live-gate issue and ADR-0002 is not fully aligned;
   a superseding ADR may be necessary.
-- True live SSE execution is deferred in
-  [issue #135](https://github.com/wilsonhj/financial-evidence-lab/issues/135).
-- Claim and numeric verification hardening remains tracked in
-  [#137](https://github.com/wilsonhj/financial-evidence-lab/issues/137) and
-  [#133](https://github.com/wilsonhj/financial-evidence-lab/issues/133).
+- Retrieval runs remain synchronous-terminal; the live SSE route from
+  [issue #135](https://github.com/wilsonhj/financial-evidence-lab/issues/135)
+  (closed) covers extraction runs only.
+- Claim and numeric verification hardening in
+  [#133](https://github.com/wilsonhj/financial-evidence-lab/issues/133) (PR
+  #210) and [#137](https://github.com/wilsonhj/financial-evidence-lab/issues/137)
+  (PR #261) is closed; it does not replace the live gate in #132.
 
 ### Release gates
 
