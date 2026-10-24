@@ -44,7 +44,7 @@ redirects to any host and stored the reply as a filing.
    dropped. The series then reads as if the period never existed. Returning an
    explicit missing marker would distinguish "not published" from "not
    requested"; this changes the `FredClient` return type.
-3. **Named clocks on source-reported metadata.** The skills repo keeps each
+3. **Named clocks on source-reported metadata.** Proposed as [ADR-0031](../decisions/ADR-0031-named-source-clocks.md) and implemented on the ADR-0029 receipt. The original candidate text follows. The skills repo keeps each
    upstream clock separate (`generated_at`, `as_of`, release vs collection) with
    a JSON Pointer to where it was read. The lab's spec 10.3 temporal fields
    could record which upstream field each clock was taken from.

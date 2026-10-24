@@ -14,6 +14,7 @@ import pytest
 
 from fel_providers.interfaces import MarketBar
 from fel_providers.mocks import MockMarketDataProvider
+from fel_workers.http import SourceClock
 from fel_workers.ingestion.market import (
     AlphaVantageMarketDataProvider,
     FeatureAssemblyError,
@@ -237,3 +238,15 @@ def test_receipted_assembly_with_mock_has_no_receipt_and_still_fails_closed() ->
         assemble_receipted_forecast_features(
             MockMarketDataProvider(), "NOADJ", start=START, end=END
         )
+
+
+def test_market_receipt_records_meta_data_clocks() -> None:
+    """ADR-0031: the refresh date and its time zone, verbatim, with pointers."""
+    _rows, receipt = assemble_receipted_forecast_features(
+        _provider(_fixture_handler), "SYNX", start=START, end=END
+    )
+    assert receipt is not None
+    assert receipt.source_clocks == (
+        SourceClock(name="last_refreshed", value="2026-07-10", path="/Meta Data/3. Last Refreshed"),
+        SourceClock(name="time_zone", value="US/Eastern", path="/Meta Data/5. Time Zone"),
+    )

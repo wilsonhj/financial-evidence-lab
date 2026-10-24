@@ -25,6 +25,7 @@ from fel_workers.http import (
     RetrievalReceipt,
     ThrottledRetryingClient,
     base_url_host,
+    read_source_clocks,
 )
 
 ALPHAVANTAGE_BASE_URL = "https://www.alphavantage.co"
@@ -33,6 +34,12 @@ _FIELD_ADJUSTED_CLOSE = "5. adjusted close"
 _FIELD_VOLUME = "6. volume"
 _FIELD_DIVIDEND = "7. dividend amount"
 _FIELD_SPLIT = "8. split coefficient"
+# Clocks Alpha Vantage reports in "Meta Data" (ADR-0031). The time zone is
+# kept beside the refresh date because the date alone does not name one.
+ALPHAVANTAGE_SOURCE_CLOCKS: dict[str, tuple[str, ...]] = {
+    "last_refreshed": ("Meta Data", "3. Last Refreshed"),
+    "time_zone": ("Meta Data", "5. Time Zone"),
+}
 # Alpha Vantage reports throttling and plan entitlement refusals as HTTP 200
 # with one of these keys instead of data. That is a provider refusal, not
 # evidence that the series lacks adjustments, so it gets its own error.
@@ -149,6 +156,9 @@ class AlphaVantageMarketDataProvider:
             ) from exc
         if not isinstance(payload, dict):
             raise MarketDataError(f"Alpha Vantage returned a non-object payload for {ticker!r}")
+        receipt = receipt.with_source_clocks(
+            read_source_clocks(payload, ALPHAVANTAGE_SOURCE_CLOCKS)
+        )
         if "Error Message" in payload:
             raise MarketDataError(f"Alpha Vantage rejected the request for {ticker!r}")
         refusal = next((key for key in _REFUSAL_KEYS if key in payload), None)

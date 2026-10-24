@@ -31,6 +31,8 @@ which URL was asked for and answered, when, with what status and content
 type, and the SHA-256 of the exact decoded bytes the caller parses. Query
 parameters named in ``secret_query_params`` (API keys) are redacted in the
 receipt, so it can be stored and shown next to the numbers it vouches for.
+Adapters may add the clocks the source itself reports (ADR-0031) with
+:func:`read_source_clocks`; this module never interprets response content.
 """
 
 from __future__ import annotations
@@ -38,7 +40,7 @@ from __future__ import annotations
 import hashlib
 import time
 from collections.abc import Callable, Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 
 import httpx
@@ -51,6 +53,48 @@ MAX_REDIRECTS = 20  # httpx's own default
 # Describe the stored body, not the wire encoding it was decoded from.
 _WIRE_HEADERS = frozenset({"content-encoding", "content-length", "transfer-encoding"})
 REDACTED = "REDACTED"
+
+
+@dataclass(frozen=True)
+class SourceClock:
+    """A time the source reports about its own data (ADR-0031).
+
+    ``value`` is the source's string verbatim, never parsed or normalized:
+    the source's own spelling and timezone convention are the evidence.
+    ``path`` is the RFC 6901 JSON Pointer it was read from, inside the bytes
+    the enclosing receipt's ``content_sha256`` identifies.
+    """
+
+    name: str
+    value: str
+    path: str
+
+
+def json_pointer(parts: tuple[str, ...]) -> str:
+    """RFC 6901 pointer for a path of object keys (``~`` and ``/`` escaped)."""
+    return "".join("/" + part.replace("~", "~0").replace("/", "~1") for part in parts)
+
+
+def read_source_clocks(
+    document: object, fields: Mapping[str, tuple[str, ...]]
+) -> tuple[SourceClock, ...]:
+    """Read each named clock from its exact object-key path in ``document``.
+
+    Only the declared paths are read; nothing is searched for. A clock is
+    recorded only when the path exists and holds a non-empty string. Any
+    other value, including null or a number, counts as not reported.
+    """
+    clocks: list[SourceClock] = []
+    for name, path in fields.items():
+        value: object = document
+        for part in path:
+            if not isinstance(value, dict) or part not in value:
+                value = None
+                break
+            value = value[part]
+        if isinstance(value, str) and value:
+            clocks.append(SourceClock(name=name, value=value, path=json_pointer(path)))
+    return tuple(clocks)
 
 
 @dataclass(frozen=True)
@@ -73,6 +117,14 @@ class RetrievalReceipt:
     byte_length: int
     content_sha256: str
     attempts: int
+    source_clocks: tuple[SourceClock, ...] | None = None
+    """Clocks the source reported in this body (ADR-0031). ``()`` means an
+    adapter looked and the source reported none; ``None`` means nothing
+    source-aware read the body (the HTTP layer alone never fills it)."""
+
+    def with_source_clocks(self, clocks: tuple[SourceClock, ...]) -> RetrievalReceipt:
+        """A copy of this receipt carrying ``clocks``."""
+        return replace(self, source_clocks=clocks)
 
 
 def redact_url(url: httpx.URL, secret_params: frozenset[str]) -> str:

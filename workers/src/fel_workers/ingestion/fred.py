@@ -25,9 +25,20 @@ from fel_workers.http import (
     RetrievalReceipt,
     ThrottledRetryingClient,
     base_url_host,
+    read_source_clocks,
 )
 
 FRED_BASE_URL = "https://api.stlouisfed.org"
+# Clocks ALFRED reports at the top of an observations response (ADR-0031):
+# the real-time window the vintage describes and the observation range.
+# Per-row realtime_* fields are not read: with the window pinned to one day
+# they only echo it.
+FRED_SOURCE_CLOCKS: dict[str, tuple[str, ...]] = {
+    "realtime_start": ("realtime_start",),
+    "realtime_end": ("realtime_end",),
+    "observation_start": ("observation_start",),
+    "observation_end": ("observation_end",),
+}
 _MISSING_VALUE = "."
 
 # No-lookahead policy (spec 10.3): ALFRED realtime windows are DATE
@@ -295,6 +306,7 @@ class LiveFredClient:
         raw_observations = payload.get("observations") if isinstance(payload, dict) else None
         if not isinstance(raw_observations, list):
             raise FredIngestionError(f"FRED payload for {series_id!r} is missing 'observations'")
+        receipt = receipt.with_source_clocks(read_source_clocks(payload, FRED_SOURCE_CLOCKS))
         points: list[tuple[date, Decimal]] = []
         missing: list[date] = []
         seen: set[date] = set()

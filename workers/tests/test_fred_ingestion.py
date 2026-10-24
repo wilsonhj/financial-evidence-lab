@@ -11,6 +11,7 @@ import httpx
 import pytest
 
 from fel_providers.mocks import MockFredClient
+from fel_workers.http import SourceClock
 from fel_workers.ingestion.fred import (
     FredIngestionError,
     GapReportingFredClient,
@@ -287,3 +288,37 @@ def test_repeated_observation_date_fails_closed(second: str) -> None:
     )
     with pytest.raises(FredIngestionError, match="repeats observation date 2026-01-01"):
         client.fetch_vintage("CPIAUCSL", as_of=_GAP_AS_OF)
+
+
+# --- Named source clocks (ADR-0031) ---------------------------------------
+
+
+def test_fred_receipt_records_alfred_window_clocks_verbatim() -> None:
+    body = json.dumps(
+        {
+            "realtime_start": "2026-03-14",
+            "realtime_end": "2026-03-14",
+            "observation_start": "1600-01-01",
+            "observation_end": "9999-12-31",
+            "observations": [{"date": "2026-01-01", "value": "310.5"}],
+        }
+    ).encode()
+    client = LiveFredClient(
+        "fred-key-not-a-secret",
+        transport=httpx.MockTransport(lambda r: httpx.Response(200, content=body)),
+    )
+    record = ingest_fred_vintage_record(client, "CPIAUCSL", as_of=_GAP_AS_OF)
+    receipt = record.observations[0].receipt
+    assert receipt is not None
+    assert receipt.source_clocks == (
+        SourceClock(name="realtime_start", value="2026-03-14", path="/realtime_start"),
+        SourceClock(name="realtime_end", value="2026-03-14", path="/realtime_end"),
+        SourceClock(name="observation_start", value="1600-01-01", path="/observation_start"),
+        SourceClock(name="observation_end", value="9999-12-31", path="/observation_end"),
+    )
+
+
+def test_fred_response_without_clocks_reports_none_found() -> None:
+    client = _gap_client([{"date": "2026-01-01", "value": "310.5"}])
+    fetch = client.fetch_vintage("CPIAUCSL", as_of=_GAP_AS_OF)
+    assert fetch.receipt.source_clocks == ()

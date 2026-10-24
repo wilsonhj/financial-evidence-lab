@@ -11,7 +11,14 @@ from datetime import UTC, datetime, timedelta, timezone
 import httpx
 import pytest
 
-from fel_workers.http import HttpRequestError, ThrottledRetryingClient, base_url_host
+from fel_workers.http import (
+    HttpRequestError,
+    SourceClock,
+    ThrottledRetryingClient,
+    base_url_host,
+    json_pointer,
+    read_source_clocks,
+)
 from fel_workers.ingestion.fred import LiveFredClient
 from fel_workers.ingestion.market import AlphaVantageMarketDataProvider
 from fel_workers.ingestion.sec_client import LiveSecClient, SecFetchError
@@ -461,3 +468,45 @@ def test_receipt_time_is_normalized_to_utc_and_naive_clock_is_refused() -> None:
 def test_get_is_unchanged_and_returns_only_the_response() -> None:
     client = _client(lambda r: httpx.Response(200, content=b"ok"), FakeClock())
     assert client.get("https://example.invalid/x").content == b"ok"
+
+
+# --- Named source clocks (ADR-0031) ---------------------------------------
+
+
+def test_read_source_clocks_reads_only_declared_paths_verbatim() -> None:
+    document = {
+        "as_of": "2026-07-10T16:00:00-04:00",
+        "meta": {"refreshed": "2026-07-10", "count": 3, "empty": "", "none": None},
+        "deep": {"as_of": "not declared, never read"},
+    }
+    clocks = read_source_clocks(
+        document,
+        {
+            "as_of": ("as_of",),
+            "refreshed": ("meta", "refreshed"),
+            "count": ("meta", "count"),
+            "empty": ("meta", "empty"),
+            "none": ("meta", "none"),
+            "absent": ("meta", "absent"),
+            "through_scalar": ("as_of", "child"),
+        },
+    )
+    assert clocks == (
+        SourceClock(name="as_of", value="2026-07-10T16:00:00-04:00", path="/as_of"),
+        SourceClock(name="refreshed", value="2026-07-10", path="/meta/refreshed"),
+    )
+    assert read_source_clocks(["not", "an", "object"], {"as_of": ("as_of",)}) == ()
+
+
+def test_json_pointer_escapes_tilde_and_slash() -> None:
+    assert json_pointer(("Meta Data", "3. Last Refreshed")) == "/Meta Data/3. Last Refreshed"
+    assert json_pointer(("a/b", "c~d")) == "/a~1b/c~0d"
+
+
+def test_http_layer_alone_never_claims_source_clocks() -> None:
+    client = _client(lambda r: httpx.Response(200, json={"as_of": "2026-07-10"}), FakeClock())
+    _response, receipt = client.get_with_receipt("https://example.invalid/x")
+    assert receipt.source_clocks is None
+    with_clocks = receipt.with_source_clocks(())
+    assert with_clocks.source_clocks == ()
+    assert with_clocks.content_sha256 == receipt.content_sha256
