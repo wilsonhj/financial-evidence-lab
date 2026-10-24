@@ -2,6 +2,12 @@
 
 This directory is the restart point for all implementation agents. Fable must be able to reconstruct the queue solely from GitHub and `workstreams.yaml`; conversation history is optional context.
 
+> **Which entry point?** For a first session in this repository, follow the
+> reading order in [`AGENTS.md`](../../AGENTS.md#read-before-changing-code).
+> To resume assigned work, follow the resume sequence in
+> [`CLAUDE.md`](../../CLAUDE.md), which reads [`STATUS.md`](STATUS.md) and
+> [`workstreams.yaml`](workstreams.yaml) first.
+
 ## Current state
 
 Resolve the live queue from GitHub, then read [`STATUS.md`](STATUS.md) and
@@ -31,6 +37,28 @@ merged implementations from outstanding acceptance evidence.
 - Follow the dispatch checklist below. An explicit blocked entry is not
   permission to work merely because a historical blocker has cleared; confirm
   dependencies, path ownership and the current lead registration first.
+
+## Briefs in this directory
+
+Dated briefs are dispatch context, not sources of truth; the order below still
+governs. Current briefs:
+
+- [`implementation-agents-2026-09-16.md`](implementation-agents-2026-09-16.md)
+  — external implementation cards for #336 and #337 against an immutable pin.
+- [`external-agents-2026-09-16.md`](external-agents-2026-09-16.md) — bounded
+  research and review cards. For #336 and #337 only, the implementation cards
+  above replace its research-only cards.
+
+Historical records:
+
+- [`execution-2026-09-09.md`](execution-2026-09-09.md) — per-issue execution
+  evidence from the September 9 backlog run and its continuations.
+- [`EXTERNAL_AGENT_BRIEF.md`](EXTERNAL_AGENT_BRIEF.md) (issued 2026-07-13),
+  [`SESSION_BRIEF_SEC_EGRESS.md`](SESSION_BRIEF_SEC_EGRESS.md) (2026-07-13) and
+  [`EXT_EXECUTOR_BRIEF_V2.md`](EXT_EXECUTOR_BRIEF_V2.md) (2026-07-14) — the July
+  EXT-1/2/3 briefs for PRs #74–#76. [`STATUS.md`](STATUS.md) records the
+  #74/#75 research as recovered onto `main`, and `EXTERNAL_AGENT_BRIEF.md`
+  bases branches on the retired `integration/m0`; do not dispatch from them.
 
 ## Source of truth
 

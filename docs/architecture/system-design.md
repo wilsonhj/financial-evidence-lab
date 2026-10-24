@@ -1,8 +1,44 @@
 # System design
 
+<details>
+<summary>Relevant source files</summary>
+
+- [apps/api/app/dependencies.py](../../apps/api/app/dependencies.py) — verifier selection and membership lookup
+- [apps/api/app/db.py](../../apps/api/app/db.py) — transaction-local request claims and `SET LOCAL ROLE fel_app`
+- [apps/api/app/reader.py](../../apps/api/app/reader.py) — composite reader endpoint and cutoff predicates
+- [workers/src/fel_workers/queue.py](../../workers/src/fel_workers/queue.py) — `SKIP LOCKED` job queue, leases and reaping
+- [packages/retrieval/fel_retrieval/fusion.py](../../packages/retrieval/fel_retrieval/fusion.py) — lane fusion and RRF
+- [packages/ontology/fel_ontology/](../../packages/ontology/fel_ontology/) — saas-metrics/v1 ontology
+- [workers/src/fel_workers/extraction/workflow.py](../../workers/src/fel_workers/extraction/workflow.py) — durable extraction workflow FSM
+- [workers/src/fel_workers/extraction/budget.py](../../workers/src/fel_workers/extraction/budget.py) — extraction budget enforcement
+- [workers/src/fel_workers/extraction/normalize/](../../workers/src/fel_workers/extraction/normalize/) — payload normalization
+- [workers/src/fel_workers/extraction/validate/](../../workers/src/fel_workers/extraction/validate/) — deterministic validators
+- [workers/src/fel_workers/redact.py](../../workers/src/fel_workers/redact.py) — job error redaction
+- [db/migrations/0004_extraction_core.sql](../../db/migrations/0004_extraction_core.sql) — extraction tables, RLS and transition guards
+
+</details>
+
+Source references verified against commit `437ce55`.
+
 This guide explains how Financial Evidence Lab preserves tenant, temporal, and
 evidence correctness across ingestion, retrieval, and review. It is aimed at a
 developer changing runtime behavior, schemas, or service boundaries.
+
+## Contents
+
+- [Design goals](#design-goals)
+- [Identity, tenancy, and authorization](#identity-tenancy-and-authorization)
+- [Temporal model](#temporal-model)
+- [Ingestion and evidence storage](#ingestion-and-evidence-storage)
+- [Reader request path](#reader-request-path)
+- [Retrieval pipeline](#retrieval-pipeline)
+- [Extraction boundary](#extraction-boundary)
+- [Failure, concurrency, and idempotency semantics](#failure-concurrency-and-idempotency-semantics)
+- [Cost and observability](#cost-and-observability)
+- [Deployment modes](#deployment-modes)
+- [Known gaps and open decisions](#known-gaps-and-open-decisions)
+- [Change rules](#change-rules)
+- [Related pages](#related-pages)
 
 ## Design goals
 
@@ -397,7 +433,7 @@ Extend these modules, not `payload.py`: as of
 [issue #155](https://github.com/wilsonhj/financial-evidence-lab/issues/155)
 they are the live path, and the private duplicates are gone. The `currency`
 field itself still must match `^[A-Z]{3}$` in `normalize/currency.py`; case
-aliases for currency *units* are a comparison-only policy (ADR-0019,
+aliases for currency _units_ are a comparison-only policy (ADR-0019,
 [issue #153](https://github.com/wilsonhj/financial-evidence-lab/issues/153))
 that never rewrites the payload.
 
@@ -670,3 +706,15 @@ Before changing contracts, migrations, or architecture:
    each category concretely requires (its "Required tests by change type"
    table) and how to run the database-backed suite locally;
 6. attach exact verification evidence to the pull request.
+
+## Related pages
+
+- [Executive architecture brief](executive-brief.md)
+- [Architecture overview](overview.md)
+- [API](../../apps/api/README.md)
+- [Workers](../../workers/README.md)
+- [Ontology](../../packages/ontology/README.md)
+- [Retrieval evals](../../packages/retrieval-evals/README.md)
+- [Extraction worker runbook](../runbooks/extraction-worker.md)
+- [Testing guide](../development/testing.md)
+- [Architecture decisions](../decisions/)
