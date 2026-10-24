@@ -19,7 +19,7 @@ from decimal import Decimal, InvalidOperation
 import httpx
 
 from fel_providers.interfaces import FredClient
-from fel_workers.http import HttpRequestError, ThrottledRetryingClient
+from fel_workers.http import HttpRequestError, ThrottledRetryingClient, base_url_host
 
 FRED_BASE_URL = "https://api.stlouisfed.org"
 _MISSING_VALUE = "."
@@ -116,6 +116,7 @@ class LiveFredClient:
             timeout_seconds=timeout_seconds,
             min_interval_seconds=min_interval_seconds,
             max_retries=max_retries,
+            allowed_hosts=base_url_host(base_url),
             sleep=sleep,
             monotonic=monotonic,
         )
@@ -144,7 +145,10 @@ class LiveFredClient:
             raise FredIngestionError(
                 f"FRED observations request for {series_id!r} failed: {exc}"
             ) from exc
-        payload = response.json()
+        try:
+            payload = response.json()
+        except ValueError as exc:
+            raise FredIngestionError(f"FRED response for {series_id!r} is not valid JSON") from exc
         raw_observations = payload.get("observations") if isinstance(payload, dict) else None
         if not isinstance(raw_observations, list):
             raise FredIngestionError(f"FRED payload for {series_id!r} is missing 'observations'")

@@ -902,6 +902,17 @@ packages:
       - README.md
       - docs/architecture/**
       - docs/development/**
+  - id: DOCS-EXECUTIVE-ARCHITECTURE # executive brief, living architecture-doc corrections, and importable diagram
+    issue: 341
+    tasks: [] # Documentation only; no duplicate Spec Kit ledger.
+    depends_on: [DOCS-ONBOARDING]
+    team: platform
+    branch: agent/executive-architecture-docs
+    status: active # Owner-requested PR, September 22; independent lead review and CI before merging.
+    allowed_paths:
+      - README.md
+      - docs/architecture/**
+      - docs/handoff/workstreams.yaml # Registration-only shared edit; contract-change label and lead review.
   - id: EVALS-REPORT-RENDER # stdlib-only corpus-QA report renderer (Markdown + SVG)
     issue: 151
     # Deliberately empty: no Spec Kit task covers eval-report rendering. The

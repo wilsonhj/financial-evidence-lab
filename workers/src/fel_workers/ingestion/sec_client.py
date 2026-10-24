@@ -25,6 +25,14 @@ from fel_workers.http import HttpRequestError, ThrottledRetryingClient
 SEC_USER_AGENT = "financial-evidence-lab research (sordidsunday@icloud.com)"
 SUBMISSIONS_BASE_URL = "https://data.sec.gov/submissions"
 COMPANY_FACTS_BASE_URL = "https://data.sec.gov/api/xbrl/companyfacts"
+# Every hop, redirects included, must stay on EDGAR. ``fetch_document`` takes
+# its URL from the sec_filing_fetch job payload, so without this pin a crafted
+# job could point the worker at an internal address and store the reply as a
+# filing.
+SEC_ALLOWED_HOSTS = frozenset({"data.sec.gov", "www.sec.gov"})
+# Large-issuer inline-XBRL filings run to tens of MB; this is a memory
+# backstop well above them, not a content policy.
+SEC_MAX_RESPONSE_BYTES = 256 * 1024 * 1024
 
 
 class SecFetchError(Exception):
@@ -59,6 +67,7 @@ class LiveSecClient:
         timeout_seconds: float = 30.0,
         min_interval_seconds: float = 0.5,
         max_retries: int = 3,
+        max_response_bytes: int = SEC_MAX_RESPONSE_BYTES,
         sleep: Callable[[float], None] = time.sleep,
         monotonic: Callable[[], float] = time.monotonic,
     ) -> None:
@@ -69,6 +78,8 @@ class LiveSecClient:
             min_interval_seconds=min_interval_seconds,
             max_retries=max_retries,
             follow_redirects=True,
+            allowed_hosts=SEC_ALLOWED_HOSTS,
+            max_response_bytes=max_response_bytes,
             sleep=sleep,
             monotonic=monotonic,
         )
