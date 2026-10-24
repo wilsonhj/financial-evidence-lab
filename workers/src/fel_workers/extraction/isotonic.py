@@ -114,7 +114,7 @@ def _check_depth(value: object, depth: int) -> None:
     if kind is dict:
         for inner in cast(dict[str, object], value).values():
             _check_depth(inner, depth + 1)
-    elif kind is list:
+    else:
         for inner in cast(list[object], value):
             _check_depth(inner, depth + 1)
 
@@ -402,4 +402,4 @@ def evaluate(artifact: dict[str, object], samples: Samples) -> dict[str, object]
     return _evaluation(status, blocks, parsed)
 
 
-__all__ = ["CalibrationError", "ErrorCode", "Samples", "evaluate", "fit", "predict"]
+__all__ = ["CalibrationError", "evaluate", "fit", "predict"]

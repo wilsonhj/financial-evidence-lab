@@ -132,11 +132,19 @@ def test_equal_adjacent_means_coalesce_into_one_block() -> None:
     ]
 
 
-def test_quantization_rounds_half_even() -> None:
-    # 1/8192 = 0.0001220703125 exactly; HALF_UP would emit ...313.
-    artifact = fit(_rows("0.1", 1, 8191) + _rows("0.9", 39, 1))
+@pytest.mark.parametrize(
+    ("positive", "expected"),
+    [
+        # 1/8192 = 0.0001220703125: even digit before the tie; HALF_UP gives ...313.
+        (1, "0.000122070312"),
+        # 3/8192 = 0.0003662109375: odd digit before the tie; HALF_DOWN gives ...937.
+        (3, "0.000366210938"),
+    ],
+)
+def test_quantization_rounds_half_even(positive: int, expected: str) -> None:
+    artifact = fit(_rows("0.1", positive, 8192 - positive) + _rows("0.9", 39, 1))
     predicted = predict(artifact, "0.1")
-    assert str(predicted) == "0.000122070312"
+    assert str(predicted) == expected
 
 
 def test_permutation_stability_and_monotonic_predictions() -> None:
