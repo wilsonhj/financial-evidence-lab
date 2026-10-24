@@ -40,7 +40,7 @@ redirects to any host and stored the reply as a filing.
    Adding `{source_url, retrieved_at, content_sha256}` would let every FRED or
    market number cite the exact bytes it came from, as SEC spans already do.
    `FredClient`/`MarketDataProvider` return shapes are frozen protocols.
-2. **Explicit FRED missing values.** ALFRED's `"."` placeholder is currently
+2. **Explicit FRED missing values.** Proposed as [ADR-0030](../decisions/ADR-0030-explicit-fred-missing-values.md) and implemented without changing the frozen protocols. The original candidate text follows. ALFRED's `"."` placeholder is currently
    dropped. The series then reads as if the period never existed. Returning an
    explicit missing marker would distinguish "not published" from "not
    requested"; this changes the `FredClient` return type.

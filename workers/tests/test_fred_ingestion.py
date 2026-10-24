@@ -13,9 +13,12 @@ import pytest
 from fel_providers.mocks import MockFredClient
 from fel_workers.ingestion.fred import (
     FredIngestionError,
+    GapReportingFredClient,
     LiveFredClient,
+    MissingObservation,
     ReceiptedFredClient,
     ingest_fred_vintage,
+    ingest_fred_vintage_record,
     vintage_cutoff_date,
 )
 
@@ -208,3 +211,79 @@ def test_same_vintage_fetched_twice_is_equal_but_keeps_both_receipts() -> None:
     assert first[0].receipt is not None and second[0].receipt is not None
     assert first[0].receipt.retrieved_at != second[0].receipt.retrieved_at
     assert first[0].receipt.content_sha256 == second[0].receipt.content_sha256
+
+
+# --- Explicit missing values (ADR-0030) -----------------------------------
+
+_GAP_AS_OF = datetime(2026, 3, 15, tzinfo=UTC)
+
+
+def _gap_client(observations: list[object]) -> LiveFredClient:
+    body = json.dumps({"observations": observations}).encode()
+    return LiveFredClient(
+        "fred-key-not-a-secret",
+        transport=httpx.MockTransport(lambda r: httpx.Response(200, content=body)),
+    )
+
+
+def test_record_keeps_alfred_gaps_as_explicit_missing_observations() -> None:
+    client = _gap_client(
+        [
+            {"date": "2026-03-01", "value": "311.2"},
+            {"date": "2026-02-01", "value": "."},
+            {"date": "2026-01-01", "value": "310.5"},
+        ]
+    )
+    assert isinstance(client, GapReportingFredClient)
+    record = ingest_fred_vintage_record(client, "CPIAUCSL", as_of=_GAP_AS_OF)
+    assert [(o.observed_on, o.value) for o in record.observations] == [
+        (date(2026, 1, 1), Decimal("310.5")),
+        (date(2026, 3, 1), Decimal("311.2")),
+    ]
+    assert record.missing == (
+        MissingObservation(series_id="CPIAUCSL", observed_on=date(2026, 2, 1), as_of=_GAP_AS_OF),
+    )
+    (gap,) = record.missing
+    assert gap.receipt is not None
+    assert gap.receipt is record.observations[0].receipt
+    # The list API is unchanged: same observations, gaps not included.
+    assert ingest_fred_vintage(client, "CPIAUCSL", as_of=_GAP_AS_OF) == list(record.observations)
+
+
+def test_no_gaps_reported_is_distinct_from_gaps_not_knowable() -> None:
+    live = ingest_fred_vintage_record(
+        _gap_client([{"date": "2026-01-01", "value": "310.5"}]), "CPIAUCSL", as_of=_GAP_AS_OF
+    )
+    assert live.missing == ()
+    mock = ingest_fred_vintage_record(MockFredClient(), "CPIAUCSL", as_of=_GAP_AS_OF)
+    assert not isinstance(MockFredClient(), GapReportingFredClient)
+    assert mock.observations
+    assert mock.missing is None
+
+
+@pytest.mark.parametrize(
+    ("row", "message"),
+    [
+        ({"date": "2026-01-01"}, "malformed"),
+        ({"value": "310.5"}, "malformed"),
+        ("2026-01-01,310.5", "malformed"),
+        ({"date": "2026-01-01", "value": "NaN"}, "not a finite number"),
+        ({"date": "2026-01-01", "value": "Infinity"}, "not a finite number"),
+        ({"date": "not-a-date", "value": "310.5"}, "unparseable"),
+    ],
+)
+def test_malformed_rows_fail_closed_instead_of_being_skipped(row: object, message: str) -> None:
+    client = _gap_client([{"date": "2026-02-01", "value": "311.0"}, row])
+    with pytest.raises(FredIngestionError, match=message):
+        client.fetch_vintage("CPIAUCSL", as_of=_GAP_AS_OF)
+    with pytest.raises(FredIngestionError, match=message):
+        client.series_vintage("CPIAUCSL", as_of=_GAP_AS_OF)
+
+
+@pytest.mark.parametrize("second", ["311.0", "."])
+def test_repeated_observation_date_fails_closed(second: str) -> None:
+    client = _gap_client(
+        [{"date": "2026-01-01", "value": "310.5"}, {"date": "2026-01-01", "value": second}]
+    )
+    with pytest.raises(FredIngestionError, match="repeats observation date 2026-01-01"):
+        client.fetch_vintage("CPIAUCSL", as_of=_GAP_AS_OF)

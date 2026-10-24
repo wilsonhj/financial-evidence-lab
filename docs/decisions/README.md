@@ -35,3 +35,4 @@ The Status column below is abbreviated. Many ADRs qualify their status with a lo
 | [ADR-0027](ADR-0027-deployment-modes.md) | Explicit deployment modes and public shared-identity refusal | Accepted (qualified) | 2026-09-16 | — |
 | [ADR-0028](ADR-0028-offline-calibration-primitives.md) | Offline extraction calibration preparation | Accepted (qualified) | 2026-09-16 | — |
 | [ADR-0029](ADR-0029-retrieval-receipts.md) | Retrieval receipts for non-SEC provider fetches | Proposed | 2026-10-24 | — |
+| [ADR-0030](ADR-0030-explicit-fred-missing-values.md) | Explicit FRED missing values | Proposed | 2026-10-24 | — |

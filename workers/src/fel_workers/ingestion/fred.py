@@ -89,32 +89,122 @@ class ReceiptedFredClient(FredClient, Protocol):
     ) -> tuple[list[tuple[date, Decimal]], RetrievalReceipt]: ...
 
 
+@dataclass(frozen=True)
+class FredVintageFetch:
+    """One ALFRED response parsed without dropping anything (ADR-0030).
+
+    ``missing`` holds the dates ALFRED returned with its ``"."`` placeholder:
+    the vintage covers that date but publishes no value for it. A date that
+    is in neither tuple was not in the response at all.
+    """
+
+    points: tuple[tuple[date, Decimal], ...]
+    missing: tuple[date, ...]
+    receipt: RetrievalReceipt
+
+
+@runtime_checkable
+class GapReportingFredClient(ReceiptedFredClient, Protocol):
+    """Workers-local capability: report explicit missing values (ADR-0030).
+
+    Extends :class:`ReceiptedFredClient` without touching the frozen
+    ``FredClient``, whose ``list[tuple[date, Decimal]]`` cannot carry them.
+    """
+
+    def fetch_vintage(self, series_id: str, *, as_of: datetime) -> FredVintageFetch: ...
+
+
+@dataclass(frozen=True)
+class MissingObservation:
+    """A date the vintage covers but publishes no value for (ALFRED ``"."``).
+
+    Never a zero or a carried-forward value: the absence itself is the
+    record. ``receipt`` is provenance, excluded from equality as on
+    :class:`VintageObservation`.
+    """
+
+    series_id: str
+    observed_on: date
+    as_of: datetime
+    receipt: RetrievalReceipt | None = field(default=None, compare=False)
+
+
+@dataclass(frozen=True)
+class FredVintageRecord:
+    """A series vintage with its published values and its explicit gaps.
+
+    ``missing`` is ``()`` when the source reported no gaps and ``None`` when
+    the client cannot report them at all (e.g. a mock): "no gaps" and "not
+    known" stay distinguishable.
+    """
+
+    series_id: str
+    as_of: datetime
+    observations: tuple[VintageObservation, ...]
+    missing: tuple[MissingObservation, ...] | None
+
+
+def ingest_fred_vintage_record(
+    client: FredClient, series_id: str, *, as_of: datetime
+) -> FredVintageRecord:
+    """Fetch a series vintage keeping published values and explicit gaps.
+
+    Both tuples are sorted by observation date. ``missing`` is populated only
+    for a :class:`GapReportingFredClient`; otherwise it is ``None``.
+    """
+    if as_of.tzinfo is None:
+        raise FredIngestionError(f"as_of cutoff for series {series_id!r} must be timezone-aware")
+    receipt: RetrievalReceipt | None = None
+    missing_days: tuple[date, ...] | None = None
+    if isinstance(client, GapReportingFredClient):
+        fetch = client.fetch_vintage(series_id, as_of=as_of)
+        points, missing_days, receipt = list(fetch.points), fetch.missing, fetch.receipt
+    elif isinstance(client, ReceiptedFredClient):
+        points, receipt = client.series_vintage_with_receipt(series_id, as_of=as_of)
+    else:
+        points = client.series_vintage(series_id, as_of=as_of)
+    observations = tuple(
+        sorted(
+            (
+                VintageObservation(
+                    series_id=series_id,
+                    observed_on=day,
+                    value=value,
+                    as_of=as_of,
+                    receipt=receipt,
+                )
+                for day, value in points
+            ),
+            key=lambda item: item.observed_on,
+        )
+    )
+    missing = (
+        None
+        if missing_days is None
+        else tuple(
+            MissingObservation(series_id=series_id, observed_on=day, as_of=as_of, receipt=receipt)
+            for day in sorted(missing_days)
+        )
+    )
+    return FredVintageRecord(
+        series_id=series_id, as_of=as_of, observations=observations, missing=missing
+    )
+
+
 def ingest_fred_vintage(
     client: FredClient, series_id: str, *, as_of: datetime
 ) -> list[VintageObservation]:
     """Fetch a series vintage through the protocol, sorted by observation date.
 
     When the client supports :class:`ReceiptedFredClient`, every observation
-    carries the receipt of the response it was parsed from.
+    carries the receipt of the response it was parsed from. Explicit gaps
+    (ALFRED ``"."``) are not returned here; use
+    :func:`ingest_fred_vintage_record` to keep them (ADR-0030).
 
     ``as_of`` must be timezone-aware: a naive cutoff cannot be compared to
     published_at timestamps and would silently break point-in-time queries.
     """
-    if as_of.tzinfo is None:
-        raise FredIngestionError(f"as_of cutoff for series {series_id!r} must be timezone-aware")
-    receipt: RetrievalReceipt | None = None
-    if isinstance(client, ReceiptedFredClient):
-        points, receipt = client.series_vintage_with_receipt(series_id, as_of=as_of)
-    else:
-        points = client.series_vintage(series_id, as_of=as_of)
-    observations = [
-        VintageObservation(
-            series_id=series_id, observed_on=day, value=value, as_of=as_of, receipt=receipt
-        )
-        for day, value in points
-    ]
-    observations.sort(key=lambda item: item.observed_on)
-    return observations
+    return list(ingest_fred_vintage_record(client, series_id, as_of=as_of).observations)
 
 
 class LiveFredClient:
@@ -162,13 +252,22 @@ class LiveFredClient:
         self._client.close()
 
     def series_vintage(self, series_id: str, *, as_of: datetime) -> list[tuple[date, Decimal]]:
-        points, _receipt = self.series_vintage_with_receipt(series_id, as_of=as_of)
-        return points
+        return list(self.fetch_vintage(series_id, as_of=as_of).points)
 
     def series_vintage_with_receipt(
         self, series_id: str, *, as_of: datetime
     ) -> tuple[list[tuple[date, Decimal]], RetrievalReceipt]:
         """:meth:`series_vintage` plus the receipt for the response (ADR-0029)."""
+        fetch = self.fetch_vintage(series_id, as_of=as_of)
+        return list(fetch.points), fetch.receipt
+
+    def fetch_vintage(self, series_id: str, *, as_of: datetime) -> FredVintageFetch:
+        """Fetch and parse one vintage, keeping explicit gaps (ADR-0030).
+
+        Fails closed on a row that is not an object, lacks ``date`` or
+        ``value``, repeats a date, or carries a non-finite value: each would
+        otherwise be silently skipped or mis-read.
+        """
         if as_of.tzinfo is None:
             raise FredIngestionError(
                 f"as_of cutoff for series {series_id!r} must be timezone-aware"
@@ -197,16 +296,37 @@ class LiveFredClient:
         if not isinstance(raw_observations, list):
             raise FredIngestionError(f"FRED payload for {series_id!r} is missing 'observations'")
         points: list[tuple[date, Decimal]] = []
+        missing: list[date] = []
+        seen: set[date] = set()
         for item in raw_observations:
-            if not isinstance(item, dict):
-                continue
-            value_text = str(item.get("value", _MISSING_VALUE))
-            if value_text == _MISSING_VALUE:
-                continue
+            if not isinstance(item, dict) or "date" not in item or "value" not in item:
+                raise FredIngestionError(
+                    f"FRED observation for {series_id!r} is malformed: {item!r}"
+                )
             try:
-                points.append((date.fromisoformat(str(item.get("date"))), Decimal(value_text)))
-            except (ValueError, InvalidOperation) as exc:
+                day = date.fromisoformat(str(item["date"]))
+            except ValueError as exc:
                 raise FredIngestionError(
                     f"FRED observation for {series_id!r} is unparseable: {item!r}"
                 ) from exc
-        return points, receipt
+            if day in seen:
+                raise FredIngestionError(
+                    f"FRED payload for {series_id!r} repeats observation date {day}"
+                )
+            seen.add(day)
+            value_text = str(item["value"])
+            if value_text == _MISSING_VALUE:
+                missing.append(day)
+                continue
+            try:
+                value = Decimal(value_text)
+            except InvalidOperation as exc:
+                raise FredIngestionError(
+                    f"FRED observation for {series_id!r} is unparseable: {item!r}"
+                ) from exc
+            if not value.is_finite():
+                raise FredIngestionError(
+                    f"FRED observation for {series_id!r} is not a finite number: {item!r}"
+                )
+            points.append((day, value))
+        return FredVintageFetch(points=tuple(points), missing=tuple(missing), receipt=receipt)
