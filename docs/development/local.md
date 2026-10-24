@@ -82,13 +82,11 @@ docker run --name fel-postgres \
   -d pgvector/pgvector:0.8.5-pg17
 ```
 
-Set the connection URL and apply migrations in filename order:
+Set the connection URL and apply migrations via the checksummed migration applier (`scripts/db/migrate.py`, ADR-0014):
 
 ```sh
 export FEL_DATABASE_URL=postgresql://fel:fel@localhost:5432/fel_dev
-for migration in db/migrations/*.sql; do
-  psql "$FEL_DATABASE_URL" -v ON_ERROR_STOP=1 -f "$migration"
-done
+.venv/bin/python scripts/db/migrate.py
 ```
 
 Migrations create the application roles and enable RLS. The migration user

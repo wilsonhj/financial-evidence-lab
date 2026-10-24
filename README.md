@@ -6,120 +6,142 @@
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](./LICENSE)
 
 Financial Evidence Lab is an evidence-first workspace for researching public
-companies. It connects filing ingestion, point-in-time search, verifiable
-claims, structured extraction, and financial modeling without losing the
-source behind a number or conclusion.
+companies. It connects SEC filing ingestion, point-in-time hybrid search,
+verifiable claims, durable agentic extraction, human conflict review, and
+deterministic financial modeling without ever losing the exact source span
+behind a number or conclusion.
 
-The project is deliberately **mock-first**. You can explore the reader and
-Search Observatory without credentials, then add PostgreSQL and live providers
-when you need the complete data path.
+The project is deliberately **mock-first**. You can explore the Evidence Reader,
+Earnings Update Desk (with interactive 3D/2D lineage graphics), Search
+Observatory, and Extraction Review Queue locally without credentials or a
+database, then enable PostgreSQL 17 (`pgvector`) and live providers when you
+need the full persistence and ingestion stack.
 
-> This is active pre-release software. The reader, hybrid-retrieval, and
-> structured-extraction foundations are implemented mock-first, while financial
-> modeling and forecasting remain roadmap work.
+![Financial Evidence Lab — System Architecture & Trust Boundaries](./docs/architecture/assets/system-overview.svg)
 
-## What works today
-
-Status as of **2026-07-30** on `main` (`61058e4`):
-
-| Area                          | State                             | What that means                                                                                                                                                                                                                                                                                                                                                 |
-| ----------------------------- | --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Platform foundation           | Implemented                       | Workspace APIs, mock authentication, tenant-scoped RLS, audit/cost primitives, PostgreSQL jobs, and CI are in place.                                                                                                                                                                                                                                            |
-| Evidence ingestion and reader | Implemented, with live gates open | SEC ingestion, immutable document versions, canonical spans/facts, a composite reader API, and the Next.js evidence reader work in tests and mock mode. The 20-issuer live corpus gate and hosted end-to-end smoke are still open.                                                                                                                              |
-| Hybrid retrieval and claims   | Implemented, mock-first           | Dense, lexical, fact, and table lanes, deterministic planning/RRF, replayable traces, feedback, claim decomposition, and the Search Observatory are present. Live embedding/generation selection and the 65-question acceptance run remain open.                                                                                                                |
-| Structured extraction         | Implemented, mock-first           | The v0.4 API/database/provider foundation, the `packages/ontology` SaaS metric ontology, and the durable extraction worker are all on `main`: typed extraction roles, a checkpointed workflow FSM, normalization, deterministic validators, hard budget enforcement, and atomic persistence. Live-provider extraction and the confidence/review gates are open. |
-| Modeling and forecasting      | Not implemented                   | M4 and M5 are specified but should not be treated as runnable product features.                                                                                                                                                                                                                                                                                 |
-
-The authoritative product requirements live in
-[`specs/001-financial-evidence-lab/`](./specs/001-financial-evidence-lab/).
-GitHub issues and pull requests are the live source for delivery state; the
-handoff snapshots can lag recent merges.
+---
 
 ## Try the UI in five minutes
 
-You need Node 22 and Corepack. The fixture mode does not require Python,
-PostgreSQL, or API keys.
+You need **Node.js 24.20.0** (`.node-version` / `.nvmrc`) and **Corepack**.
+Fixture mode runs completely offline and does not require Python, PostgreSQL,
+or API keys:
 
 ```sh
 corepack enable
 corepack pnpm install --frozen-lockfile
-FEL_EVIDENCE_SOURCE=fixture corepack pnpm --filter @fel/web dev
+FEL_DEPLOYMENT_MODE=fixture FEL_API_BEARER_TOKEN= FEL_EVIDENCE_SOURCE=fixture corepack pnpm --filter @fel/web dev
 ```
 
-Open:
+Open these interactive workspaces in your browser:
 
-- <http://localhost:3000> for the filing list and evidence reader
-- <http://localhost:3000/observatory> for retrieval inspection
+| Route | Workspace | What you can explore |
+| :--- | :--- | :--- |
+| <http://localhost:3000> | **Filings & Evidence Reader** (`/reader/[documentId]`) | Version-pinned SEC filings, global character-offset highlighting, SHA-256 span verification, duplicate/restatement detection, and amendment chains (`10-Q` → `10-Q/A`). |
+| <http://localhost:3000/desk> | **Earnings Update Desk** (`/desk`) | Interactive **3D Evidence & Calculation Lineage Constellation**, Base/Bull/Bear scenario waterfall & sensitivity charts, point-in-time cutoff scrubber, NRR conflict resolution (`108%` vs `109%`), and guidance approval gates. |
+| <http://localhost:3000/observatory> | **Search Observatory** (`/observatory`) | Interactive **4-Lane RRF Fusion Flow (`k=60`) & Budget Visualizer**, candidate rank/score inspection across Dense/Lexical/Fact/Table lanes, rejection timelines, claim entailment status, and run comparison (`/observatory/compare`). |
+| <http://localhost:3000/extractions> | **Extraction Review Queue** (`/extractions`) | Atomic batch review (`accept`, `edit`, `merge`, `reject`), ontology conflict resolution with ETag preconditions, live SSE run event streams (`/extraction-runs`), and immutable version history (`/approved-extractions`). |
 
-Fixture mode is explicit by design; there is no silent production fallback.
-For a database-backed setup, see
-[`docs/development/local.md`](./docs/development/local.md).
+Fixture mode is explicit by design (`FEL_DEPLOYMENT_MODE=fixture`); there is no
+silent production fallback. In public deployment mode without request-scoped
+sessions, business routes fail closed with HTTP `503`. For a database-backed
+setup, see [`docs/development/local.md`](./docs/development/local.md).
 
-## How the system fits together
+---
 
-```mermaid
-flowchart LR
-    User[Analyst] --> Web[Next.js web app]
-    Web --> API[FastAPI API]
-    API --> DB[(PostgreSQL + pgvector)]
-    API --> Retrieval[Retrieval and claim pipeline]
-    Retrieval --> DB
-    Worker[Python worker] --> DB
-    Worker --> Objects[(Canonical object storage)]
-    Worker --> Providers[SEC / FRED / market providers]
-    API --> Objects
-```
+## What works today
 
-Three rules shape the design:
+| Area | State | What is implemented on `main` |
+| :--- | :--- | :--- |
+| **Platform foundation (M0)** | Implemented | Workspace APIs, Supabase JWKS + mock authentication (`apps/api/app/supabase_auth.py`), tenant-scoped RLS (`fel_app`) and worker RLS (`fel_worker`), durable per-org query budgets and rate limiting, offline BYOK credential encryption (`credential_cipher.py`), checksummed migration applier (`scripts/db/migrate.py`, migrations `0001`–`0011`), and public deployment guard. |
+| **Evidence ingestion & reader (M1)** | Implemented (live gates open) | SEC discovery/fetch/XBRL ingestion, immutable document versions, canonical spans/facts, composite reader API, Next.js Evidence Reader with WCAG 2.2 AA contrast verification, and local production-build Chromium smoke. Dedicated hosted Railway smoke (#108) and the 20-issuer live SEC gate (#56/#81) remain open. |
+| **Hybrid retrieval & claims (M2)** | Implemented (mock-first + OpenAI adapters) | Dense (512-dim), lexical, fact, and table lanes, deterministic planning and RRF (`k=60`), byte-stable replayable traces, non-identity atomic claim decomposition and numeric verification, explicit-key OpenAI embedding/structured adapters, 65-question benchmark gate harness, and Search Observatory UI. |
+| **Agentic extraction & review (M3)** | Implemented (mock-first + full review stack) | `packages/ontology` (`saas-metrics/v1`: 9 families, 14 KPIs), 5 typed read-only extraction roles, 10-stage checkpointed worker FSM (`extraction_run_steps.output`), Decimal normalizer, deterministic accounting validators, hard budget caps, batched atomic review API/UI (`/extractions`), live SSE events, and offline isotonic calibration primitives. |
+| **Financial modeling (M4) & forecasting (M5)** | M4 calc engine & Desk UI implemented; M4 DB & M5 planned | `packages/calculation-engine` (`fel_calculation_engine`) implements all 9 typed node kinds, 34-digit IEEE Decimal arithmetic, closed unit algebra, `fel-formula/v1` expression ASTs, exact-SCC Jacobi fixed-point iteration, Base/Bull/Bear scenario overrides, and a 5,000-node recalculation benchmark (~43 ms). M4 Postgres persistence and M5 forecasting remain roadmap work. |
 
-1. **Point-in-time by default.** A query or direct document read must not see
-   information published after its effective cutoff.
-2. **Evidence is immutable.** Document content, spans, hashes, facts, retrieval
-   traces, and calculation lineage are versioned instead of silently rewritten.
-3. **Failures are explicit.** Missing credentials, unsupported provider modes,
-   corrupt evidence, and incomplete configuration fail closed rather than
-   returning plausible-looking results.
+The authoritative product requirements live in
+[`specs/001-financial-evidence-lab/`](./specs/001-financial-evidence-lab/).
+GitHub issues, pull requests, and [`docs/handoff/STATUS.md`](./docs/handoff/STATUS.md)
+track delivery and verification state.
+
+---
+
+## System design diagrams (editable `.svg` for Miro & Figma)
+
+All diagrams in [`docs/architecture/assets/`](./docs/architecture/assets/) are
+authored as clean, layered, editable `.svg` files using semantic `<g id="...">`
+groups and vector primitives. You can drag-and-drop them directly onto any
+**Miro board** or **Figma canvas** to ungroup and edit individual nodes,
+connectors, and labels.
+
+### 1. End-to-End Epistemic Lineage (M1 → M4)
+
+![End-to-End Epistemic Lineage Pipeline](./docs/architecture/assets/evidence-to-model-pipeline.svg)
+
+Three non-negotiable rules govern the architecture:
+
+1. **Point-in-time by default (`published_at <= effective_as_of`).** Every query,
+   direct document read, extraction pin, and calculation leaf enforces an
+   effective temporal cutoff so future information can never leak into a
+   historical analysis.
+2. **Immutable evidence & cryptographic lineage.** Document versions, global
+   character spans (`start_char..end_char`), SHA-256 text hashes, retrieval
+   traces, approved extraction versions, and calculation snapshots (`snapshot_id`,
+   `result_id`) are content-addressed and superseded rather than overwritten.
+3. **Fail closed.** Missing credentials, ambiguous deployment modes, unverified
+   span hashes, undeclared formula cycles, or exceeded token/cost budgets halt
+   explicitly rather than returning plausible-looking numbers.
+
+### 2. Observable Hybrid Retrieval (M2) & Durable Extraction FSM (M3)
+
+![Observable Hybrid Retrieval and Durable Extraction State Machine](./docs/architecture/assets/hybrid-retrieval-and-extraction-fsm.svg)
+
+### 3. Deterministic Decimal Calculation DAG & Four-Way Provenance (M4)
+
+![Deterministic Calculation DAG and Four-Way Provenance](./docs/architecture/assets/calculation-dag-and-provenance.svg)
 
 Read the [architecture overview](./docs/architecture/overview.md) for component
-boundaries and the [system design](./docs/architecture/system-design.md) for
-data flow, tenancy, temporal behavior, and failure semantics.
+boundaries, the [system design guide](./docs/architecture/system-design.md) for
+data flow and failure semantics, and the
+[visualization & 3D interactive design guide](./docs/architecture/visualization-roadmap.md)
+for how financial evidence and calculation graphs are rendered interactively.
+
+---
 
 ## Repository map
 
 ```text
-apps/api/                    FastAPI routes and database-backed services
-apps/web/                    Next.js reader and Search Observatory
-workers/                     Job consumer, ingestion pipelines, extraction runtime
-packages/contracts/          Versioned JSON Schema/OpenAPI contracts
-packages/ontology/           SaaS metric ontology, comparability keys, loader
-packages/providers/          Provider protocols and deterministic mocks
-packages/retrieval/          Chunking, retrieval, fusion, traces, and claims
-packages/retrieval-evals/    Retrieval benchmark and evaluation tooling
-db/migrations/               Append-only PostgreSQL migrations
-db/seeds/                    Seed data for local and test databases
-evals/                       Cross-stack fixtures and graders
-infra/                       Railway service definitions
-scripts/                     Repository tooling invoked by make and CI
-specs/                       Canonical product/specification packages
-.github/                     CI workflows (ci.yml is the authoritative gate)
-.specify/                    Constitution and Spec Kit memory
-.agents/                     Spec Kit agent skills
-docs/architecture/           System overview and design
-docs/decisions/              Architecture decision records
-docs/development/            Local setup and testing guides
-docs/handoff/                Agent work queue and status snapshots
-docs/research/               Research studies and package proposals
-docs/runbooks/               Operator runbooks for deployed services
+apps/api/                    FastAPI service, Supabase/mock auth, RLS, reader/retrieval/extraction APIs
+apps/web/                    Next.js 16 Evidence Reader, Update Desk (3D/2D viz), Search Observatory, Review UI
+workers/                     Durable job consumer, SEC ingestion pipelines, 10-stage extraction runtime FSM
+packages/contracts/          Versioned JSON Schema/OpenAPI contracts (v0.6.0) and generated TypeScript types
+packages/calculation-engine/ Deterministic 34-digit Decimal DAG, formula ASTs, Jacobi SCC solver, scenarios
+packages/ontology/           SaaS metric ontology (saas-metrics/v1: 9 families, 14 metrics) & comparability keys
+packages/providers/          Provider protocols, deterministic mocks, OpenAI adapters, BYOK credential cipher
+packages/retrieval/          Chunking, 4-lane hybrid retrieval, RRF k=60 fusion, traces, claim entailment
+packages/retrieval-evals/    Retrieval benchmark compiler, oracle, and evaluation metrics
+db/migrations/               Append-only PostgreSQL migrations (0001..0011) and SQL test harnesses
+evals/                       Cross-stack harnesses, SEC fixtures, retrieval gates, deterministic SVG/MD reports
+infra/                       Railway service definitions for API, worker, and web
+scripts/                     Migration applier (scripts/db/migrate.py), CI guards, and audit tooling
+specs/                       Canonical Spec Kit product/specification packages (001..005)
+docs/architecture/           System overview, system design, visualization roadmap, and editable SVG diagrams
+docs/decisions/              Architecture Decision Records (ADR-0001..ADR-0028)
+docs/development/            Local setup, testing matrix, and quality gates
+docs/handoff/                Multi-agent orchestration queue and verification checkpoints
+docs/runbooks/               Operator runbooks (extraction worker, unit/guidance policy migrations)
 ```
+
+---
 
 ## Development setup
 
 Supported toolchain:
 
-- Node.js 24.20.0 (`.node-version` for CI, `.nvmrc` for nvm)
-- pnpm 10.33 through Corepack (`packageManager` in `package.json`)
-- Python 3.11 (`.python-version`)
-- PostgreSQL with pgvector for database-backed tests and services
+- **Node.js 24.20.0** (`.node-version` for CI, `.nvmrc` for nvm)
+- **pnpm 10.33** through Corepack (`packageManager` in `package.json`)
+- **Python 3.11** (`.python-version`)
+- **PostgreSQL 16/17 with `pgvector`** for database-backed tests and services
 
 ```sh
 corepack enable
@@ -130,114 +152,87 @@ python3.11 -m venv .venv
 .venv/bin/pip install -r requirements-dev.txt
 ```
 
-If `python3.11` is not on your `PATH`, do not substitute another interpreter
-silently — `.python-version` pins 3.11 and CI builds against it.
-[`docs/development/local.md`](./docs/development/local.md) is the canonical
-source for the toolchain, including how to obtain 3.11 and what to check if
-`python3` resolves elsewhere. Prefer it over this summary if the two ever
-disagree.
+If `python3.11` is not on your `PATH`, use `uv venv --python 3.11 --seed .venv`
+as documented in [`docs/development/local.md`](./docs/development/local.md).
 
-Run the fast, database-independent checks:
+Run the fast, database-independent test and quality suites:
 
 ```sh
+corepack pnpm run format:check
+corepack pnpm run lint
+corepack pnpm run typecheck
 corepack pnpm run test
 .venv/bin/pytest
 ```
 
-Database-gated Python tests skip when `TEST_DATABASE_URL` is absent. CI runs
-those suites against PostgreSQL 17 with pgvector. See the
-[testing guide](./docs/development/testing.md) for the complete matrix and
-recommended developer loops.
+Database-gated Python suites skip automatically when `TEST_DATABASE_URL` is
+absent and run against PostgreSQL 17 + `pgvector` in CI. To apply migrations to
+a local PostgreSQL instance, use the checksummed migration applier
+(`python3.11 scripts/db/migrate.py`). See the
+[local development guide](./docs/development/local.md) and
+[testing guide](./docs/development/testing.md) for the complete matrix.
+
+---
 
 ## API and runtime modes
 
-The implemented API includes:
+The web application (`apps/web`) enforces an explicit deployment mode guard
+(`FEL_DEPLOYMENT_MODE` in [`apps/web/src/lib/deployment-mode.ts`](./apps/web/src/lib/deployment-mode.ts)):
 
-- workspace create/list/update with idempotency and optimistic concurrency
-- corpus, span, and version-pinned composite reader endpoints
-- retrieval query, rerun, event, result, and feedback endpoints
-- health and structured error responses
+- `FEL_DEPLOYMENT_MODE=fixture` with `FEL_EVIDENCE_SOURCE=fixture` — deterministic local UI exploration with zero upstream API calls.
+- `FEL_DEPLOYMENT_MODE=synthetic-http` or `reader-smoke` with `FEL_EVIDENCE_SOURCE=http` — dedicated local/CI cross-stack integration against FastAPI and PostgreSQL.
+- `FEL_DEPLOYMENT_MODE=public` (default when unset) — fails closed with HTTP `503` on business routes until per-user request-scoped session custody is enabled, preventing shared deployment-bearer leakage.
 
-Authentication is currently development-only: `FEL_AUTH_MODE=mock` uses
-unsigned mock tokens while database membership remains authoritative. A production
-Supabase/JWKS verifier has not shipped.
+Server tokens (`FEL_API_BEARER_TOKEN`) are isolated to server-only modules and
+are never exposed to client components.
 
-The web reader has two explicit server-side modes:
+---
 
-- `FEL_EVIDENCE_SOURCE=fixture` — deterministic local demonstration
-- `FEL_EVIDENCE_SOURCE=http` — authenticated FastAPI reader calls
+## Current critical path & open release gates
 
-Server tokens must never be exposed to client components. Full environment
-configuration is documented in
-[`docs/development/local.md`](./docs/development/local.md).
+Per [`docs/handoff/STATUS.md`](./docs/handoff/STATUS.md), the core M0–M4 code
+foundations are merged on `main`. The remaining items before live production
+cutover are:
 
-## Current blockers and open decisions
+1. **Public session custody & user-funded BYOK admission (#324 / ADR-0026 / ADR-0027):**
+   connect the merged Supabase verifier (`supabase_auth.py`), offline credential
+   cipher (`credential_cipher.py`), and OpenAI adapters (`openai_structured.py`,
+   `openai_embeddings.py`) to request-scoped browser sessions and durable
+   user-funded admission.
+2. **Dedicated load & hosted smoke targets (#61 / #108):** run the 25-concurrent-user
+   extraction review benchmark (#61) and the hosted Railway ingestion-to-reader
+   smoke (#108) against dedicated database/compute targets rather than a shared
+   local Docker VM.
+3. **Live corpus & benchmark cutover (#56 / #81 / #132 / #177):** execute the
+   20-issuer SEC ingestion gate and the 65-question live retrieval/claim
+   evaluation once user-funded credentials and provider ADRs (#195) are ratified.
+4. **M4 database persistence & M5 forecasting:** add PostgreSQL persistence
+   tables for `fel_calculation_engine` snapshots/scenarios (#197) and implement
+   M5 statistical/ML forecast workflows.
 
-The nearest critical path is:
-
-1. Settle two extraction-validation gaps deferred out of the M3 runtime, both of
-   which move persisted identity keys and therefore need an ADR before
-   implementation: unit-case handling is inconsistent across the identity,
-   duplicate, and definition checks
-   ([#153](https://github.com/wilsonhj/financial-evidence-lab/issues/153)), and
-   guidance-range ordering is polarity-blind while never firing at all for
-   free-text metric ids
-   ([#154](https://github.com/wilsonhj/financial-evidence-lab/issues/154)).
-2. Decide how a terminal extraction run relates to queue retries in
-   [issue #146](https://github.com/wilsonhj/financial-evidence-lab/issues/146).
-3. Finish the production reader smoke
-   ([#108](https://github.com/wilsonhj/financial-evidence-lab/issues/108)) and
-   preserve integrity errors instead of flattening every server error into a
-   generic outage.
-4. Run the live SEC corpus gates
-   ([#56](https://github.com/wilsonhj/financial-evidence-lab/issues/56),
-   [#81](https://github.com/wilsonhj/financial-evidence-lab/issues/81)).
-5. Select live embedding/generation providers and execute the checksum-pinned
-   65-question retrieval gate
-   ([#132](https://github.com/wilsonhj/financial-evidence-lab/issues/132)).
-   This may require an ADR update because current provider direction is not
-   fully reconciled with ADR-0002.
-6. Complete M3 review/confidence work, then begin M4 modeling and M5
-   forecasting.
-
-There are also repository-governance decisions for dependency-only shared-path
-changes ([#141](https://github.com/wilsonhj/financial-evidence-lab/issues/141))
-and scheduled dependency auditing
-([#143](https://github.com/wilsonhj/financial-evidence-lab/issues/143)).
-
-See [system design: known gaps](./docs/architecture/system-design.md#known-gaps-and-open-decisions)
-for details.
+---
 
 ## Contributing
 
 1. Read [`AGENTS.md`](./AGENTS.md) and the
    [contributor operating model](./docs/handoff/README.md).
-2. Start from the current `main` and claim one GitHub issue/work package.
-3. Keep path ownership non-overlapping. Shared contract, migration, ADR, and
-   handoff files require the repository's contract-change process.
-4. Add tests for behavior changes and run the relevant local gates.
-5. Open a draft pull request early, then attach exact test and review evidence.
-
-Good first contributions are focused documentation, test coverage, developer
-tooling, or a narrowly scoped issue with no shared-path collision. Report
-security issues privately to the repository maintainers rather than opening a
-public exploit report.
+2. Start from `main` and claim one GitHub issue/work package.
+3. Keep path ownership non-overlapping. Shared contract, migration, lockfile,
+   ADR, and handoff files require the repository's `contract-change` process.
+4. Add deterministic tests for behavior changes and verify local gates before
+   opening or updating a pull request.
 
 ## Further reading
 
 - [Architecture overview](./docs/architecture/overview.md)
 - [System design](./docs/architecture/system-design.md)
+- [Visualization & 3D interactive design roadmap](./docs/architecture/visualization-roadmap.md)
+- [Calculation engine documentation](./packages/calculation-engine/README.md)
 - [Local development](./docs/development/local.md)
 - [Testing guide](./docs/development/testing.md)
 - [Extraction worker runbook](./docs/runbooks/extraction-worker.md)
 - [Canonical specification](./specs/001-financial-evidence-lab/spec.md)
-- [MVP stack ADR](./docs/decisions/ADR-0002-mvp-stack.md)
-- [Contract package](./packages/contracts/README.md)
-
-`SPEC.md`, `PLAN.md`, and `TASKS.md` at the repository root are pointer stubs
-into [`specs/001-financial-evidence-lab/`](./specs/001-financial-evidence-lab/).
-They carry no normative content — read the spec package instead.
 
 ## License
 
-Apache-2.0. See [`LICENSE`](./LICENSE).
+Apache-2.0. See [`LICENSE`](./LICENSE) and [`NOTICE`](./NOTICE).

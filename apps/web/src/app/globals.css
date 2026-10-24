@@ -1434,3 +1434,256 @@ body:has(.desk-shell[data-fel-theme="oled"]) .site-header {
   max-height: 320px;
   overflow-y: auto;
 }
+
+/* 3D Epistemic Lineage Explorer & Scenario Waterfall (Update Desk) */
+.viz3d-card,
+.waterfall-card {
+  margin-top: 18px;
+  padding: 20px;
+  border: 1px solid var(--color-border);
+  border-radius: 18px;
+  background: var(--color-surface);
+  display: grid;
+  gap: 14px;
+}
+
+.viz3d-header,
+.waterfall-header,
+.obs-flow-header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.viz3d-header h3,
+.waterfall-header h3 {
+  margin: 2px 0 0;
+  font-size: 1.08rem;
+}
+
+.viz3d-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.viz3d-controls button,
+.viz3d-pill {
+  font: inherit;
+  color: var(--color-text);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border-strong);
+  border-radius: 9px;
+  padding: 6px 11px;
+  min-height: 32px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.viz3d-controls button[aria-pressed="true"],
+.viz3d-pill[aria-pressed="true"] {
+  background: var(--color-info-bg);
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.viz3d-hud-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+  padding: 10px 14px;
+  border-radius: 11px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  font-size: 0.8rem;
+}
+
+.viz3d-canvas-wrap {
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid var(--color-border-strong);
+  background: #080e1a;
+}
+
+.viz3d-canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  cursor: grab;
+}
+
+.viz3d-canvas:active {
+  cursor: grabbing;
+}
+
+.viz3d-scrubber {
+  display: grid;
+  gap: 6px;
+  padding: 10px 14px;
+  border-radius: 11px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+}
+
+.viz3d-scrubber label {
+  display: grid;
+  gap: 2px;
+  font-size: 0.82rem;
+}
+
+.viz3d-scrubber small {
+  color: var(--color-muted);
+  font-size: 0.75rem;
+}
+
+.viz3d-scrubber input[type="range"] {
+  width: 100%;
+  accent-color: var(--color-accent);
+  min-height: 24px;
+}
+
+.viz3d-node-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.viz3d-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.viz3d-inspector {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  padding: 14px;
+  border-radius: 12px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+}
+
+.viz3d-inspector small {
+  color: var(--color-muted);
+  text-transform: uppercase;
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+}
+
+.viz3d-inspector h4 {
+  margin: 3px 0 4px;
+  font-size: 0.96rem;
+}
+
+.viz3d-inspector p {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 0.8rem;
+}
+
+.viz3d-meta {
+  margin: 0;
+  display: grid;
+  gap: 6px;
+  font-size: 0.78rem;
+}
+
+.viz3d-meta div {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.viz3d-meta dt {
+  color: var(--color-muted);
+}
+
+.viz3d-meta dd {
+  margin: 0;
+  font-weight: 600;
+  word-break: break-word;
+}
+
+.waterfall-badge {
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--color-info-bg);
+  border: 1px solid var(--color-info-border);
+  font-size: 0.76rem;
+  font-weight: 650;
+}
+
+.waterfall-svg,
+.obs-flow-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* Search Observatory RRF Flow Visualizer */
+.obs-flow-card {
+  display: grid;
+  gap: 12px;
+}
+
+.obs-flow-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.obs-flow-meters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+  padding-top: 8px;
+  border-top: 1px solid var(--color-border);
+}
+
+.obs-meter-box {
+  display: grid;
+  gap: 6px;
+  font-size: 0.85rem;
+}
+
+.obs-meter-label {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.obs-meter-track {
+  height: 10px;
+  border-radius: 999px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border-strong);
+  overflow: hidden;
+}
+
+.obs-meter-fill {
+  height: 100%;
+  background: var(--color-accent);
+}
+
+.obs-Stage-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.obs-stage-chip {
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  font-size: 0.78rem;
+}

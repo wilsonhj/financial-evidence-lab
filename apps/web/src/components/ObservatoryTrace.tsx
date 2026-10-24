@@ -17,6 +17,7 @@ import {
   readerHref,
   type ClaimDisplayStatus,
 } from "../lib/observatory/trace-view";
+import { ObservatoryFlowViz } from "./ObservatoryFlowViz";
 
 const CLAIM_OK: ReadonlySet<string> = new Set(["supported"]);
 const CLAIM_WARNING: ReadonlySet<string> = new Set(["contradicted", "unverifiable"]);
@@ -355,6 +356,7 @@ export function ObservatoryTrace({
         </section>
       )}
       <PlanSection snapshot={snapshot} trace={trace} />
+      <ObservatoryFlowViz trace={trace} />
       <LaneSection trace={trace} documentIdByVersionId={documentIdByVersionId} />
       <TimelineSection trace={trace} />
       <ClaimsSection trace={trace} documentIdByVersionId={documentIdByVersionId} />
