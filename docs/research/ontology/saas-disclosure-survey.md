@@ -48,6 +48,23 @@ Accession map (CIK / 10-K / 10-Q / 8-K-2.02 used):
 Note: HUBS, PAYC use filing-agent accession prefixes (0001193125); DDOG, MDB,
 BILL 10-Qs/10-Ks use agent prefix 0001628280. Archive paths use the issuer CIK.
 
+## Contents
+
+- [Part 1 — Per-metric survey](#part-1--per-metric-survey)
+  - [Family 1 — ARR / annualized recurring revenue run-rate](#family-1--arr--annualized-recurring-revenue-run-rate)
+  - [Family 2 — Net revenue retention (NRR) / gross retention (GRR)](#family-2--net-revenue-retention-nrr--gross-retention-grr)
+  - [Family 3 — Customer counts / spend-threshold cohorts](#family-3--customer-counts--spend-threshold-cohorts)
+  - [Family 4 — Seats / users / paid licenses](#family-4--seats--users--paid-licenses)
+  - [Family 5 — Bookings](#family-5--bookings)
+  - [Family 6 — Billings / calculated billings](#family-6--billings--calculated-billings)
+  - [Family 7 — RPO / cRPO (remaining performance obligations)](#family-7--rpo--crpo-remaining-performance-obligations)
+  - [Family 8 — Deferred revenue / contract liabilities](#family-8--deferred-revenue--contract-liabilities)
+  - [Family 9 — Subscription vs services gross margin](#family-9--subscription-vs-services-gross-margin)
+- [Part 2a — Normalized metric list (machine-consumable)](#part-2a--normalized-metric-list-machine-consumable)
+- [Part 2b — Top ten definitional conflicts (issuer vs issuer, verbatim)](#part-2b--top-ten-definitional-conflicts-issuer-vs-issuer-verbatim)
+- [Part 3 — XBRL-derivable vs extraction-only, verified per issuer](#part-3--xbrl-derivable-vs-extraction-only-verified-per-issuer)
+- [Provenance & integrity](#provenance--integrity)
+
 ---
 
 ## Part 1 — Per-metric survey
@@ -64,6 +81,7 @@ under U.S. GAAP" caveat, e.g. DOCU below).
 **Two definitional archetypes.**
 
 *(a) Point-in-time MRR × 12 (run-rate snapshot).*
+
 - DDOG: "We define ARR as the annual run-rate revenue of subscription
   agreements from all customers at a point in time." followed by "We calculate
   ARR by taking the monthly run-rate revenue, or MRR, and multiplying it by 12."
@@ -78,6 +96,7 @@ under U.S. GAAP" caveat, e.g. DOCU below).
   — `0001650372 / 0001650372-25-000036 / 10-K §MD&A`.
 
 *(b) Annualized value of active contracts (contract-based).*
+
 - PD: "We define ARR as the annualized recurring revenue of all active
   contracts at the end of a reporting period."
   — `0001568100 / 0001568100-26-000012 / 10-K §MD&A`.
@@ -116,6 +135,7 @@ name, base quantity (ARR vs ACV vs revenue vs product revenue), cohort window,
 and averaging method all differ.
 
 **Base-quantity variants (verbatim):**
+
 - ARR-cohort ratio, trailing-12-month: DDOG — "We calculate dollar-based net
   retention rate as of a period end by starting with the ARR from the cohort of
   all customers as of 12 months prior to such period-end, or the Prior Period
@@ -187,6 +207,7 @@ in 8-K EX-99.1. **Narrative-only.** The base quantity behind the threshold is
 the key incompatibility — six mutually inconsistent bases across the cohort.
 
 **Threshold-base variants (verbatim):**
+
 - ARR ≥ $100k / $1M: DDOG — "As of December 31, 2025, we had approximately
   4,310 customers with annual run-rate revenue, or ARR, of $100,000 or more …"
   and "… approximately 603 customers with annual run-rate revenue, or ARR, of
@@ -299,6 +320,7 @@ change in tagged deferred revenue/contract liabilities; issuer formula must be
 recorded because the deferred-revenue delta convention differs.
 
 **Formula variants (verbatim):**
+
 - Sequential change convention: HUBS — "Calculated billings is defined as total
   revenue recognized in a period plus the sequential change in total deferred
   revenue in the corresponding period."
@@ -336,6 +358,7 @@ every cohort CIK. RPO magnitude is therefore machine-derivable cohort-wide; the
 *label* and *cRPO split* are the extraction variance.
 
 **Label variants (verbatim):**
+
 - "Remaining performance obligations" / "RPO": most issuers.
 - "Transaction price allocated to remaining performance obligations": NOW —
   "Transaction price allocated to remaining performance obligations ("RPO")
@@ -387,6 +410,7 @@ aggregate `ContractWithCustomerLiability`, and/or legacy
 `DeferredRevenueCurrent/Noncurrent`.
 
 **Label / scope variants (verbatim):**
+
 - "Deferred revenue" as the balance-sheet caption: most issuers, e.g. OKTA —
   "Deferred revenue consists of the unearned portion of billed fees for our
   subscriptions, which is recognized as revenue in accordance with our revenue

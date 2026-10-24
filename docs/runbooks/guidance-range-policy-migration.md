@@ -1,5 +1,18 @@
 # Signed guidance range policy deployment
 
+<details>
+<summary>Relevant source files</summary>
+
+- [workers/src/fel_workers/extraction/types.py](../../workers/src/fel_workers/extraction/types.py) — workflow, normalizer, validator and range-policy version pins
+- [workers/src/fel_workers/extraction/normalize/payload.py](../../workers/src/fel_workers/extraction/normalize/payload.py) — range endpoint normalization
+- [workers/src/fel_workers/extraction/validate/range.py](../../workers/src/fel_workers/extraction/validate/range.py) — range ordering validator
+- [workers/src/fel_workers/extraction/validate/duplicates.py](../../workers/src/fel_workers/extraction/validate/duplicates.py) — policy-scoped duplicate and conflict identity
+- [workers/src/fel_workers/extraction/workflow.py](../../workers/src/fel_workers/extraction/workflow.py) — workflow version checks on resume
+
+</details>
+
+Source references verified against commit `437ce55`.
+
 [ADR-0022](../decisions/ADR-0022-guidance-range-ordering.md) introduces
 `guidance-range-order/v1`, `normalize/v2`, `validate/v3` and
 `extraction-workflow/v3`. Unit comparison remains `unit-comparison/v1`.
@@ -56,3 +69,10 @@ Do not route v3 runs to an old worker or rewrite them as v2. Stop new v3 request
 creation if the v3 worker is unavailable; retained old workers can finish their
 own existing runs. No database migration, bulk re-extraction, historical rewrite,
 live provider calls or hosted deployment is part of this policy change.
+
+## Related pages
+
+- [Unit comparison policy deployment](unit-policy-migration.md)
+- [Extraction worker runbook](extraction-worker.md)
+- [Workers](../../workers/README.md)
+- [ADR-0022: guidance range ordering](../decisions/ADR-0022-guidance-range-ordering.md)
