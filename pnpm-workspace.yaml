@@ -8,7 +8,7 @@ packages:
 #   The sourceMappingURL path-traversal chain moved the floor twice: GHSA-r28c-9q8g-f849
 #   covers <=8.5.17, and GHSA-fxqj-rqcc-2cmp — an incomplete fix, where the traversal
 #   check is skipped when opts.from is unset — covers <=8.5.22; force patched 8.5.x
-#   (>=8.5.23). Global rather than next-scoped: vite@8.1.4's declared ^8.5.16 already
+#   (>=8.5.23). Global rather than next-scoped: vite@8.1.6's declared ^8.5.17 already
 #   admits patched versions, but a global override stops any consumer drifting back into
 #   the vulnerable window on a future re-resolve. NOTE: fxqj is published on the postcss
 #   repo but not yet mirrored into the GitHub Advisory DB, so audit-bulk will not flag
@@ -37,6 +37,9 @@ packages:
 #   and re-running `check:generated` (byte-equality on the generated client).
 #   The scripts/audit-allowlist.json triage for mh99 is retired by this change: with
 #   2.1.4 resolved, the 2.x remnant is patched rather than suppressed.
+#   GHSA-6j4f-fj2g-mc7p, GHSA-qhr7-859c-m2p7 and GHSA-q2hr-2g5m-vwhr (recursion and
+#   quadratic-expansion DoS) subsequently raise the floors to 5.0.12 and 2.1.7, both
+#   still inside their minimatch major's declared range.
 # - js-yaml (GHSA-52cp-r559-cp3m / CVE-2026-59869, then GHSA-5p4m-2wfm-xmqj /
 #   CVE-2026-59870): @redocly/openapi-core@1.34.17 (via openapi-typescript in
 #   @fel/contracts) pins js-yaml@4.2.0 exactly, so an override is the only lever.
@@ -60,10 +63,13 @@ packages:
 #   brace-expansion's rgw5 — treat every authority-normalization fix as provisional.
 #   This batch turned trunk red at b8dc8a6 with no code change, which is exactly
 #   the discovery-by-CI-breakage #143 exists to end.
+#   GHSA-hrr3-gc8f-f4qj (inconsistent host case normalization via percent-encoded
+#   octets, <3.1.8) subsequently raises the floor to 3.1.8.
 # - next>sharp (GHSA-f88m-g3jw-g9cj): next@16.2.11 declares sharp ^0.34.5 as an
 #   optionalDependency for image optimization (libvips CVEs); scoped to next,
 #   force patched 0.35.x (^0.35.0).
-#   GHSA-rgj7-g3m4-5g8c subsequently raises the floor to 0.35.4.
+#   GHSA-rgj7-g3m4-5g8c subsequently raises the floor to 0.35.4, and
+#   GHSA-wq5f-xc86-pv6w to 0.35.5.
 #
 # NOT listed below, deliberately: nanoid (GHSA-2v37-7h3g-55p8, <3.3.17 — custom
 # generators loop forever on size 0). Its only consumer is postcss@8.5.23, which
@@ -75,8 +81,8 @@ packages:
 # global nanoid override.
 overrides:
   "postcss": "^8.5.23"
-  "minimatch@^10>brace-expansion": "^5.0.9"
-  "minimatch@^5>brace-expansion": "^2.1.4"
+  "minimatch@^10>brace-expansion": "^5.0.12"
+  "minimatch@^5>brace-expansion": "^2.1.7"
   "js-yaml": "^4.3.2"
-  "fast-uri": "^3.1.6"
-  "next>sharp": "^0.35.4"
+  "fast-uri": "^3.1.8"
+  "next>sharp": "^0.35.5"
