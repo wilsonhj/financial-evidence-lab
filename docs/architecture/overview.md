@@ -1,5 +1,22 @@
 # Architecture overview
 
+<details>
+<summary>Relevant source files</summary>
+
+- [apps/api/app/main.py](../../apps/api/app/main.py) — API entrypoint and router registration
+- [apps/api/app/db.py](../../apps/api/app/db.py) — tenant-scoped transactions and the `fel_app` role switch
+- [workers/src/fel_workers/consumer.py](../../workers/src/fel_workers/consumer.py) — worker claim and dispatch loop
+- [workers/src/fel_workers/extraction/budget.py](../../workers/src/fel_workers/extraction/budget.py) — extraction hard budget caps
+- [packages/retrieval/fel_retrieval/](../../packages/retrieval/fel_retrieval/) — chunking, lanes, fusion, traces
+- [packages/providers/fel_providers/](../../packages/providers/fel_providers/) — provider protocols and deterministic mocks
+- [packages/contracts/](../../packages/contracts/) — versioned JSON Schemas and OpenAPI descriptions
+- [db/migrations/](../../db/migrations/) — append-only schema migrations
+- [infra/railway/](../../infra/railway/) — Railway API, worker and web service definitions
+
+</details>
+
+Source references verified against commit `437ce55`.
+
 This document describes the architecture that is present on `main`, not only
 the target product. Planned components are labeled so a new contributor can
 tell which paths are safe to run, extend, or depend on. For a leadership
@@ -248,3 +265,15 @@ Use each artifact for its intended purpose:
 When code changes, update these diagrams together with the invariants and
 acceptance evidence they describe. For lower-level behavior and current gaps,
 read [`system-design.md`](./system-design.md).
+
+## Related pages
+
+- [Executive architecture brief](executive-brief.md)
+- [System design](system-design.md)
+- [API](../../apps/api/README.md)
+- [Workers](../../workers/README.md)
+- [Ontology](../../packages/ontology/README.md)
+- [Local development](../development/local.md)
+- [Testing guide](../development/testing.md)
+- [Extraction worker runbook](../runbooks/extraction-worker.md)
+- [Architecture decisions](../decisions/)
