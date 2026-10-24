@@ -185,6 +185,23 @@ const step = (v: unknown): v is Schemas["ExtractionStepSummary"] =>
     { input_tokens: integer, output_tokens: integer, cost_usd: str, error: nullable(error) },
   );
 const event = (v: unknown): v is Event => eventSchemaGuard(v) && positive(v.id);
+/**
+ * Item count, cursor shape and non-progression rules every page shares. A page
+ * whose forward and backward tokens are identical never advances, so the
+ * Previous/Next controls would return it forever.
+ */
+function pageInvariants(
+  items: unknown[],
+  next: string | null,
+  previous: string | null,
+  limit: number,
+): boolean {
+  return (
+    items.length <= limit &&
+    (next === null || next !== previous) &&
+    (items.length > 0 || (next === null && previous === null))
+  );
+}
 function page<T>(guard: Guard<T>): Guard<{
   items: T[];
   next_cursor: string | null;
@@ -206,8 +223,12 @@ function page<T>(guard: Guard<T>): Guard<{
       limit: (v) => positive(v) && v <= 200,
     }) &&
     Array.isArray(v.items) &&
-    v.items.length <= Number(v.limit) &&
-    (v.items.length > 0 || (v.next_cursor === null && v.previous_cursor === null));
+    pageInvariants(
+      v.items,
+      v.next_cursor as string | null,
+      v.previous_cursor as string | null,
+      Number(v.limit),
+    );
 }
 const reason = (v: unknown) => str(v) && v.trim().length > 0 && v.length <= 2000;
 const ids = (v: unknown) => array(uuid, 200, 1)(v) && new Set(v).size === v.length;
@@ -215,12 +236,12 @@ const conflictSchemaGuard = schema<Conflict>(conflictSchema);
 const conflict = (v: unknown): v is Conflict =>
   conflictSchemaGuard(v) && Object.values(v.member_versions).every(positive);
 const resultSchemaGuard = schema<Schemas["ReviewResult"]>(resultSchema);
+const reviewSchemaGuard = schema<Review>(reviewSchema);
 export const guards = {
   events: (v: unknown): v is Schemas["ExtractionEventPage"] =>
     eventPageGuard(v) &&
     v.items.every((e) => event(e) && e.run_id === v.run_id) &&
-    v.items.length <= v.limit &&
-    (v.items.length > 0 || (v.next_cursor === null && v.previous_cursor === null)),
+    pageInvariants(v.items, v.next_cursor, v.previous_cursor, v.limit),
   candidate,
   payload,
   edge,
@@ -245,7 +266,10 @@ export const guards = {
           8,
         )(v) && new Set(v).size === v.length,
     }),
-  review: schema<Review>(reviewSchema),
+  review: (v: unknown): v is Review =>
+    reviewSchemaGuard(v) &&
+    Object.values(v.expected_versions).every(positive) &&
+    (v.conflict_resolution ?? []).every((r) => Object.values(r.member_versions).every(positive)),
   result: (v: unknown): v is Schemas["ReviewResult"] =>
     resultSchemaGuard(v) &&
     Object.values(v.proposal_versions).every(positive) &&

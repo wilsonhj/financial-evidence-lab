@@ -5,6 +5,7 @@ import payload from "@fel/contracts/fixtures/extraction-payload.json";
 import conflict from "@fel/contracts/fixtures/extraction-conflict.json";
 import event from "@fel/contracts/fixtures/extraction-event.json";
 import result from "@fel/contracts/fixtures/extraction-review-result.json";
+import command from "@fel/contracts/fixtures/extraction-review-command.json";
 import { guards } from "./contracts";
 
 describe("extraction response boundary", () => {
@@ -42,6 +43,32 @@ describe("extraction response boundary", () => {
     expect(guards.proposals({ ...page, items: [proposal, proposal] })).toBe(false);
     expect(guards.proposals({ ...page, next_cursor: "x".repeat(2049) })).toBe(false);
     expect(guards.proposals({ ...page, items: [], next_cursor: "cursor" })).toBe(false);
+  });
+  it("rejects a page whose forward and backward cursors never progress", () => {
+    const page = { items: [proposal], limit: 1, next_cursor: "c", previous_cursor: "c" };
+    expect(guards.proposals(page)).toBe(false);
+    expect(guards.proposals({ ...page, previous_cursor: "b" })).toBe(true);
+    const events = {
+      items: [event],
+      limit: 1,
+      next_cursor: "c",
+      previous_cursor: "c",
+      run_id: event.run_id,
+    };
+    expect(guards.events(events)).toBe(false);
+    expect(guards.events({ ...events, previous_cursor: null })).toBe(true);
+  });
+  it("rejects rounded review preconditions", () => {
+    expect(guards.review(command)).toBe(true);
+    expect(
+      guards.review({
+        ...command,
+        expected_versions: {
+          ...command.expected_versions,
+          [Object.keys(command.expected_versions)[0]!]: 9007199254740992,
+        },
+      }),
+    ).toBe(false);
   });
   it("rejects rounded conflict preconditions and result versions", () => {
     const id = Object.keys(conflict.member_versions)[0]!;

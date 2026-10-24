@@ -2,6 +2,8 @@ import { guards, uuid, type Event } from "./contracts";
 
 class InvalidStream extends Error {}
 const FRAME_BYTES = 65536;
+/** Longer than the server's 20 s heartbeat interval. */
+const HEALTHY_CONNECTION_MS = 30_000;
 const terminal = new Set<Event["type"]>(["run_succeeded", "run_failed", "run_cancelled"]);
 function decode(decoder: TextDecoder, bytes?: Uint8Array): string {
   try {
@@ -65,14 +67,18 @@ export async function* parseExtractionEvents(
   const decoder = new TextDecoder("utf-8", { fatal: true });
   const encoder = new TextEncoder();
   let pending = "",
+    skipLf = false,
     data: string[] = [],
     id: string | undefined,
     bytes = 0;
   const line = (value: string): Event | undefined => {
+    // Comments and keepalives terminate no frame, so they must not spend the
+    // frame budget: a healthy run held open by bare `:` pings would otherwise
+    // be killed once those pings accumulate past the ceiling.
+    if (value.startsWith(":")) return;
     bytes += encoder.encode(value).length + 1;
     if (bytes > FRAME_BYTES) throw new InvalidStream("Extraction frame exceeds 64 KiB");
-    const text = value.endsWith("\r") ? value.slice(0, -1) : value;
-    if (text === "") {
+    if (value === "") {
       const json = data.join("\n"),
         frameId = id;
       data = [];
@@ -91,10 +97,9 @@ export async function* parseExtractionEvents(
       lastId = parsed.id;
       return parsed;
     }
-    if (text.startsWith(":")) return;
-    const colon = text.indexOf(":"),
-      field = colon < 0 ? text : text.slice(0, colon);
-    const raw = colon < 0 ? "" : text.slice(colon + 1);
+    const colon = value.indexOf(":"),
+      field = colon < 0 ? value : value.slice(0, colon);
+    const raw = colon < 0 ? "" : value.slice(colon + 1);
     const content = raw.startsWith(" ") ? raw.slice(1) : raw;
     if (field === "data") data.push(content);
     if (field === "id") {
@@ -103,10 +108,40 @@ export async function* parseExtractionEvents(
       id = content;
     }
   };
+  /** SSE terminates a line with CRLF, a bare LF or a bare CR. */
+  function* drain(): Generator<Event> {
+    for (;;) {
+      // A CR that ended the previous chunk may be the first half of CRLF.
+      if (skipLf && pending.length > 0) {
+        if (pending[0] === "\n") pending = pending.slice(1);
+        skipLf = false;
+      }
+      const cr = pending.indexOf("\r"),
+        lf = pending.indexOf("\n");
+      let end: number, next: number;
+      if (cr >= 0 && (lf < 0 || cr < lf)) {
+        end = cr;
+        if (cr === pending.length - 1) {
+          // Dispatch now rather than holding the frame for a possible LF.
+          next = cr + 1;
+          skipLf = true;
+        } else next = pending[cr + 1] === "\n" ? cr + 2 : cr + 1;
+      } else if (lf >= 0) {
+        end = lf;
+        next = lf + 1;
+      } else return;
+      const event = line(pending.slice(0, end));
+      pending = pending.slice(next);
+      if (event) yield event;
+    }
+  }
   try {
     while (true) {
       const chunk = await reader.read();
       if (chunk.done) {
+        // An incomplete line or frame at end of stream is never dispatched (SSE
+        // discards it) and the caller reconnects from lastId. A cut multi-byte
+        // sequence stays fatal, as main's malformed-UTF-8 contract requires.
         decode(decoder);
         return;
       }
@@ -114,12 +149,7 @@ export async function* parseExtractionEvents(
       // bounded pieces instead of retaining an arbitrary chunk as one string.
       for (let offset = 0; offset < chunk.value.length; offset += 4096) {
         pending += decode(decoder, chunk.value.subarray(offset, offset + 4096));
-        let newline: number;
-        while ((newline = pending.indexOf("\n")) >= 0) {
-          const event = line(pending.slice(0, newline));
-          pending = pending.slice(newline + 1);
-          if (event) yield event;
-        }
+        yield* drain();
         if (bytes + encoder.encode(pending).length > FRAME_BYTES)
           throw new InvalidStream("Extraction frame exceeds 64 KiB");
       }
@@ -152,6 +182,7 @@ export async function consumeExtractionEvents(
     lastId?: number;
     open?: (lastId: number, signal: AbortSignal) => Promise<Response>;
     wait?: typeof pause;
+    now?: () => number;
   },
 ): Promise<void> {
   if (!uuid(runId)) throw new InvalidStream("Invalid run ID");
@@ -164,7 +195,11 @@ export async function consumeExtractionEvents(
         headers: lastId ? { "last-event-id": String(lastId) } : {},
       }));
   let lastId = options.lastId ?? 0;
-  for (let attempt = 0; attempt <= 5 && !options.signal.aborted; attempt++) {
+  const now = options.now ?? Date.now;
+  let attempt = 0;
+  while (!options.signal.aborted) {
+    let progressed = false;
+    const openedAt = now();
     try {
       const response = await open(lastId, options.signal);
       if (!response.ok) {
@@ -175,6 +210,7 @@ export async function consumeExtractionEvents(
       for await (const event of parseExtractionEvents(response, runId, lastId)) {
         if (options.signal.aborted) return;
         lastId = event.id;
+        progressed = true;
         options.onEvent(event);
         if (terminal.has(event.type)) {
           options.onStatus?.("complete");
@@ -185,8 +221,14 @@ export async function consumeExtractionEvents(
       if (options.signal.aborted) return;
       if (error instanceof InvalidStream) throw error;
     }
+    // A reconnect that delivered events starts a fresh budget, so a long human
+    // review is not ended merely by lasting.
+    // While a run waits for review the server sends only heartbeat comments,
+    // so a connection that stayed up long enough to be healthy also counts.
+    if (progressed || now() - openedAt >= HEALTHY_CONNECTION_MS) attempt = 0;
     if (attempt === 5) throw new Error("Reconnect limit reached; reconnect explicitly");
     options.onStatus?.("reconnecting");
     await (options.wait ?? pause)(Math.min(250 * 2 ** attempt, 2000), options.signal);
+    attempt += 1;
   }
 }
