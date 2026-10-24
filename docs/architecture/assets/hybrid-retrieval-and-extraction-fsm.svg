@@ -1,0 +1,165 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1160 620" width="1160" height="620" role="img" aria-labelledby="title-retrieval-fsm desc-retrieval-fsm">
+  <title id="title-retrieval-fsm">Observable Hybrid Retrieval and Durable Agentic Extraction State Machine</title>
+  <desc id="desc-retrieval-fsm">Side-by-side technical diagram of the M2 4-lane RRF hybrid retrieval pipeline and the M3 10-stage checkpointed extraction worker state machine.</desc>
+
+  <defs>
+    <marker id="arrow-cyan" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#58a6ff" />
+    </marker>
+    <marker id="arrow-gold" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#e3b341" />
+    </marker>
+    <linearGradient id="fsm-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0b1220" />
+      <stop offset="100%" stop-color="#111a2e" />
+    </linearGradient>
+  </defs>
+
+  <!-- Canvas -->
+  <g id="layer-background">
+    <rect x="0" y="0" width="1160" height="620" rx="16" fill="url(#fsm-bg)" stroke="#26354d" stroke-width="2" />
+    <text x="32" y="40" fill="#f0f6fc" font-family="Inter, -apple-system, sans-serif" font-size="20" font-weight="700">Observable Hybrid Retrieval (M2) &amp; Durable Extraction Worker FSM (M3)</text>
+    <text x="32" y="62" fill="#8b949e" font-family="Inter, -apple-system, sans-serif" font-size="13">Deterministic multi-lane retrieval fusion paired with content-addressed, lease-fenced 10-stage extraction checkpoints.</text>
+  </g>
+
+  <!-- Left Panel: M2 Hybrid Retrieval -->
+  <g id="panel-m2-retrieval">
+    <rect x="28" y="82" width="536" height="510" rx="12" fill="#131d31" stroke="#388bfd" stroke-width="1.5" />
+    <text x="48" y="110" fill="#79c0ff" font-family="Inter, -apple-system, sans-serif" font-size="14" font-weight="700">A. OBSERVABLE HYBRID RETRIEVAL (`packages/retrieval`)</text>
+
+    <!-- Query Plan -->
+    <g id="m2-query-plan">
+      <rect x="146" y="128" width="300" height="54" rx="8" fill="#1b2a46" stroke="#58a6ff" stroke-width="1.5" />
+      <text x="166" y="149" fill="#f0f6fc" font-family="Inter, -apple-system, sans-serif" font-size="13" font-weight="700">Deterministic Query Planner</text>
+      <text x="166" y="168" fill="#8b949e" font-family="'JetBrains Mono', monospace" font-size="10.5">intent + variants + effective_as_of + corpus_pin</text>
+    </g>
+
+    <!-- 4 Lanes -->
+    <g id="m2-four-lanes">
+      <rect x="48" y="212" width="112" height="72" rx="8" fill="#1c2942" stroke="#3b5998" />
+      <text x="60" y="236" fill="#79c0ff" font-family="Inter, -apple-system, sans-serif" font-size="12" font-weight="700">Dense Lane</text>
+      <text x="60" y="254" fill="#8b949e" font-family="Inter, -apple-system, sans-serif" font-size="10">pgvector HNSW</text>
+      <text x="60" y="268" fill="#8b949e" font-family="Inter, -apple-system, sans-serif" font-size="10">512 dimensions</text>
+
+      <rect x="174" y="212" width="112" height="72" rx="8" fill="#1c2942" stroke="#3b5998" />
+      <text x="186" y="236" fill="#79c0ff" font-family="Inter, -apple-system, sans-serif" font-size="12" font-weight="700">Lexical Lane</text>
+      <text x="186" y="254" fill="#8b949e" font-family="Inter, -apple-system, sans-serif" font-size="10">Full-text BM25 /</text>
+      <text x="186" y="268" fill="#8b949e" font-family="Inter, -apple-system, sans-serif" font-size="10">tsvector spans</text>
+
+      <rect x="300" y="212" width="112" height="72" rx="8" fill="#1c2942" stroke="#3b5998" />
+      <text x="312" y="236" fill="#79c0ff" font-family="Inter, -apple-system, sans-serif" font-size="12" font-weight="700">Fact Lane</text>
+      <text x="312" y="254" fill="#8b949e" font-family="Inter, -apple-system, sans-serif" font-size="10">Structured XBRL</text>
+      <text x="312" y="268" fill="#8b949e" font-family="Inter, -apple-system, sans-serif" font-size="10">concept &amp; period</text>
+
+      <rect x="426" y="212" width="118" height="72" rx="8" fill="#1c2942" stroke="#3b5998" />
+      <text x="438" y="236" fill="#79c0ff" font-family="Inter, -apple-system, sans-serif" font-size="12" font-weight="700">Table Lane</text>
+      <text x="438" y="254" fill="#8b949e" font-family="Inter, -apple-system, sans-serif" font-size="10">Row/column headers</text>
+      <text x="438" y="268" fill="#8b949e" font-family="Inter, -apple-system, sans-serif" font-size="10">&amp; numeric cells</text>
+    </g>
+
+    <!-- RRF Fusion -->
+    <g id="m2-rrf-fusion">
+      <rect x="116" y="314" width="360" height="58" rx="8" fill="#1f2d4d" stroke="#a371f7" stroke-width="1.5" />
+      <text x="136" y="338" fill="#d2a8ff" font-family="Inter, -apple-system, sans-serif" font-size="13" font-weight="700">Reciprocal Rank Fusion (`k = 60`) &amp; Rerank</text>
+      <text x="136" y="356" fill="#c9d1d9" font-family="'JetBrains Mono', monospace" font-size="10.5">score = £ 1 / (60 + lane_rank) · tie-broken by item_id</text>
+    </g>
+
+    <!-- Evidence & Cutoff Gates -->
+    <g id="m2-rejection-gate">
+      <rect x="116" y="400" width="360" height="58" rx="8" fill="#281d2e" stroke="#f78166" stroke-width="1.5" />
+      <text x="136" y="424" fill="#ffa198" font-family="Inter, -apple-system, sans-serif" font-size="13" font-weight="700">Temporal, Version &amp; Budget Rejection Gates</text>
+      <text x="136" y="442" fill="#c9d1d9" font-family="'JetBrains Mono', monospace" font-size="10.5">temporal_after_cutoff · cross_version · budget_cap</text>
+    </g>
+
+    <!-- Claim Decomposition -->
+    <g id="m2-claims">
+      <rect x="86" y="486" width="420" height="84" rx="8" fill="#162925" stroke="#3fb950" stroke-width="1.5" />
+      <text x="106" y="510" fill="#56d364" font-family="Inter, -apple-system, sans-serif" font-size="13" font-weight="700">Atomic Claim Decomposition &amp; Citation Entailment</text>
+      <text x="106" y="530" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="11">" Verifies numeric values &amp; span hashes against supported candidates</text>
+      <text x="106" y="548" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="11">" Emits `supported` | `contradicted` | `unverifiable` + replayable trace</text>
+    </g>
+
+    <!-- M2 Arrows -->
+    <g id="m2-arrows" fill="none" stroke="#58a6ff" stroke-width="1.8">
+      <path d="M 220 182 L 104 208" marker-end="url(#arrow-cyan)" />
+      <path d="M 270 182 L 230 208" marker-end="url(#arrow-cyan)" />
+      <path d="M 320 182 L 356 208" marker-end="url(#arrow-cyan)" />
+      <path d="M 370 182 L 480 208" marker-end="url(#arrow-cyan)" />
+
+      <path d="M 104 284 L 220 310" marker-end="url(#arrow-cyan)" />
+      <path d="M 230 284 L 270 310" marker-end="url(#arrow-cyan)" />
+      <path d="M 356 284 L 320 310" marker-end="url(#arrow-cyan)" />
+      <path d="M 480 284 L 370 310" marker-end="url(#arrow-cyan)" />
+
+      <path d="M 296 372 L 296 396" marker-end="url(#arrow-cyan)" />
+      <path d="M 296 458 L 296 482" marker-end="url(#arrow-cyan)" />
+    </g>
+  </g>
+
+  <!-- Right Panel: M3 Extraction Worker FSM -->
+  <g id="panel-m3-fsm">
+    <rect x="596" y="82" width="536" height="510" rx="12" fill="#131d31" stroke="#d29922" stroke-width="1.5" />
+    <text x="616" y="110" fill="#e3b341" font-family="Inter, -apple-system, sans-serif" font-size="14" font-weight="700">B. DURABLE EXTRACTION WORKER FSM (`workers/.../extraction`)</text>
+
+    <!-- Column 1 of FSM (Stages 1 to 5) -->
+    <g id="fsm-col-left">
+      <rect x="620" y="130" width="224" height="56" rx="8" fill="#1d283a" stroke="#d29922" />
+      <text x="634" y="152" fill="#f0f6fc" font-family="Inter, -apple-system, sans-serif" font-size="12" font-weight="700">1. `validate_request`</text>
+      <text x="634" y="170" fill="#8b949e" font-family="Inter, -apple-system, sans-serif" font-size="10.5">Read `RunPins` from DB, verify ontology hash</text>
+
+      <rect x="620" y="204" width="224" height="56" rx="8" fill="#1d283a" stroke="#d29922" />
+      <text x="634" y="226" fill="#f0f6fc" font-family="Inter, -apple-system, sans-serif" font-size="12" font-weight="700">2. `assemble_evidence`</text>
+      <text x="634" y="244" fill="#8b949e" font-family="Inter, -apple-system, sans-serif" font-size="10.5">Pin cutoff-valid spans + delimiter wrap</text>
+
+      <rect x="620" y="278" width="224" height="56" rx="8" fill="#1d283a" stroke="#d29922" />
+      <text x="634" y="300" fill="#f0f6fc" font-family="Inter, -apple-system, sans-serif" font-size="12" font-weight="700">3. `classify` &amp; 4. `candidates`</text>
+      <text x="634" y="318" fill="#8b949e" font-family="Inter, -apple-system, sans-serif" font-size="10.5">Identify sections &amp; candidate disclosures</text>
+
+      <rect x="620" y="352" width="224" height="66" rx="8" fill="#242c3d" stroke="#e3b341" stroke-width="1.5" />
+      <text x="634" y="374" fill="#e3b341" font-family="Inter, -apple-system, sans-serif" font-size="12" font-weight="700">5. Mode-Gated Role Extraction</text>
+      <text x="634" y="392" fill="#c9d1d9" font-family="'JetBrains Mono', monospace" font-size="10">extract_kpi | guidance | driver</text>
+      <text x="634" y="407" fill="#8b949e" font-family="Inter, -apple-system, sans-serif" font-size="10">Max 1 repair; refusal fails closed</text>
+    </g>
+
+    <!-- Column 2 of FSM (Stages 6 to 10) -->
+    <g id="fsm-col-right">
+      <rect x="884" y="130" width="224" height="56" rx="8" fill="#1d283a" stroke="#58a6ff" />
+      <text x="898" y="152" fill="#f0f6fc" font-family="Inter, -apple-system, sans-serif" font-size="12" font-weight="700">6. `normalize` (Decimal-Only)</text>
+      <text x="898" y="170" fill="#8b949e" font-family="Inter, -apple-system, sans-serif" font-size="10.5">Mantissa + scale, ISO-4217, period, dims</text>
+
+      <rect x="884" y="204" width="224" height="56" rx="8" fill="#1d283a" stroke="#58a6ff" />
+      <text x="898" y="226" fill="#f0f6fc" font-family="Inter, -apple-system, sans-serif" font-size="12" font-weight="700">7. `validate` &amp; 8. `citations`</text>
+      <text x="898" y="244" fill="#8b949e" font-family="Inter, -apple-system, sans-serif" font-size="10.5">Schema, accounting identities, span hashes</text>
+
+      <rect x="884" y="278" width="224" height="56" rx="8" fill="#1d283a" stroke="#58a6ff" />
+      <text x="898" y="300" fill="#f0f6fc" font-family="Inter, -apple-system, sans-serif" font-size="12" font-weight="700">9. `detect_conflicts`</text>
+      <text x="898" y="318" fill="#8b949e" font-family="Inter, -apple-system, sans-serif" font-size="10.5">Group by ontology comparability key</text>
+
+      <rect x="884" y="352" width="224" height="66" rx="8" fill="#162925" stroke="#3fb950" stroke-width="1.5" />
+      <text x="898" y="374" fill="#56d364" font-family="Inter, -apple-system, sans-serif" font-size="12" font-weight="700">10. `persist_proposals`</text>
+      <text x="898" y="392" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="10.5">Atomic TX: proposals + evidence + conflicts</text>
+      <text x="898" y="407" fill="#56d364" font-family="'JetBrains Mono', monospace" font-size="10">status ’ waiting_review</text>
+    </g>
+
+    <!-- FSM Guard Footer Box -->
+    <g id="fsm-guards-box">
+      <rect x="620" y="444" width="488" height="126" rx="8" fill="#1b2234" stroke="#6e7681" stroke-width="1.2" />
+      <text x="638" y="468" fill="#f0f6fc" font-family="Inter, -apple-system, sans-serif" font-size="12.5" font-weight="700">Every Stage Boundary (`_boundary` &amp; `_commit_fence`) Enforces:</text>
+      <text x="638" y="490" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="11">" Content-Addressed Checkpoint: `(run_id, step_name, input_hash, workflow_version)` in `steps.output`</text>
+      <text x="638" y="510" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="11">" Pre-Call &amp; Post-Call Budget Caps: calls, input/output tokens, USD cost, wall-clock (`GREATEST` merge)</text>
+      <text x="638" y="530" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="11">" Lease &amp; Cancellation Fencing: zombie workers cannot commit after lease expiry or run cancel</text>
+      <text x="638" y="550" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="11">" Terminal Event Ordering: `run_failed` / `run_cancelled` appended before terminal status lock</text>
+    </g>
+
+    <!-- FSM Arrows -->
+    <g id="fsm-arrows" fill="none" stroke="#e3b341" stroke-width="1.8">
+      <path d="M 732 186 L 732 200" marker-end="url(#arrow-gold)" />
+      <path d="M 732 260 L 732 274" marker-end="url(#arrow-gold)" />
+      <path d="M 732 334 L 732 348" marker-end="url(#arrow-gold)" />
+      <path d="M 844 385 C 868 385, 860 158, 880 158" marker-end="url(#arrow-gold)" />
+      <path d="M 996 186 L 996 200" marker-end="url(#arrow-gold)" />
+      <path d="M 996 260 L 996 274" marker-end="url(#arrow-gold)" />
+      <path d="M 996 334 L 996 348" marker-end="url(#arrow-gold)" />
+    </g>
+  </g>
+</svg>

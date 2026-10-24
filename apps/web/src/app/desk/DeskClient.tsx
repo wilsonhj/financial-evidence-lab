@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { EvidenceGraph3D } from "../../components/EvidenceGraph3D";
 import {
   buildAppliedFacts,
   buildReviewDecision,
@@ -179,7 +180,16 @@ export default function DeskClient({ initialTheme }: { initialTheme: DeskTheme }
         </header>
         <div className={`desk-grid ${inspector ? "" : "inspector-hidden"}`}>
           <section className="desk-content">
-            {section === "coverage" && <Coverage onOpen={() => selectSection("research")} />}
+            {section === "coverage" && (
+              <Coverage
+                onOpen={() => selectSection("research")}
+                scenario={scenario}
+                source={source}
+                decision={decision}
+                approvals={approvals}
+                applied={applied}
+              />
+            )}
             {section === "research" && (
               <Research
                 visibleClaims={visibleClaims}
@@ -204,17 +214,45 @@ export default function DeskClient({ initialTheme }: { initialTheme: DeskTheme }
               />
             )}
             {section === "model" && (
-              <Model scenario={scenario} setScenario={setScenario} applied={applied} />
+              <Model
+                scenario={scenario}
+                setScenario={setScenario}
+                applied={applied}
+                source={source}
+                decision={decision}
+                approvals={approvals}
+              />
             )}
           </section>
-          {inspector && <Inspector gatesReady={gatesReady} applied={applied} />}
+          {inspector && (
+            <Inspector
+              gatesReady={gatesReady}
+              applied={applied}
+              decision={decision}
+              approvals={approvals}
+            />
+          )}
         </div>
       </section>
     </main>
   );
 }
 
-function Coverage({ onOpen }: { onOpen: () => void }) {
+function Coverage({
+  onOpen,
+  scenario,
+  source,
+  decision,
+  approvals,
+  applied,
+}: {
+  onOpen: () => void;
+  scenario: string;
+  source: EvidenceSourceId | null;
+  decision: ReviewDecision | null;
+  approvals: GuidanceApproval[];
+  applied: boolean;
+}) {
   return (
     <>
       <p className="desk-intro">Earnings events, filing freshness, and update deadlines.</p>
@@ -250,9 +288,17 @@ function Coverage({ onOpen }: { onOpen: () => void }) {
         </span>
         <em>Current</em>
       </div>
+      <EvidenceGraph3D
+        scenario={scenario}
+        source={source}
+        decision={decision}
+        approvals={approvals}
+        applied={applied}
+      />
     </>
   );
 }
+
 function Research({
   visibleClaims,
   claim,
@@ -464,14 +510,194 @@ function Review(props: {
     </div>
   );
 }
+
+function ScenarioWaterfallChart({
+  scenario,
+  decision,
+}: {
+  scenario: string;
+  decision: ReviewDecision | null;
+}) {
+  const nrrLabel = decision?.sourceId === "call-turn-48" ? "+$70.4m (109%)" : "+$62.6m (108%)";
+  const scenarioDelta: Record<
+    string,
+    { delta: string; total: string; barHeight: number; color: string }
+  > = {
+    Base: { delta: "+$0.0m (Base)", total: "$842.4m", barHeight: 132, color: "#388bfd" },
+    Bull: { delta: "+$14.7m (Bull)", total: "$857.1m", barHeight: 148, color: "#2ea043" },
+    Bear: { delta: "-$18.6m (Bear)", total: "$823.8m", barHeight: 112, color: "#d29922" },
+  };
+  const active = scenarioDelta[scenario] ?? scenarioDelta.Base!;
+
+  return (
+    <section
+      className="waterfall-card"
+      data-testid="scenario-waterfall-chart"
+      aria-label="FY27 Revenue Bridge and Scenario Sensitivity Chart"
+    >
+      <div className="waterfall-header">
+        <div>
+          <p className="eyebrow">Deterministic Decimal Bridge · FY26 → FY27</p>
+          <h3>Scenario Waterfall &amp; Guidance Corridor</h3>
+        </div>
+        <span className="waterfall-badge">{scenario} Scenario Active</span>
+      </div>
+      <svg
+        viewBox="0 0 640 210"
+        className="waterfall-svg"
+        role="img"
+        aria-label={`Waterfall chart showing Q2 ARR $782.0m building to ${active.total} under ${scenario} scenario`}
+      >
+        {/* Background grid lines */}
+        <line x1="40" y1="30" x2="610" y2="30" stroke="currentColor" strokeOpacity="0.12" />
+        <line x1="40" y1="80" x2="610" y2="80" stroke="currentColor" strokeOpacity="0.12" />
+        <line x1="40" y1="130" x2="610" y2="130" stroke="currentColor" strokeOpacity="0.12" />
+        <line x1="40" y1="170" x2="610" y2="170" stroke="currentColor" strokeOpacity="0.24" />
+
+        {/* Bar 1: Q2 ARR Base */}
+        <g>
+          <rect x="64" y="62" width="96" height="108" rx="6" fill="#388bfd" fillOpacity="0.85" />
+          <text
+            x="112"
+            y="54"
+            textAnchor="middle"
+            fill="currentColor"
+            fontSize="11"
+            fontWeight="700"
+          >
+            $782.0m
+          </text>
+          <text x="112" y="188" textAnchor="middle" fill="currentColor" fontSize="10.5">
+            Q2 ARR Base
+          </text>
+        </g>
+
+        {/* Connector 1 -> 2 */}
+        <line
+          x1="160"
+          y1="62"
+          x2="196"
+          y2="62"
+          stroke="currentColor"
+          strokeDasharray="3 3"
+          strokeOpacity="0.4"
+        />
+
+        {/* Bar 2: NRR Expansion */}
+        <g>
+          <rect x="196" y="38" width="96" height="24" rx="5" fill="#2ea043" />
+          <text
+            x="244"
+            y="30"
+            textAnchor="middle"
+            fill="currentColor"
+            fontSize="10.5"
+            fontWeight="700"
+          >
+            {nrrLabel}
+          </text>
+          <text x="244" y="188" textAnchor="middle" fill="currentColor" fontSize="10.5">
+            Net Retention
+          </text>
+        </g>
+
+        {/* Connector 2 -> 3 */}
+        <line
+          x1="292"
+          y1="38"
+          x2="328"
+          y2="38"
+          stroke="currentColor"
+          strokeDasharray="3 3"
+          strokeOpacity="0.4"
+        />
+
+        {/* Bar 3: Scenario Override */}
+        <g>
+          <rect
+            x="328"
+            y={scenario === "Bear" ? 38 : 26}
+            width="96"
+            height={scenario === "Base" ? 8 : 16}
+            rx="4"
+            fill={active.color}
+          />
+          <text
+            x="376"
+            y="19"
+            textAnchor="middle"
+            fill="currentColor"
+            fontSize="10.5"
+            fontWeight="700"
+          >
+            {active.delta}
+          </text>
+          <text x="376" y="188" textAnchor="middle" fill="currentColor" fontSize="10.5">
+            Scenario Override
+          </text>
+        </g>
+
+        {/* Connector 3 -> 4 */}
+        <line
+          x1="424"
+          y1="38"
+          x2="468"
+          y2="38"
+          stroke="currentColor"
+          strokeDasharray="3 3"
+          strokeOpacity="0.4"
+        />
+
+        {/* Bar 4: FY27 Revenue Output */}
+        <g>
+          <rect
+            x="468"
+            y={170 - active.barHeight}
+            width="112"
+            height={active.barHeight}
+            rx="6"
+            fill={active.color}
+          />
+          <text
+            x="524"
+            y={162 - active.barHeight}
+            textAnchor="middle"
+            fill="currentColor"
+            fontSize="12"
+            fontWeight="700"
+          >
+            {active.total}
+          </text>
+          <text
+            x="524"
+            y="188"
+            textAnchor="middle"
+            fill="currentColor"
+            fontSize="10.5"
+            fontWeight="600"
+          >
+            FY27 Revenue
+          </text>
+        </g>
+      </svg>
+    </section>
+  );
+}
+
 function Model({
   scenario,
   setScenario,
   applied,
+  source,
+  decision,
+  approvals,
 }: {
   scenario: string;
   setScenario: (value: string) => void;
   applied: boolean;
+  source: EvidenceSourceId | null;
+  decision: ReviewDecision | null;
+  approvals: GuidanceApproval[];
 }) {
   const values: Record<string, string> = { Base: "$842.4m", Bull: "$857.1m", Bear: "$823.8m" };
   return (
@@ -497,6 +723,14 @@ function Model({
             : "Awaiting approved facts"}
         </span>
       </div>
+      <ScenarioWaterfallChart scenario={scenario} decision={decision} />
+      <EvidenceGraph3D
+        scenario={scenario}
+        source={source}
+        decision={decision}
+        approvals={approvals}
+        applied={applied}
+      />
       <div className="packet-card">
         <h3>PM packet</h3>
         <p data-testid="text-packet-readiness">
@@ -511,7 +745,20 @@ function Model({
     </>
   );
 }
-function Inspector({ gatesReady, applied }: { gatesReady: boolean; applied: boolean }) {
+
+function Inspector({
+  gatesReady,
+  applied,
+  decision,
+  approvals,
+}: {
+  gatesReady: boolean;
+  applied: boolean;
+  decision: ReviewDecision | null;
+  approvals: GuidanceApproval[];
+}) {
+  const completedCount =
+    (decision !== null ? 1 : 0) + approvals.filter((item) => item.approved).length;
   return (
     <aside className="inspector" data-testid="evidence-inspector">
       <h3>Impact Inspector</h3>
@@ -533,10 +780,12 @@ function Inspector({ gatesReady, applied }: { gatesReady: boolean; applied: bool
             ? "Rationale and approvals captured"
             : "Resolve NRR conflict and approve guidance"}
         </span>
+        <small className="gate-note">Gate progress: {completedCount} / 3 verified</small>
       </div>
     </aside>
   );
 }
+
 function Metric({ label, value, note }: { label: string; value: string; note: string }) {
   return (
     <div className="metric-card">
