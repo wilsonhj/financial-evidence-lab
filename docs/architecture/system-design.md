@@ -93,8 +93,25 @@ Important properties:
 - The source corpus is shared and application-read-only by design. Workers
   curate it; organizations create private analysis over it.
 
-`FEL_AUTH_MODE` supports `mock` and `supabase`. The Supabase verifier checks
-bearer tokens against the issuer's JWKS; it merged in #300 under ADR-0025.
+`FEL_AUTH_MODE` selects one of two verifiers (`apps/api/app/dependencies.py`):
+
+- `mock` accepts unsigned mock tokens and is permitted only in the explicit
+  `reader-smoke` and `synthetic-http` deployment modes, each of which must also
+  match a target marker in its storage directory.
+- `supabase` (`apps/api/app/supabase_auth.py`, ADR-0025) verifies ES256/RS256
+  access tokens against an exact HTTPS issuer and audience through a bounded,
+  cooldown-limited JWKS cache. It maps only the UUID `sub` and trusted
+  `app_metadata.org_id`; the role still comes from database membership.
+
+`apps/api/app/deployment.py` (ADR-0027) refuses business authentication with
+`AUTH_UNAVAILABLE` (503) for any other combination. A missing deployment mode
+means `public`, which requires `supabase`.
+
+The sequence above is the API path. It is **not** yet a per-user web path:
+public web business routes return 503 until request-scoped sessions exist, and
+a shared server token must never be configured in a public Next.js deployment
+to imitate a user. That is a safe unavailable state, not completed signup
+(#324, [`STATUS.md`](../handoff/STATUS.md)).
 
 ## Temporal model
 
@@ -106,8 +123,10 @@ published_at <= effective_as_of
 ```
 
 `published_at` is the real column name — on `documents` (`db/migrations/0002_corpus_core.sql`)
-and in every cutoff predicate (`apps/api/app/reader.py`). There is no
-`available_at` anywhere in the schema or the code; grep for the name you see here.
+and in every cutoff predicate (`apps/api/app/reader.py`). The only
+`available_at` column is `jobs.available_at` (migration `0007`), a retry
+schedule; the calculation engine's node `available_at` is an in-memory model
+bound. Neither is a document cutoff column; grep for the name you see here.
 
 The rule applies to both collection endpoints and direct reads. A user must not
 be able to bypass a cutoff by guessing a document or version URL.
@@ -197,10 +216,12 @@ flowchart LR
 ```
 
 HTTP and fixture modes are explicit. Production must never fall back to fixture
-data. A remaining blocker is that the web adapter maps API 5xx responses too
-broadly: an `INTEGRITY_ERROR` can appear as generic unavailability. Invalid or
-draft corpus pins also need a distinct path so they do not masquerade as a
-missing document.
+data. The web adapter (`apps/web/src/lib/data/http-source.ts`) classifies a 5xx
+carrying `INTEGRITY_ERROR` as an integrity failure rather than generic
+unavailability, and maps 401/403/409/413/422 to their own typed states. On
+the API side, an unknown or draft corpus pin returns 404 with
+`details.resource = "corpus_version"` (`apps/api/app/corpus.py::require_corpus`),
+so it is distinguishable from a missing document.
 
 ## Retrieval pipeline
 
@@ -242,9 +263,10 @@ specific run and candidate.
 
 The current API executes the pipeline before returning its nominal `202`
 response. Runs are therefore synchronous-terminal today. The event endpoint
-replays committed events; it is not a live asynchronous SSE producer. A true
-live producer/consumer is deferred and must be added before M3 depends on
-real-time progress semantics.
+replays committed events; it is not a live asynchronous SSE producer.
+Extraction runs differ: they execute as worker jobs, and
+`apps/api/app/extraction/routes_events.py` streams their committed events live
+over SSE (issue #135, PR #288).
 
 ### Current provider limitation
 
@@ -262,7 +284,12 @@ Schema/OpenAPI contracts, extraction/provider protocols and deterministic
 mocks, migration `0004`'s tables/RLS/transition guards, a first-party ontology
 package, and a durable, checkpointed worker FSM. The runtime merged as
 `61058e4` (PR #145, closing #60); downstream code may assume it is present on
-`main`. Its genuine remaining gaps are tracked below under
+`main`. Later migrations moved the checkpoint onto
+`extraction_run_steps.output` (`0006`, ADR-0011) and added run cancellation
+requests, review validation context, and conflict occurrences (`0011`,
+ADR-0024). The API exposes run, step-history, event-replay, review-decision,
+correction, and approved-version routes under `apps/api/app/extraction/`. Its
+genuine remaining gaps are tracked below under
 [Known gaps and open decisions](#known-gaps-and-open-decisions), not treated
 as unmerged.
 
@@ -352,12 +379,15 @@ Stage success is content-addressed —
 `(run_id, step_name, input_hash, workflow_version)` — matching migration
 `0004`'s partial unique index (`WHERE status = 'succeeded'`).
 `MemoryCheckpointStore` is the in-memory double used by tests and mock E2E;
-`PostgresCheckpointStore.commit_succeeded_atomic` commits a step row and its
-`step_completed` event (the sole carrier of stage output, since `0004` has no
-`steps.output` column) as one transaction, closing a defect where a crash
-between the two separate writes left a durably `succeeded` step with no
-recoverable output — resumed as a false "abstained, zero proposals" run
-rather than a re-run of the lost stage. `_is_recoverable` rejects any
+`PostgresCheckpointStore.commit_succeeded_atomic`
+(`extraction/persist_checkpoint.py`) writes the stage output and its hash into
+`extraction_run_steps.output` (migration `0006`, ADR-0011) and appends the
+metadata-only `step_completed` event in the same transaction. Before `0006`
+the event payload was the only carrier of stage output, and a crash between
+two separate writes left a durably `succeeded` step with no recoverable
+output — resumed as a false "abstained, zero proposals" run rather than a
+re-run of the lost stage. The transaction is kept so the append-only audit
+trail has no step row without its event. `_is_recoverable` rejects any
 checkpoint that claims an output it cannot hand back rather than trusting a
 torn row.
 
@@ -401,13 +431,11 @@ dropped.
 
 Extend these modules, not `payload.py`: as of
 [issue #155](https://github.com/wilsonhj/financial-evidence-lab/issues/155)
-they are the live path, and the private duplicates are gone. In particular the
-currency-fold question in
-[issue #153](https://github.com/wilsonhj/financial-evidence-lab/issues/153)
-is now localized to `normalize/currency.py`. The line that decision would
-change is the `_ISO_4217` pattern, which rejects `"usd"` before the
-subsequent `.upper()` is ever reached — that `.upper()` is a no-op today and
-changing it alone would do nothing.
+they are the live path, and the private duplicates are gone. The `currency`
+field itself still must match `^[A-Z]{3}$` in `normalize/currency.py`; case
+aliases for currency _units_ are a comparison-only policy (ADR-0019,
+[issue #153](https://github.com/wilsonhj/financial-evidence-lab/issues/153))
+that never rewrites the payload.
 
 ### Deterministic validators (`extraction/validate/`)
 
@@ -431,9 +459,9 @@ changing it alone would do nothing.
   parenthesized-negative accounting presentation is reachable through the
   same normalizer that fixed the paren-parsing defect.
 - `range.py` checks Decimal-parseability and a scale bound (`0`–`12`), plus
-  `check_range`'s low ≤ high ordering for `guidance`/`range` payloads — see
-  [issue #154](https://github.com/wilsonhj/financial-evidence-lab/issues/154)
-  under Known gaps for two defects in that specific check, fixed in #270.
+  `check_range`'s signed low ≤ high ordering for `guidance`/`range` payloads
+  (ADR-0022,
+  [issue #154](https://github.com/wilsonhj/financial-evidence-lab/issues/154)).
 - `citations.py` blocks a proposal that cites no evidence and one whose every
   citation is membership-only (`partial`): only an asserted `text_hash` that
   matches the pinned span proves the citing role actually opened it.
@@ -512,11 +540,11 @@ now has a concrete implementation to point to.
 | Version conflict                 | Reject cross-version references before persistence/promotion                  |
 | Partial logical batch            | Transaction rollback; no partially visible accepted result                    |
 
-The unresolved M3 question is how a terminal extraction-run state relates to a
-retryable queue job. The alternatives are tracked in
-[issue #146](https://github.com/wilsonhj/financial-evidence-lab/issues/146);
-the decision must align schema transitions, worker retry semantics, and API
-observability.
+A terminal extraction run is final: it is never requeued, and a cancelled run
+never marks its job succeeded. This was the Option 1 ruling on
+[issue #146](https://github.com/wilsonhj/financial-evidence-lab/issues/146),
+implemented by PR #211 (`RunAlreadyTerminal`, `TERMINAL_RUN_STATUSES`,
+`_assert_run_open`).
 
 ## Cost and observability
 
@@ -532,27 +560,34 @@ runtime enforces this with a hard budget (`extraction/budget.py`, see
 `fel_workers/redact.py` (positional masking for the shared `jobs.error` /
 `extraction_run_steps.error` sinks — credential shapes and quoted runs, since
 those columns can carry document-derived text such as
-`f"cannot normalize raw_value {value!r}"`) and
-`extraction/events.py::redact_event_payload` (key-based masking for extraction
-event payloads, with one deliberate exception: a `step_completed` event's
-`stage_output` is the durable checkpoint payload — migration `0004` has no
-`steps.output` column — so the whole subtree is split out, redacted around,
-and reattached verbatim: neither truncated nor key-substituted). PR #145
-review finding M4 — substitution inside `stage_output` corrupting
-`raw_payload_hash` — was real; PR #156 @ `263bff8` made the exemption
-positional and total (`events.py:117-126`). No ruling is pending. See
-[Known gaps](#known-gaps-and-open-decisions). ADR-0011 moves the checkpoint
-onto `extraction_run_steps.output` via #157 / migration `0006`; until that
-lands the payload stays exempt from redaction entirely.
+`f"cannot normalize raw_value {value!r}"`) and `extraction/events.py`
+(`redact_event_payload` for the event sink, `redact_log_payload` for the log
+sink). The event stream is metadata-only with no exemption. Before migration
+`0006` a `step_completed` event's `stage_output` carried the checkpoint
+payload verbatim and was exempt from redaction (PR #145 review finding M4, PR
+#156; ADR-0009). ADR-0011 moved the checkpoint onto
+`extraction_run_steps.output` via #157 / migration `0006` (PR #236), and the
+exemption was deleted rather than narrowed.
 
 ## Deployment modes
 
-| Mode               | Intended use                                      | Guarantees and limitations                                                           |
-| ------------------ | ------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| Web fixture        | UI development and deterministic demos            | No API/database/provider coverage                                                    |
-| Local mock stack   | API/worker/RLS integration without live providers | Requires PostgreSQL and shared local storage                                         |
-| Live SEC ingestion | Corpus acceptance and parser testing              | Requires durable storage, SEC identity, and network access                           |
-| Hosted production  | Target deployment                                 | Not complete; request-scoped web sessions, storage, web deployment, telemetry, and hosted smoke remain open |
+The web and API deployment mode is explicit (ADR-0027,
+`docs/research/deployment-guard-contract.md`). A missing mode means `public`.
+Modes are never inferred from `NODE_ENV`, request headers, query parameters, or
+hostnames.
+
+| Mode             | Intended use                                          | Guarantees and limitations                                                                                                         |
+| ---------------- | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `public`         | Default for any deployment                            | Web business routes return HTTP 503 until request-scoped sessions exist; API requires `FEL_AUTH_MODE=supabase`; health stays reachable |
+| `fixture`        | UI development and deterministic demos                | Fixture evidence source only, no API bearer; no API/database/provider coverage                                                      |
+| `reader-smoke`   | Protected reader acceptance (#108)                    | Mock identity, gated by a named target marker in the storage directory; does not certify production identity                       |
+| `synthetic-http` | Local extraction HTTP/load workflow                   | Mock identity and mock LLM, loopback PostgreSQL only, named storage marker                                                          |
+
+Independently of the web mode, a local mock stack (API/worker/RLS without live
+providers) needs PostgreSQL and shared local storage, and live SEC ingestion
+needs durable storage, a compliant SEC identity, and network access. Hosted
+production is not complete; see
+[Production readiness](#production-readiness-and-repository-health).
 
 ## Known gaps and open decisions
 
@@ -561,84 +596,46 @@ lands the payload stays exempt from redaction entirely.
 The runtime described in [Extraction boundary](#extraction-boundary) is
 merged and its review-blocking correctness findings (durable input binding,
 atomic persistence, terminal-event ordering, financial-identity polarity,
-conflict identity, worker routing, audit exposure) are fixed. What remains
-open:
+conflict identity, worker routing, audit exposure) are fixed. The follow-ups
+deferred from PR #145 are resolved:
 
 - [Issue #153](https://github.com/wilsonhj/financial-evidence-lab/issues/153)
-  — **Fixed in #264 (2026-09-10) under ADR-0019; the text below is the original
-  gap record.** `unit` case handling is inconsistent across the identity
-  (`validate/accounting.py::_facts`), duplicate/conflict
-  (`validate/duplicates.py::comparability_key_for`), and definition
-  (`validate/definitions.py::_unit_errors`) checkers. A one-sided fold
-  (`_facts` only) was tried during PR #145 review and reverted: it merged
-  `'usd'`/`'USD'` rows into one identity slice, `_sole` correctly backed off
-  to `validate/conflicts.py`, but conflicts is keyed on the _unfolded_ unit
-  and never saw the pair — a real identity break became invisible with no
-  blocker from any checker, strictly worse than the under-merge gap the fold
-  was meant to close. A correct fix needs one canonical unit policy applied
-  consistently everywhere at once, which is a contract question (persisted
-  proposal/conflict ids may shift), hence an issue rather than a one-line
-  edit.
+  — unit-case handling across identity, duplicate/conflict and definition
+  checks. Resolved by ADR-0019 (PR #264): one comparison vocabulary in
+  `packages/ontology/fel_ontology/units.py` recognizes case aliases without
+  rewriting payloads, and every validator applies it.
 - [Issue #154](https://github.com/wilsonhj/financial-evidence-lab/issues/154)
-  — **Fixed in #270 (2026-09-10) under ADR-0022; the text below is the original
-  gap record.** Two defects in guidance-range ordering. `validate/range.py::check_range`
-  compares raw signed Decimal bounds; since `low`/`high` route through the
-  same parens-aware parser as every other numeric field, an ordinary
-  worsening margin range (e.g. `svc_gm` guidance of `-5%` to `-15%`, written
-  `low="(5)"`, `high="(15)"` in filing order) normalizes to `low=-5,
-high=-15` and is spuriously blocked as `range_low_gt_high` — no schema or
-  prompt anywhere actually states that `low` must be the numerically smaller
-  bound. Separately, `check_range` never runs at all for a `guidance`
-  payload whose `metric_id` is free text (real income-statement guidance
-  such as `metric_id="revenue"`): `accounting_errors` returns before reaching
-  it whenever `ontology.metric()` raises `KeyError` and `kind != "kpi"`, so
-  an inverted, all-positive `low="300"`/`high="200"` passes with no blocker
-  in that (more common) case. The fix is a normalization-time or contract
-  decision (needs an ADR), not a comparison-site patch — `abs()` would make
-  the check always pass.
+  — guidance-range ordering. Resolved by ADR-0022 (PR #270): `low`/`high` are
+  signed bounds; normalization swaps them only when `high < low < 0`
+  (`normalize/payload.py`), and the ordering check applies to free-text
+  metrics as well as ontology metrics. `abs()` is never applied to persisted
+  values.
 - [Issue #146](https://github.com/wilsonhj/financial-evidence-lab/issues/146)
-  — a terminal-run/retry lifecycle decision: migration `0004` rejects any
-  UPDATE to a run row already `succeeded`/`failed`/`cancelled`, but the queue
-  can still requeue a job whose run reached one of those statuses, and
-  `mark_running` only matches `queued`/`running`. Not reproducible against
-  the in-memory stores, so it only surfaces against real Postgres.
+  — terminal runs are final (PR #211); see
+  [Failure, concurrency, and idempotency semantics](#failure-concurrency-and-idempotency-semantics).
+- ADR-0009's checkpoint-in-event question was superseded by ADR-0011 and
+  implemented by migration `0006`; see [Cost and observability](#cost-and-observability).
+
+What remains open:
+
 - [Issue #62](https://github.com/wilsonhj/financial-evidence-lab/issues/62)
-  — the live OpenAI structured-output adapter is deferred; the mock provider
-  remains opt-in only (`FEL_ALLOW_MOCK_LLM`, queue-scoped to `extraction`).
-  Also covers confidence calibration and monetary auto-approval-prevention
-  release gates.
-- Whether sensitive-key redaction firing inside a `step_completed` event's
-  `stage_output` is a defect (PR #145 review finding M4) is **settled: it was
-  real, and PR #156 @ `263bff8` fixed it.** An earlier assessment recorded it as
-  a false positive; that assessment was wrong — it computed the key intersection
-  over the schema's enumerated property names, but `_redact` walks every key at
-  every depth, and the frozen contract opens `dimensions`/`qualifiers` to
-  arbitrary issuer-supplied keys. No ruling is pending. The exemption is now
-  **positional and total** (`events.py:117-126`): the whole `stage_output`
-  subtree is split out, redacted around, and reattached verbatim, so no rule
-  later added to `_redact` can reach it.
-- A second, adjacent question about the same payload was tracked separately in
-  [ADR-0009](../decisions/ADR-0009-checkpoint-payload-in-event-stream.md),
-  **Status: Superseded by ADR-0011** — whether `stage_output` carrying evidence
-  text verbatim breaches the metadata-only event guarantee in
-  `specs/003-agentic-extraction/data-model.md` (PR #145 review finding P1-8.2).
-  Distinct from M4: M4 asked whether key substitution _inside_ `stage_output`
-  corrupts a resumed run, ADR-0009 asked whether that payload should carry the
-  text at all. **That question is now ruled:**
-  [ADR-0011](../decisions/ADR-0011-extraction-step-output-column.md) (Accepted)
-  adds `extraction_run_steps.output` so the checkpoint stops riding on the event
-  payload, restoring the metadata-only guarantee rather than amending it. The
-  work is #157, migration `0006`, and it is not yet implemented — until it lands
-  the payload stays exempt from redaction entirely, neither truncated nor
-  key-substituted.
+  — an explicit-key OpenAI structured-generation adapter merged in #328, but
+  it performs no environment-key lookup or runtime registration, so the
+  worker still runs extraction only with the opt-in mock provider
+  (`FEL_ALLOW_MOCK_LLM`). #62 also covers confidence calibration and
+  monetary auto-approval-prevention release gates. ADR-0028 freezes offline
+  calibration interfaces (#336, #337); synthetic fixtures are not
+  human-adjudicated calibration.
+- [Issue #61](https://github.com/wilsonhj/financial-evidence-lab/issues/61)
+  — review, correction and approved-version history are implemented, but the
+  canonical 25-active-user reference performance profile is not met.
 
 ### Reader and corpus acceptance
 
 - [Issue #108](https://github.com/wilsonhj/financial-evidence-lab/issues/108)
   requires the real worker → PostgreSQL → FastAPI → HTTP source → production
-  Next.js/browser smoke.
-- Reader integrity and invalid corpus-pin errors must retain their meaning
-  through the web adapter.
+  Next.js/browser smoke on a dedicated hosted target. Local production-build
+  browser cases pass (#318); no hosted run has occurred.
 - [Issues #56](https://github.com/wilsonhj/financial-evidence-lab/issues/56)
   and [#81](https://github.com/wilsonhj/financial-evidence-lab/issues/81)
   require live SEC access and a compliant SEC identity.
@@ -650,26 +647,51 @@ high=-15` and is spuriously blocked as `range_low_gt_high` — no schema or
   checksum-pinned 65-question gate.
 - Provider direction in the live-gate issue and ADR-0002 is not fully aligned;
   a superseding ADR may be necessary.
-- True live SSE execution is deferred in
-  [issue #135](https://github.com/wilsonhj/financial-evidence-lab/issues/135).
-- Claim and numeric verification hardening remains tracked in
-  [#137](https://github.com/wilsonhj/financial-evidence-lab/issues/137) and
-  [#133](https://github.com/wilsonhj/financial-evidence-lab/issues/133).
+- Retrieval runs remain synchronous-terminal; the live SSE route from
+  [issue #135](https://github.com/wilsonhj/financial-evidence-lab/issues/135)
+  (closed) covers extraction runs only.
+- Claim and numeric verification hardening in
+  [#133](https://github.com/wilsonhj/financial-evidence-lab/issues/133) (PR
+  #210) and [#137](https://github.com/wilsonhj/financial-evidence-lab/issues/137)
+  (PR #261) is closed; it does not replace the live gate in #132.
+
+### Release gates
+
+[Spec section 19.6](../../specs/001-financial-evidence-lab/spec.md#196-release-gates)
+sets the quantitative gates a release candidate must pass on the frozen
+benchmark (for example 100% temporal validity, at least 99% numeric
+value/unit/period/sign/scale accuracy, at least 95% citation entailment
+precision). They are criteria, not measured results. Mock-first CI makes
+changes repeatable without paid provider calls but cannot prove SEC ingest
+breadth, live provider quality, or a hosted deployment. The model composer
+and forecast workflows that would consume `packages/calculation-engine` are
+still open in the
+[canonical task ledger](../../specs/001-financial-evidence-lab/tasks.md).
 
 ### Production readiness and repository health
 
-- Production Supabase/JWKS auth and hosted object storage are not implemented.
-- The web production-service definition and full observability/telemetry are
-  incomplete ([#138](https://github.com/wilsonhj/financial-evidence-lab/issues/138)).
-- Accessibility/keyboard release evidence is open
-  ([#136](https://github.com/wilsonhj/financial-evidence-lab/issues/136)).
-- A policy decision is needed for dependency-only shared-path security changes
-  ([#141](https://github.com/wilsonhj/financial-evidence-lab/issues/141)).
-- Scheduled dependency auditing remains open
-  ([#143](https://github.com/wilsonhj/financial-evidence-lab/issues/143)).
-- Some coordination artifacts and issues lag merged work (for example, the
-  Playwright CI implementation merged in PR #131 while its tracker remained
-  open during this audit). Reconcile live GitHub state before dispatch.
+- The API Supabase verifier is implemented (ADR-0025), but public web identity
+  is not request-scoped. Session custody, bootstrap, encrypted credential
+  storage, durable user-funded admission and hosted two-user isolation remain
+  separate contract/runtime work under
+  [#324](https://github.com/wilsonhj/financial-evidence-lab/issues/324).
+- Hosted object storage is not implemented; `LocalDirStorageProvider` is the
+  only real storage provider.
+- Railway web, API and worker service definitions exist (`infra/railway/`).
+  Sentry is opt-in through `FEL_SENTRY_DSN`; web telemetry
+  ([#138](https://github.com/wilsonhj/financial-evidence-lab/issues/138),
+  closed by PR #245) is off by default behind two flags.
+- Accessibility/keyboard fixes for the Observatory and reader landed in PR
+  #235 ([#136](https://github.com/wilsonhj/financial-evidence-lab/issues/136),
+  closed).
+- The shared-path policy ([#141](https://github.com/wilsonhj/financial-evidence-lab/issues/141))
+  is transcribed into `AGENTS.md` and enforced by
+  `.github/workflows/shared-paths.yml` (PR #228); scheduled dependency
+  auditing runs in `.github/workflows/advisories.yml`
+  ([#143](https://github.com/wilsonhj/financial-evidence-lab/issues/143),
+  closed).
+- Some coordination artifacts and issues lag merged work. Reconcile live
+  GitHub state before dispatch.
 
 ## Change rules
 
@@ -687,6 +709,7 @@ Before changing contracts, migrations, or architecture:
 
 ## Related pages
 
+- [Executive architecture brief](executive-brief.md)
 - [Architecture overview](overview.md)
 - [API](../../apps/api/README.md)
 - [Workers](../../workers/README.md)

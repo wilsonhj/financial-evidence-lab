@@ -19,7 +19,7 @@ from decimal import Decimal, InvalidOperation
 import httpx
 
 from fel_providers.interfaces import MarketBar, MarketDataProvider
-from fel_workers.http import HttpRequestError, ThrottledRetryingClient
+from fel_workers.http import HttpRequestError, ThrottledRetryingClient, base_url_host
 
 ALPHAVANTAGE_BASE_URL = "https://www.alphavantage.co"
 _SERIES_KEY = "Time Series (Daily)"
@@ -27,6 +27,10 @@ _FIELD_ADJUSTED_CLOSE = "5. adjusted close"
 _FIELD_VOLUME = "6. volume"
 _FIELD_DIVIDEND = "7. dividend amount"
 _FIELD_SPLIT = "8. split coefficient"
+# Alpha Vantage reports throttling and plan entitlement refusals as HTTP 200
+# with one of these keys instead of data. That is a provider refusal, not
+# evidence that the series lacks adjustments, so it gets its own error.
+_REFUSAL_KEYS = ("Note", "Information")
 
 # Alpha Vantage's compact output covers the latest ~100 trading days; when
 # the requested window starts within this many calendar days of today the
@@ -80,6 +84,7 @@ class AlphaVantageMarketDataProvider:
             timeout_seconds=timeout_seconds,
             min_interval_seconds=min_interval_seconds,
             max_retries=max_retries,
+            allowed_hosts=base_url_host(base_url),
             sleep=sleep,
             monotonic=monotonic,
         )
@@ -107,11 +112,23 @@ class AlphaVantageMarketDataProvider:
             )
         except HttpRequestError as exc:
             raise MarketDataError(f"Alpha Vantage request for {ticker!r} failed: {exc}") from exc
-        payload = response.json()
+        try:
+            payload = response.json()
+        except ValueError as exc:
+            raise MarketDataError(
+                f"Alpha Vantage response for {ticker!r} is not valid JSON"
+            ) from exc
         if not isinstance(payload, dict):
             raise MarketDataError(f"Alpha Vantage returned a non-object payload for {ticker!r}")
         if "Error Message" in payload:
             raise MarketDataError(f"Alpha Vantage rejected the request for {ticker!r}")
+        refusal = next((key for key in _REFUSAL_KEYS if key in payload), None)
+        if refusal is not None and _SERIES_KEY not in payload:
+            # The upstream text is not echoed: it is free-form and unbounded.
+            raise MarketDataError(
+                f"Alpha Vantage refused the request for {ticker!r} ({refusal!r}: "
+                "rate limit or plan entitlement); no data was returned"
+            )
         series = payload.get(_SERIES_KEY)
         if not isinstance(series, dict):
             raise MarketDataError(
