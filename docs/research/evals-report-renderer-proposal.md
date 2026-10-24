@@ -12,9 +12,21 @@ field-by-field.
 
 **Issue title (form `title:` prefix is `"[PACKAGE-ID] "`):**
 
-```
+```text
 [EVALS-REPORT-RENDER] Stdlib-only corpus-QA eval report renderer (Markdown + SVG)
 ```
+
+**Contents**
+
+- [Work package ID](#work-package-id)
+- [Spec Kit task IDs](#spec-kit-task-ids)
+- [Required outcome and acceptance criteria](#required-outcome-and-acceptance-criteria)
+- [Dependencies and frozen contract versions](#dependencies-and-frozen-contract-versions)
+- [Allowed and forbidden paths](#allowed-and-forbidden-paths)
+- [Required checks and evidence](#required-checks-and-evidence)
+- [Credentials needed?](#credentials-needed)
+- [Agent contract](#agent-contract)
+- [Out of scope (explicit — do not do these)](#out-of-scope-explicit--do-not-do-these)
 
 ---
 
@@ -22,7 +34,7 @@ field-by-field.
 
 *(form field `package`, `type: input`, required)*
 
-```
+```text
 EVALS-REPORT-RENDER
 ```
 
@@ -51,7 +63,7 @@ M3-CONFIDENCE-GATE (#62), the other `evals/**` owners.
 
 *(form field `tasks`, `type: input`, required)*
 
-```
+```text
 None — unallocated. No Spec Kit task covers eval-report rendering.
 ```
 
@@ -170,6 +182,7 @@ in the order it appears in the JSON (`SCHEMA.md:149`: "in cohort order"). No
 sorting, no ranking, no "worst first". Same for `run.expected_issuers`.
 
 **AC3 — Numeric fidelity.**
+
 - `span_hash_verification_rate` is an exact 6-dp decimal **string**
   (`SCHEMA.md:185`). It is echoed **verbatim**. Never parsed to `float`, never
   re-rounded, never reformatted as a percentage, never passed through
@@ -185,6 +198,7 @@ sorting, no ranking, no "worst first". Same for `run.expected_issuers`.
 **AC4 — The `"unavailable"` sentinel.** When `spans_total == 0` the rate is the
 literal string `"unavailable"` — "an empty denominator is NEVER reported as
 `1`" (`SCHEMA.md:185`). The renderer must:
+
 - print the literal token `unavailable` (never `0.000000`, never `100%`, never
   `—`, never an empty cell);
 - never let an `unavailable` issuer contribute to any derived figure — the
@@ -206,6 +220,7 @@ different schema to the **same** `<label>.json` path (`SCHEMA.md:61-73`). It has
 **no** `issuers`, **no** `totals`, **no** `pipeline`; it has `run_failure`
 (`failure_reason` plus `jobs_completed` and `jobs`, either of which may be
 `null`) and `acceptance` fixed to `{"accepted": false, ...}`. The renderer must:
+
 - dispatch on the `schema` field, never on the filename;
 - render a **Markdown-only** failure summary with a `RUN FAILURE` banner,
   `failure_reason`, every acceptance reason, the shared provenance fields, and
@@ -237,6 +252,7 @@ A single-snapshot **horizontal stacked bar chart**, one row per issuer in cohort
 order, segmented `documents_parsed` / `documents_ingested − documents_parsed −
 documents_quarantined` / `documents_quarantined`, plus a totals row, a legend,
 and a value axis.
+
 - Root: `<svg xmlns="http://www.w3.org/2000/svg" role="img" viewBox="0 0 W H"
   width="W" height="H">` with child `<title>` and `<desc>` for accessibility.
 - **Integer coordinates only.** Every x/y/width/height is computed in `int`
@@ -252,6 +268,7 @@ and a value axis.
 
 **AC8 — Byte determinism.** Rendering the same input twice, on any machine, on
 any day, produces byte-identical Markdown and SVG.
+
 - **No wall clock.** `datetime.now()`, `time.time()`, `uuid4()`, `random`, and
   `os.urandom` must not appear. The only timestamp emitted is `generated_at`
   copied verbatim from the input.
@@ -271,6 +288,7 @@ any day, produces byte-identical Markdown and SVG.
 **AC9 — n=1 is a hard design constraint, stated in code and README.** There is
 exactly **one** committed report. There is **no time series**. The renderer
 therefore:
+
 - takes exactly **one** report path per invocation; there is no `--compare`, no
   glob, no directory scan, no multi-report aggregation;
 - emits **no** trend line, delta, sparkline, "change since", or run-over-run
@@ -295,7 +313,7 @@ without it). Proven by the `env -u TEST_DATABASE_URL` run in evidence.
 **AC12 — bandit clean without touching shared config.** `bandit -q -r … evals …
 -c pyproject.toml` currently **fails** on `import xml.etree.ElementTree`:
 
-```
+```text
 [B405:blacklist] Using xml.etree.ElementTree to parse untrusted XML data …
 Severity: Low   Confidence: High   →  bandit exit=1
 ```
@@ -422,14 +440,14 @@ before dispatch. The agent must not edit either file.
 
 ### Allowed (write)
 
-```
+```text
 evals/reporting/**          # new; the whole implementation
 evals/tests/**              # new test module + golden fixtures
 ```
 
 Concretely, the only files this PR may create or modify:
 
-```
+```text
 evals/reporting/__init__.py
 evals/reporting/corpus_qa_render.py
 evals/reporting/README.md
@@ -440,7 +458,7 @@ evals/tests/golden/corpus-qa/2026-07-14-synthetic-cohort.svg
 
 ### Read-only (must not be modified)
 
-```
+```text
 evals/reports/corpus-qa/**       # the input artifact and its SCHEMA.md
 evals/harness/**                 # corpus_qa.py, synthetic_sec.py (test-time import only)
 evals/datasets/**
@@ -448,7 +466,7 @@ evals/datasets/**
 
 ### Forbidden — shared paths (`AGENTS.md:27-41`, `workstreams.yaml:6-33`)
 
-```
+```text
 .github/**                       # incl. workflows/ci.yml — NO CI wiring
 .specify/**
 .agents/**
@@ -466,7 +484,7 @@ pyproject.toml, requirements-dev.txt, Makefile
 
 ### Forbidden — other packages' code
 
-```
+```text
 apps/**, workers/**, packages/**, infra/**, db/**, docs/**, scripts/**
 ```
 
@@ -621,7 +639,7 @@ echo "exit=$?"    # expect 2, one-line stderr message, nothing written, no trace
 *(form field `credentials`, `type: dropdown`, required — pick one of
 `"No — use mocks"` / `"Yes — integration lead must provision"`)*
 
-```
+```text
 No — use mocks
 ```
 

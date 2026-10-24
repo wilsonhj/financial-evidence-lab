@@ -15,6 +15,20 @@ under `db/migrations/`, or — for §8 of this doc — amending `specs/001-finan
 (the `specs/` tree is a shared path). This study lives in `docs/research/` (not a shared
 path) precisely so it needs neither.
 
+## Contents
+
+- [1. What was studied](#1-what-was-studied)
+- [2. Scope reality check](#2-scope-reality-check)
+- [3. Compliance gaps — FinRobot shortcuts vs. FEL invariants](#3-compliance-gaps--finrobot-shortcuts-vs-fel-invariants)
+- [4. FEL-compliant port skeleton (illustrative — rev 3, hardened after two review passes)](#4-fel-compliant-port-skeleton-illustrative--rev-3-hardened-after-two-review-passes)
+- [5. M4 adaptation: a driver-graph evaluator, not a function library](#5-m4-adaptation-a-driver-graph-evaluator-not-a-function-library)
+- [6. Contracts and eval gates (the actual ADR moment)](#6-contracts-and-eval-gates-the-actual-adr-moment)
+- [7. Where the "agent-team" fits (M3/M5 orchestration)](#7-where-the-agent-team-fits-m3m5-orchestration)
+- [8. Proposed P1 expansion: valuation, done the FEL way](#8-proposed-p1-expansion-valuation-done-the-fel-way)
+- [9. Recommendation](#9-recommendation)
+- [10. Review and verification](#10-review-and-verification)
+- [11. Reproduction](#11-reproduction)
+
 ## 1. What was studied
 
 Source: `AI4Finance-Foundation/FinRobot` at commit

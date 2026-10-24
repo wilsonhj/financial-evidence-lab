@@ -1,5 +1,22 @@
 # Local development (T0002)
 
+<details>
+<summary>Relevant source files</summary>
+
+- [Makefile](../../Makefile) — install, test and CI targets
+- [.node-version](../../.node-version) — Node pin
+- [.python-version](../../.python-version) — Python pin
+- [apps/api/app/config.py](../../apps/api/app/config.py) — API environment variables
+- [apps/api/app/auth.py](../../apps/api/app/auth.py) — `make_mock_token` and the mock verifier
+- [apps/api/benchmarks/synthetic_target.py](../../apps/api/benchmarks/synthetic_target.py) — `prepare_synthetic_target`
+- [workers/src/fel_workers/\_\_main\_\_.py](../../workers/src/fel_workers/__main__.py) — worker modes and startup checks
+- [apps/web/src/lib/deployment-mode.ts](../../apps/web/src/lib/deployment-mode.ts) — web deployment and evidence-source modes
+- [db/migrations/](../../db/migrations/) — migrations applied in filename order
+
+</details>
+
+Source references verified against commit `437ce55`.
+
 This guide covers three useful setups:
 
 1. **Fixture UI** — fastest onboarding; no database, Python, or credentials.
@@ -10,6 +27,18 @@ This guide covers three useful setups:
 
 Use fixture mode first unless you are changing persistence or cross-service
 behavior.
+
+## Contents
+
+- [Prerequisites](#prerequisites)
+- [Option A: fixture UI](#option-a-fixture-ui)
+- [Option B: local PostgreSQL and API](#option-b-local-postgresql-and-api)
+- [Run the worker](#run-the-worker)
+- [Option C: dedicated HTTP acceptance](#option-c-dedicated-http-acceptance)
+- [Useful environment variables](#useful-environment-variables)
+- [Provider mocks](#provider-mocks)
+- [Common setup problems](#common-setup-problems)
+- [Related pages](#related-pages)
 
 ## Prerequisites
 
@@ -245,7 +274,7 @@ runbook for when that applies.
 
 ## Option C: dedicated HTTP acceptance
 
-The public web default deliberately returns503 until per-user sessions exist.
+The public web default deliberately returns 503 until per-user sessions exist.
 A deployment bearer is no longer a way to serve an ordinary public reader.
 Use fixture UI for normal offline development, or a dedicated synthetic workflow
 for actual API/browser integration. Never switch a real user's deployment to a
@@ -273,7 +302,7 @@ acceptance has additional protected target/revision checks in the reader-smoke
 report README; local tests do not prove hosted readiness.
 
 Extraction cross-stack uses synthetic-http, an explicit FEL_SYNTHETIC_HTTP_TARGET,
-local fel_extraction_acceptance* database and the canonical CROSS_STACK_MANIFEST
+local `fel_extraction_acceptance*` database and the canonical `CROSS_STACK_MANIFEST`
 emitted by its seeder. Load acceptance retains its local fel_load* database rule;
 set the same explicit mode/target and use fresh empty storage so its runner can
 create the matching marker. Existing nonempty unmarked storage is never adopted.
@@ -286,7 +315,7 @@ provider calls or replace public Supabase identity.
 | Variable                       | Service     | Purpose                                                                 |
 | ------------------------------ | ----------- | ----------------------------------------------------------------------- |
 | `FEL_DATABASE_URL`             | API, worker | PostgreSQL connection URL                                               |
-| `FEL_AUTH_MODE`                | API         | `mock` is the only implemented verifier mode                            |
+| `FEL_AUTH_MODE`                | API         | `mock` or `supabase` (JWKS verification, ADR-0025)                     |
 | `FEL_STORAGE_DIR`              | API, worker | Shared canonical evidence-object directory                              |
 | `FEL_MOCK_SMOKE`               | Worker      | Explicit deterministic provider mode                                    |
 | `FEL_SEC_LIVE`                 | Worker      | Explicit live SEC mode                                                  |
@@ -371,3 +400,12 @@ fail closed.
 
 For test commands and CI parity, continue with
 [`testing.md`](./testing.md).
+
+## Related pages
+
+- [Testing guide](testing.md)
+- [Measured quality gates](quality-gates.md)
+- [API](../../apps/api/README.md)
+- [Workers](../../workers/README.md)
+- [Extraction worker runbook](../runbooks/extraction-worker.md)
+- [Architecture overview](../architecture/overview.md)

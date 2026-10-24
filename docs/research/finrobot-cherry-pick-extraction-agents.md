@@ -14,6 +14,17 @@ contract, and §6 states precisely where a contract boundary WOULD be crossed. I
 belongs to the `M3-EXTRACTION-CORE` chain (issue #60 et al.) in the worker's currently-stub
 `extraction/` module, under that package's allowed paths.
 
+## Contents
+
+- [1. What was studied](#1-what-was-studied)
+- [2. Role mapping — 8 donor narrators vs. 5 FEL extraction roles](#2-role-mapping--8-donor-narrators-vs-5-fel-extraction-roles)
+- [3. Compliance gaps — donor behaviors vs. the frozen M3 contract](#3-compliance-gaps--donor-behaviors-vs-the-frozen-m3-contract)
+- [4. What genuinely transfers](#4-what-genuinely-transfers)
+- [5. FEL-conformant skeleton (illustrative — rev 3, hardened after three review passes)](#5-fel-conformant-skeleton-illustrative--rev-3-hardened-after-three-review-passes)
+- [6. Governance, contract boundary, and real-port requirements](#6-governance-contract-boundary-and-real-port-requirements)
+- [7. Review and verification](#7-review-and-verification)
+- [8. Reproduction](#8-reproduction)
+
 ## 1. What was studied
 
 Source: `AI4Finance-Foundation/FinRobot` at commit `297a8d28d099be328c8a8eb658b4f782b93f3651`

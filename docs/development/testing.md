@@ -1,11 +1,44 @@
 # Testing guide
 
+<details>
+<summary>Relevant source files</summary>
+
+- [pyproject.toml](../../pyproject.toml) — pytest `testpaths`, `pythonpath` and coverage settings
+- [vitest.config.ts](../../vitest.config.ts) — root Vitest configuration
+- [Makefile](../../Makefile) — `make ci` and its component targets
+- [apps/api/tests/conftest.py](../../apps/api/tests/conftest.py) — `TEST_DATABASE_URL` and `FEL_REQUIRE_DB` gating
+- [packages/contracts/contracts.test.ts](../../packages/contracts/contracts.test.ts) — generated-client drift check
+- [apps/web/playwright.config.ts](../../apps/web/playwright.config.ts) — fixture-mode browser tests
+- [.github/workflows/ci.yml](../../.github/workflows/ci.yml) — CI jobs
+- [.github/workflows/advisories.yml](../../.github/workflows/advisories.yml) — scheduled advisory refresh
+- [scripts/audit-bulk.mjs](../../scripts/audit-bulk.mjs) — bulk npm advisory check
+
+</details>
+
+Source references verified against commit `437ce55`.
+
 Financial Evidence Lab tests correctness at several boundaries: pure domain
 logic, generated contracts, service adapters, PostgreSQL/RLS behavior,
 cross-stack fixtures, browser flows, migrations, and security advisories.
 
 The fastest useful command depends on what you changed. Run the smallest
 relevant loop while developing, then the full gate before review.
+
+## Contents
+
+- [Test matrix](#test-matrix)
+- [Install the exact toolchain](#install-the-exact-toolchain)
+- [Fast developer loops](#fast-developer-loops)
+- [Database-backed tests](#database-backed-tests)
+- [Contract generation and drift](#contract-generation-and-drift)
+- [Browser tests](#browser-tests)
+- [Build verification](#build-verification)
+- [Full local gate](#full-local-gate)
+- [Required tests by change type](#required-tests-by-change-type)
+- [Test-data rules](#test-data-rules)
+- [Current baseline](#current-baseline)
+- [Troubleshooting](#troubleshooting)
+- [Related pages](#related-pages)
 
 ## Test matrix
 
@@ -68,14 +101,16 @@ name while iterating, but run the workspace command before handoff.
 # All tests; DB-gated suites skip without TEST_DATABASE_URL
 .venv/bin/pytest
 
-# Focused packages — all seven of pyproject.toml's testpaths
+# Focused packages — all nine of pyproject.toml's testpaths
 .venv/bin/pytest apps/api/tests
+.venv/bin/pytest scripts/db/tests
 .venv/bin/pytest workers/tests
 .venv/bin/pytest packages/retrieval/tests
 .venv/bin/pytest packages/retrieval-evals/tests
 .venv/bin/pytest packages/ontology/tests
 .venv/bin/pytest packages/providers/tests
 .venv/bin/pytest evals/tests
+.venv/bin/pytest packages/calculation-engine/tests
 
 # Static checks (matches the Makefile's format-check/lint/typecheck targets
 # and ci.yml's python job exactly — packages/ontology joined the tree in #145)
@@ -229,7 +264,7 @@ _copies_ the interpreter binary. `uv`'s standalone CPython builds resolve
 `libpython3.11.dylib` through an `@rpath` relative to their original install
 location, so the copy cannot load it and the step aborts:
 
-```
+```text
 Library not loaded: @rpath/libpython3.11.dylib
 subprocess.CalledProcessError: ... '-m', 'ensurepip' ... died with <Signals.SIGABRT: 6>
 ```
@@ -368,3 +403,11 @@ single tracking issue titled `Dependency advisories: <date>` (label
 `advisory`): it searches for an existing open issue with that label first and
 comments on it if found, or creates one otherwise, so a run of consecutive
 failures does not spawn a new issue every week.
+
+## Related pages
+
+- [Local development](local.md)
+- [Measured quality gates](quality-gates.md)
+- [API](../../apps/api/README.md)
+- [Workers](../../workers/README.md)
+- [System design](../architecture/system-design.md)
