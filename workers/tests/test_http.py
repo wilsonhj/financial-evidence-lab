@@ -5,6 +5,8 @@ request ever leaves the process."""
 from __future__ import annotations
 
 import gzip
+import hashlib
+from datetime import UTC, datetime, timedelta, timezone
 
 import httpx
 import pytest
@@ -377,3 +379,85 @@ def test_adapters_pin_their_upstream_hosts() -> None:
     assert market._client._allowed_hosts == {"www.alphavantage.co"}  # noqa: SLF001
     for adapter in (sec, fred, market):
         adapter.close()
+
+
+# --- Retrieval receipts (ADR-0029) ----------------------------------------
+
+_T0 = datetime(2026, 10, 24, 12, 0, tzinfo=UTC)
+
+
+def test_receipt_hashes_the_decoded_body_and_redacts_secrets() -> None:
+    body = b'{"observations": []}'
+    client = ThrottledRetryingClient(
+        transport=httpx.MockTransport(
+            lambda r: httpx.Response(
+                200,
+                headers={"Content-Encoding": "gzip", "Content-Type": "application/json"},
+                content=gzip.compress(body),
+            )
+        ),
+        secret_query_params=("API_KEY",),
+        now=lambda: _T0,
+    )
+    response, receipt = client.get_with_receipt(
+        "https://api.example.test/obs", params={"series_id": "CPI", "api_key": "s3cr3t"}
+    )
+    assert response.content == body
+    assert receipt.content_sha256 == f"sha256:{hashlib.sha256(body).hexdigest()}"
+    assert receipt.byte_length == len(body)
+    assert receipt.content_type == "application/json"
+    assert receipt.status_code == 200
+    assert receipt.retrieved_at == _T0
+    assert receipt.attempts == 1
+    assert "s3cr3t" not in repr(receipt)
+    assert receipt.source_url == "https://api.example.test/obs?series_id=CPI&api_key=REDACTED"
+    assert receipt.final_url == receipt.source_url
+
+
+def test_receipt_final_url_follows_redirect_and_counts_retries() -> None:
+    statuses = iter([503])
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/old":
+            try:
+                return httpx.Response(next(statuses))
+            except StopIteration:
+                return httpx.Response(301, headers={"Location": "https://data.sec.gov/new?k=v"})
+        return httpx.Response(200, content=b"moved")
+
+    clock = FakeClock()
+    client = ThrottledRetryingClient(
+        transport=httpx.MockTransport(handler),
+        follow_redirects=True,
+        allowed_hosts={"data.sec.gov"},
+        sleep=clock.sleep,
+        monotonic=clock.monotonic,
+        now=lambda: _T0,
+    )
+    _response, receipt = client.get_with_receipt("https://data.sec.gov/old")
+    assert receipt.source_url == "https://data.sec.gov/old"
+    assert receipt.final_url == "https://data.sec.gov/new?k=v"
+    assert receipt.attempts == 2
+
+
+def test_receipt_time_is_normalized_to_utc_and_naive_clock_is_refused() -> None:
+    offset = timezone(timedelta(hours=-7))
+    aware = ThrottledRetryingClient(
+        transport=httpx.MockTransport(lambda r: httpx.Response(200)),
+        now=lambda: _T0.astimezone(offset),
+    )
+    _response, receipt = aware.get_with_receipt("https://example.invalid/x")
+    assert receipt.retrieved_at == _T0
+    assert receipt.retrieved_at.tzinfo is UTC
+
+    naive = ThrottledRetryingClient(
+        transport=httpx.MockTransport(lambda r: httpx.Response(200)),
+        now=lambda: datetime(2026, 10, 24, 12, 0),
+    )
+    with pytest.raises(ValueError, match="timezone-aware"):
+        naive.get_with_receipt("https://example.invalid/x")
+
+
+def test_get_is_unchanged_and_returns_only_the_response() -> None:
+    client = _client(lambda r: httpx.Response(200, content=b"ok"), FakeClock())
+    assert client.get("https://example.invalid/x").content == b"ok"

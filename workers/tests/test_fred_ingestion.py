@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from datetime import UTC, date, datetime, timedelta, timezone
 from decimal import Decimal
@@ -13,6 +14,7 @@ from fel_providers.mocks import MockFredClient
 from fel_workers.ingestion.fred import (
     FredIngestionError,
     LiveFredClient,
+    ReceiptedFredClient,
     ingest_fred_vintage,
     vintage_cutoff_date,
 )
@@ -147,3 +149,62 @@ def test_live_client_surfaces_http_errors() -> None:
     client = LiveFredClient("test-key-not-a-secret", transport=httpx.MockTransport(handler))
     with pytest.raises(FredIngestionError, match="status 500"):
         client.series_vintage("CPIAUCSL", as_of=datetime(2026, 3, 15, tzinfo=UTC))
+
+
+def test_live_ingest_attaches_a_redacted_receipt_to_every_observation() -> None:
+    """ADR-0029: each value carries the receipt of the bytes it came from."""
+    body = json.dumps(
+        {
+            "observations": [
+                {"date": "2026-01-01", "value": "310.1"},
+                {"date": "2026-02-01", "value": "311.4"},
+            ]
+        }
+    ).encode()
+    fetched_at = datetime(2026, 3, 16, 9, 30, tzinfo=UTC)
+    client = LiveFredClient(
+        "fred-key-not-a-secret",
+        transport=httpx.MockTransport(lambda r: httpx.Response(200, content=body)),
+        now=lambda: fetched_at,
+    )
+    observations = ingest_fred_vintage(client, "CPIAUCSL", as_of=datetime(2026, 3, 15, tzinfo=UTC))
+    assert isinstance(client, ReceiptedFredClient)
+    receipts = {obs.receipt for obs in observations}
+    assert len(receipts) == 1
+    (receipt,) = receipts
+    assert receipt is not None
+    assert receipt.content_sha256 == f"sha256:{hashlib.sha256(body).hexdigest()}"
+    assert receipt.retrieved_at == fetched_at
+    assert "fred-key-not-a-secret" not in repr(receipt)
+    assert "api_key=REDACTED" in receipt.source_url
+    assert "series_id=CPIAUCSL" in receipt.source_url
+    assert "realtime_end=2026-03-14" in receipt.source_url
+
+
+def test_mock_client_yields_no_receipt() -> None:
+    client = MockFredClient()
+    assert not isinstance(client, ReceiptedFredClient)
+    observations = ingest_fred_vintage(client, "CPIAUCSL", as_of=datetime(2026, 3, 15, tzinfo=UTC))
+    assert observations
+    assert all(obs.receipt is None for obs in observations)
+
+
+def test_same_vintage_fetched_twice_is_equal_but_keeps_both_receipts() -> None:
+    """Receipts are provenance, not identity: two fetches of one vintage
+    compare equal, while each observation keeps its own fetch time."""
+    body = json.dumps({"observations": [{"date": "2026-01-01", "value": "310.1"}]}).encode()
+    times = iter(
+        [datetime(2026, 3, 16, 9, 0, tzinfo=UTC), datetime(2026, 3, 16, 10, 0, tzinfo=UTC)]
+    )
+    client = LiveFredClient(
+        "fred-key-not-a-secret",
+        transport=httpx.MockTransport(lambda r: httpx.Response(200, content=body)),
+        now=lambda: next(times),
+    )
+    as_of = datetime(2026, 3, 15, tzinfo=UTC)
+    first = ingest_fred_vintage(client, "CPIAUCSL", as_of=as_of)
+    second = ingest_fred_vintage(client, "CPIAUCSL", as_of=as_of)
+    assert first == second
+    assert first[0].receipt is not None and second[0].receipt is not None
+    assert first[0].receipt.retrieved_at != second[0].receipt.retrieved_at
+    assert first[0].receipt.content_sha256 == second[0].receipt.content_sha256

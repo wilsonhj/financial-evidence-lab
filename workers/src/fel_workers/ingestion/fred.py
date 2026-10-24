@@ -12,14 +12,20 @@ from __future__ import annotations
 import os
 import time
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
+from typing import Protocol, runtime_checkable
 
 import httpx
 
 from fel_providers.interfaces import FredClient
-from fel_workers.http import HttpRequestError, ThrottledRetryingClient, base_url_host
+from fel_workers.http import (
+    HttpRequestError,
+    RetrievalReceipt,
+    ThrottledRetryingClient,
+    base_url_host,
+)
 
 FRED_BASE_URL = "https://api.stlouisfed.org"
 _MISSING_VALUE = "."
@@ -62,6 +68,25 @@ class VintageObservation:
     observed_on: date
     value: Decimal
     as_of: datetime
+    receipt: RetrievalReceipt | None = field(default=None, compare=False)
+    """The fetch this value came from (ADR-0029); None when no retrieval
+    happened, e.g. a mock client. Excluded from equality and hashing: an
+    observation is its series, day, value and cutoff, so the same vintage
+    fetched twice compares equal even though each fetch has its own receipt."""
+
+
+@runtime_checkable
+class ReceiptedFredClient(FredClient, Protocol):
+    """Workers-local capability extension of the frozen FredClient protocol.
+
+    ``packages/providers`` is contract-frozen; this adds the retrieval
+    receipt (ADR-0029) without touching it, the same way
+    ``CompanyFactsSecClient`` extends ``SecClient``.
+    """
+
+    def series_vintage_with_receipt(
+        self, series_id: str, *, as_of: datetime
+    ) -> tuple[list[tuple[date, Decimal]], RetrievalReceipt]: ...
 
 
 def ingest_fred_vintage(
@@ -69,14 +94,23 @@ def ingest_fred_vintage(
 ) -> list[VintageObservation]:
     """Fetch a series vintage through the protocol, sorted by observation date.
 
+    When the client supports :class:`ReceiptedFredClient`, every observation
+    carries the receipt of the response it was parsed from.
+
     ``as_of`` must be timezone-aware: a naive cutoff cannot be compared to
     published_at timestamps and would silently break point-in-time queries.
     """
     if as_of.tzinfo is None:
         raise FredIngestionError(f"as_of cutoff for series {series_id!r} must be timezone-aware")
-    points = client.series_vintage(series_id, as_of=as_of)
+    receipt: RetrievalReceipt | None = None
+    if isinstance(client, ReceiptedFredClient):
+        points, receipt = client.series_vintage_with_receipt(series_id, as_of=as_of)
+    else:
+        points = client.series_vintage(series_id, as_of=as_of)
     observations = [
-        VintageObservation(series_id=series_id, observed_on=day, value=value, as_of=as_of)
+        VintageObservation(
+            series_id=series_id, observed_on=day, value=value, as_of=as_of, receipt=receipt
+        )
         for day, value in points
     ]
     observations.sort(key=lambda item: item.observed_on)
@@ -105,6 +139,7 @@ class LiveFredClient:
         max_retries: int = 3,
         sleep: Callable[[float], None] = time.sleep,
         monotonic: Callable[[], float] = time.monotonic,
+        now: Callable[[], datetime] = lambda: datetime.now(UTC),
     ) -> None:
         key = api_key or os.environ.get("FEL_FRED_API_KEY")
         if not key:
@@ -117,21 +152,30 @@ class LiveFredClient:
             min_interval_seconds=min_interval_seconds,
             max_retries=max_retries,
             allowed_hosts=base_url_host(base_url),
+            secret_query_params=("api_key",),
             sleep=sleep,
             monotonic=monotonic,
+            now=now,
         )
 
     def close(self) -> None:
         self._client.close()
 
     def series_vintage(self, series_id: str, *, as_of: datetime) -> list[tuple[date, Decimal]]:
+        points, _receipt = self.series_vintage_with_receipt(series_id, as_of=as_of)
+        return points
+
+    def series_vintage_with_receipt(
+        self, series_id: str, *, as_of: datetime
+    ) -> tuple[list[tuple[date, Decimal]], RetrievalReceipt]:
+        """:meth:`series_vintage` plus the receipt for the response (ADR-0029)."""
         if as_of.tzinfo is None:
             raise FredIngestionError(
                 f"as_of cutoff for series {series_id!r} must be timezone-aware"
             )
         vintage_date = vintage_cutoff_date(as_of).isoformat()
         try:
-            response = self._client.get(
+            response, receipt = self._client.get_with_receipt(
                 f"{self._base_url}/fred/series/observations",
                 params={
                     "series_id": series_id,
@@ -165,4 +209,4 @@ class LiveFredClient:
                 raise FredIngestionError(
                     f"FRED observation for {series_id!r} is unparseable: {item!r}"
                 ) from exc
-        return points
+        return points, receipt

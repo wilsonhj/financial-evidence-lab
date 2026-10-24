@@ -13,13 +13,19 @@ from __future__ import annotations
 import os
 import time
 from collections.abc import Callable
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
+from typing import Protocol, runtime_checkable
 
 import httpx
 
 from fel_providers.interfaces import MarketBar, MarketDataProvider
-from fel_workers.http import HttpRequestError, ThrottledRetryingClient, base_url_host
+from fel_workers.http import (
+    HttpRequestError,
+    RetrievalReceipt,
+    ThrottledRetryingClient,
+    base_url_host,
+)
 
 ALPHAVANTAGE_BASE_URL = "https://www.alphavantage.co"
 _SERIES_KEY = "Time Series (Daily)"
@@ -52,6 +58,19 @@ class FeatureAssemblyError(Exception):
 ForecastFeatureRow = MarketBar
 
 
+@runtime_checkable
+class ReceiptedMarketDataProvider(MarketDataProvider, Protocol):
+    """Workers-local capability extension of the frozen MarketDataProvider.
+
+    Adds the retrieval receipt (ADR-0029) without touching
+    ``packages/providers``; ``MarketBar`` stays the frozen row contract.
+    """
+
+    def daily_adjusted_with_receipt(
+        self, ticker: str, *, start: date, end: date
+    ) -> tuple[list[MarketBar], RetrievalReceipt]: ...
+
+
 class AlphaVantageMarketDataProvider:
     """MarketDataProvider over Alpha Vantage daily adjusted series.
 
@@ -71,6 +90,7 @@ class AlphaVantageMarketDataProvider:
         max_retries: int = 3,
         sleep: Callable[[float], None] = time.sleep,
         monotonic: Callable[[], float] = time.monotonic,
+        now: Callable[[], datetime] = lambda: datetime.now(UTC),
         today: Callable[[], date] = date.today,
     ) -> None:
         key = api_key or os.environ.get("FEL_ALPHAVANTAGE_API_KEY")
@@ -85,8 +105,10 @@ class AlphaVantageMarketDataProvider:
             min_interval_seconds=min_interval_seconds,
             max_retries=max_retries,
             allowed_hosts=base_url_host(base_url),
+            secret_query_params=("apikey",),
             sleep=sleep,
             monotonic=monotonic,
+            now=now,
         )
 
     def close(self) -> None:
@@ -99,8 +121,15 @@ class AlphaVantageMarketDataProvider:
         return "full"
 
     def daily_adjusted(self, ticker: str, *, start: date, end: date) -> list[MarketBar]:
+        bars, _receipt = self.daily_adjusted_with_receipt(ticker, start=start, end=end)
+        return bars
+
+    def daily_adjusted_with_receipt(
+        self, ticker: str, *, start: date, end: date
+    ) -> tuple[list[MarketBar], RetrievalReceipt]:
+        """:meth:`daily_adjusted` plus the receipt for the response (ADR-0029)."""
         try:
-            response = self._client.get(
+            response, receipt = self._client.get_with_receipt(
                 f"{self._base_url}/query",
                 params={
                     "function": "TIME_SERIES_DAILY_ADJUSTED",
@@ -173,7 +202,7 @@ class AlphaVantageMarketDataProvider:
                     f"Alpha Vantage bar {ticker!r}/{day_text} has unparseable values"
                 ) from exc
         bars.sort(key=lambda bar: bar.day)
-        return bars
+        return bars, receipt
 
 
 def assemble_forecast_features(
@@ -186,12 +215,34 @@ def assemble_forecast_features(
     unadjusted or partially-adjusted prices. Provider-level refusals (e.g.
     the mock's NOADJ sentinel) surface as :class:`FeatureAssemblyError`.
     """
+    rows, _receipt = assemble_receipted_forecast_features(provider, ticker, start=start, end=end)
+    return rows
+
+
+def assemble_receipted_forecast_features(
+    provider: MarketDataProvider, ticker: str, *, start: date, end: date
+) -> tuple[list[ForecastFeatureRow], RetrievalReceipt | None]:
+    """:func:`assemble_forecast_features` plus the receipt of the fetch.
+
+    The receipt (ADR-0029) is None when the provider has no
+    :class:`ReceiptedMarketDataProvider` capability, e.g. the mock; the
+    FOR-005 validation is identical either way.
+    """
+    receipt: RetrievalReceipt | None = None
     try:
-        bars = provider.daily_adjusted(ticker, start=start, end=end)
+        if isinstance(provider, ReceiptedMarketDataProvider):
+            bars, receipt = provider.daily_adjusted_with_receipt(ticker, start=start, end=end)
+        else:
+            bars = provider.daily_adjusted(ticker, start=start, end=end)
     except (ValueError, MarketDataError) as exc:
         raise FeatureAssemblyError(
             f"FOR-005 fail closed for {ticker!r}: required adjustments are " f"unavailable ({exc})"
         ) from exc
+    return _validated_feature_rows(ticker, bars), receipt
+
+
+def _validated_feature_rows(ticker: str, bars: list[MarketBar]) -> list[ForecastFeatureRow]:
+    """FOR-005 row validation shared by both assembly entry points."""
     rows: list[ForecastFeatureRow] = []
     seen: set[date] = set()
     for bar in bars:

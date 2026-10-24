@@ -3,6 +3,7 @@ assembly. All transport is mocked; nothing leaves the process."""
 
 from __future__ import annotations
 
+import hashlib
 import json
 import pathlib
 from datetime import date
@@ -18,7 +19,9 @@ from fel_workers.ingestion.market import (
     FeatureAssemblyError,
     ForecastFeatureRow,
     MarketDataError,
+    ReceiptedMarketDataProvider,
     assemble_forecast_features,
+    assemble_receipted_forecast_features,
 )
 
 FIXTURES = pathlib.Path(__file__).parent / "fixtures"
@@ -210,3 +213,27 @@ def test_feature_assembly_rejects_duplicate_days() -> None:
 
     with pytest.raises(FeatureAssemblyError, match="duplicate"):
         assemble_forecast_features(DuplicatingProvider(), "SYNX", start=START, end=END)
+
+
+def test_receipted_assembly_returns_the_fetch_receipt_with_key_redacted() -> None:
+    """ADR-0029: the receipt rides beside the frozen MarketBar rows."""
+    provider = _provider(_fixture_handler)
+    assert isinstance(provider, ReceiptedMarketDataProvider)
+    rows, receipt = assemble_receipted_forecast_features(provider, "SYNX", start=START, end=END)
+    assert rows == assemble_forecast_features(provider, "SYNX", start=START, end=END)
+    assert receipt is not None
+    body = fixture_bytes("alpha_vantage_daily_adjusted.json")
+    assert receipt.content_sha256 == f"sha256:{hashlib.sha256(body).hexdigest()}"
+    assert "apikey=REDACTED" in receipt.source_url
+    assert "test-key-not-a-secret" not in repr(receipt)
+
+
+def test_receipted_assembly_with_mock_has_no_receipt_and_still_fails_closed() -> None:
+    rows, receipt = assemble_receipted_forecast_features(
+        MockMarketDataProvider(), "SYNX", start=START, end=END
+    )
+    assert rows and receipt is None
+    with pytest.raises(FeatureAssemblyError, match="FOR-005"):
+        assemble_receipted_forecast_features(
+            MockMarketDataProvider(), "NOADJ", start=START, end=END
+        )

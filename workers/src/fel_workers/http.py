@@ -25,12 +25,21 @@ Retrieval is also bounded, because some request URLs (e.g. the
 - Each attempt, redirect hops included, has a total ``deadline_seconds``;
   httpx's own timeout is per socket operation, so a slow-drip body could
   otherwise run unbounded.
+
+Every successful GET can also yield a :class:`RetrievalReceipt` (ADR-0029):
+which URL was asked for and answered, when, with what status and content
+type, and the SHA-256 of the exact decoded bytes the caller parses. Query
+parameters named in ``secret_query_params`` (API keys) are redacted in the
+receipt, so it can be stored and shown next to the numbers it vouches for.
 """
 
 from __future__ import annotations
 
+import hashlib
 import time
 from collections.abc import Callable, Iterable, Mapping
+from dataclasses import dataclass
+from datetime import UTC, datetime
 
 import httpx
 
@@ -41,6 +50,40 @@ DEFAULT_DEADLINE_SECONDS = 300.0
 MAX_REDIRECTS = 20  # httpx's own default
 # Describe the stored body, not the wire encoding it was decoded from.
 _WIRE_HEADERS = frozenset({"content-encoding", "content-length", "transfer-encoding"})
+REDACTED = "REDACTED"
+
+
+@dataclass(frozen=True)
+class RetrievalReceipt:
+    """Provenance for one successful GET (ADR-0029).
+
+    ``content_sha256`` hashes the decoded body exactly as the adapter parsed
+    it, in the repository-wide ``sha256:<hex>`` format, so a stored copy of
+    those bytes can be checked against it. ``retrieved_at`` is the UTC
+    instant the body finished reading. URLs carry the full query with secret
+    parameter values replaced by ``REDACTED``; ``final_url`` differs from
+    ``source_url`` only when a followed redirect moved the request.
+    """
+
+    source_url: str
+    final_url: str
+    retrieved_at: datetime
+    status_code: int
+    content_type: str | None
+    byte_length: int
+    content_sha256: str
+    attempts: int
+
+
+def redact_url(url: httpx.URL, secret_params: frozenset[str]) -> str:
+    """``url`` with the values of ``secret_params`` (case-insensitive) redacted."""
+    if not secret_params or not url.query:
+        return str(url)
+    params = [
+        (name, REDACTED if name.lower() in secret_params else value)
+        for name, value in url.params.multi_items()
+    ]
+    return str(url.copy_with(params=params))
 
 
 def base_url_host(base_url: str) -> frozenset[str]:
@@ -74,8 +117,10 @@ class ThrottledRetryingClient:
         allowed_hosts: Iterable[str] | None = None,
         max_response_bytes: int = DEFAULT_MAX_RESPONSE_BYTES,
         deadline_seconds: float = DEFAULT_DEADLINE_SECONDS,
+        secret_query_params: Iterable[str] = (),
         sleep: Callable[[float], None] = time.sleep,
         monotonic: Callable[[], float] = time.monotonic,
+        now: Callable[[], datetime] = lambda: datetime.now(UTC),
     ) -> None:
         if type(max_response_bytes) is not int or max_response_bytes < 1:
             raise ValueError("max_response_bytes must be a positive integer")
@@ -86,8 +131,10 @@ class ThrottledRetryingClient:
         self._follow_redirects = follow_redirects
         self._max_response_bytes = max_response_bytes
         self._deadline_seconds = deadline_seconds
+        self._secret_query_params = frozenset(name.lower() for name in secret_query_params)
         self._sleep = sleep
         self._monotonic = monotonic
+        self._now = now
         self._last_request_at = float("-inf")
         self._allowed_hosts = (
             None if allowed_hosts is None else frozenset(host.lower() for host in allowed_hosts)
@@ -167,6 +214,13 @@ class ThrottledRetryingClient:
 
         The returned response is fully read and carries the decoded body.
         """
+        response, _receipt = self.get_with_receipt(url, params=params)
+        return response
+
+    def get_with_receipt(
+        self, url: str, *, params: Mapping[str, str] | None = None
+    ) -> tuple[httpx.Response, RetrievalReceipt]:
+        """:meth:`get`, plus the :class:`RetrievalReceipt` for its body."""
         last_error = "unknown error"
         for attempt in range(self._max_retries + 1):
             if attempt > 0:
@@ -188,7 +242,23 @@ class ThrottledRetryingClient:
                             "redirects are not followed by this client"
                         )
                     body = self._read_bounded(response, url, started)
-                    return httpx.Response(
+                    retrieved_at = self._now()
+                    if retrieved_at.tzinfo is None:
+                        raise ValueError("the receipt clock must return timezone-aware times")
+                    receipt = RetrievalReceipt(
+                        source_url=redact_url(
+                            self._client.build_request("GET", url, params=params).url,
+                            self._secret_query_params,
+                        ),
+                        final_url=redact_url(response.request.url, self._secret_query_params),
+                        retrieved_at=retrieved_at.astimezone(UTC),
+                        status_code=status,
+                        content_type=response.headers.get("content-type"),
+                        byte_length=len(body),
+                        content_sha256=f"sha256:{hashlib.sha256(body).hexdigest()}",
+                        attempts=attempt + 1,
+                    )
+                    decoded = httpx.Response(
                         status,
                         headers=[
                             (name, value)
@@ -198,6 +268,7 @@ class ThrottledRetryingClient:
                         content=body,
                         request=response.request,
                     )
+                    return decoded, receipt
                 finally:
                     response.close()
             except httpx.TransportError as exc:

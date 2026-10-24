@@ -34,7 +34,7 @@ redirects to any host and stored the reply as a filing.
 
 ## Proposals that need an ADR (they touch frozen contracts)
 
-1. **Retrieval receipts for non-SEC sources.** SEC bytes are
+1. **Retrieval receipts for non-SEC sources.** Proposed as [ADR-0029](../decisions/ADR-0029-retrieval-receipts.md) and implemented without changing the frozen protocols. The original candidate text follows. SEC bytes are
    content-addressed. FRED and Alpha Vantage values are not: a
    `VintageObservation` carries no source URL, retrieval clock or byte hash.
    Adding `{source_url, retrieved_at, content_sha256}` would let every FRED or
