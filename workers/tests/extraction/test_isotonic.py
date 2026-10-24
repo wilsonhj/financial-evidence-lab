@@ -123,6 +123,22 @@ def test_two_monotone_blocks_keep_gap_and_endpoints() -> None:
     assert predict(artifact, "1") == Decimal("0.750000000000")
 
 
+def test_equal_adjacent_means_coalesce_into_one_block() -> None:
+    # 10/40 and 30/120 are equal reduced rationals; a strict > merge keeps two blocks.
+    samples = _rows("0.2", 10, 30) + _rows("0.8", 30, 90)
+    artifact = fit(samples)
+    assert artifact["blocks"] == [
+        {"lower_score": "0.2", "upper_score": "0.8", "count": 160, "positive": 40}
+    ]
+
+
+def test_quantization_rounds_half_even() -> None:
+    # 1/8192 = 0.0001220703125 exactly; HALF_UP would emit ...313.
+    artifact = fit(_rows("0.1", 1, 8191) + _rows("0.9", 39, 1))
+    predicted = predict(artifact, "0.1")
+    assert str(predicted) == "0.000122070312"
+
+
 def test_permutation_stability_and_monotonic_predictions() -> None:
     samples = _rows("0.2", 20, 60) + _rows("0.8", 60, 20)
     shuffled = list(samples)
@@ -206,6 +222,9 @@ def test_evaluation_never_refits() -> None:
     assert refit["blocks"] != artifact["blocks"]
     assert result["status"] == "evaluated"
     assert predict(artifact, "0.8") == Decimal("0.800000000000")
+    # Frozen 0.8 against a 0.2 held-out rate; a refit would give 0.16 and 0.
+    assert result["brier"] == "0.520000000000"
+    assert result["ece"] == "0.600000000000"
 
 
 def test_ambient_decimal_context_does_not_affect_outputs() -> None:
@@ -342,13 +361,15 @@ def test_insufficient_zero_is_string_distinct_but_equal_to_fitted_zero() -> None
     predicted = predict(insufficient, "0.5")
     assert predicted == Decimal("0")
     assert format(predicted, "f") == "0"
+    assert str(predicted) == "0"
     # Fitted probabilities are 12-place; insufficient is unquantized.
-    fitted = fit(_rows("0.2", 20, 80) + _rows("0.8", 80, 20))
+    fitted = fit(_rows("0.1", 0, 40) + _rows("0.9", 40, 20))
     assert fitted["status"] == "fitted"
-    sample_prob = predict(fitted, "0.2")
-    assert format(sample_prob, "f") != "0" or sample_prob.as_tuple().exponent == -12
+    fitted_zero = predict(fitted, "0.1")
+    assert str(fitted_zero) == "0E-12"
+    assert format(fitted_zero, "f") == "0.000000000000"
     # Document the trap: == cannot distinguish insufficient from fitted zero.
-    assert predicted == Decimal("0.000000000000")
+    assert predicted == fitted_zero
     assert predicted.as_tuple().exponent != Decimal("0.000000000000").as_tuple().exponent
 
 

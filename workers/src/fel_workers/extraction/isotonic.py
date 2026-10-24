@@ -54,17 +54,20 @@ _SEQUENCE_TYPES = (list, tuple)
 
 FitStatus = Literal["fitted", "insufficient_data"]
 EvalStatus = Literal["evaluated", "insufficient_calibration", "insufficient_evaluation"]
+ErrorCode = Literal["invalid_sample", "limit_exceeded", "invalid_artifact"]
+# Runtime accepts only a list or tuple of two-element list/tuple rows.
+Samples = Sequence[tuple[str, int] | list[str | int]]
 
 
 class CalibrationError(Exception):
     """Safe calibration failure; ``code`` is a frozen diagnostic token."""
 
-    def __init__(self, message: str, *, code: str) -> None:
+    def __init__(self, message: str, *, code: ErrorCode) -> None:
         super().__init__(message)
-        self.code = code
+        self.code: ErrorCode = code
 
 
-def _fail(code: str) -> NoReturn:
+def _fail(code: ErrorCode) -> NoReturn:
     if code not in _CODES:
         raise RuntimeError("unknown calibration error")
     error = CalibrationError(_MESSAGES[code], code=code)
@@ -116,19 +119,19 @@ def _check_depth(value: object, depth: int) -> None:
             _check_depth(inner, depth + 1)
 
 
-def _canonical_score(value: object, *, code: str) -> str:
+def _canonical_score(value: object, *, code: ErrorCode) -> str:
     if type(value) is not str or _SCORE.fullmatch(value) is None:
         _fail(code)
     return value
 
 
-def _actual_int(value: object, *, code: str) -> int:
+def _actual_int(value: object, *, code: ErrorCode) -> int:
     if type(value) is not int:
         _fail(code)
     return value
 
 
-def _bounded_count(value: object, *, code: str) -> int:
+def _bounded_count(value: object, *, code: ErrorCode) -> int:
     number = _actual_int(value, code=code)
     if number < 0 or number > _MAX_SAMPLES:
         _fail(code)
@@ -274,7 +277,7 @@ def _left_step(blocks: list[tuple[str, str, int, int]], score: str) -> Decimal:
     return _mean(blocks[max(index - 1, 0)])
 
 
-def fit(samples: list[tuple[str, int]] | tuple[tuple[str, int], ...]) -> dict[str, object]:
+def fit(samples: Samples) -> dict[str, object]:
     """Fit a weighted PAV artifact for one stratum of score/outcome tuples."""
     parsed = _parse_samples(samples)
     n = len(parsed)
@@ -392,11 +395,11 @@ def _evaluation(
     }
 
 
-def evaluate(artifact: dict[str, object], samples: Sequence[tuple[str, int]]) -> dict[str, object]:
+def evaluate(artifact: dict[str, object], samples: Samples) -> dict[str, object]:
     """Evaluate a frozen artifact on held-out tuples without refitting."""
     status, blocks = _validate_artifact(artifact)
     parsed = _parse_samples(samples)
     return _evaluation(status, blocks, parsed)
 
 
-__all__ = ["CalibrationError", "evaluate", "fit", "predict"]
+__all__ = ["CalibrationError", "ErrorCode", "Samples", "evaluate", "fit", "predict"]
