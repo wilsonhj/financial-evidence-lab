@@ -103,9 +103,11 @@ def _emit12(value: Decimal) -> str:
 
 
 def _check_depth(value: object, depth: int) -> None:
+    kind = type(value)
+    if kind is not dict and kind is not list:
+        return
     if depth > _MAX_DEPTH:
         _fail("limit_exceeded")
-    kind = type(value)
     if kind is dict:
         for inner in cast(dict[str, object], value).values():
             _check_depth(inner, depth + 1)

@@ -325,13 +325,15 @@ def test_invalid_prediction_score_is_invalid_sample() -> None:
     assert caught.value.code == "invalid_artifact"
 
 
-def test_nesting_limit_on_artifacts() -> None:
+@pytest.mark.parametrize(("containers", "code"), [(16, "invalid_artifact"), (17, "limit_exceeded")])
+def test_nesting_limit_on_artifacts(containers: int, code: str) -> None:
+    # The contract allows 16 containers counting the root as 1; scalar leaves do not count.
     nested: object = None
-    for _ in range(17):
+    for _ in range(containers):
         nested = [nested]
     with pytest.raises(CalibrationError) as caught:
         predict(nested, "0.5")  # type: ignore[arg-type]
-    assert caught.value.code == "limit_exceeded"
+    assert caught.value.code == code
 
 
 def test_insufficient_zero_is_string_distinct_but_equal_to_fitted_zero() -> None:
