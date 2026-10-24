@@ -1,0 +1,22 @@
+// markdownlint rules for repository docs. CI (.github/workflows/docs.yml)
+// applies them only to Markdown files a pull request changes, so legacy docs
+// are brought into line as they are edited rather than in one sweeping diff.
+{
+  "config": {
+    "default": true,
+    // Prose is not hard-wrapped consistently; tables and links run long.
+    "MD013": false,
+    // <details> blocks are part of the doc-page template.
+    "MD033": false,
+    // Lines that start with an issue number (#123) are not headings.
+    "MD018": false,
+    // Repeated headings such as "Context" are fine in different sections.
+    "MD024": { "siblings_only": true },
+    // Bold labels such as "**Contents**" stand in for headings where a new
+    // heading would change a document's structure.
+    "MD036": false,
+    // Some docs open with an advisory blockquote above the title.
+    "MD041": false
+  },
+  "ignores": ["**/node_modules/**", "**/.venv/**", "**/.next/**"]
+}

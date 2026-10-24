@@ -1,0 +1,57 @@
+# Documentation checks. Not a required check (see .github/required-checks.md);
+# promote it once it has run cleanly for a while.
+#
+# - Links: every relative link and #anchor in every Markdown file must resolve.
+#   Offline only, so external sites going down never turn a PR red.
+# - Lint: markdownlint runs on the Markdown files this PR changes, with the
+#   rules in .markdownlint-cli2.jsonc. Legacy files are fixed when touched.
+name: Docs
+
+on:
+  pull_request:
+    branches: [main, "integration/**"]
+    paths: ["**/*.md", ".markdownlint-cli2.jsonc", ".github/workflows/docs.yml"]
+
+concurrency:
+  group: docs-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  links:
+    name: Docs — relative links and anchors
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: lycheeverse/lychee-action@v2
+        with:
+          args: >-
+            --offline --include-fragments --no-progress --hidden
+            --exclude-path node_modules --exclude-path .venv --exclude-path .next
+            './**/*.md'
+          fail: true
+
+  lint:
+    name: Docs — markdownlint on changed files
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+      - name: Lint changed Markdown
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          mapfile -t files < <(git diff --name-only --diff-filter=ACMR "$BASE_SHA...$HEAD_SHA" -- '*.md')
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "No changed Markdown files."
+            exit 0
+          fi
+          npx --yes markdownlint-cli2@0.18.1 "${files[@]}"
