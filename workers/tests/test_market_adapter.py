@@ -70,9 +70,31 @@ def test_missing_adjustment_field_fails_closed() -> None:
 
 def test_missing_series_fails_closed() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, json={"Note": "rate limited"})
+        return httpx.Response(200, json={"Meta Data": {}})
 
     with pytest.raises(MarketDataError, match="fail closed"):
+        _provider(handler).daily_adjusted("SYNX", start=START, end=END)
+
+
+@pytest.mark.parametrize("key", ["Note", "Information"])
+def test_provider_refusal_is_not_reported_as_missing_adjustments(key: str) -> None:
+    """A 200 throttling/entitlement body is a refusal, not absent adjustments,
+    and its free-form upstream text is not echoed."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={key: "upstream text with detail"})
+
+    with pytest.raises(MarketDataError, match="refused the request") as caught:
+        _provider(handler).daily_adjusted("SYNX", start=START, end=END)
+    assert "adjusted data is unavailable" not in str(caught.value)
+    assert "upstream text" not in str(caught.value)
+
+
+def test_non_json_body_is_a_market_data_error() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=b"<html>maintenance</html>")
+
+    with pytest.raises(MarketDataError, match="not valid JSON"):
         _provider(handler).daily_adjusted("SYNX", start=START, end=END)
 
 

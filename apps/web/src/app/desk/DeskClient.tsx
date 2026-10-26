@@ -518,16 +518,24 @@ function ScenarioWaterfallChart({
   scenario: string;
   decision: ReviewDecision | null;
 }) {
-  const nrrLabel = decision?.sourceId === "call-turn-48" ? "+$70.4m (109%)" : "+$62.6m (108%)";
+  const nrrLabel =
+    decision?.sourceId === "call-turn-48"
+      ? "+$60.4m (109% Call)"
+      : decision?.sourceId === "sec-10q-nrr"
+        ? "+$60.4m (108% 10-Q)"
+        : "+$60.4m (NRR Pending)";
   const scenarioDelta: Record<
     string,
     { delta: string; total: string; barHeight: number; color: string }
   > = {
     Base: { delta: "+$0.0m (Base)", total: "$842.4m", barHeight: 132, color: "#388bfd" },
-    Bull: { delta: "+$14.7m (Bull)", total: "$857.1m", barHeight: 148, color: "#2ea043" },
-    Bear: { delta: "-$18.6m (Bear)", total: "$823.8m", barHeight: 112, color: "#d29922" },
+    Bull: { delta: "+$14.7m (Bull)", total: "$857.1m", barHeight: 146, color: "#2ea043" },
+    Bear: { delta: "-$18.6m (Bear)", total: "$823.8m", barHeight: 114, color: "#d29922" },
   };
   const active = scenarioDelta[scenario] ?? scenarioDelta.Base!;
+  const outputTopY = 170 - active.barHeight;
+  const overrideBarY = scenario === "Bear" ? 38 : outputTopY;
+  const overrideBarHeight = Math.max(8, Math.abs(38 - outputTopY));
 
   return (
     <section
@@ -616,15 +624,15 @@ function ScenarioWaterfallChart({
         <g>
           <rect
             x="328"
-            y={scenario === "Bear" ? 38 : 26}
+            y={overrideBarY}
             width="96"
-            height={scenario === "Base" ? 8 : 16}
+            height={overrideBarHeight}
             rx="4"
             fill={active.color}
           />
           <text
             x="376"
-            y="19"
+            y="18"
             textAnchor="middle"
             fill="currentColor"
             fontSize="10.5"
@@ -640,9 +648,9 @@ function ScenarioWaterfallChart({
         {/* Connector 3 -> 4 */}
         <line
           x1="424"
-          y1="38"
+          y1={outputTopY}
           x2="468"
-          y2="38"
+          y2={outputTopY}
           stroke="currentColor"
           strokeDasharray="3 3"
           strokeOpacity="0.4"
@@ -652,7 +660,7 @@ function ScenarioWaterfallChart({
         <g>
           <rect
             x="468"
-            y={170 - active.barHeight}
+            y={outputTopY}
             width="112"
             height={active.barHeight}
             rx="6"
@@ -660,7 +668,7 @@ function ScenarioWaterfallChart({
           />
           <text
             x="524"
-            y={162 - active.barHeight}
+            y={outputTopY - 8}
             textAnchor="middle"
             fill="currentColor"
             fontSize="12"

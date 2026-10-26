@@ -1,0 +1,158 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2400" height="2240" viewBox="0 0 2400 2240" role="img" aria-labelledby="title desc">
+<title id="title">Financial Evidence Lab executive architecture blueprint</title>
+<desc id="desc">Six sections describe business value, readiness, logical architecture, evidence lineage, financial controls and release decisions at commit 437ce55.</desc>
+<rect x="0" y="0" width="2400" height="196" rx="0" fill="#14283F" stroke="none" stroke-width="2"/>
+<text x="60" y="52.6" font-family="DejaVu Sans,Arial,sans-serif" font-size="22" font-weight="700" fill="#92D4CE">FINANCIAL EVIDENCE LAB</text>
+<text x="60" y="121.2" font-family="DejaVu Sans,Arial,sans-serif" font-size="54" font-weight="700" fill="white">Executive system architecture</text>
+<text x="62" y="170.2" font-family="DejaVu Sans,Arial,sans-serif" font-size="24" font-weight="400" fill="#CAD8E5">Evidence-led research  /  Human-controlled decisions  /  Measurable release gates</text>
+<text x="1780" y="61.400000000000006" font-family="DejaVu Sans,Arial,sans-serif" font-size="23" font-weight="700" fill="#CAD8E5">CODE SNAPSHOT  437ce55</text>
+<text x="1780" y="102.2" font-family="DejaVu Sans,Arial,sans-serif" font-size="24" font-weight="400" fill="white">22 September 2026</text>
+<text x="1780" y="140.6" font-family="DejaVu Sans,Arial,sans-serif" font-size="22" font-weight="400" fill="#FFD798">Pre-release  |  Not a deployment claim</text>
+<rect x="60" y="236" width="1120" height="420" rx="18" fill="white" stroke="#D6E0E8" stroke-width="2"/>
+<rect x="88" y="264" width="54" height="42" rx="9" fill="#14283F" stroke="none" stroke-width="2"/>
+<text x="100" y="290.4" font-family="DejaVu Sans,Arial,sans-serif" font-size="23" font-weight="700" fill="white">01</text>
+<text x="160" y="291.6" font-family="DejaVu Sans,Arial,sans-serif" font-size="32" font-weight="700" fill="#14283F">The business case</text>
+<text x="92" y="342.6" font-family="DejaVu Sans,Arial,sans-serif" font-size="22" font-weight="400" fill="#516378">Design intent — business benefits still require measurement</text>
+<text x="94" y="390.8" font-family="DejaVu Sans,Arial,sans-serif" font-size="26" font-weight="700" fill="#087F73">Defensible financial research</text>
+<text x="94" y="425.4" font-family="DejaVu Sans,Arial,sans-serif" font-size="23" font-weight="400" fill="#14283F">Trace a reported metric back to a specific filing and source span.</text>
+<text x="94" y="479.8" font-family="DejaVu Sans,Arial,sans-serif" font-size="26" font-weight="700" fill="#087F73">Less repeated verification</text>
+<text x="94" y="514.4" font-family="DejaVu Sans,Arial,sans-serif" font-size="23" font-weight="400" fill="#14283F">Reuse pinned evidence and preserve analyst corrections.</text>
+<text x="94" y="568.8" font-family="DejaVu Sans,Arial,sans-serif" font-size="26" font-weight="700" fill="#087F73">Controlled path to automation</text>
+<text x="94" y="603.4" font-family="DejaVu Sans,Arial,sans-serif" font-size="23" font-weight="400" fill="#14283F">Validate proposals, then retain human review and version history.</text>
+<rect x="1220" y="236" width="1120" height="420" rx="18" fill="white" stroke="#D6E0E8" stroke-width="2"/>
+<rect x="1248" y="264" width="54" height="42" rx="9" fill="#14283F" stroke="none" stroke-width="2"/>
+<text x="1260" y="290.4" font-family="DejaVu Sans,Arial,sans-serif" font-size="23" font-weight="700" fill="white">02</text>
+<text x="1320" y="291.6" font-family="DejaVu Sans,Arial,sans-serif" font-size="32" font-weight="700" fill="#14283F">What leadership can rely on</text>
+<text x="1252" y="342.6" font-family="DejaVu Sans,Arial,sans-serif" font-size="22" font-weight="400" fill="#516378">Code implementation is distinct from hosted or market readiness</text>
+<rect x="1252" y="369" width="135" height="35" rx="6" fill="#E5F4F0" stroke="none" stroke-width="2"/>
+<text x="1266" y="391.2" font-family="DejaVu Sans,Arial,sans-serif" font-size="19" font-weight="700" fill="#087F73">BUILT</text>
+<text x="1408" y="389.0" font-family="DejaVu Sans,Arial,sans-serif" font-size="25" font-weight="700" fill="#14283F">Evidence and review foundations</text>
+<text x="1252" y="431.6" font-family="DejaVu Sans,Arial,sans-serif" font-size="22" font-weight="400" fill="#14283F">Ingestion, retrieval, extraction, RLS and immutable review history.</text>
+<rect x="1252" y="458" width="135" height="35" rx="6" fill="#FFF1D9" stroke="none" stroke-width="2"/>
+<text x="1266" y="480.2" font-family="DejaVu Sans,Arial,sans-serif" font-size="19" font-weight="700" fill="#986000">GATED</text>
+<text x="1408" y="478.0" font-family="DejaVu Sans,Arial,sans-serif" font-size="25" font-weight="700" fill="#14283F">Public multi-user product</text>
+<text x="1252" y="520.6" font-family="DejaVu Sans,Arial,sans-serif" font-size="22" font-weight="400" fill="#14283F">Web business routes refuse public access pending per-user sessions.</text>
+<rect x="1252" y="547" width="135" height="35" rx="6" fill="#EBF1FA" stroke="none" stroke-width="2"/>
+<text x="1266" y="569.2" font-family="DejaVu Sans,Arial,sans-serif" font-size="19" font-weight="700" fill="#285FA7">PLANNED</text>
+<text x="1408" y="567.0" font-family="DejaVu Sans,Arial,sans-serif" font-size="25" font-weight="700" fill="#14283F">Models and forecasts</text>
+<text x="1252" y="609.6" font-family="DejaVu Sans,Arial,sans-serif" font-size="22" font-weight="400" fill="#14283F">Not presented as delivered functionality or proven commercial value.</text>
+<rect x="60" y="696" width="1480" height="790" rx="18" fill="white" stroke="#D6E0E8" stroke-width="2"/>
+<rect x="88" y="724" width="54" height="42" rx="9" fill="#14283F" stroke="none" stroke-width="2"/>
+<text x="100" y="750.4" font-family="DejaVu Sans,Arial,sans-serif" font-size="23" font-weight="700" fill="white">03</text>
+<text x="160" y="751.6" font-family="DejaVu Sans,Arial,sans-serif" font-size="32" font-weight="700" fill="#14283F">Logical system architecture</text>
+<text x="92" y="802.6" font-family="DejaVu Sans,Arial,sans-serif" font-size="22" font-weight="400" fill="#516378">Existing component relationships — not a verified hosted topology</text>
+<text x="101" y="852.0" font-family="DejaVu Sans,Arial,sans-serif" font-size="20" font-weight="700" fill="#087F73">ANALYST / REVIEWER</text>
+<text x="1030" y="852.0" font-family="DejaVu Sans,Arial,sans-serif" font-size="20" font-weight="700" fill="#087F73">EXTERNAL INPUTS</text>
+<polyline points="280,866 280,896" fill="none" stroke="#8294A5" stroke-width="3"/><polygon points="280.0,896.0 274.8,885.2 285.2,885.2" fill="#8294A5"/>
+<polyline points="1208,866 1208,896" fill="none" stroke="#8294A5" stroke-width="3"/><polygon points="1208.0,896.0 1202.8,885.2 1213.2,885.2" fill="#8294A5"/>
+<rect x="102" y="896" width="356" height="138" rx="12" fill="#EEF5FB" stroke="#CDDCE7" stroke-width="2"/>
+<rect x="103" y="910" width="5" height="110" rx="2" fill="#285FA7" stroke="none" stroke-width="2"/>
+<text x="122" y="935.0" font-family="DejaVu Sans,Arial,sans-serif" font-size="25" font-weight="700" fill="#14283F">Next.js workspace</text>
+<text x="122" y="972.8" font-family="DejaVu Sans,Arial,sans-serif" font-size="21" font-weight="400" fill="#516378">Reader, search, review UI</text>
+<text x="122" y="1001.8" font-family="DejaVu Sans,Arial,sans-serif" font-size="21" font-weight="400" fill="#516378">Public session gate applies</text>
+<rect x="590" y="896" width="356" height="138" rx="12" fill="#EEF5FB" stroke="#CDDCE7" stroke-width="2"/>
+<rect x="591" y="910" width="5" height="110" rx="2" fill="#285FA7" stroke="none" stroke-width="2"/>
+<text x="610" y="935.0" font-family="DejaVu Sans,Arial,sans-serif" font-size="25" font-weight="700" fill="#14283F">FastAPI boundary</text>
+<text x="610" y="972.8" font-family="DejaVu Sans,Arial,sans-serif" font-size="21" font-weight="400" fill="#516378">Identity and membership</text>
+<text x="610" y="1001.8" font-family="DejaVu Sans,Arial,sans-serif" font-size="21" font-weight="400" fill="#516378">Review and event streams</text>
+<rect x="1038" y="896" width="456" height="138" rx="12" fill="#EEF5FB" stroke="#CDDCE7" stroke-width="2"/>
+<rect x="1039" y="910" width="5" height="110" rx="2" fill="#285FA7" stroke="none" stroke-width="2"/>
+<text x="1058" y="935.0" font-family="DejaVu Sans,Arial,sans-serif" font-size="25" font-weight="700" fill="#14283F">Python workers</text>
+<text x="1058" y="972.8" font-family="DejaVu Sans,Arial,sans-serif" font-size="21" font-weight="400" fill="#516378">SEC ingestion and extraction</text>
+<text x="1058" y="1001.8" font-family="DejaVu Sans,Arial,sans-serif" font-size="21" font-weight="400" fill="#516378">Leases, checkpoints, budgets</text>
+<polyline points="458,963 590,963" fill="none" stroke="#285FA7" stroke-width="3"/><polygon points="590.0,963.0 579.2,968.2 579.2,957.8" fill="#285FA7"/>
+<text x="475" y="943.4" font-family="DejaVu Sans,Arial,sans-serif" font-size="18" font-weight="400" fill="#285FA7">HTTPS</text>
+<rect x="102" y="1160" width="356" height="152" rx="12" fill="#EEF5FB" stroke="#CDDCE7" stroke-width="2"/>
+<rect x="103" y="1174" width="5" height="124" rx="2" fill="#285FA7" stroke="none" stroke-width="2"/>
+<text x="122" y="1199.0" font-family="DejaVu Sans,Arial,sans-serif" font-size="25" font-weight="700" fill="#14283F">Retrieval engine</text>
+<text x="122" y="1236.8" font-family="DejaVu Sans,Arial,sans-serif" font-size="21" font-weight="400" fill="#516378">Evidence lanes and ranking</text>
+<text x="122" y="1265.8" font-family="DejaVu Sans,Arial,sans-serif" font-size="21" font-weight="400" fill="#516378">Claims and replayable traces</text>
+<text x="122" y="1294.8" font-family="DejaVu Sans,Arial,sans-serif" font-size="21" font-weight="400" fill="#516378">Used within the API path</text>
+<rect x="590" y="1160" width="356" height="152" rx="12" fill="#EEF5FB" stroke="#CDDCE7" stroke-width="2"/>
+<rect x="591" y="1174" width="5" height="124" rx="2" fill="#285FA7" stroke="none" stroke-width="2"/>
+<text x="610" y="1199.0" font-family="DejaVu Sans,Arial,sans-serif" font-size="25" font-weight="700" fill="#14283F">PostgreSQL + pgvector</text>
+<text x="610" y="1236.8" font-family="DejaVu Sans,Arial,sans-serif" font-size="21" font-weight="400" fill="#516378">Tenant data and RLS</text>
+<text x="610" y="1265.8" font-family="DejaVu Sans,Arial,sans-serif" font-size="21" font-weight="400" fill="#516378">Jobs, versions, events</text>
+<text x="610" y="1294.8" font-family="DejaVu Sans,Arial,sans-serif" font-size="21" font-weight="400" fill="#516378">Shared evidence metadata</text>
+<rect x="1038" y="1160" width="456" height="152" rx="12" fill="#EEF5FB" stroke="#CDDCE7" stroke-width="2"/>
+<rect x="1039" y="1174" width="5" height="124" rx="2" fill="#285FA7" stroke="none" stroke-width="2"/>
+<text x="1058" y="1199.0" font-family="DejaVu Sans,Arial,sans-serif" font-size="25" font-weight="700" fill="#14283F">Canonical evidence store</text>
+<text x="1058" y="1236.8" font-family="DejaVu Sans,Arial,sans-serif" font-size="21" font-weight="400" fill="#516378">Content-addressed filing bytes</text>
+<text x="1058" y="1265.8" font-family="DejaVu Sans,Arial,sans-serif" font-size="21" font-weight="400" fill="#516378">Local-directory provider today</text>
+<text x="1058" y="1294.8" font-family="DejaVu Sans,Arial,sans-serif" font-size="21" font-weight="400" fill="#516378">Shared access needs explicit setup</text>
+<polyline points="670,1034 670,1070 280,1070 280,1160" fill="none" stroke="#285FA7" stroke-width="3"/><polygon points="280.0,1160.0 274.8,1149.2 285.2,1149.2" fill="#285FA7"/>
+<polyline points="820,1034 820,1160" fill="none" stroke="#285FA7" stroke-width="3"/><polygon points="820.0,1160.0 814.8,1149.2 825.2,1149.2" fill="#285FA7"/>
+<text x="695" y="1123.6" font-family="DejaVu Sans,Arial,sans-serif" font-size="17" font-weight="400" fill="#285FA7">read / write</text>
+<polyline points="458,1236 590,1236" fill="none" stroke="#285FA7" stroke-width="3"/><polygon points="590.0,1236.0 579.2,1241.2 579.2,1230.8" fill="#285FA7"/>
+<polyline points="1120,1034 1120,1086 925,1086 925,1160" fill="none" stroke="#087F73" stroke-width="3"/><polygon points="925.0,1160.0 919.8,1149.2 930.2,1149.2" fill="#087F73"/>
+<text x="1136" y="1066.4" font-family="DejaVu Sans,Arial,sans-serif" font-size="18" font-weight="400" fill="#087F73">jobs / state</text>
+<polyline points="1280,1034 1280,1160" fill="none" stroke="#087F73" stroke-width="3"/><polygon points="1280.0,1160.0 1274.8,1149.2 1285.2,1149.2" fill="#087F73"/>
+<text x="1300" y="1114.4" font-family="DejaVu Sans,Arial,sans-serif" font-size="18" font-weight="400" fill="#087F73">write bytes</text>
+<polyline points="945,1000 988,1000 988,1130 1080,1130 1080,1160" fill="none" stroke="#285FA7" stroke-width="3"/><polygon points="1080.0,1160.0 1074.8,1149.2 1085.2,1149.2" fill="#285FA7"/>
+<text x="1096" y="1147.6" font-family="DejaVu Sans,Arial,sans-serif" font-size="17" font-weight="400" fill="#285FA7">API reads bytes</text>
+<rect x="102" y="1350" width="1392" height="99" rx="12" fill="#FFF4E4" stroke="none" stroke-width="2"/>
+<text x="124" y="1386.4" font-family="DejaVu Sans,Arial,sans-serif" font-size="23" font-weight="700" fill="#986000">AI provider boundary</text>
+<text x="460" y="1385.6" font-family="DejaVu Sans,Arial,sans-serif" font-size="22" font-weight="400" fill="#14283F">Explicit-key OpenAI adapters exist; runtime promotion is still gated.</text>
+<text x="460" y="1418.6" font-family="DejaVu Sans,Arial,sans-serif" font-size="22" font-weight="400" fill="#14283F">Public credential custody, user funding and live evaluation are not complete.</text>
+<rect x="1580" y="696" width="760" height="790" rx="18" fill="white" stroke="#D6E0E8" stroke-width="2"/>
+<rect x="1608" y="724" width="54" height="42" rx="9" fill="#14283F" stroke="none" stroke-width="2"/>
+<text x="1620" y="750.4" font-family="DejaVu Sans,Arial,sans-serif" font-size="23" font-weight="700" fill="white">04</text>
+<text x="1680" y="751.6" font-family="DejaVu Sans,Arial,sans-serif" font-size="32" font-weight="700" fill="#14283F">Evidence to approved record</text>
+<text x="1612" y="802.6" font-family="DejaVu Sans,Arial,sans-serif" font-size="22" font-weight="400" fill="#516378">Lineage survives every transformation</text>
+<rect x="1614" y="843" width="690" height="89" rx="10" fill="#F0F6F5" stroke="none" stroke-width="2"/>
+<text x="1634" y="878.0" font-family="DejaVu Sans,Arial,sans-serif" font-size="25" font-weight="700" fill="#087F73">Primary source</text>
+<text x="1634" y="910.8" font-family="DejaVu Sans,Arial,sans-serif" font-size="21" font-weight="400" fill="#14283F">Filing bytes and publication time</text>
+<polyline points="1959,932 1959,962" fill="none" stroke="#087F73" stroke-width="3"/><polygon points="1959.0,962.0 1953.8,951.2 1964.2,951.2" fill="#087F73"/>
+<rect x="1614" y="962" width="690" height="89" rx="10" fill="#F0F6F5" stroke="none" stroke-width="2"/>
+<text x="1634" y="997.0" font-family="DejaVu Sans,Arial,sans-serif" font-size="25" font-weight="700" fill="#087F73">Pinned evidence</text>
+<text x="1634" y="1029.8" font-family="DejaVu Sans,Arial,sans-serif" font-size="21" font-weight="400" fill="#14283F">Document version, offsets and hashes</text>
+<polyline points="1959,1051 1959,1081" fill="none" stroke="#087F73" stroke-width="3"/><polygon points="1959.0,1081.0 1953.8,1070.2 1964.2,1070.2" fill="#087F73"/>
+<rect x="1614" y="1081" width="690" height="89" rx="10" fill="#F0F6F5" stroke="none" stroke-width="2"/>
+<text x="1634" y="1116.0" font-family="DejaVu Sans,Arial,sans-serif" font-size="25" font-weight="700" fill="#087F73">Candidate result</text>
+<text x="1634" y="1148.8" font-family="DejaVu Sans,Arial,sans-serif" font-size="21" font-weight="400" fill="#14283F">Retrieved claims or extracted metrics</text>
+<polyline points="1959,1170 1959,1200" fill="none" stroke="#087F73" stroke-width="3"/><polygon points="1959.0,1200.0 1953.8,1189.2 1964.2,1189.2" fill="#087F73"/>
+<rect x="1614" y="1200" width="690" height="89" rx="10" fill="#F0F6F5" stroke="none" stroke-width="2"/>
+<text x="1634" y="1235.0" font-family="DejaVu Sans,Arial,sans-serif" font-size="25" font-weight="700" fill="#087F73">Validation and human review</text>
+<text x="1634" y="1267.8" font-family="DejaVu Sans,Arial,sans-serif" font-size="21" font-weight="400" fill="#14283F">Cutoff, schema, evidence and conflicts</text>
+<polyline points="1959,1289 1959,1319" fill="none" stroke="#087F73" stroke-width="3"/><polygon points="1959.0,1319.0 1953.8,1308.2 1964.2,1308.2" fill="#087F73"/>
+<rect x="1614" y="1319" width="690" height="89" rx="10" fill="#F0F6F5" stroke="none" stroke-width="2"/>
+<text x="1634" y="1354.0" font-family="DejaVu Sans,Arial,sans-serif" font-size="25" font-weight="700" fill="#087F73">Immutable approved version</text>
+<text x="1634" y="1386.8" font-family="DejaVu Sans,Arial,sans-serif" font-size="21" font-weight="400" fill="#14283F">Correction creates a child, not an overwrite</text>
+<rect x="60" y="1526" width="1120" height="568" rx="18" fill="white" stroke="#D6E0E8" stroke-width="2"/>
+<rect x="88" y="1554" width="54" height="42" rx="9" fill="#14283F" stroke="none" stroke-width="2"/>
+<text x="100" y="1580.4" font-family="DejaVu Sans,Arial,sans-serif" font-size="23" font-weight="700" fill="white">05</text>
+<text x="160" y="1581.6" font-family="DejaVu Sans,Arial,sans-serif" font-size="32" font-weight="700" fill="#14283F">Controls and unit economics</text>
+<text x="92" y="1632.6" font-family="DejaVu Sans,Arial,sans-serif" font-size="22" font-weight="400" fill="#516378">Mechanisms reduce risk; effectiveness and ROI need evidence</text>
+<text x="94" y="1682.8" font-family="DejaVu Sans,Arial,sans-serif" font-size="26" font-weight="700" fill="#087F73">Information isolation</text>
+<text x="94" y="1718.4" font-family="DejaVu Sans,Arial,sans-serif" font-size="23" font-weight="400" fill="#14283F">Database membership and RLS constrain tenant-owned analysis.</text>
+<text x="94" y="1766.8" font-family="DejaVu Sans,Arial,sans-serif" font-size="26" font-weight="700" fill="#087F73">Research integrity</text>
+<text x="94" y="1802.4" font-family="DejaVu Sans,Arial,sans-serif" font-size="23" font-weight="400" fill="#14283F">Cutoffs, hashes, versions and explicit errors expose invalid evidence.</text>
+<text x="94" y="1850.8" font-family="DejaVu Sans,Arial,sans-serif" font-size="26" font-weight="700" fill="#087F73">Spend discipline</text>
+<text x="94" y="1886.4" font-family="DejaVu Sans,Arial,sans-serif" font-size="23" font-weight="400" fill="#14283F">Extraction run caps exist; public BYOK admission is unfinished.</text>
+<text x="94" y="1934.8" font-family="DejaVu Sans,Arial,sans-serif" font-size="26" font-weight="700" fill="#087F73">Measure before scaling</text>
+<text x="94" y="1970.4" font-family="DejaVu Sans,Arial,sans-serif" font-size="23" font-weight="400" fill="#14283F">Track cost per approved record, review time and accepted yield.</text>
+<rect x="94" y="2010" width="1052" height="52" rx="8" fill="#EDF2F8" stroke="none" stroke-width="2"/>
+<text x="113" y="2043.4" font-family="DejaVu Sans,Arial,sans-serif" font-size="23" font-weight="700" fill="#14283F">Cost per approved record = total attributable cost / approved records</text>
+<rect x="1220" y="1526" width="1120" height="568" rx="18" fill="white" stroke="#D6E0E8" stroke-width="2"/>
+<rect x="1248" y="1554" width="54" height="42" rx="9" fill="#14283F" stroke="none" stroke-width="2"/>
+<text x="1260" y="1580.4" font-family="DejaVu Sans,Arial,sans-serif" font-size="23" font-weight="700" fill="white">06</text>
+<text x="1320" y="1581.6" font-family="DejaVu Sans,Arial,sans-serif" font-size="32" font-weight="700" fill="#14283F">Investment and release decisions</text>
+<text x="1252" y="1632.6" font-family="DejaVu Sans,Arial,sans-serif" font-size="22" font-weight="400" fill="#516378">Recommended sequence — milestones are not promised dates</text>
+<rect x="1254" y="1660" width="48" height="43" rx="8" fill="#14283F" stroke="none" stroke-width="2"/>
+<text x="1267" y="1687.2" font-family="DejaVu Sans,Arial,sans-serif" font-size="24" font-weight="700" fill="white">A</text>
+<text x="1323" y="1681.6" font-family="DejaVu Sans,Arial,sans-serif" font-size="27" font-weight="700" fill="#14283F">Complete identity and funding</text>
+<text x="1254" y="1729.4" font-family="DejaVu Sans,Arial,sans-serif" font-size="23" font-weight="400" fill="#14283F">Per-user sessions, private workspaces, custody and billable admission.</text>
+<rect x="1254" y="1758" width="48" height="43" rx="8" fill="#14283F" stroke="none" stroke-width="2"/>
+<text x="1267" y="1785.2" font-family="DejaVu Sans,Arial,sans-serif" font-size="24" font-weight="700" fill="white">B</text>
+<text x="1323" y="1779.6" font-family="DejaVu Sans,Arial,sans-serif" font-size="27" font-weight="700" fill="#14283F">Prove operating readiness</text>
+<text x="1254" y="1827.4" font-family="DejaVu Sans,Arial,sans-serif" font-size="23" font-weight="400" fill="#14283F">Reference-load performance, hosted evidence and live quality gates.</text>
+<rect x="1254" y="1856" width="48" height="43" rx="8" fill="#14283F" stroke="none" stroke-width="2"/>
+<text x="1267" y="1883.2" font-family="DejaVu Sans,Arial,sans-serif" font-size="24" font-weight="700" fill="white">C</text>
+<text x="1323" y="1877.6" font-family="DejaVu Sans,Arial,sans-serif" font-size="27" font-weight="700" fill="#14283F">Expand the decision product</text>
+<text x="1254" y="1925.4" font-family="DejaVu Sans,Arial,sans-serif" font-size="23" font-weight="400" fill="#14283F">Complete calibrated review before releasing modeling and forecasts.</text>
+<rect x="1254" y="1970" width="1052" height="92" rx="10" fill="#FFF4E4" stroke="none" stroke-width="2"/>
+<text x="1272" y="2003.6" font-family="DejaVu Sans,Arial,sans-serif" font-size="22" font-weight="400" fill="#986000">Leadership checkpoint: approve bounded scope and explicit exit evidence.</text>
+<text x="1272" y="2035.6" font-family="DejaVu Sans,Arial,sans-serif" font-size="22" font-weight="400" fill="#986000">Do not equate green CI, an adapter, or an issue closure with launch readiness.</text>
+<text x="62" y="2149.6" font-family="DejaVu Sans,Arial,sans-serif" font-size="22" font-weight="700" fill="#14283F">READOUT  01 value  →  02 readiness  →  03 architecture  →  04 lineage  →  05 economics  →  06 decisions</text>
+<text x="62" y="2194.8" font-family="DejaVu Sans,Arial,sans-serif" font-size="21" font-weight="400" fill="#516378">Source-pinned interpretation. Evidence links, limitations, editable diagram source and Miro import instructions accompany this board.</text>
+</svg>

@@ -1,12 +1,17 @@
 # Shared packages
 
-Reusable first-party libraries consumed by `apps/api`, `apps/web`, `workers`, and `evals`.
+Reusable libraries consumed by `apps/` and `workers/`. Path ownership for each
+package is registered per work package in
+[`docs/handoff/workstreams.yaml`](../docs/handoff/workstreams.yaml);
+`packages/contracts/` is a shared path owned by the integration lead
+(see [`AGENTS.md`](../AGENTS.md#shared-paths)).
 
-| Package | Directory | Language | Responsibility |
-| :--- | :--- | :--- | :--- |
-| `@fel/contracts` | [`contracts/`](./contracts/README.md) | OpenAPI 3.1 / JSON Schema / TypeScript | Frozen API and domain contracts (v0.6.0), AJV runtime validators, and generated TypeScript types consumed by `apps/web` and verified against `apps/api`. |
-| `fel_calculation_engine` | [`calculation-engine/`](./calculation-engine/README.md) | Python 3.11 | Deterministic 34-digit IEEE Decimal calculation DAG, 9 frozen node kinds, closed unit algebra, `fel-formula/v1` expression ASTs, exact-SCC Jacobi fixed-point iteration, Base/Bull/Bear scenario overrides, and 5,000-node recalculation benchmark. |
-| `fel_ontology` | [`ontology/`](./ontology/) | Python 3.11 | First-party SaaS metric ontology (`saas-metrics/v1`: 9 families, 14 canonical KPIs), enum/qualifier validation, content-hash pinning, and deterministic comparability keys. |
-| `fel_providers` | [`providers/`](./providers/) | Python 3.11 | Stable external-provider protocols and deterministic mocks for SEC EDGAR, FRED, market data, storage, OpenAI 512-dim embeddings (`openai_embeddings.py`), OpenAI structured outputs (`openai_structured.py`), and offline BYOK credential encryption (`credential_cipher.py`). |
-| `fel_retrieval` | [`retrieval/`](./retrieval/README.md) | Python 3.11 | Deterministic section/span chunking, cutoff-safe 4-lane retrieval (dense, lexical, fact, table), query planner, Reciprocal Rank Fusion (`k=60`), atomic claim decomposition, citation entailment verification, and byte-stable trace replay. |
-| `fel_retrieval_evals` | [`retrieval-evals/`](./retrieval-evals/) | Python 3.11 | Retrieval benchmark dataset compiler, exact-vs-HNSW vector oracle, and Recall/MRR/nDCG/temporal-validity evaluation metrics. |
+| Package | Purpose | Language | Docs |
+|---|---|---|---|
+| `calculation-engine/` | Typed model graph and deterministic Decimal calculation engine for the Revenue Model Composer (M4) | Python (`fel-calculation-engine`) | [README](./calculation-engine/README.md), [#219 acceptance](./calculation-engine/ACCEPTANCE-219.md) |
+| `contracts/` | Frozen OpenAPI and JSON Schema contracts (`0.9.0`), canonical fixtures, and the generated TypeScript client (ADR-0001) | OpenAPI / JSON Schema / TypeScript (`@fel/contracts`) | [README](./contracts/README.md), [versioning rules](./contracts/VERSIONING.md) |
+| `ontology/` | B2B SaaS metric ontology (`saas-metrics/v1`) used by extraction | Python (`fel-ontology`) | [README](./ontology/README.md) |
+| `providers/` | Provider protocols and deterministic mocks, plus explicit-key OpenAI adapters and an offline credential cipher | Python (`fel-providers`) | [OpenAI structured](./providers/OPENAI.md), [OpenAI embeddings](./providers/OPENAI_EMBEDDINGS.md), [credential cipher](./providers/CREDENTIAL_CIPHER.md) |
+| `retrieval/` | Versioned hybrid retrieval backend: item building, index publish, cutoff-safe lanes, planning, RRF fusion, and persisted traces (M2) | Python (`fel-retrieval`) | [README](./retrieval/README.md), [acceptance](./retrieval/ACCEPTANCE.md) |
+| `retrieval-evals/` | Retrieval smoke-benchmark tooling: checksum-pinned manifest compiler and release-gate metrics | Python | [README](./retrieval-evals/README.md) |
+| `ui/` | Reserved for shared React UI; currently contains only `.gitkeep` and its README | — | [README](./ui/README.md) |

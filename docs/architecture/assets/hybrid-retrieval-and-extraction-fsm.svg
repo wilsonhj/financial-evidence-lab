@@ -61,22 +61,22 @@
     <g id="m2-rrf-fusion">
       <rect x="116" y="314" width="360" height="58" rx="8" fill="#1f2d4d" stroke="#a371f7" stroke-width="1.5" />
       <text x="136" y="338" fill="#d2a8ff" font-family="Inter, -apple-system, sans-serif" font-size="13" font-weight="700">Reciprocal Rank Fusion (`k = 60`) &amp; Rerank</text>
-      <text x="136" y="356" fill="#c9d1d9" font-family="'JetBrains Mono', monospace" font-size="10.5">score = £ 1 / (60 + lane_rank) · tie-broken by item_id</text>
+      <text x="136" y="356" fill="#c9d1d9" font-family="'JetBrains Mono', monospace" font-size="10.5">score = &#931; 1 / (60 + lane_rank) &#183; tie-broken by item_id</text>
     </g>
 
     <!-- Evidence & Cutoff Gates -->
     <g id="m2-rejection-gate">
       <rect x="116" y="400" width="360" height="58" rx="8" fill="#281d2e" stroke="#f78166" stroke-width="1.5" />
       <text x="136" y="424" fill="#ffa198" font-family="Inter, -apple-system, sans-serif" font-size="13" font-weight="700">Temporal, Version &amp; Budget Rejection Gates</text>
-      <text x="136" y="442" fill="#c9d1d9" font-family="'JetBrains Mono', monospace" font-size="10.5">temporal_after_cutoff · cross_version · budget_cap</text>
+      <text x="136" y="442" fill="#c9d1d9" font-family="'JetBrains Mono', monospace" font-size="10.5">temporal_after_cutoff &#183; cross_version &#183; budget_cap</text>
     </g>
 
     <!-- Claim Decomposition -->
     <g id="m2-claims">
       <rect x="86" y="486" width="420" height="84" rx="8" fill="#162925" stroke="#3fb950" stroke-width="1.5" />
       <text x="106" y="510" fill="#56d364" font-family="Inter, -apple-system, sans-serif" font-size="13" font-weight="700">Atomic Claim Decomposition &amp; Citation Entailment</text>
-      <text x="106" y="530" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="11">" Verifies numeric values &amp; span hashes against supported candidates</text>
-      <text x="106" y="548" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="11">" Emits `supported` | `contradicted` | `unverifiable` + replayable trace</text>
+      <text x="106" y="530" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="11">&#8226; Verifies numeric values &amp; span hashes against supported candidates</text>
+      <text x="106" y="548" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="11">&#8226; Emits `supported` | `contradicted` | `unverifiable` + replayable trace</text>
     </g>
 
     <!-- M2 Arrows -->
@@ -138,17 +138,17 @@
       <rect x="884" y="352" width="224" height="66" rx="8" fill="#162925" stroke="#3fb950" stroke-width="1.5" />
       <text x="898" y="374" fill="#56d364" font-family="Inter, -apple-system, sans-serif" font-size="12" font-weight="700">10. `persist_proposals`</text>
       <text x="898" y="392" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="10.5">Atomic TX: proposals + evidence + conflicts</text>
-      <text x="898" y="407" fill="#56d364" font-family="'JetBrains Mono', monospace" font-size="10">status ’ waiting_review</text>
+      <text x="898" y="407" fill="#56d364" font-family="'JetBrains Mono', monospace" font-size="10">status &#8594; waiting_review</text>
     </g>
 
     <!-- FSM Guard Footer Box -->
     <g id="fsm-guards-box">
       <rect x="620" y="444" width="488" height="126" rx="8" fill="#1b2234" stroke="#6e7681" stroke-width="1.2" />
       <text x="638" y="468" fill="#f0f6fc" font-family="Inter, -apple-system, sans-serif" font-size="12.5" font-weight="700">Every Stage Boundary (`_boundary` &amp; `_commit_fence`) Enforces:</text>
-      <text x="638" y="490" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="11">" Content-Addressed Checkpoint: `(run_id, step_name, input_hash, workflow_version)` in `steps.output`</text>
-      <text x="638" y="510" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="11">" Pre-Call &amp; Post-Call Budget Caps: calls, input/output tokens, USD cost, wall-clock (`GREATEST` merge)</text>
-      <text x="638" y="530" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="11">" Lease &amp; Cancellation Fencing: zombie workers cannot commit after lease expiry or run cancel</text>
-      <text x="638" y="550" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="11">" Terminal Event Ordering: `run_failed` / `run_cancelled` appended before terminal status lock</text>
+      <text x="638" y="490" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="11">&#8226; Content-Addressed Checkpoint: `(run_id, step_name, input_hash, workflow_version)` in `steps.output`</text>
+      <text x="638" y="510" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="11">&#8226; Pre-Call &amp; Post-Call Budget Caps: calls, input/output tokens, USD cost, wall-clock (`GREATEST` merge)</text>
+      <text x="638" y="530" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="11">&#8226; Lease &amp; Cancellation Fencing: zombie workers cannot commit after lease expiry or run cancel</text>
+      <text x="638" y="550" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="11">&#8226; Terminal Event Ordering: `run_failed` / `run_cancelled` appended before terminal status lock</text>
     </g>
 
     <!-- FSM Arrows -->

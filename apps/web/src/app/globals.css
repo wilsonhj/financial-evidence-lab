@@ -1674,7 +1674,7 @@ body:has(.desk-shell[data-fel-theme="oled"]) .site-header {
   background: var(--color-accent);
 }
 
-.obs-Stage-bar {
+.obs-stage-bar {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;

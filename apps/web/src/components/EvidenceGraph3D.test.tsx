@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
@@ -18,6 +19,12 @@ const DECISION_10Q: ReviewDecision = {
   conflictId: "C-104",
   sourceId: "sec-10q-nrr",
   rationale: "Filed 10-Q disclosure is the authoritative modeled metric.",
+};
+
+const DECISION_CALL: ReviewDecision = {
+  conflictId: "C-104",
+  sourceId: "call-turn-48",
+  rationale: "Earnings call transcript turn 48 reflects updated point-in-time NRR.",
 };
 
 describe("buildEpistemicGraph", () => {
@@ -48,19 +55,28 @@ describe("buildEpistemicGraph", () => {
     expect(output?.state).toBe("verified");
   });
 
-  it("enforces point-in-time cutoff by blocking future-published nodes", () => {
+  it("enforces point-in-time cutoff by blocking future-published nodes and decisions", () => {
     const atFiling = buildEpistemicGraph({
       scenario: "Base",
-      source: null,
-      decision: null,
-      approvals: PENDING_APPROVALS,
-      applied: false,
+      source: "call-turn-48",
+      decision: DECISION_CALL,
+      approvals: COMPLETED_APPROVALS,
+      applied: true,
       cutoffStep: 1,
     });
     const callNode = atFiling.nodes.find((n) => n.id === "call-turn-48");
     const filingNode = atFiling.nodes.find((n) => n.id === "sec-10q-nrr");
+    const gateNode = atFiling.nodes.find((n) => n.id === "gate-c104");
+    const outputNode = atFiling.nodes.find((n) => n.id === "output-fy27-rev");
     expect(callNode?.state).toBe("cutoff-blocked");
     expect(filingNode?.state).toBe("verified");
+    // Because DECISION_CALL relies on call-turn-48 (step 2), it is inadmissible at step 1:
+    expect(gateNode?.state).toBe("conflict");
+    expect(outputNode?.state).toBe("pending");
+    const gateToArrEdge = atFiling.edges.find(
+      (e) => e.from === "gate-c104" && e.to === "calc-driver-arr",
+    );
+    expect(gateToArrEdge?.active).toBe(false);
 
     const preClose = buildEpistemicGraph({
       scenario: "Base",
@@ -72,6 +88,9 @@ describe("buildEpistemicGraph", () => {
     });
     expect(preClose.nodes.find((n) => n.id === "sec-10q-nrr")?.state).toBe("cutoff-blocked");
     expect(preClose.nodes.find((n) => n.id === "calc-scenario")?.state).toBe("override");
+    expect(
+      preClose.edges.find((e) => e.from === "calc-scenario" && e.to === "output-fy27-rev")?.active,
+    ).toBe(false);
   });
 });
 
@@ -92,5 +111,25 @@ describe("EvidenceGraph3D component", () => {
     expect(markup).toContain("3D Evidence &amp; Calculation Lineage Explorer");
     expect(markup).toContain("FY27 Revenue · $842.4m");
     expect(markup).toContain("C-104 conflict active");
+  });
+
+  it("ships valid UTF-8 and control-character-free SVG architecture diagrams", () => {
+    const svgFiles = [
+      "../../../../docs/architecture/assets/system-overview.svg",
+      "../../../../docs/architecture/assets/evidence-to-model-pipeline.svg",
+      "../../../../docs/architecture/assets/hybrid-retrieval-and-extraction-fsm.svg",
+      "../../../../docs/architecture/assets/calculation-dag-and-provenance.svg",
+    ];
+    for (const rel of svgFiles) {
+      const content = readFileSync(new URL(rel, import.meta.url), "utf8");
+      expect(content.startsWith("<svg")).toBe(true);
+      expect(content.trimEnd().endsWith("</svg>")).toBe(true);
+      // Ensure no raw control characters (ASCII < 32 except tab, LF, CR) exist
+      const hasControlChar = [...content].some((ch) => {
+        const code = ch.charCodeAt(0);
+        return code < 32 && code !== 9 && code !== 10 && code !== 13;
+      });
+      expect(hasControlChar).toBe(false);
+    }
   });
 });

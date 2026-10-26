@@ -1,5 +1,18 @@
 # Unit comparison policy deployment
 
+<details>
+<summary>Relevant source files</summary>
+
+- [packages/ontology/fel_ontology/units.py](../../packages/ontology/fel_ontology/units.py) — `unit-comparison/v1` canonicalization
+- [packages/ontology/fel_ontology/data/currency-codes.json](../../packages/ontology/fel_ontology/data/currency-codes.json) — pinned ISO 4217 currency vocabulary
+- [workers/src/fel_workers/extraction/types.py](../../workers/src/fel_workers/extraction/types.py) — workflow and validator version pins
+- [workers/src/fel_workers/extraction/validate/pipeline.py](../../workers/src/fel_workers/extraction/validate/pipeline.py) — validation summaries with unit-policy provenance
+- [workers/src/fel_workers/extraction/validate/duplicates.py](../../workers/src/fel_workers/extraction/validate/duplicates.py) — policy-namespaced conflict keys
+
+</details>
+
+Source references verified against commit `437ce55`.
+
 The current producer target is `extraction-workflow/v3`; follow the
 [signed guidance range rollout](guidance-range-policy-migration.md). The v2
 instructions below describe the original unit-policy release and remain relevant
@@ -35,3 +48,10 @@ group guard still rejects attaching unreviewed proposals to an adjudicated group
 
 No database migration, historical rewrite, automatic re-extraction or automatic
 run repinning is part of this deployment.
+
+## Related pages
+
+- [Signed guidance range policy deployment](guidance-range-policy-migration.md)
+- [Extraction worker runbook](extraction-worker.md)
+- [Ontology](../../packages/ontology/README.md)
+- [ADR-0019: unit comparison policy](../decisions/ADR-0019-unit-comparison-policy.md)

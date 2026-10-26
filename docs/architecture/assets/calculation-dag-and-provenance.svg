@@ -21,8 +21,8 @@
   <!-- Canvas -->
   <g id="layer-background">
     <rect x="0" y="0" width="1160" height="580" rx="16" fill="url(#calc-bg)" stroke="#26354d" stroke-width="2" />
-    <text x="32" y="40" fill="#f0f6fc" font-family="Inter, -apple-system, sans-serif" font-size="20" font-weight="700">M4 Calculation Engine (`fel_calculation_engine`)  9 Node Kinds &amp; Provenance DAG</text>
-    <text x="32" y="62" fill="#8b949e" font-family="Inter, -apple-system, sans-serif" font-size="13">34-digit IEEE Decimal (`ROUND_HALF_EVEN`) " Closed unit algebra " `fel-formula/v1` ASTs " Jacobi SCC fixed-point cycles</text>
+    <text x="32" y="40" fill="#f0f6fc" font-family="Inter, -apple-system, sans-serif" font-size="20" font-weight="700">M4 Calculation Engine (`fel_calculation_engine`) &#8212; 9 Node Kinds &amp; Provenance DAG</text>
+    <text x="32" y="62" fill="#8b949e" font-family="Inter, -apple-system, sans-serif" font-size="13">34-digit IEEE Decimal (`ROUND_HALF_EVEN`) &#8226; Closed unit algebra &#8226; `fel-formula/v1` ASTs &#8226; Jacobi SCC fixed-point cycles</text>
   </g>
 
   <!-- Column 1: Leaf Nodes (Constitution II Four-Way Provenance Leaves) -->
@@ -85,9 +85,9 @@
       <rect x="356" y="216" width="444" height="106" rx="8" fill="#1b263b" stroke="#58a6ff" stroke-width="1.5" />
       <text x="372" y="238" fill="#f0f6fc" font-family="Inter, -apple-system, sans-serif" font-size="13" font-weight="700">4. `FormulaNode` &amp; `ExpressionFormulaNode` (`fel-formula/v1`)</text>
       <text x="372" y="258" fill="#79c0ff" font-family="'JetBrains Mono', monospace" font-size="11">expression = "([principal] + [interest]) * [rate]"</text>
-      <text x="372" y="276" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="11">" Closed unit algebra (`currency * ratio ’ currency`, `currency / count ’ currency`)</text>
-      <text x="372" y="294" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="11">" Full 34-digit Decimal precision retained node-to-node (zero intermediate rounding)</text>
-      <text x="372" y="311" fill="#8b949e" font-family="Inter, -apple-system, sans-serif" font-size="10.5">" Bounded AST (max 512 nodes, depth 64); rejects executable code, calls, or floats</text>
+      <text x="372" y="276" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="11">&#8226; Closed unit algebra (`currency * ratio &#8594; currency`, `currency / count &#8594; currency`)</text>
+      <text x="372" y="294" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="11">&#8226; Full 34-digit Decimal precision retained node-to-node (zero intermediate rounding)</text>
+      <text x="372" y="311" fill="#8b949e" font-family="Inter, -apple-system, sans-serif" font-size="10.5">&#8226; Bounded AST (max 512 nodes, depth 64); rejects executable code, calls, or floats</text>
     </g>
 
     <!-- Jacobi Iteration Group Box -->
@@ -95,16 +95,16 @@
       <rect x="356" y="338" width="444" height="96" rx="8" fill="#231c38" stroke="#bc8cff" stroke-width="1.5" />
       <text x="372" y="360" fill="#d2a8ff" font-family="Inter, -apple-system, sans-serif" font-size="13" font-weight="700">Explicit Exact-SCC `IterationGroup` (Jacobi Fixed-Point Solver)</text>
       <text x="372" y="378" fill="#c9d1d9" font-family="'JetBrains Mono', monospace" font-size="10.5">|new - old| &lt;= abs_tol + rel_tol * max(|new|, |old|)</text>
-      <text x="372" y="396" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="11">" Undeclared cycles fail closed (`CYCLE_DETECTED`); declared SCCs require external seed nodes</text>
-      <text x="372" y="414" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="11">" Non-convergence within `max_iterations` (1..1000) halts before any downstream output runs</text>
+      <text x="372" y="396" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="11">&#8226; Undeclared cycles fail closed (`CYCLE_DETECTED`); declared SCCs require external seed nodes</text>
+      <text x="372" y="414" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="11">&#8226; Non-convergence within `max_iterations` (1..1000) halts before any downstream output runs</text>
     </g>
 
     <!-- AggregationNode -->
     <g id="node-aggregation">
       <rect x="356" y="450" width="444" height="80" rx="8" fill="#1b263b" stroke="#e3b341" stroke-width="1.5" />
       <text x="372" y="472" fill="#f0f6fc" font-family="Inter, -apple-system, sans-serif" font-size="13" font-weight="700">5. `AggregationNode` (`sum` | `rollup_year`)</text>
-      <text x="372" y="490" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="11">" `sum`: combines same-period segments with identical currency/unit</text>
-      <text x="372" y="508" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="11">" `rollup_year`: requires exact `Q1, Q2, Q3, Q4` of target `FiscalYear`</text>
+      <text x="372" y="490" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="11">&#8226; `sum`: combines same-period segments with identical currency/unit</text>
+      <text x="372" y="508" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="11">&#8226; `rollup_year`: requires exact `Q1, Q2, Q3, Q4` of target `FiscalYear`</text>
     </g>
   </g>
 
@@ -129,8 +129,8 @@
       <rect x="868" y="274" width="248" height="132" rx="8" fill="#162925" stroke="#3fb950" stroke-width="1.8" />
       <text x="882" y="296" fill="#56d364" font-family="Inter, -apple-system, sans-serif" font-size="13" font-weight="700">9. `ReportedFinancialOutputNode`</text>
       <text x="882" y="316" fill="#f0f6fc" font-family="Inter, -apple-system, sans-serif" font-size="11.5" font-weight="600">Single-Edge Quantization Boundary</text>
-      <text x="882" y="336" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="11">" Quantizes once at the reporting edge</text>
-      <text x="882" y="352" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="11">" ISO 4217 minor units (USD=2, JPY=0,</text>
+      <text x="882" y="336" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="11">&#8226; Quantizes once at the reporting edge</text>
+      <text x="882" y="352" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="11">&#8226; ISO 4217 minor units (USD=2, JPY=0,</text>
       <text x="882" y="368" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="11">  KWD=3) or explicit `quantum`</text>
       <text x="882" y="388" fill="#56d364" font-family="'JetBrains Mono', monospace" font-size="10">Rounding never compounds!</text>
     </g>

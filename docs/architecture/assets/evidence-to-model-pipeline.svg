@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1160 520" width="1160" height="520" role="img" aria-labelledby="title-pipeline desc-pipeline">
-  <title id="title-pipeline">Financial Evidence Lab  End-to-End Evidence-to-Model Lineage Pipeline (M1 to M4)</title>
+  <title id="title-pipeline">Financial Evidence Lab &#8212; End-to-End Evidence-to-Model Lineage Pipeline (M1 to M4)</title>
   <desc id="desc-pipeline">Five-stage pipeline diagram showing how immutable SEC filings flow through point-in-time cutoff gates, 4-lane hybrid retrieval, 10-stage durable extraction, human review, and the 9-node Decimal calculation engine.</desc>
 
   <defs>
@@ -18,7 +18,7 @@
   <!-- Background -->
   <g id="layer-background">
     <rect x="0" y="0" width="1160" height="520" rx="16" fill="url(#pipeline-bg)" stroke="#26354d" stroke-width="2" />
-    <text x="32" y="42" fill="#f0f6fc" font-family="Inter, -apple-system, BlinkMacSystemFont, sans-serif" font-size="20" font-weight="700">End-to-End Epistemic Lineage  From SEC Filing to Financial Model (M1 ’ M4)</text>
+    <text x="32" y="42" fill="#f0f6fc" font-family="Inter, -apple-system, BlinkMacSystemFont, sans-serif" font-size="20" font-weight="700">End-to-End Epistemic Lineage &#8212; From SEC Filing to Financial Model (M1 &#8594; M4)</text>
     <text x="32" y="64" fill="#8b949e" font-family="Inter, -apple-system, BlinkMacSystemFont, sans-serif" font-size="13">Every number in a scenario or model traces back through immutable cryptographic hashes to exact source character spans.</text>
   </g>
 
@@ -33,7 +33,7 @@
   <g id="stage-m1-corpus">
     <rect x="32" y="136" width="204" height="300" rx="10" fill="#141f33" stroke="#58a6ff" stroke-width="1.5" />
     <rect x="32" y="136" width="204" height="34" rx="10" fill="#1f3558" />
-    <text x="46" y="158" fill="#79c0ff" font-family="Inter, -apple-system, sans-serif" font-size="12.5" font-weight="700">M1 · IMMUTABLE CORPUS</text>
+    <text x="46" y="158" fill="#79c0ff" font-family="Inter, -apple-system, sans-serif" font-size="12.5" font-weight="700">M1 &#183; IMMUTABLE CORPUS</text>
 
     <rect x="46" y="184" width="176" height="58" rx="6" fill="#1b2942" stroke="#30476e" />
     <text x="56" y="204" fill="#f0f6fc" font-family="Inter, -apple-system, sans-serif" font-size="12" font-weight="600">SEC Filings &amp; XBRL</text>
@@ -56,12 +56,12 @@
   <g id="stage-m2-retrieval">
     <rect x="255" y="136" width="204" height="300" rx="10" fill="#141f33" stroke="#bc8cff" stroke-width="1.5" />
     <rect x="255" y="136" width="204" height="34" rx="10" fill="#322356" />
-    <text x="269" y="158" fill="#d2a8ff" font-family="Inter, -apple-system, sans-serif" font-size="12.5" font-weight="700">M2 · HYBRID RETRIEVAL</text>
+    <text x="269" y="158" fill="#d2a8ff" font-family="Inter, -apple-system, sans-serif" font-size="12.5" font-weight="700">M2 &#183; HYBRID RETRIEVAL</text>
 
     <rect x="269" y="184" width="176" height="68" rx="6" fill="#1b2942" stroke="#47386e" />
     <text x="279" y="204" fill="#f0f6fc" font-family="Inter, -apple-system, sans-serif" font-size="12" font-weight="600">4 Cutoff-Safe Lanes</text>
-    <text x="279" y="220" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="10.5">Dense (512d) · Lexical</text>
-    <text x="279" y="235" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="10.5">Facts · Tables</text>
+    <text x="279" y="220" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="10.5">Dense (512d) &#183; Lexical</text>
+    <text x="279" y="235" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="10.5">Facts &#183; Tables</text>
 
     <rect x="269" y="264" width="176" height="62" rx="6" fill="#1b2942" stroke="#47386e" />
     <text x="279" y="284" fill="#f0f6fc" font-family="Inter, -apple-system, sans-serif" font-size="12" font-weight="600">RRF Fusion &amp; Gates</text>
@@ -79,7 +79,7 @@
   <g id="stage-m3-extraction">
     <rect x="478" y="136" width="204" height="300" rx="10" fill="#141f33" stroke="#d29922" stroke-width="1.5" />
     <rect x="478" y="136" width="204" height="34" rx="10" fill="#4b3614" />
-    <text x="492" y="158" fill="#e3b341" font-family="Inter, -apple-system, sans-serif" font-size="12.5" font-weight="700">M3 · EXTRACTION FSM</text>
+    <text x="492" y="158" fill="#e3b341" font-family="Inter, -apple-system, sans-serif" font-size="12.5" font-weight="700">M3 &#183; EXTRACTION FSM</text>
 
     <rect x="492" y="184" width="176" height="68" rx="6" fill="#1b2942" stroke="#634b23" />
     <text x="502" y="204" fill="#f0f6fc" font-family="Inter, -apple-system, sans-serif" font-size="12" font-weight="600">5 Typed Read-Only Roles</text>
@@ -101,7 +101,7 @@
   <g id="stage-m3-review">
     <rect x="701" y="136" width="204" height="300" rx="10" fill="#141f33" stroke="#f78166" stroke-width="1.5" />
     <rect x="701" y="136" width="204" height="34" rx="10" fill="#59251e" />
-    <text x="715" y="158" fill="#ffa198" font-family="Inter, -apple-system, sans-serif" font-size="12.5" font-weight="700">M3 · HUMAN REVIEW GATE</text>
+    <text x="715" y="158" fill="#ffa198" font-family="Inter, -apple-system, sans-serif" font-size="12.5" font-weight="700">M3 &#183; HUMAN REVIEW GATE</text>
 
     <rect x="715" y="184" width="176" height="68" rx="6" fill="#1b2942" stroke="#6e3630" />
     <text x="725" y="204" fill="#f0f6fc" font-family="Inter, -apple-system, sans-serif" font-size="12" font-weight="600">Zero Auto-Approval</text>
@@ -123,7 +123,7 @@
   <g id="stage-m4-calc">
     <rect x="924" y="136" width="204" height="300" rx="10" fill="#141f33" stroke="#3fb950" stroke-width="1.5" />
     <rect x="924" y="136" width="204" height="34" rx="10" fill="#1b4728" />
-    <text x="938" y="158" fill="#56d364" font-family="Inter, -apple-system, sans-serif" font-size="12.5" font-weight="700">M4 · CALCULATION DAG</text>
+    <text x="938" y="158" fill="#56d364" font-family="Inter, -apple-system, sans-serif" font-size="12.5" font-weight="700">M4 &#183; CALCULATION DAG</text>
 
     <rect x="938" y="184" width="176" height="68" rx="6" fill="#1b2942" stroke="#285c37" />
     <text x="948" y="204" fill="#f0f6fc" font-family="Inter, -apple-system, sans-serif" font-size="12" font-weight="600">9 Typed Node Kinds</text>
@@ -154,6 +154,6 @@
     <rect x="32" y="454" width="1096" height="42" rx="8" fill="#12261e" stroke="#2ea043" stroke-width="1.2" />
     <path d="M 1020 475 L 140 475" stroke="#3fb950" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#arrow-lineage)" />
     <rect x="330" y="461" width="500" height="28" rx="6" fill="#0d1b15" />
-    <text x="348" y="479" fill="#56d364" font-family="Inter, -apple-system, sans-serif" font-size="12" font-weight="700">REVERSE AUDIT LINEAGE: CalcResult.trace() ’ ApprovedVersion ’ SourceSpan (SHA-256)</text>
+    <text x="348" y="479" fill="#56d364" font-family="Inter, -apple-system, sans-serif" font-size="12" font-weight="700">REVERSE AUDIT LINEAGE: CalcResult.trace() &#8594; ApprovedVersion &#8594; SourceSpan (SHA-256)</text>
   </g>
 </svg>

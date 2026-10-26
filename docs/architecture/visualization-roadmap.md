@@ -1,5 +1,18 @@
 # Visualization, 3D Graphics, and Interactive Gamified UX Roadmap
 
+<details>
+<summary>Relevant source files</summary>
+
+- [apps/web/src/components/EvidenceGraph3D.tsx](../../apps/web/src/components/EvidenceGraph3D.tsx) — 3D perspective provenance DAG and temporal cutoff explorer
+- [apps/web/src/components/ObservatoryFlowViz.tsx](../../apps/web/src/components/ObservatoryFlowViz.tsx) — 4-lane RRF fusion flow and budget visualizer
+- [apps/web/src/app/desk/DeskClient.tsx](../../apps/web/src/app/desk/DeskClient.tsx) — Earnings Update Desk, scenario waterfall chart, and review gates
+- [apps/web/src/components/ObservatoryTrace.tsx](../../apps/web/src/components/ObservatoryTrace.tsx) — Search Observatory trace view
+- [evals/reporting/corpus_qa_render.py](../../evals/reporting/corpus_qa_render.py) — deterministic stdlib SVG and Markdown renderer
+
+</details>
+
+Source references verified against commit `59bbf7e`.
+
 This document audits the visual surfaces in Financial Evidence Lab, defines the
 architecture for interactive 2D charts, 3D spatial graphics, and game-like
 analytical mechanics, and documents both the **zero-dependency interactive
@@ -26,16 +39,16 @@ exclusively on semantic HTML tables and definition lists:
 ## 2. Core Principles: "Game-Like" Without Compromising Epistemic Rigor
 
 Financial Evidence Lab is governed by strict constitutional invariants
-(`.specify/memory/constitution.md`): **Decimal-only math**, **point-in-time
-temporal cutoffs (`published_at <= effective_as_of`)**, **hash-verified
-citations**, and **fail-closed validation**. Making the interface feel like a
-tactile strategy or investigation game must *reinforce*—never obscure—those
-guarantees:
+([`constitution.md`](../../.specify/memory/constitution.md)): **Decimal-only math**,
+**point-in-time temporal cutoffs (`published_at <= effective_as_of`)**,
+**hash-verified citations**, and **fail-closed validation**. Making the
+interface feel like a tactile strategy or investigation game must *reinforce*—never
+obscure—those guarantees:
 
 1. **Visuals never invent numbers.** Every bar height, 3D node position, or
    scenario delta is derived deterministically from typed `Decimal` strings or
    verified trace payloads.
-2. **Spatial depth maps to epistemic provenance.** In 3D space, the Z/Y axis
+2. **Spatial depth maps to epistemic provenance.** In 3D space, the Y/Z axis
    represents the **Constitution II Four-Way Provenance Hierarchy**:
    - **Layer 0 (Bedrock):** Immutable SEC Filing Spans & XBRL Facts (`reported`)
    - **Layer 1 (Extraction & Claims):** Candidate Proposals, Conflict Groups, & Entailed Claims
@@ -52,9 +65,9 @@ guarantees:
 ## 3. Implemented Interactive 3D & 2D Components in `apps/web`
 
 Because `package.json` and `pnpm-lock.yaml` are protected `shared_paths` under
-`AGENTS.md`, `apps/web` ships a custom, dependency-free **3D Perspective Canvas
-Engine + Interactive SVG Chart Suite** that runs out-of-the-box in fixture and
-HTTP modes:
+[`AGENTS.md`](../../AGENTS.md), `apps/web` ships a custom, dependency-free **3D
+Perspective Canvas Engine + Interactive SVG Chart Suite** that runs
+out-of-the-box in fixture and HTTP modes:
 
 ### A. 3D Evidence & Calculation Lineage Explorer (`apps/web/src/components/EvidenceGraph3D.tsx`)
 
@@ -62,45 +75,42 @@ Mounted on the **Earnings Update Desk (`/desk`)**, `EvidenceGraph3D` provides an
 interactive, game-like 3D viewport over the CloudMetric Q2 FY26 update workflow:
 
 - **Real-Time 3D Perspective Projection & Camera Orbit:** Drag to orbit in 3D
-  (`yaw` / `pitch`), toggle between **3D Constellation**, **Layered DAG**, and
-  **Temporal Cutoff Slice** camera presets, or toggle continuous orbital
-  rotation.
+  (`yaw` / `pitch`), toggle between **3D Orbit**, **Layered DAG**, and
+  **Cutoff Slice** camera presets, or toggle continuous orbital rotation.
 - **Animated Provenance Energy Pulses:** Directional particles travel along
   dependency edges from SEC `10-Q` (`sec-10q-nrr`) and Earnings Call
   (`call-turn-48`) source spans up through the `C-104` NRR conflict node,
   `C-109` guidance nodes, operational drivers, and Base/Bull/Bear scenario
   overrides into the terminal `FY27 Revenue` output node.
 - **Live Reactivity to Analyst Decisions:**
-  - Before conflict resolution, the `C-104 NRR Conflict` node pulses amber/crimson
+  - Before conflict resolution, the `C-104 NRR Conflict` node pulses amber
     with split provenance beams from both the `10-Q (108%)` and `Call (109%)`
     spans.
   - Choosing an authoritative source and saving the resolution in the `Review`
-    tab locks the winning span's beam in emerald green and dims the rejected
-    source.
+    tab locks the winning span's beam in emerald green (when temporally
+    admissible under the cutoff) and dims the rejected source.
   - Approving both `C-109` guidance checkboxes and clicking **Apply approved
     facts** unlocks the full provenance chain and lights up the terminal `FY27
     Revenue` node.
   - Switching between **Base (`$842.4m`)**, **Bull (`$857.1m`)**, and **Bear
-    (`$823.8m`)** dynamically morphs node elevations and highlights active
-    `ScenarioOverrideNode` connections.
+    (`$823.8m`)** updates the output node elevation and scenario delta.
 - **Interactive Point-in-Time Cutoff Scrubber (`effective_as_of`):** Analysts
-  can scrub the temporal cutoff across filing timestamps (`2026-07-31` Q2 close,
-  `2026-08-14 16:05` 10-Q filing, `2026-08-14 17:30` earnings call, `2026-08-20`
-  full desk window) to see how `published_at <= effective_as_of` fences out
-  future evidence in real time.
+  can scrub the temporal cutoff across three stops (`Q2 Close (2026-07-31)`,
+  `10-Q Filed (16:15 UTC)`, and `Post-Call (18:00 UTC)`) to see how
+  `published_at <= effective_as_of` fences out future-dated evidence and
+  invalidates future-dependent conflict decisions in real time.
 
-### B. Interactive Scenario Waterfall & Guidance Range Chart (`apps/web/src/app/desk/DeskClient.tsx`)
+### B. Interactive Scenario Waterfall & Guidance Corridor (`apps/web/src/app/desk/DeskClient.tsx`)
 
-In the Update Desk **Model** view, an interactive SVG **Revenue Bridge &
-Scenario Sensitivity** chart visualizes:
+In the Update Desk **Model** view, an interactive SVG **Scenario Waterfall &
+Guidance Corridor** chart visualizes:
 
-- The step-by-step buildup from **Q2 Run-Rate ARR (`$782.0m`)** → **Net
-  Retention Expansion (`108%` / `109%`)** → **New Logo & Seat Expansion** →
-  **Scenario Override Delta (`Base` / `Bull` / `Bear`)** → **FY27 Projected
-  Revenue (`$823.8m` – `$857.1m`)**.
-- A gamified **Review Gate Readiness HUD** showing quest-style progress across
-  Conflict Resolution (`C-104`), Revenue Guidance (`C-109-revenue`), and Gross
-  Margin Guidance (`C-109-gross-margin`).
+- The step-by-step buildup from **Q2 ARR Base (`$782.0m`)** → **Net
+  Retention Expansion (`+$60.4m`)** → **Scenario Override Delta (`Base` / `Bull`
+  / `Bear`)** → **FY27 Projected Revenue (`$823.8m` – `$857.1m`)**.
+- A **Review Gate Readiness HUD** in the Impact Inspector showing progress
+  across Conflict Resolution (`C-104`), Revenue Guidance (`C-109-revenue`), and
+  Gross Margin Guidance (`C-109-gross-margin`).
 
 ### C. 4-Lane RRF Fusion Flow & Budget Gauge (`apps/web/src/components/ObservatoryFlowViz.tsx`)
 
@@ -111,14 +121,15 @@ pipeline:
 - **Multi-Lane RRF Flow Diagram (Sankey-style SVG):** Visualizes candidate
   counts and score ribbons flowing from **Dense**, **Lexical**, **Facts**, and
   **Tables** lanes into the **RRF (`k=60`) Fusion Nexus**, splitting into
-  **Supported Context Items** versus **Gate-Rejected Candidates**
-  (`temporal_after_cutoff`, `cross_version`), and terminating in **Entailed /
-  Contradicted / Unverifiable Claims**.
-- **Interactive Lane Filter & Inspector:** Clicking any lane or stage highlights
-  its flow path and filters the summary telemetry.
+  **Supported Set** versus **Gate Rejected** candidates
+  (`temporal_after_cutoff`, `cross_version`), and terminating in **Supported /
+  Flagged Claims**.
+- **Interactive Lane Filter:** Clicking any lane filter button highlights its
+  Sankey flow ribbon and displays per-lane hit and supported-candidate counts.
 - **Latency Stage Breakdown & Context Budget Bar:** Visualizes per-stage
-  execution timings (`plan`, `retrieve`, `fuse`, `verify`, `generate`) and
-  context item/token consumption against hard budget caps.
+  execution timings (`plan`, `retrieve`, `fuse`, `rerank`, `context`,
+  `generate`, `verify`) and context item/token consumption against hard budget
+  caps.
 
 ---
 
@@ -152,17 +163,19 @@ flowchart TB
 ```
 
 ### 4.1 3D Embedding Point-Cloud "Observatory Galaxy" (`/observatory`)
+
 - **Concept:** Project the 512-dimensional `pgvector` index (`0003_retrieval_core.sql`)
   into 3D coordinates using deterministic PCA/UMAP precomputed at index publish
   time.
 - **Game Mechanic:** When a user submits a query in `/observatory`, the camera
   flies toward the query vector's coordinates. Candidates retrieved by the
-  **Dense** lane ignite as blue stars, **Lexical** hits glow amber, **Facts**
+  **Dense** lane ignite as blue stars, **Lexical** hits glow purple, **Facts**
   appear as crystalline octahedrons, and **Tables** render as structured grids.
   Items published after `effective_as_of` are visibly enclosed behind a
   translucent red **Temporal Cutoff Horizon Plane**.
 
 ### 4.2 3D Two-Way Sensitivity Surface & Monte Carlo Fan (`M4` / `M5`)
+
 - **Concept:** Extend `fel_calculation_engine` scenarios from discrete
   `Base / Bull / Bear` tabs to a continuous 2-parameter grid (e.g., `NRR` on X,
   `New Bookings Growth` on Z, and `FY27 Revenue` or `Free Cash Flow` on Y).
@@ -172,6 +185,7 @@ flowchart TB
   Decimal evaluations at any coordinate.
 
 ### 4.3 Jacobi Fixed-Point Iteration "Convergence Wave" (`M4`)
+
 - **Concept:** `packages/calculation-engine/fel_calculation_engine/iteration.py`
   solves cyclic strongly connected components (`IterationGroup`) via Jacobi
   sweeps up to `max_iterations` against `abs_tol` and `rel_tol`.
@@ -182,6 +196,7 @@ flowchart TB
   `IterationConvergenceError`.
 
 ### 4.4 Restatement & Amendment Time-Lapse Ribbon (`/reader/[documentId]`)
+
 - **Concept:** `apps/web/src/lib/amendments.ts` and `FactPanel.tsx` already link
   original filings (`10-Q`) to amendments (`10-Q/A`) and detect restated facts
   (`isRestatementGroup`).
@@ -189,3 +204,11 @@ flowchart TB
   Bezier ribbons connecting each original span to its restated counterpart,
   color-coded by magnitude delta ($\Delta$) and accompanied by a one-click "Diff
   Time-Jump" toggle.
+
+## Related pages
+
+- [Architecture overview](overview.md)
+- [Executive architecture brief](executive-brief.md)
+- [System design](system-design.md)
+- [Calculation engine](../../packages/calculation-engine/README.md)
+- [Local development](../development/local.md)

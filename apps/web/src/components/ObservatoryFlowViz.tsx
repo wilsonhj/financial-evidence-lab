@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from "react";
 import type { RetrievalTrace } from "../lib/observatory/query-source";
 import {
   claimViews,
@@ -26,12 +29,13 @@ function laneColor(lane: Lane): string {
 }
 
 /**
- * Interactive / visual 4-Lane RRF Fusion Sankey Flow & Latency/Budget Gauge
- * for the Search Observatory. Uses `laneColumns`, `partitionCandidates` and
+ * Interactive 4-Lane RRF Fusion Sankey Flow & Latency/Budget Gauge for the
+ * Search Observatory. Uses `laneColumns`, `partitionCandidates` and
  * `claimViews` so future-dated or cross-version evidence is never counted as
  * supported.
  */
 export function ObservatoryFlowViz({ trace }: { trace: RetrievalTrace }) {
+  const [selectedLane, setSelectedLane] = useState<Lane | null>(null);
   const columns = laneColumns(trace);
   const { supported, rejected } = partitionCandidates(trace);
   const claims = claimViews(trace);
@@ -50,6 +54,11 @@ export function ObservatoryFlowViz({ trace }: { trace: RetrievalTrace }) {
     Math.round((contextItemsUsed / contextItemsCap) * 100),
   );
 
+  const selectedLaneRows = selectedLane ? columns[selectedLane] : null;
+  const selectedLaneSupportedCount = selectedLaneRows
+    ? selectedLaneRows.filter((row) => row.supported).length
+    : null;
+
   return (
     <section
       className="panel-card obs-flow-card"
@@ -65,10 +74,38 @@ export function ObservatoryFlowViz({ trace }: { trace: RetrievalTrace }) {
           </p>
         </div>
         <div className="obs-flow-pills">
+          {selectedLane && selectedLaneRows ? (
+            <span className="badge badge-info" data-testid="obs-flow-selected-lane-summary">
+              {LANE_LABELS[selectedLane]}: {selectedLaneRows.length} hit
+              {selectedLaneRows.length === 1 ? "" : "s"} ({selectedLaneSupportedCount} supported)
+            </span>
+          ) : null}
           <span className="badge badge-ok">{supported.length} supported</span>
           <span className="badge badge-warning">{rejected.length} rejected</span>
           <span className="badge badge-info">{totalLatencyMs} ms total</span>
         </div>
+      </div>
+
+      <div className="viz3d-controls" role="group" aria-label="Filter flow by retrieval lane">
+        <button
+          type="button"
+          data-testid="button-obs-flow-lane-all"
+          aria-pressed={selectedLane === null}
+          onClick={() => setSelectedLane(null)}
+        >
+          All lanes
+        </button>
+        {LANES.map((lane) => (
+          <button
+            key={lane}
+            type="button"
+            data-testid={`button-obs-flow-lane-${lane}`}
+            aria-pressed={selectedLane === lane}
+            onClick={() => setSelectedLane((prev) => (prev === lane ? null : lane))}
+          >
+            {LANE_LABELS[lane]} ({columns[lane].length})
+          </button>
+        ))}
       </div>
 
       <svg
@@ -96,9 +133,10 @@ export function ObservatoryFlowViz({ trace }: { trace: RetrievalTrace }) {
           const rows = columns[lane];
           const y = 38 + index * 50;
           const color = laneColor(lane);
+          const isHighlighted = selectedLane === null || selectedLane === lane;
           const strokeWidth = Math.max(2, Math.min(12, rows.length * 4));
           return (
-            <g key={lane} data-testid={`obs-flow-lane-${lane}`}>
+            <g key={lane} data-testid={`obs-flow-lane-${lane}`} opacity={isHighlighted ? 1 : 0.3}>
               {/* Curved Sankey ribbon to RRF Nexus */}
               <path
                 d={`M 184 ${y + 18} C 235 ${y + 18}, 240 128, 290 128`}
@@ -115,9 +153,9 @@ export function ObservatoryFlowViz({ trace }: { trace: RetrievalTrace }) {
                 height="36"
                 rx="7"
                 fill={color}
-                fillOpacity="0.14"
+                fillOpacity={selectedLane === lane ? "0.28" : "0.14"}
                 stroke={color}
-                strokeWidth="1.5"
+                strokeWidth={selectedLane === lane ? "2.4" : "1.5"}
               />
               <text x="32" y={y + 16} fill="currentColor" fontSize="12" fontWeight="700">
                 {LANE_LABELS[lane]}
@@ -233,7 +271,7 @@ export function ObservatoryFlowViz({ trace }: { trace: RetrievalTrace }) {
             Claims ({claims.length})
           </text>
           <text x="732" y="114" fill="#56d364" fontSize="10.5">
-            • {supportedClaims} entailed
+            • {supportedClaims} supported
           </text>
           <text x="732" y="132" fill="#ffa198" fontSize="10.5">
             • {flaggedClaims} flagged
@@ -267,7 +305,7 @@ export function ObservatoryFlowViz({ trace }: { trace: RetrievalTrace }) {
               </span>
               <span>Cost: ${trace.cost_usd}</span>
             </div>
-            <div className="obs-Stage-bar" role="list" aria-label="Stage latencies">
+            <div className="obs-stage-bar" role="list" aria-label="Stage latencies">
               {timingEntries.map(([stage, ms]) => (
                 <span key={stage} role="listitem" className="obs-stage-chip">
                   <b>{stage}:</b> {ms} ms

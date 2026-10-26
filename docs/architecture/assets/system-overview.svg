@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1160 660" width="1160" height="660" role="img" aria-labelledby="title-sys-overview desc-sys-overview">
-  <title id="title-sys-overview">Financial Evidence Lab  System Topology and Trust Boundaries</title>
+  <title id="title-sys-overview">Financial Evidence Lab &#8212; System Topology and Trust Boundaries</title>
   <desc id="desc-sys-overview">Layered architecture diagram showing Analyst Browser, Next.js 16 Web Workspace, FastAPI Service with RLS tenant boundary, Durable Python Workers, PostgreSQL 17 + pgvector, Content-Addressed Object Storage, and External Providers.</desc>
 
   <defs>
@@ -24,8 +24,8 @@
   <!-- Canvas Background -->
   <g id="layer-background">
     <rect x="0" y="0" width="1160" height="660" rx="16" fill="url(#bg-grad)" stroke="#26354d" stroke-width="2" />
-    <text x="32" y="42" fill="#f0f6fc" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="20" font-weight="700">Financial Evidence Lab  System Architecture &amp; Trust Boundaries</text>
-    <text x="32" y="64" fill="#8b949e" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="13">Point-in-time cutoff enforcement " Immutable content-addressed evidence " Tenant RLS isolation " Fail-closed provider boundaries</text>
+    <text x="32" y="42" fill="#f0f6fc" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="20" font-weight="700">Financial Evidence Lab &#8212; System Architecture &amp; Trust Boundaries</text>
+    <text x="32" y="64" fill="#8b949e" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="13">Point-in-time cutoff enforcement &#8226; Immutable content-addressed evidence &#8226; Tenant RLS isolation &#8226; Fail-closed provider boundaries</text>
   </g>
 
   <!-- Zone 1: Client & Web Layer -->
@@ -68,7 +68,7 @@
     <!-- Contracts Badge -->
     <g id="node-contracts-shared">
       <rect x="48" y="540" width="240" height="64" rx="8" fill="#1a243b" stroke="#6e7681" stroke-width="1.2" />
-      <text x="64" y="564" fill="#d2a8ff" font-family="Inter, -apple-system, sans-serif" font-size="13" font-weight="700">`packages/contracts` (v0.6.0)</text>
+      <text x="64" y="564" fill="#d2a8ff" font-family="Inter, -apple-system, sans-serif" font-size="13" font-weight="700">`packages/contracts` (0.9.0)</text>
       <text x="64" y="582" fill="#8b949e" font-family="Inter, -apple-system, sans-serif" font-size="11">Frozen OpenAPI + JSON Schemas</text>
       <text x="64" y="596" fill="#8b949e" font-family="Inter, -apple-system, sans-serif" font-size="11">AJV runtime guards + TS codegen</text>
     </g>
@@ -157,12 +157,12 @@
       <rect x="844" y="132" width="268" height="174" rx="10" fill="#182238" stroke="#58a6ff" stroke-width="1.5" />
       <text x="860" y="158" fill="#f0f6fc" font-family="Inter, -apple-system, sans-serif" font-size="15" font-weight="700">PostgreSQL 17 + pgvector</text>
       <text x="860" y="176" fill="#79c0ff" font-family="'JetBrains Mono', monospace" font-size="11">Append-only migrations 0001..0011</text>
-      <text x="860" y="198" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="11.5">" Shared read-only evidence corpus</text>
-      <text x="860" y="216" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="11.5">" Tenant-RLS workspaces &amp; runs</text>
-      <text x="860" y="234" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="11.5">" 512-dim HNSW + exact vector index</text>
-      <text x="860" y="252" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="11.5">" Durable job queue &amp; checkpoints</text>
-      <text x="860" y="270" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="11.5">" Atomic review &amp; conflict ledger</text>
-      <text x="860" y="288" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="11.5">" Usage metering &amp; audit events</text>
+      <text x="860" y="198" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="11.5">&#8226; Shared read-only evidence corpus</text>
+      <text x="860" y="216" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="11.5">&#8226; Tenant-RLS workspaces &amp; runs</text>
+      <text x="860" y="234" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="11.5">&#8226; 512-dim HNSW + exact vector index</text>
+      <text x="860" y="252" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="11.5">&#8226; Durable job queue &amp; checkpoints</text>
+      <text x="860" y="270" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="11.5">&#8226; Atomic review &amp; conflict ledger</text>
+      <text x="860" y="288" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="11.5">&#8226; Usage metering &amp; audit events</text>
     </g>
 
     <!-- Object Storage -->
@@ -170,8 +170,8 @@
       <rect x="844" y="324" width="268" height="104" rx="10" fill="#182238" stroke="#3fb950" stroke-width="1.5" />
       <text x="860" y="350" fill="#f0f6fc" font-family="Inter, -apple-system, sans-serif" font-size="15" font-weight="700">Canonical Object Store</text>
       <text x="860" y="368" fill="#56d364" font-family="'JetBrains Mono', monospace" font-size="11">Content-Addressed (`FEL_STORAGE_DIR`)</text>
-      <text x="860" y="388" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="11.5">" Immutable filing bodies &amp; HTML/text</text>
-      <text x="860" y="406" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="11.5">" Shared between API &amp; Worker</text>
+      <text x="860" y="388" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="11.5">&#8226; Immutable filing bodies &amp; HTML/text</text>
+      <text x="860" y="406" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="11.5">&#8226; Shared between API &amp; Worker</text>
     </g>
 
     <!-- External Providers -->
@@ -179,38 +179,29 @@
       <rect x="844" y="446" width="268" height="158" rx="10" fill="#182238" stroke="#d29922" stroke-width="1.5" />
       <text x="860" y="472" fill="#f0f6fc" font-family="Inter, -apple-system, sans-serif" font-size="15" font-weight="700">External Providers</text>
       <text x="860" y="490" fill="#e3b341" font-family="'JetBrains Mono', monospace" font-size="11">packages/providers (`fel_providers`)</text>
-      <text x="860" y="512" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="11.5">" SEC EDGAR (rate-limited + fair access)</text>
-      <text x="860" y="530" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="11.5">" OpenAI Structured Output &amp; 512d Embed</text>
-      <text x="860" y="548" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="11.5">" Offline BYOK Credential Cipher</text>
-      <text x="860" y="566" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="11.5">" Deterministic Mocks (CI default)</text>
-      <text x="860" y="584" fill="#8b949e" font-family="Inter, -apple-system, sans-serif" font-size="11">" FRED / Market adapters (staged)</text>
+      <text x="860" y="512" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="11.5">&#8226; SEC EDGAR (rate-limited + fair access)</text>
+      <text x="860" y="530" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="11.5">&#8226; OpenAI Structured Output &amp; 512d Embed</text>
+      <text x="860" y="548" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="11.5">&#8226; Offline BYOK Credential Cipher</text>
+      <text x="860" y="566" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="11.5">&#8226; Deterministic Mocks (CI default)</text>
+      <text x="860" y="584" fill="#8b949e" font-family="Inter, -apple-system, sans-serif" font-size="11">&#8226; FRED / Market adapters (staged)</text>
     </g>
   </g>
 
   <!-- Connectors -->
   <g id="layer-connectors" fill="none" stroke-width="2">
-    <!-- Analyst -> Next.js -->
     <path d="M 168 200 L 168 226" stroke="#58a6ff" marker-end="url(#arrow-blue)" />
-    <!-- Next.js -> FastAPI -->
     <path d="M 288 260 L 352 215" stroke="#58a6ff" marker-end="url(#arrow-blue)" />
     <rect x="292" y="218" width="56" height="18" rx="4" fill="#0b1220" stroke="#2f4b7c" stroke-width="1" />
     <text x="298" y="230" fill="#79c0ff" font-family="'JetBrains Mono', monospace" font-size="9.5">Bearer</text>
 
-    <!-- FastAPI -> Domain Packages -->
     <path d="M 566 306 L 566 320" stroke="#bc8cff" marker-end="url(#arrow-purple)" />
-    <!-- Workers -> Domain Packages -->
     <path d="M 566 456 L 566 442" stroke="#bc8cff" marker-end="url(#arrow-purple)" />
 
-    <!-- FastAPI -> Postgres -->
     <path d="M 776 200 L 840 200" stroke="#3fb950" marker-end="url(#arrow-emerald)" />
-    <!-- FastAPI -> Object Store -->
     <path d="M 776 268 L 840 356" stroke="#3fb950" marker-end="url(#arrow-emerald)" />
 
-    <!-- Workers -> Postgres -->
     <path d="M 776 490 L 840 265" stroke="#d29922" marker-end="url(#arrow-amber)" />
-    <!-- Workers -> Object Store -->
     <path d="M 776 520 L 840 392" stroke="#d29922" marker-end="url(#arrow-amber)" />
-    <!-- Workers -> Providers -->
     <path d="M 776 550 L 840 530" stroke="#d29922" marker-end="url(#arrow-amber)" />
   </g>
 </svg>

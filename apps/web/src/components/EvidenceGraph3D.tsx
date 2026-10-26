@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { EvidenceSourceId, GuidanceApproval, ReviewDecision } from "../app/desk/desk-state";
 
 export type CameraPreset = "constellation" | "dag" | "temporal";
@@ -100,6 +100,27 @@ function nodeColor(state: NodeState): { fill: string; ring: string; badge: strin
   }
 }
 
+function edgePalette(kind: GraphEdge3D["kind"]): {
+  stroke: string;
+  width: number;
+  pulse: string;
+} {
+  switch (kind) {
+    case "conflict":
+      return { stroke: "rgba(210, 153, 34, 0.78)", width: 2, pulse: "#f0c96f" };
+    case "scenario":
+      return { stroke: "rgba(163, 113, 247, 0.85)", width: 2.2, pulse: "#d2a8ff" };
+    case "iteration":
+      return { stroke: "rgba(88, 166, 255, 0.85)", width: 2.2, pulse: "#79c0ff" };
+    case "provenance":
+      return { stroke: "rgba(63, 185, 80, 0.82)", width: 2.2, pulse: "#56d364" };
+    default: {
+      const _never: never = kind;
+      return _never;
+    }
+  }
+}
+
 function layerTitle(layer: ProvenanceLayer): string {
   switch (layer) {
     case "reported":
@@ -130,6 +151,11 @@ export function buildEpistemicGraph(props: {
   const gmApproved = approvals.find((a) => a.claimId === "C-109-gross-margin")?.approved ?? false;
   const effectiveSource = decision?.sourceId ?? source;
 
+  // A saved decision is temporally admissible only if its underlying source span
+  // was published at or before the effective cutoff.
+  const decisionAdmissible =
+    decision !== null && (decision.sourceId === "sec-10q-nrr" ? cutoffStep >= 1 : cutoffStep >= 2);
+
   const revenueByScenario: Record<string, string> = {
     Base: "$842.4m",
     Bull: "$857.1m",
@@ -139,6 +165,11 @@ export function buildEpistemicGraph(props: {
     Base: "+0.0% Base",
     Bull: "+$14.7m (+1.7%)",
     Bear: "-$18.6m (-2.2%)",
+  };
+  const outputElevationByScenario: Record<string, number> = {
+    Base: -118,
+    Bull: -128,
+    Bear: -108,
   };
 
   const rawNodes: Omit<GraphNode3D, "state">[] = [
@@ -192,10 +223,14 @@ export function buildEpistemicGraph(props: {
     },
     {
       id: "gate-c104",
-      label: decision
+      label: decisionAdmissible
         ? `C-104 Resolved (${decision.sourceId === "sec-10q-nrr" ? "108%" : "109%"})`
         : "C-104 NRR Conflict",
-      sublabel: decision ? "Human rationale recorded" : "10-Q 108% vs Call 109%",
+      sublabel: decisionAdmissible
+        ? "Human rationale recorded"
+        : decision
+          ? "Selected source blocked by cutoff"
+          : "10-Q 108% vs Call 109%",
       layer: "extraction",
       x: -115,
       y: 36,
@@ -267,10 +302,13 @@ export function buildEpistemicGraph(props: {
     {
       id: "output-fy27-rev",
       label: `FY27 Revenue · ${revenueByScenario[scenario] ?? "$842.4m"}`,
-      sublabel: applied ? "Staged with verified lineage" : "Preview · awaiting review gates",
+      sublabel:
+        applied && decisionAdmissible
+          ? "Staged with verified lineage"
+          : "Preview · awaiting review gates",
       layer: "output",
       x: 12,
-      y: -118,
+      y: outputElevationByScenario[scenario] ?? -118,
       z: 0,
       publishedStep: 1,
       publishedAt: "2026-08-14T16:05:00Z",
@@ -283,7 +321,7 @@ export function buildEpistemicGraph(props: {
       return { ...n, state: "cutoff-blocked" };
     }
     if (n.id === "gate-c104") {
-      return { ...n, state: decision ? "verified" : "conflict" };
+      return { ...n, state: decisionAdmissible ? "verified" : "conflict" };
     }
     if (n.id === "gate-c109-rev") {
       return { ...n, state: revApproved ? "verified" : "pending" };
@@ -295,7 +333,10 @@ export function buildEpistemicGraph(props: {
       return { ...n, state: "override" };
     }
     if (n.id === "output-fy27-rev") {
-      return { ...n, state: applied ? "verified" : "pending" };
+      return {
+        ...n,
+        state: applied && decisionAdmissible && revApproved && gmApproved ? "verified" : "pending",
+      };
     }
     return { ...n, state: "verified" };
   });
@@ -305,13 +346,13 @@ export function buildEpistemicGraph(props: {
       from: "sec-10q-nrr",
       to: "gate-c104",
       active: cutoffStep >= 1 && (effectiveSource === null || effectiveSource === "sec-10q-nrr"),
-      kind: decision?.sourceId === "sec-10q-nrr" ? "provenance" : "conflict",
+      kind: decisionAdmissible && decision.sourceId === "sec-10q-nrr" ? "provenance" : "conflict",
     },
     {
       from: "call-turn-48",
       to: "gate-c104",
       active: cutoffStep >= 2 && (effectiveSource === null || effectiveSource === "call-turn-48"),
-      kind: decision?.sourceId === "call-turn-48" ? "provenance" : "conflict",
+      kind: decisionAdmissible && decision.sourceId === "call-turn-48" ? "provenance" : "conflict",
     },
     {
       from: "sec-10q-guidance",
@@ -334,7 +375,7 @@ export function buildEpistemicGraph(props: {
     {
       from: "gate-c104",
       to: "calc-driver-arr",
-      active: cutoffStep >= 1 && decision !== null,
+      active: cutoffStep >= 1 && decisionAdmissible,
       kind: "provenance",
     },
     {
@@ -364,7 +405,7 @@ export function buildEpistemicGraph(props: {
     {
       from: "calc-scenario",
       to: "output-fy27-rev",
-      active: true,
+      active: cutoffStep >= 1,
       kind: "scenario",
     },
   ];
@@ -380,6 +421,7 @@ export function EvidenceGraph3D({
   applied,
   onSelectNode,
 }: EvidenceGraph3DProps) {
+  const cutoffInputId = useId();
   const [preset, setPreset] = useState<CameraPreset>("constellation");
   const [cutoffStep, setCutoffStep] = useState<0 | 1 | 2>(2);
   const [selectedId, setSelectedId] = useState<string>("output-fy27-rev");
@@ -389,8 +431,11 @@ export function EvidenceGraph3D({
   );
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const dragRef = useRef<{ active: boolean; lastX: number; lastY: number }>({
+  const pulsePhaseRef = useRef<number>(0);
+  const orbitYawOffsetRef = useRef<number>(0);
+  const dragRef = useRef<{ active: boolean; moved: boolean; lastX: number; lastY: number }>({
     active: false,
+    moved: false,
     lastX: 0,
     lastY: 0,
   });
@@ -422,6 +467,7 @@ export function EvidenceGraph3D({
 
   const choosePreset = (next: CameraPreset) => {
     setPreset(next);
+    orbitYawOffsetRef.current = 0;
     setAngles(presetAngles(next));
   };
 
@@ -437,7 +483,6 @@ export function EvidenceGraph3D({
     if (!ctx) return;
 
     let frameId = 0;
-    let pulsePhase = 0;
     const reducedMotion =
       typeof window !== "undefined" &&
       typeof window.matchMedia === "function" &&
@@ -464,7 +509,7 @@ export function EvidenceGraph3D({
         "L0 · SOURCE SPANS",
       ];
 
-      const yaw = angles.yaw + (autoOrbit && !reducedMotion ? pulsePhase * 0.18 : 0);
+      const yaw = angles.yaw + orbitYawOffsetRef.current;
       const pitch = angles.pitch;
       const cosY = Math.cos(yaw);
       const sinY = Math.sin(yaw);
@@ -523,6 +568,7 @@ export function EvidenceGraph3D({
         const to = nodeMap.get(edge.to);
         if (!from || !to) return;
 
+        const style = edgePalette(edge.kind);
         ctx.save();
         ctx.beginPath();
         ctx.moveTo(from.sx, from.sy);
@@ -531,26 +577,20 @@ export function EvidenceGraph3D({
           ctx.strokeStyle = "rgba(139, 148, 158, 0.24)";
           ctx.setLineDash([4, 4]);
           ctx.lineWidth = 1.2;
-        } else if (edge.kind === "conflict") {
-          ctx.strokeStyle = "rgba(210, 153, 34, 0.78)";
-          ctx.lineWidth = 2;
-        } else if (edge.kind === "scenario") {
-          ctx.strokeStyle = "rgba(163, 113, 247, 0.85)";
-          ctx.lineWidth = 2.2;
         } else {
-          ctx.strokeStyle = "rgba(63, 185, 80, 0.82)";
-          ctx.lineWidth = 2.2;
+          ctx.strokeStyle = style.stroke;
+          ctx.lineWidth = style.width;
         }
         ctx.stroke();
 
         // Animated energy pulse along active edges
         if (edge.active) {
-          const t = (pulsePhase * 0.9) % 1;
+          const t = (pulsePhaseRef.current * 0.9) % 1;
           const px = from.sx + (to.sx - from.sx) * t;
           const py = from.sy + (to.sy - from.sy) * t;
           ctx.beginPath();
           ctx.arc(px, py, 3.4, 0, Math.PI * 2);
-          ctx.fillStyle = edge.kind === "conflict" ? "#f0c96f" : "#79c0ff";
+          ctx.fillStyle = style.pulse;
           ctx.fill();
         }
         ctx.restore();
@@ -567,7 +607,6 @@ export function EvidenceGraph3D({
         hitList.push({ id: node.id, sx, sy, r: radius + 6, depth });
 
         ctx.save();
-        // Outer halo for selected or conflict node
         if (isSelected || node.state === "conflict" || node.state === "cutoff-blocked") {
           ctx.beginPath();
           ctx.arc(sx, sy, radius + (isSelected ? 6 : 4), 0, Math.PI * 2);
@@ -576,7 +615,6 @@ export function EvidenceGraph3D({
           ctx.stroke();
         }
 
-        // 3D sphere shading
         const sphereGrad = ctx.createRadialGradient(
           sx - radius * 0.3,
           sy - radius * 0.3,
@@ -596,7 +634,6 @@ export function EvidenceGraph3D({
         ctx.strokeStyle = "#0b1220";
         ctx.stroke();
 
-        // Node label pill
         ctx.font = `${isSelected ? "700" : "600"} 11px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`;
         const textWidth = ctx.measureText(node.label).width;
         const pillX = sx - textWidth / 2 - 6;
@@ -615,7 +652,10 @@ export function EvidenceGraph3D({
       projectedRef.current = hitList;
 
       if (!reducedMotion) {
-        pulsePhase += 0.016;
+        pulsePhaseRef.current += 0.016;
+        if (autoOrbit && !dragRef.current.active) {
+          orbitYawOffsetRef.current += 0.0028;
+        }
         frameId = window.requestAnimationFrame(renderFrame);
       }
     };
@@ -627,6 +667,10 @@ export function EvidenceGraph3D({
   }, [nodes, edges, angles, autoOrbit, selectedId]);
 
   const handleCanvasClick = (event: React.MouseEvent<HTMLCanvasElement>) => {
+    if (dragRef.current.moved) {
+      dragRef.current.moved = false;
+      return;
+    }
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
@@ -635,7 +679,6 @@ export function EvidenceGraph3D({
     const x = (event.clientX - rect.left) * scaleX;
     const y = (event.clientY - rect.top) * scaleY;
 
-    // Pick closest frontmost node within hit radius
     const hits = projectedRef.current
       .filter((item) => Math.hypot(item.sx - x, item.sy - y) <= item.r)
       .sort((a, b) => a.depth - b.depth);
@@ -709,17 +752,19 @@ export function EvidenceGraph3D({
           ref={canvasRef}
           width={680}
           height={330}
+          role="img"
           className="viz3d-canvas"
           data-testid="canvas-evidence-3d"
           onClick={handleCanvasClick}
           onPointerDown={(e) => {
-            dragRef.current = { active: true, lastX: e.clientX, lastY: e.clientY };
+            dragRef.current = { active: true, moved: false, lastX: e.clientX, lastY: e.clientY };
           }}
           onPointerMove={(e) => {
             if (!dragRef.current.active) return;
             const dx = e.clientX - dragRef.current.lastX;
             const dy = e.clientY - dragRef.current.lastY;
-            dragRef.current = { active: true, lastX: e.clientX, lastY: e.clientY };
+            const moved = dragRef.current.moved || Math.hypot(dx, dy) > 4;
+            dragRef.current = { active: true, moved, lastX: e.clientX, lastY: e.clientY };
             setAngles((prev) => ({
               yaw: prev.yaw + dx * 0.01,
               pitch: Math.max(-0.85, Math.min(0.85, prev.pitch + dy * 0.01)),
@@ -736,7 +781,7 @@ export function EvidenceGraph3D({
       </div>
 
       <div className="viz3d-scrubber">
-        <label htmlFor="viz3d-cutoff-range">
+        <label htmlFor={cutoffInputId}>
           <span>
             Point-in-time cutoff (<code>published_at &lt;= effective_as_of</code>):{" "}
             <strong data-testid="text-viz3d-cutoff-label">{cutoffInfo.label}</strong>
@@ -744,7 +789,7 @@ export function EvidenceGraph3D({
           <small>{cutoffInfo.description}</small>
         </label>
         <input
-          id="viz3d-cutoff-range"
+          id={cutoffInputId}
           data-testid="input-viz3d-cutoff"
           type="range"
           min={0}
