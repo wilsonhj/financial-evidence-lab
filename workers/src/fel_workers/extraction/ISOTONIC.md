@@ -21,6 +21,11 @@ with a nonzero last digit (for example `0.1` is accepted but `0.10`,
 `0.0`, and `0.100000000000` are rejected as `invalid_sample`). Emitted
 12-place strings such as `0.100000000000` must not be fed back as scores.
 
+Failures raise `CalibrationError` with a fixed `code`: `invalid_sample`,
+`limit_exceeded`, or `invalid_artifact`. Artifacts may nest at most 16
+dict/list containers, counting the root as 1; scalar leaves do not count.
+Deeper input raises `limit_exceeded`.
+
 ## Insufficient support
 
 Per-stratum calibration support is at least 100 rows with 20 of each outcome.
