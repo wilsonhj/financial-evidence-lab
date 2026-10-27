@@ -1,6 +1,6 @@
 # ADR-0030: Explicit FRED missing values
 
-Status: Proposed. Awaiting integration-lead acceptance on the implementing PR.
+Status: Accepted by the integration lead on PR #354 (2026-10-27).
 
 Date: 2026-10-24
 
