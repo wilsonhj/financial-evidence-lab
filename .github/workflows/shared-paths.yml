@@ -28,7 +28,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          # Need the base commit to diff against.
+          # Full history: the diff below starts at the merge-base, and finding
+          # it needs every commit back to where the PR left the base branch.
           fetch-depth: 0
 
       - name: Check the label against the changed paths
@@ -44,8 +45,29 @@ jobs:
           shared_prefix='^(\.github/|\.specify/|specs/|packages/contracts/|db/migrations/|docs/decisions/)'
           shared_exact='^(docs/handoff/workstreams\.yaml|docs/handoff/STATUS\.md|AGENTS\.md|package\.json|package-lock\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml|pyproject\.toml|Makefile)$'
 
-          git fetch --no-tags --depth=1 origin "$BASE_SHA" 2>/dev/null || true
-          changed=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")
+          # Diff from the merge-base, not from base.sha. base.sha is the base
+          # branch's tip when the event fired, so once main moves past the
+          # point where the PR left it, a two-dot diff reports main's own new
+          # commits as this PR's changes (#352 failed this way on #348's files).
+          #
+          # A merge-base needs real history on both sides. A shallow clone, or
+          # a `--depth` fetch that grafts away the base commit's parents, can
+          # leave none, so refuse to run shallow and never fetch with --depth.
+          if [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then
+            echo "FAIL: the checkout is shallow, so the merge-base cannot be" >&2
+            echo "trusted. Keep fetch-depth: 0 on actions/checkout." >&2
+            exit 1
+          fi
+          if ! git cat-file -e "$BASE_SHA^{commit}" 2>/dev/null; then
+            git fetch --no-tags origin "$BASE_SHA"
+          fi
+          if ! merge_base=$(git merge-base "$BASE_SHA" "$HEAD_SHA"); then
+            echo "FAIL: no merge-base between base $BASE_SHA and head $HEAD_SHA," >&2
+            echo "so this PR's own changes cannot be isolated. Refusing to" >&2
+            echo "report success." >&2
+            exit 1
+          fi
+          changed=$(git diff --name-only "$merge_base" "$HEAD_SHA")
 
           if [ -z "$changed" ]; then
             echo "No changed files; nothing to check."

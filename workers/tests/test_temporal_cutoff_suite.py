@@ -38,6 +38,7 @@ from fel_workers.ingestion.fred import (
     FredIngestionError,
     LiveFredClient,
     ingest_fred_vintage,
+    ingest_fred_vintage_record,
     vintage_cutoff_date,
 )
 from fel_workers.ingestion.pipeline import ingest_filing
@@ -325,6 +326,19 @@ def test_fred_no_lookahead_invariant(as_of: datetime, expected: list[tuple[date,
             published_on.year, published_on.month, published_on.day, tzinfo=UTC
         ) + timedelta(days=1)
         assert day_end <= as_of, "a vintage published after the cutoff leaked"
+
+
+@pytest.mark.parametrize(("as_of", "expected"), FRED_MATRIX)
+def test_fred_record_surfaces_the_gap_without_changing_the_vintage(
+    as_of: datetime, expected: list[tuple[date, str]]
+) -> None:
+    """ADR-0030: the archive's '.' row is an explicit gap at every cutoff,
+    and keeping it does not alter the point-in-time values."""
+    del expected
+    record = ingest_fred_vintage_record(_client(), "SYNTEST", as_of=as_of)
+    assert list(record.observations) == ingest_fred_vintage(_client(), "SYNTEST", as_of=as_of)
+    assert record.missing is not None
+    assert [gap.observed_on for gap in record.missing] == [date(2026, 5, 1)]
 
 
 @pytest.mark.parametrize(

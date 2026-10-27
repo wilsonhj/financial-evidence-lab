@@ -34,17 +34,17 @@ redirects to any host and stored the reply as a filing.
 
 ## Proposals that need an ADR (they touch frozen contracts)
 
-1. **Retrieval receipts for non-SEC sources.** SEC bytes are
+1. **Retrieval receipts for non-SEC sources.** Accepted as [ADR-0029](../decisions/ADR-0029-retrieval-receipts.md) and implemented without changing the frozen protocols. The original candidate text follows. SEC bytes are
    content-addressed. FRED and Alpha Vantage values are not: a
    `VintageObservation` carries no source URL, retrieval clock or byte hash.
    Adding `{source_url, retrieved_at, content_sha256}` would let every FRED or
    market number cite the exact bytes it came from, as SEC spans already do.
    `FredClient`/`MarketDataProvider` return shapes are frozen protocols.
-2. **Explicit FRED missing values.** ALFRED's `"."` placeholder is currently
+2. **Explicit FRED missing values.** Accepted as [ADR-0030](../decisions/ADR-0030-explicit-fred-missing-values.md) and implemented without changing the frozen protocols. The original candidate text follows. ALFRED's `"."` placeholder is currently
    dropped. The series then reads as if the period never existed. Returning an
    explicit missing marker would distinguish "not published" from "not
    requested"; this changes the `FredClient` return type.
-3. **Named clocks on source-reported metadata.** The skills repo keeps each
+3. **Named clocks on source-reported metadata.** Accepted as [ADR-0031](../decisions/ADR-0031-named-source-clocks.md) and implemented on the ADR-0029 receipt. The original candidate text follows. The skills repo keeps each
    upstream clock separate (`generated_at`, `as_of`, release vs collection) with
    a JSON Pointer to where it was read. The lab's spec 10.3 temporal fields
    could record which upstream field each clock was taken from.
