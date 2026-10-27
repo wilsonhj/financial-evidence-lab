@@ -515,8 +515,12 @@ export function EvidenceGraph3D({
       const sinY = Math.sin(yaw);
       const cosP = Math.cos(pitch);
       const sinP = Math.sin(pitch);
-      const fov = 440;
+      // Sized so every node and label stays in frame at each preset pitch for
+      // any orbit yaw; the scene sits low (near L0 spans grow under positive
+      // pitch), so the projection center is above the canvas midline.
+      const fov = 320;
       const viewerDist = 420;
+      const centerY = height * 0.42;
 
       const project = (x: number, y: number, z: number) => {
         const rx = x * cosY - z * sinY;
@@ -526,7 +530,7 @@ export function EvidenceGraph3D({
         const scale = fov / Math.max(120, viewerDist + rz2);
         return {
           sx: width / 2 + rx * scale,
-          sy: height / 2 + ry * scale,
+          sy: centerY + ry * scale,
           scale,
           depth: rz2,
         };
@@ -751,7 +755,7 @@ export function EvidenceGraph3D({
         <canvas
           ref={canvasRef}
           width={680}
-          height={330}
+          height={400}
           role="img"
           className="viz3d-canvas"
           data-testid="canvas-evidence-3d"

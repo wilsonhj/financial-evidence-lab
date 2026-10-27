@@ -215,9 +215,9 @@ describe("EvidenceGraph3D component", () => {
     const canvasRef = hooks.values[5] as { current: unknown };
     canvasRef.current = {
       width: 680,
-      height: 330,
+      height: 400,
       getContext: () => mockCtx,
-      getBoundingClientRect: () => ({ left: 0, top: 0, width: 680, height: 330 }),
+      getBoundingClientRect: () => ({ left: 0, top: 0, width: 680, height: 400 }),
     };
 
     // Run effect to draw 3D frame and schedule animation frame
@@ -286,6 +286,70 @@ describe("EvidenceGraph3D component", () => {
     });
     (props(canvasEl).onPointerLeave as () => void)();
     expect(findAll(tree(), (e) => e.type === "button").length).toBeGreaterThan(5);
+  });
+
+  it("keeps every node and its label inside the canvas at each preset for any orbit yaw", () => {
+    const ctx2d = new Proxy(
+      { measureText: () => ({ width: 48 }) },
+      {
+        get: (target, key) =>
+          key in target
+            ? target[key as keyof typeof target]
+            : key === "createLinearGradient" || key === "createRadialGradient"
+              ? () => ({ addColorStop: () => undefined })
+              : () => undefined,
+        set: () => true,
+      },
+    );
+    // Reduced motion paints exactly one frame and schedules no animation.
+    vi.stubGlobal("window", { matchMedia: () => ({ matches: true }) });
+    const width = 680;
+    const height = 400;
+    const tree = () => {
+      hooks.index = 0;
+      return EvidenceGraph3D({
+        // Bull lifts the output node highest; the near L0 spans set the bottom.
+        scenario: "Bull",
+        source: null,
+        decision: null,
+        approvals: PENDING_APPROVALS,
+        applied: false,
+      });
+    };
+    tree();
+    (hooks.values[5] as { current: unknown }).current = {
+      width,
+      height,
+      getContext: () => ctx2d,
+    };
+    const orbitYawOffset = hooks.values[7] as { current: number };
+    const projected = hooks.values[9] as {
+      current: { id: string; sx: number; sy: number; r: number; depth: number }[];
+    };
+
+    for (const presetId of ["constellation", "dag", "temporal"]) {
+      const btn = findOne(
+        tree(),
+        (e) => props(e)["data-testid"] === `button-viz3d-preset-${presetId}`,
+      );
+      (props(btn).onClick as () => void)();
+      tree();
+      const paint = hooks.effects[hooks.effects.length - 1]!;
+      for (let step = 0; step < 24; step += 1) {
+        orbitYawOffset.current = (step * Math.PI) / 12;
+        paint();
+        expect(projected.current).toHaveLength(11);
+        for (const { id, sx, sy, r } of projected.current) {
+          const where = `${presetId} yaw+${step}/24 ${id}`;
+          // r is the hit radius (sphere + 6), which covers the selection ring;
+          // the label pill ends 17px below it.
+          expect(sy - r, where).toBeGreaterThanOrEqual(0);
+          expect(sy + r + 17, where).toBeLessThanOrEqual(height);
+          expect(sx - r, where).toBeGreaterThanOrEqual(0);
+          expect(sx + r, where).toBeLessThanOrEqual(width);
+        }
+      }
+    }
   });
 
   it("ships valid UTF-8 and control-character-free SVG architecture diagrams", () => {
