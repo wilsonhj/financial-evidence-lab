@@ -113,8 +113,11 @@ File: `docs/decisions/ADR-0010-cross-repo-pattern-adoption.md`. Needs the
 - The amendment says the Context's replay-only description of retrieval-run
   events is unchanged. The Context has no such sentence. Its SSE sentence
   (line 48) says the same-origin proxy is deferred to #135, and #135 is closed:
-  the proxy is `apps/web/src/lib/extraction/transport.ts`, forwarding to
-  `/v1/extraction-runs/{id}/events`. Say that #135 shipped without the
+  the proxy is `apps/web/src/app/api/extraction/runs/[runId]/events/route.ts`,
+  which forwards through `requestExtraction` in
+  `apps/web/src/lib/extraction/transport.ts` to
+  `/v1/extraction-runs/{id}/events`, and the browser consumer resumes with
+  `Last-Event-ID`. Say that #135 shipped without the
   instance epoch, reset signal, or descriptor/body split, so decision 5 was not
   met by the implementation that closed it.
 - Two anchors the citation table missed: `workflow.py:477-489` is past the end
