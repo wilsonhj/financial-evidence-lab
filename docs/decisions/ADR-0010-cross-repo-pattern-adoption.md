@@ -2,6 +2,8 @@
 
 **Status:** Proposed
 **Date:** 2026-08-06
+**Amendment 1:** 2026-10-27 — refreshes factual premises and citations against `main`
+at `59bbf7e`; changes no decision and ratifies nothing. See the end of this file.
 
 ## Context
 
@@ -160,3 +162,70 @@ The gaps, verified locally:
   epoch requirements stated in decision 5.
 - Item 6: enforced by review; any optimization PR must show all three gates
   cleared and must change only versioned prompt files.
+
+## Amendment 1 — premises and citations refreshed against `main` (2026-10-27)
+
+This ADR was written at `a25bf7c`. `main` has since moved by about seventy commits, and
+several statements above no longer hold. **No decision is changed, added or withdrawn, and the
+Status remains Proposed.** This amendment corrects the record so that a reader weighing the
+seven decisions is not weighing stale evidence. Every claim below was re-read from `main`.
+
+### Corrections
+
+1. **The eval gate no longer only "scores perfect."** The Context bullet is still true of
+   `apps/api/tests/test_smoke_gate.py`, but a second, discriminating gate has since merged
+   (ARCH-RETRIEVAL-GATE, #201): `make eval-retrieval-gate` grades the benchmark seed through
+   the retrieval pipeline. Its recorded run
+   (`evals/reports/retrieval-gate/2026-09-01-synthetic-seed.json`) **fails**: `recall_at_10`
+   `0.4692` against the `0.90` threshold, with `temporal_validity` at `1.0`. The cause is
+   hash-based mock embeddings, which carry little semantic signal. Decision 3 therefore
+   has a gate to apply to, and the acceptance rule is still gated on a live embedder (#132):
+   until then CI enforces byte-identity against the committed golden, not the threshold.
+2. **Decision 4's first invariant is superseded.** It tells the implementer to preserve
+   "event-payload output carriage per ADR-0009". ADR-0009 is **Superseded by ADR-0011**
+   (Accepted 2026-08-30). Stage output now lives on `extraction_run_steps.output`
+   (migration 0006) and is read back in `persist_checkpoint.py`; the hash and the hashed
+   value are written in the same `INSERT`. The invariant to preserve is now: stage output
+   is carried on the step row, written atomically with its `output_hash`, and
+   `(run_id, step_name, input_hash, workflow_version) WHERE status = 'succeeded'` stays the
+   resume key. The other three invariants in decision 4 are unchanged.
+3. **Citations moved.** Re-resolve before relying on any `file:line` in this ADR:
+
+   | Cited above | Now |
+   | --- | --- |
+   | `_dispatch_stage` (`workflow.py:660-686`) | `workflow.py:382` |
+   | `_stage_input_payload` (`workflow.py:560-590`) | `workflow.py:339` |
+   | `_restore_output` (`workflow.py:593-657`) | `workflow_codec.py:23` |
+   | `_boundary` / `_commit_fence` (`workflow.py:334-361`) | `workflow.py:213` / `workflow.py:222` |
+   | `STAGE_ORDER` (`types.py:29-42`) | `types.py:55` |
+   | `StageRecord.output: Any` (`types.py:114`) | `types.py:140` |
+
+4. **Decision 5's premise is partly overtaken.** A live extraction event stream now exists
+   (`apps/api/app/extraction/routes_events.py`): it resumes from a `Last-Event-ID` cursor and
+   polls committed rows. It has no instance epoch, no reset signal and no descriptor/body
+   split, so the decision stands as design guidance for any change to that stream; the
+   replay-only description of retrieval-run events in the Context is unchanged.
+5. **Decision 6's gates have moved unevenly.**
+   - (a) Explicit-key OpenAI structured-generation and embeddings adapters merged
+     (#328, #329), but the provider decision (#195, ADR-0012) is still Proposed, there is no
+     live smoke, and M3-CONFIDENCE-GATE (#62) still depends on M3-REVIEW and
+     RELEASE-LIVE-CUTOVER. This gate is **partly** open, not cleared.
+   - (b) The benchmark seed is unchanged: all 65 records are `draft`.
+   - (c) The five prompts still total 30 lines.
+
+   The decision's conclusion, that no optimization runs until all three clear, is unaffected.
+
+### Unchanged since the original text
+
+Decisions 1, 2 and 7 have no implementation on `main`: `errors.py` still defines the same
+ten classes (`ExtractionError`, `StepFailed` and the eight below it), `evals/graders/` still
+holds only `exact_match.py`, and `.agents/skills/` holds the ten `speckit-*` skills. Decision 4's
+four-way structure also stands: `STAGE_ORDER`, `_dispatch_stage`, `_stage_input_payload` and
+`_restore_output` remain separate hand-maintained structures.
+
+### Registration
+
+Decisions 1, 2, 4 and 7 need no contract change and no external dependency. They are
+candidates for work packages, but `docs/handoff/workstreams.yaml` is integration-lead
+owned and this amendment does not edit it. Registering them, or rejecting them, is a lead
+decision.
