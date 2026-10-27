@@ -11,7 +11,8 @@
 - [apps/api/benchmarks/synthetic_target.py](../../apps/api/benchmarks/synthetic_target.py) — `prepare_synthetic_target`
 - [workers/src/fel_workers/\_\_main\_\_.py](../../workers/src/fel_workers/__main__.py) — worker modes and startup checks
 - [apps/web/src/lib/deployment-mode.ts](../../apps/web/src/lib/deployment-mode.ts) — web deployment and evidence-source modes
-- [db/migrations/](../../db/migrations/) — migrations applied in filename order
+- [scripts/db/migrate.py](../../scripts/db/migrate.py) — checksummed migration applier (ADR-0014)
+- [db/migrations/](../../db/migrations/) — append-only SQL migrations
 
 </details>
 
@@ -111,13 +112,11 @@ docker run --name fel-postgres \
   -d pgvector/pgvector:0.8.5-pg17
 ```
 
-Set the connection URL and apply migrations in filename order:
+Set the connection URL and apply migrations via the checksummed migration applier (`scripts/db/migrate.py`, ADR-0014):
 
 ```sh
 export FEL_DATABASE_URL=postgresql://fel:fel@localhost:5432/fel_dev
-for migration in db/migrations/*.sql; do
-  psql "$FEL_DATABASE_URL" -v ON_ERROR_STOP=1 -f "$migration"
-done
+.venv/bin/python scripts/db/migrate.py
 ```
 
 Migrations create the application roles and enable RLS. The migration user

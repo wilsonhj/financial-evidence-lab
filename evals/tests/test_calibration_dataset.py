@@ -217,6 +217,44 @@ def test_support_boundary_is_exclusive_of_99_and_19(n: int, n_positive: int) -> 
     assert calibration["sufficient"] is False
 
 
+@pytest.mark.parametrize(
+    ("n", "n_positive"),
+    [(99, 20), (100, 19), (100, 81)],
+)
+def test_evaluation_support_boundary_is_exclusive_of_99_and_19(n: int, n_positive: int) -> None:
+    records = [
+        *_rows("calibration", 100, 20),
+        *_rows("evaluation", n, n_positive),
+    ]
+    report = support_report(load_dataset(_dumps(_dataset(records))))
+    assert report["ready"] is False
+    assert report["reason"] == "insufficient_support"
+    cells = report["cells"]
+    assert isinstance(cells, list)
+    by_split = {cell["split"]: cell for cell in cells}
+    assert by_split["calibration"]["sufficient"] is True
+    assert by_split["evaluation"]["n"] == n
+    assert by_split["evaluation"]["positive"] == n_positive
+    assert by_split["evaluation"]["sufficient"] is False
+
+
+@pytest.mark.parametrize("n_positive", [20, 80])
+def test_evaluation_support_boundary_is_inclusive_of_100_and_20(n_positive: int) -> None:
+    records = [
+        *_rows("calibration", 100, 20),
+        *_rows("evaluation", 100, n_positive),
+    ]
+    report = support_report(load_dataset(_dumps(_dataset(records))))
+    assert report["ready"] is True
+    assert report["reason"] is None
+    cells = report["cells"]
+    assert isinstance(cells, list)
+    evaluation = next(cell for cell in cells if cell["split"] == "evaluation")
+    assert evaluation["n"] == 100
+    assert evaluation["positive"] == n_positive
+    assert evaluation["sufficient"] is True
+
+
 def test_missing_split_rows_are_zero_cells_not_dropped() -> None:
     records = _rows("calibration", 100, 20)
     report = support_report(load_dataset(_dumps(_dataset(records))))
@@ -594,6 +632,50 @@ def test_train_as_of_crossing_evaluation_with_empty_calibration_is_rejected() ->
         adjudicated_at="2021-05-02T00:00:00Z",
     )
     evaluation = _record(sample=_uuid("empty-cal-eval"), split="evaluation")
+    _code(_dumps(_dataset([train, evaluation])), "invalid_time")
+
+
+@pytest.mark.parametrize("published_at", ["2020-01-01T00:00:00Z", "2020-06-30T23:59:59Z"])
+def test_empty_calibration_train_row_inside_window_is_accepted(published_at: str) -> None:
+    # Only publication is window-bound; as_of may run to one second before the
+    # earliest evaluation publication (2021-03-01T00:00:00Z).
+    train = _record(
+        sample=_uuid(f"in-window:{published_at}"),
+        split="train",
+        published_at=published_at,
+        as_of="2021-02-28T23:59:59Z",
+        adjudicated_at="2021-02-28T23:59:59Z",
+    )
+    evaluation = _record(sample=_uuid("in-window-eval"), split="evaluation")
+    loaded = load_dataset(_dumps(_dataset([train, evaluation])))
+    rows = loaded["records"]
+    assert isinstance(rows, list)
+    assert sorted(row["split"] for row in rows) == ["evaluation", "train"]
+
+
+@pytest.mark.parametrize("published_at", ["2019-12-31T23:59:59Z", "2020-07-01T00:00:00Z"])
+def test_empty_calibration_train_row_outside_window_is_rejected(published_at: str) -> None:
+    # as_of stays well before evaluation publication, so only the train
+    # publication window rejects this row.
+    train = _record(
+        sample=_uuid(f"out-of-window:{published_at}"),
+        split="train",
+        published_at=published_at,
+        as_of=published_at,
+        adjudicated_at=published_at,
+    )
+    evaluation = _record(sample=_uuid("out-of-window-eval"), split="evaluation")
+    _code(_dumps(_dataset([train, evaluation])), "invalid_time")
+
+
+def test_train_as_of_equal_to_evaluation_publication_with_empty_calibration_is_rejected() -> None:
+    train = _record(
+        sample=_uuid("equal-cutoff-train"),
+        split="train",
+        as_of="2021-03-01T00:00:00Z",
+        adjudicated_at="2021-03-01T00:00:00Z",
+    )
+    evaluation = _record(sample=_uuid("equal-cutoff-eval"), split="evaluation")
     _code(_dumps(_dataset([train, evaluation])), "invalid_time")
 
 

@@ -1,0 +1,159 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1160 520" width="1160" height="520" role="img" aria-labelledby="title-pipeline desc-pipeline">
+  <title id="title-pipeline">Financial Evidence Lab &#8212; End-to-End Evidence-to-Model Lineage Pipeline (M1 to M4)</title>
+  <desc id="desc-pipeline">Five-stage pipeline diagram showing how immutable SEC filings flow through point-in-time cutoff gates, 4-lane hybrid retrieval, 10-stage durable extraction, human review, and the 9-node Decimal calculation engine.</desc>
+
+  <defs>
+    <marker id="arrow-flow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#79c0ff" />
+    </marker>
+    <marker id="arrow-lineage" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#3fb950" />
+    </marker>
+    <linearGradient id="pipeline-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0b1220" />
+      <stop offset="100%" stop-color="#10192b" />
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <g id="layer-background">
+    <rect x="0" y="0" width="1160" height="520" rx="16" fill="url(#pipeline-bg)" stroke="#26354d" stroke-width="2" />
+    <text x="32" y="42" fill="#f0f6fc" font-family="Inter, -apple-system, BlinkMacSystemFont, sans-serif" font-size="20" font-weight="700">End-to-End Epistemic Lineage &#8212; From SEC Filing to Financial Model (M1 &#8594; M4)</text>
+    <text x="32" y="64" fill="#8b949e" font-family="Inter, -apple-system, BlinkMacSystemFont, sans-serif" font-size="13">Every number in a scenario or model traces back through immutable cryptographic hashes to exact source character spans.</text>
+  </g>
+
+  <!-- Temporal Cutoff Banner -->
+  <g id="banner-temporal-cutoff">
+    <rect x="32" y="82" width="1096" height="36" rx="8" fill="#16243a" stroke="#388bfd" stroke-width="1.2" />
+    <text x="52" y="105" fill="#79c0ff" font-family="'JetBrains Mono', monospace" font-size="12.5" font-weight="700">GLOBAL INVARIANT: published_at &lt;= effective_as_of</text>
+    <text x="440" y="105" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="12">Enforced on every document read, retrieval lane, extraction pin, and calculation leaf node</text>
+  </g>
+
+  <!-- Stage 1: M1 Ingestion & Reader -->
+  <g id="stage-m1-corpus">
+    <rect x="32" y="136" width="204" height="300" rx="10" fill="#141f33" stroke="#58a6ff" stroke-width="1.5" />
+    <rect x="32" y="136" width="204" height="34" rx="10" fill="#1f3558" />
+    <text x="46" y="158" fill="#79c0ff" font-family="Inter, -apple-system, sans-serif" font-size="12.5" font-weight="700">M1 &#183; IMMUTABLE CORPUS</text>
+
+    <rect x="46" y="184" width="176" height="58" rx="6" fill="#1b2942" stroke="#30476e" />
+    <text x="56" y="204" fill="#f0f6fc" font-family="Inter, -apple-system, sans-serif" font-size="12" font-weight="600">SEC Filings &amp; XBRL</text>
+    <text x="56" y="220" fill="#8b949e" font-family="Inter, -apple-system, sans-serif" font-size="10.5">10-K, 10-Q, 8-K, 10-Q/A</text>
+    <text x="56" y="234" fill="#8b949e" font-family="Inter, -apple-system, sans-serif" font-size="10.5">Amendment chain links</text>
+
+    <rect x="46" y="254" width="176" height="68" rx="6" fill="#1b2942" stroke="#30476e" />
+    <text x="56" y="274" fill="#f0f6fc" font-family="Inter, -apple-system, sans-serif" font-size="12" font-weight="600">Global Spans &amp; Hashes</text>
+    <text x="56" y="290" fill="#8b949e" font-family="'JetBrains Mono', monospace" font-size="10">start_char..end_char</text>
+    <text x="56" y="305" fill="#8b949e" font-family="Inter, -apple-system, sans-serif" font-size="10.5">SHA-256 slice verification</text>
+
+    <rect x="46" y="334" width="176" height="86" rx="6" fill="#1b2942" stroke="#30476e" />
+    <text x="56" y="354" fill="#f0f6fc" font-family="Inter, -apple-system, sans-serif" font-size="12" font-weight="600">Composite Reader</text>
+    <text x="56" y="370" fill="#8b949e" font-family="Inter, -apple-system, sans-serif" font-size="10.5">Single DB snapshot</text>
+    <text x="56" y="385" fill="#8b949e" font-family="Inter, -apple-system, sans-serif" font-size="10.5">Duplicate &amp; restatement</text>
+    <text x="56" y="400" fill="#8b949e" font-family="Inter, -apple-system, sans-serif" font-size="10.5">detection (`FactPanel`)</text>
+  </g>
+
+  <!-- Stage 2: M2 Hybrid Retrieval -->
+  <g id="stage-m2-retrieval">
+    <rect x="255" y="136" width="204" height="300" rx="10" fill="#141f33" stroke="#bc8cff" stroke-width="1.5" />
+    <rect x="255" y="136" width="204" height="34" rx="10" fill="#322356" />
+    <text x="269" y="158" fill="#d2a8ff" font-family="Inter, -apple-system, sans-serif" font-size="12.5" font-weight="700">M2 &#183; HYBRID RETRIEVAL</text>
+
+    <rect x="269" y="184" width="176" height="68" rx="6" fill="#1b2942" stroke="#47386e" />
+    <text x="279" y="204" fill="#f0f6fc" font-family="Inter, -apple-system, sans-serif" font-size="12" font-weight="600">4 Cutoff-Safe Lanes</text>
+    <text x="279" y="220" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="10.5">Dense (512d) &#183; Lexical</text>
+    <text x="279" y="235" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="10.5">Facts &#183; Tables</text>
+
+    <rect x="269" y="264" width="176" height="62" rx="6" fill="#1b2942" stroke="#47386e" />
+    <text x="279" y="284" fill="#f0f6fc" font-family="Inter, -apple-system, sans-serif" font-size="12" font-weight="600">RRF Fusion &amp; Gates</text>
+    <text x="279" y="300" fill="#8b949e" font-family="'JetBrains Mono', monospace" font-size="10">k = 60 deterministic</text>
+    <text x="279" y="314" fill="#8b949e" font-family="Inter, -apple-system, sans-serif" font-size="10.5">Rejects cross-version/future</text>
+
+    <rect x="269" y="338" width="176" height="82" rx="6" fill="#1b2942" stroke="#47386e" />
+    <text x="279" y="358" fill="#f0f6fc" font-family="Inter, -apple-system, sans-serif" font-size="12" font-weight="600">Verifiable Claims</text>
+    <text x="279" y="374" fill="#8b949e" font-family="Inter, -apple-system, sans-serif" font-size="10.5">Atomic decomposition</text>
+    <text x="279" y="389" fill="#8b949e" font-family="Inter, -apple-system, sans-serif" font-size="10.5">Citation entailment &amp;</text>
+    <text x="279" y="404" fill="#8b949e" font-family="Inter, -apple-system, sans-serif" font-size="10.5">byte-stable trace replay</text>
+  </g>
+
+  <!-- Stage 3: M3 Agentic Extraction -->
+  <g id="stage-m3-extraction">
+    <rect x="478" y="136" width="204" height="300" rx="10" fill="#141f33" stroke="#d29922" stroke-width="1.5" />
+    <rect x="478" y="136" width="204" height="34" rx="10" fill="#4b3614" />
+    <text x="492" y="158" fill="#e3b341" font-family="Inter, -apple-system, sans-serif" font-size="12.5" font-weight="700">M3 &#183; EXTRACTION FSM</text>
+
+    <rect x="492" y="184" width="176" height="68" rx="6" fill="#1b2942" stroke="#634b23" />
+    <text x="502" y="204" fill="#f0f6fc" font-family="Inter, -apple-system, sans-serif" font-size="12" font-weight="600">5 Typed Read-Only Roles</text>
+    <text x="502" y="220" fill="#8b949e" font-family="Inter, -apple-system, sans-serif" font-size="10.5">Classifier, Fact, KPI,</text>
+    <text x="502" y="235" fill="#8b949e" font-family="Inter, -apple-system, sans-serif" font-size="10.5">Guidance, Driver Mapper</text>
+
+    <rect x="492" y="264" width="176" height="68" rx="6" fill="#1b2942" stroke="#634b23" />
+    <text x="502" y="284" fill="#f0f6fc" font-family="Inter, -apple-system, sans-serif" font-size="12" font-weight="600">Decimal Normalizer</text>
+    <text x="502" y="300" fill="#8b949e" font-family="Inter, -apple-system, sans-serif" font-size="10.5">No floats; parens negative;</text>
+    <text x="502" y="315" fill="#8b949e" font-family="Inter, -apple-system, sans-serif" font-size="10.5">shared scale left-shift</text>
+
+    <rect x="492" y="344" width="176" height="76" rx="6" fill="#1b2942" stroke="#634b23" />
+    <text x="502" y="364" fill="#f0f6fc" font-family="Inter, -apple-system, sans-serif" font-size="12" font-weight="600">Accounting Validators</text>
+    <text x="502" y="380" fill="#8b949e" font-family="Inter, -apple-system, sans-serif" font-size="10.5">cRPO &lt;= RPO, segment sums,</text>
+    <text x="502" y="395" fill="#8b949e" font-family="Inter, -apple-system, sans-serif" font-size="10.5">GP = Rev - |COGS|, citations</text>
+  </g>
+
+  <!-- Stage 4: M3 Human Review Gate -->
+  <g id="stage-m3-review">
+    <rect x="701" y="136" width="204" height="300" rx="10" fill="#141f33" stroke="#f78166" stroke-width="1.5" />
+    <rect x="701" y="136" width="204" height="34" rx="10" fill="#59251e" />
+    <text x="715" y="158" fill="#ffa198" font-family="Inter, -apple-system, sans-serif" font-size="12.5" font-weight="700">M3 &#183; HUMAN REVIEW GATE</text>
+
+    <rect x="715" y="184" width="176" height="68" rx="6" fill="#1b2942" stroke="#6e3630" />
+    <text x="725" y="204" fill="#f0f6fc" font-family="Inter, -apple-system, sans-serif" font-size="12" font-weight="600">Zero Auto-Approval</text>
+    <text x="725" y="220" fill="#8b949e" font-family="Inter, -apple-system, sans-serif" font-size="10.5">Every proposal lands in</text>
+    <text x="725" y="235" fill="#ffa198" font-family="'JetBrains Mono', monospace" font-size="10">state = needs_review</text>
+
+    <rect x="715" y="264" width="176" height="68" rx="6" fill="#1b2942" stroke="#6e3630" />
+    <text x="725" y="284" fill="#f0f6fc" font-family="Inter, -apple-system, sans-serif" font-size="12" font-weight="600">Conflict Resolution</text>
+    <text x="725" y="300" fill="#8b949e" font-family="Inter, -apple-system, sans-serif" font-size="10.5">Ontology comparability keys</text>
+    <text x="725" y="315" fill="#8b949e" font-family="Inter, -apple-system, sans-serif" font-size="10.5">Explicit winner + ETag</text>
+
+    <rect x="715" y="344" width="176" height="76" rx="6" fill="#1b2942" stroke="#6e3630" />
+    <text x="725" y="364" fill="#f0f6fc" font-family="Inter, -apple-system, sans-serif" font-size="12" font-weight="600">Immutable Version Ledger</text>
+    <text x="725" y="380" fill="#8b949e" font-family="Inter, -apple-system, sans-serif" font-size="10.5">Accept / Edit / Merge / Reject</text>
+    <text x="725" y="395" fill="#8b949e" font-family="Inter, -apple-system, sans-serif" font-size="10.5">Supersedes without overwrite</text>
+  </g>
+
+  <!-- Stage 5: M4 Calculation Engine -->
+  <g id="stage-m4-calc">
+    <rect x="924" y="136" width="204" height="300" rx="10" fill="#141f33" stroke="#3fb950" stroke-width="1.5" />
+    <rect x="924" y="136" width="204" height="34" rx="10" fill="#1b4728" />
+    <text x="938" y="158" fill="#56d364" font-family="Inter, -apple-system, sans-serif" font-size="12.5" font-weight="700">M4 &#183; CALCULATION DAG</text>
+
+    <rect x="938" y="184" width="176" height="68" rx="6" fill="#1b2942" stroke="#285c37" />
+    <text x="948" y="204" fill="#f0f6fc" font-family="Inter, -apple-system, sans-serif" font-size="12" font-weight="600">9 Typed Node Kinds</text>
+    <text x="948" y="220" fill="#8b949e" font-family="Inter, -apple-system, sans-serif" font-size="10.5">Closed unit algebra, 34-digit</text>
+    <text x="948" y="235" fill="#8b949e" font-family="Inter, -apple-system, sans-serif" font-size="10.5">Decimal, `fel-formula/v1`</text>
+
+    <rect x="938" y="264" width="176" height="68" rx="6" fill="#1b2942" stroke="#285c37" />
+    <text x="948" y="284" fill="#f0f6fc" font-family="Inter, -apple-system, sans-serif" font-size="12" font-weight="600">Scenarios &amp; Jacobi SCC</text>
+    <text x="948" y="300" fill="#8b949e" font-family="Inter, -apple-system, sans-serif" font-size="10.5">Base / Bull / Bear overrides</text>
+    <text x="948" y="315" fill="#8b949e" font-family="Inter, -apple-system, sans-serif" font-size="10.5">Explicit fixed-point cycles</text>
+
+    <rect x="938" y="344" width="176" height="76" rx="6" fill="#1b2942" stroke="#285c37" />
+    <text x="948" y="364" fill="#f0f6fc" font-family="Inter, -apple-system, sans-serif" font-size="12" font-weight="600">Content-Addressed Trace</text>
+    <text x="948" y="380" fill="#8b949e" font-family="Inter, -apple-system, sans-serif" font-size="10.5">5,000-node recalc ~43 ms</text>
+    <text x="948" y="395" fill="#8b949e" font-family="Inter, -apple-system, sans-serif" font-size="10.5">`trace(node)` walks to spans</text>
+  </g>
+
+  <!-- Stage Connectors -->
+  <g id="layer-stage-arrows" fill="none" stroke="#79c0ff" stroke-width="2.2">
+    <path d="M 236 286 L 251 286" marker-end="url(#arrow-flow)" />
+    <path d="M 459 286 L 474 286" marker-end="url(#arrow-flow)" />
+    <path d="M 682 286 L 697 286" marker-end="url(#arrow-flow)" />
+    <path d="M 905 286 L 920 286" marker-end="url(#arrow-flow)" />
+  </g>
+
+  <!-- Bottom Provenance Return Bar -->
+  <g id="layer-provenance-return">
+    <rect x="32" y="454" width="1096" height="42" rx="8" fill="#12261e" stroke="#2ea043" stroke-width="1.2" />
+    <path d="M 1020 475 L 140 475" stroke="#3fb950" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#arrow-lineage)" />
+    <rect x="330" y="461" width="500" height="28" rx="6" fill="#0d1b15" />
+    <text x="348" y="479" fill="#56d364" font-family="Inter, -apple-system, sans-serif" font-size="12" font-weight="700">REVERSE AUDIT LINEAGE: CalcResult.trace() &#8594; ApprovedVersion &#8594; SourceSpan (SHA-256)</text>
+  </g>
+</svg>

@@ -5,11 +5,21 @@ request ever leaves the process."""
 from __future__ import annotations
 
 import gzip
+import hashlib
+from datetime import UTC, datetime, timedelta, timezone
 
 import httpx
 import pytest
 
-from fel_workers.http import HttpRequestError, ThrottledRetryingClient, base_url_host
+from fel_workers.http import (
+    HttpRequestError,
+    SourceClock,
+    ThrottledRetryingClient,
+    base_url_host,
+    json_pointer,
+    read_source_clocks,
+    redact_url,
+)
 from fel_workers.ingestion.fred import LiveFredClient
 from fel_workers.ingestion.market import AlphaVantageMarketDataProvider
 from fel_workers.ingestion.sec_client import LiveSecClient, SecFetchError
@@ -377,3 +387,218 @@ def test_adapters_pin_their_upstream_hosts() -> None:
     assert market._client._allowed_hosts == {"www.alphavantage.co"}  # noqa: SLF001
     for adapter in (sec, fred, market):
         adapter.close()
+
+
+# --- Retrieval receipts (ADR-0029) ----------------------------------------
+
+_T0 = datetime(2026, 10, 24, 12, 0, tzinfo=UTC)
+
+
+def test_receipt_hashes_the_decoded_body_and_redacts_secrets() -> None:
+    body = b'{"observations": []}'
+    client = ThrottledRetryingClient(
+        transport=httpx.MockTransport(
+            lambda r: httpx.Response(
+                200,
+                headers={"Content-Encoding": "gzip", "Content-Type": "application/json"},
+                content=gzip.compress(body),
+            )
+        ),
+        secret_query_params=("API_KEY",),
+        now=lambda: _T0,
+    )
+    response, receipt = client.get_with_receipt(
+        "https://api.example.test/obs", params={"series_id": "CPI", "api_key": "s3cr3t"}
+    )
+    assert response.content == body
+    assert receipt.content_sha256 == f"sha256:{hashlib.sha256(body).hexdigest()}"
+    assert receipt.byte_length == len(body)
+    assert receipt.content_type == "application/json"
+    assert receipt.status_code == 200
+    assert receipt.retrieved_at == _T0
+    assert receipt.attempts == 1
+    assert "s3cr3t" not in repr(receipt)
+    assert receipt.source_url == "https://api.example.test/obs?series_id=CPI&api_key=REDACTED"
+    assert receipt.final_url == receipt.source_url
+
+
+def test_receipt_final_url_follows_redirect_and_counts_retries() -> None:
+    statuses = iter([503])
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/old":
+            try:
+                return httpx.Response(next(statuses))
+            except StopIteration:
+                return httpx.Response(301, headers={"Location": "https://data.sec.gov/new?k=v"})
+        return httpx.Response(200, content=b"moved")
+
+    clock = FakeClock()
+    client = ThrottledRetryingClient(
+        transport=httpx.MockTransport(handler),
+        follow_redirects=True,
+        allowed_hosts={"data.sec.gov"},
+        sleep=clock.sleep,
+        monotonic=clock.monotonic,
+        now=lambda: _T0,
+    )
+    _response, receipt = client.get_with_receipt("https://data.sec.gov/old")
+    assert receipt.source_url == "https://data.sec.gov/old"
+    assert receipt.final_url == "https://data.sec.gov/new?k=v"
+    assert receipt.attempts == 2
+
+
+def test_receipt_time_is_normalized_to_utc_and_naive_clock_is_refused() -> None:
+    offset = timezone(timedelta(hours=-7))
+    aware = ThrottledRetryingClient(
+        transport=httpx.MockTransport(lambda r: httpx.Response(200)),
+        now=lambda: _T0.astimezone(offset),
+    )
+    _response, receipt = aware.get_with_receipt("https://example.invalid/x")
+    assert receipt.retrieved_at == _T0
+    assert receipt.retrieved_at.tzinfo is UTC
+
+    naive = ThrottledRetryingClient(
+        transport=httpx.MockTransport(lambda r: httpx.Response(200)),
+        now=lambda: datetime(2026, 10, 24, 12, 0),
+    )
+    with pytest.raises(ValueError, match="timezone-aware"):
+        naive.get_with_receipt("https://example.invalid/x")
+
+
+def test_get_is_unchanged_and_returns_only_the_response() -> None:
+    client = _client(lambda r: httpx.Response(200, content=b"ok"), FakeClock())
+    assert client.get("https://example.invalid/x").content == b"ok"
+
+
+def test_redact_url_matches_secret_names_case_insensitively() -> None:
+    """Declared names are matched case-insensitively, including a mixed-case set."""
+    url = httpx.URL("https://api.example.test/obs?API_KEY=s3cr3t&series_id=CPI&apikey=other")
+    redacted = redact_url(url, frozenset({"api_key", "APIKEY"}))
+    assert "s3cr3t" not in redacted
+    assert "other" not in redacted
+    assert "API_KEY=REDACTED" in redacted
+    assert "apikey=REDACTED" in redacted
+    assert "series_id=CPI" in redacted
+
+
+def test_status_errors_redact_secrets_embedded_in_the_url() -> None:
+    client = _client(
+        lambda r: httpx.Response(404),
+        FakeClock(),
+        secret_query_params=("API_KEY",),
+        max_retries=0,
+    )
+    with pytest.raises(HttpRequestError, match="status 404") as caught:
+        client.get("https://api.example.test/obs?api_key=s3cr3t&series_id=CPI")
+    message = str(caught.value)
+    assert "s3cr3t" not in message
+    assert "api_key=REDACTED" in message
+
+
+def test_transport_errors_redact_secret_query_values() -> None:
+    secret = "s3cr3t-value"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError(f"boom {request.url}")
+
+    client = _client(
+        handler,
+        FakeClock(),
+        secret_query_params=("api_key",),
+        max_retries=0,
+    )
+    with pytest.raises(HttpRequestError, match="transport error") as caught:
+        client.get("https://api.example.test/obs", params={"series_id": "CPI", "api_key": secret})
+    assert secret not in str(caught.value)
+    assert "REDACTED" in str(caught.value)
+
+
+def test_transport_errors_redact_a_secret_introduced_by_a_redirect() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/old":
+            return httpx.Response(
+                302, headers={"Location": "https://data.sec.gov/new?api_key=other-secret"}
+            )
+        raise httpx.ConnectError(f"boom {request.url}")
+
+    client = _client(
+        handler,
+        FakeClock(),
+        follow_redirects=True,
+        allowed_hosts={"data.sec.gov"},
+        secret_query_params=("api_key",),
+        max_retries=0,
+    )
+    with pytest.raises(HttpRequestError, match="transport error") as caught:
+        client.get("https://data.sec.gov/old")
+    assert "other-secret" not in str(caught.value)
+    assert "api_key=REDACTED" in str(caught.value)
+
+
+def test_receipt_redacts_a_secret_carried_on_the_redirect_target() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/old":
+            return httpx.Response(
+                301, headers={"Location": "https://data.sec.gov/new?api_key=s3cr3t&k=v"}
+            )
+        return httpx.Response(200, content=b"moved")
+
+    clock = FakeClock()
+    client = ThrottledRetryingClient(
+        transport=httpx.MockTransport(handler),
+        follow_redirects=True,
+        allowed_hosts={"data.sec.gov"},
+        secret_query_params=("API_KEY",),
+        sleep=clock.sleep,
+        monotonic=clock.monotonic,
+        now=lambda: _T0,
+    )
+    _response, receipt = client.get_with_receipt(
+        "https://data.sec.gov/old", params={"api_key": "s3cr3t"}
+    )
+    assert "s3cr3t" not in repr(receipt)
+    assert "api_key=REDACTED" in receipt.source_url
+    assert "api_key=REDACTED" in receipt.final_url
+
+
+# --- Named source clocks (ADR-0031) ---------------------------------------
+
+
+def test_read_source_clocks_reads_only_declared_paths_verbatim() -> None:
+    document = {
+        "as_of": "2026-07-10T16:00:00-04:00",
+        "meta": {"refreshed": "2026-07-10", "count": 3, "empty": "", "none": None},
+        "deep": {"as_of": "not declared, never read"},
+    }
+    clocks = read_source_clocks(
+        document,
+        {
+            "as_of": ("as_of",),
+            "refreshed": ("meta", "refreshed"),
+            "count": ("meta", "count"),
+            "empty": ("meta", "empty"),
+            "none": ("meta", "none"),
+            "absent": ("meta", "absent"),
+            "through_scalar": ("as_of", "child"),
+        },
+    )
+    assert clocks == (
+        SourceClock(name="as_of", value="2026-07-10T16:00:00-04:00", path="/as_of"),
+        SourceClock(name="refreshed", value="2026-07-10", path="/meta/refreshed"),
+    )
+    assert read_source_clocks(["not", "an", "object"], {"as_of": ("as_of",)}) == ()
+
+
+def test_json_pointer_escapes_tilde_and_slash() -> None:
+    assert json_pointer(("Meta Data", "3. Last Refreshed")) == "/Meta Data/3. Last Refreshed"
+    assert json_pointer(("a/b", "c~d")) == "/a~1b/c~0d"
+
+
+def test_http_layer_alone_never_claims_source_clocks() -> None:
+    client = _client(lambda r: httpx.Response(200, json={"as_of": "2026-07-10"}), FakeClock())
+    _response, receipt = client.get_with_receipt("https://example.invalid/x")
+    assert receipt.source_clocks is None
+    with_clocks = receipt.with_source_clocks(())
+    assert with_clocks.source_clocks == ()
+    assert with_clocks.content_sha256 == receipt.content_sha256

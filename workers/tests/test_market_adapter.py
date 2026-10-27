@@ -3,9 +3,10 @@ assembly. All transport is mocked; nothing leaves the process."""
 
 from __future__ import annotations
 
+import hashlib
 import json
 import pathlib
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 
 import httpx
@@ -13,12 +14,15 @@ import pytest
 
 from fel_providers.interfaces import MarketBar
 from fel_providers.mocks import MockMarketDataProvider
+from fel_workers.http import SourceClock
 from fel_workers.ingestion.market import (
     AlphaVantageMarketDataProvider,
     FeatureAssemblyError,
     ForecastFeatureRow,
     MarketDataError,
+    ReceiptedMarketDataProvider,
     assemble_forecast_features,
+    assemble_receipted_forecast_features,
 )
 
 FIXTURES = pathlib.Path(__file__).parent / "fixtures"
@@ -210,3 +214,90 @@ def test_feature_assembly_rejects_duplicate_days() -> None:
 
     with pytest.raises(FeatureAssemblyError, match="duplicate"):
         assemble_forecast_features(DuplicatingProvider(), "SYNX", start=START, end=END)
+
+
+def test_receipted_assembly_returns_the_fetch_receipt_with_key_redacted() -> None:
+    """ADR-0029: the receipt rides beside the frozen MarketBar rows."""
+    provider = _provider(_fixture_handler)
+    assert isinstance(provider, ReceiptedMarketDataProvider)
+    rows, receipt = assemble_receipted_forecast_features(provider, "SYNX", start=START, end=END)
+    assert rows == assemble_forecast_features(provider, "SYNX", start=START, end=END)
+    assert receipt is not None
+    body = fixture_bytes("alpha_vantage_daily_adjusted.json")
+    assert receipt.content_sha256 == f"sha256:{hashlib.sha256(body).hexdigest()}"
+    assert "apikey=REDACTED" in receipt.source_url
+    assert "test-key-not-a-secret" not in repr(receipt)
+
+
+def test_receipted_assembly_with_mock_has_no_receipt_and_still_fails_closed() -> None:
+    rows, receipt = assemble_receipted_forecast_features(
+        MockMarketDataProvider(), "SYNX", start=START, end=END
+    )
+    assert rows and receipt is None
+    with pytest.raises(FeatureAssemblyError, match="FOR-005"):
+        assemble_receipted_forecast_features(
+            MockMarketDataProvider(), "NOADJ", start=START, end=END
+        )
+
+
+@pytest.mark.parametrize(
+    ("field", "raw", "label"),
+    [
+        ("5. adjusted close", "NaN", "adjusted close"),
+        ("5. adjusted close", "Infinity", "adjusted close"),
+        ("5. adjusted close", "-Infinity", "adjusted close"),
+        ("7. dividend amount", "NaN", "dividend"),
+        ("8. split coefficient", "Infinity", "split factor"),
+    ],
+)
+def test_non_finite_bar_fields_fail_closed(field: str, raw: str, label: str) -> None:
+    payload = json.loads(fixture_bytes("alpha_vantage_daily_adjusted.json"))
+    payload["Time Series (Daily)"]["2026-07-09"][field] = raw
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=payload)
+
+    with pytest.raises(MarketDataError, match=f"non-finite {label}"):
+        _provider(handler).daily_adjusted("SYNX", start=START, end=END)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("adjusted_close", Decimal("Infinity")),
+        ("adjusted_close", Decimal("NaN")),
+        ("adjusted_close", Decimal("-Infinity")),
+        ("dividend", Decimal("Infinity")),
+        ("dividend", Decimal("NaN")),
+        ("split_factor", Decimal("Infinity")),
+        ("split_factor", Decimal("NaN")),
+    ],
+)
+def test_feature_assembly_rejects_non_finite_decimals(field: str, value: Decimal) -> None:
+    provider = _DeficientProvider(_bar(**{field: value}))
+    with pytest.raises(FeatureAssemblyError, match="non-finite"):
+        assemble_forecast_features(provider, "SYNX", start=START, end=END)
+
+
+def test_naive_receipt_clock_is_not_reported_as_missing_adjustments() -> None:
+    """A naive receipt clock is a caller bug, not a FOR-005 adjustment failure."""
+    provider = AlphaVantageMarketDataProvider(
+        "test-key-not-a-secret",
+        transport=httpx.MockTransport(_fixture_handler),
+        now=lambda: datetime(2026, 7, 10),
+    )
+    with pytest.raises(ValueError, match="timezone-aware") as caught:
+        assemble_receipted_forecast_features(provider, "SYNX", start=START, end=END)
+    assert "FOR-005" not in str(caught.value)
+
+
+def test_market_receipt_records_meta_data_clocks() -> None:
+    """ADR-0031: the refresh date and its time zone, verbatim, with pointers."""
+    _rows, receipt = assemble_receipted_forecast_features(
+        _provider(_fixture_handler), "SYNX", start=START, end=END
+    )
+    assert receipt is not None
+    assert receipt.source_clocks == (
+        SourceClock(name="last_refreshed", value="2026-07-10", path="/Meta Data/3. Last Refreshed"),
+        SourceClock(name="time_zone", value="US/Eastern", path="/Meta Data/5. Time Zone"),
+    )

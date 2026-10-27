@@ -5,6 +5,8 @@
 
 - [apps/api/app/main.py](../../apps/api/app/main.py) — API entrypoint and router registration
 - [apps/api/app/db.py](../../apps/api/app/db.py) — tenant-scoped transactions and the `fel_app` role switch
+- [apps/web/src/components/EvidenceGraph3D.tsx](../../apps/web/src/components/EvidenceGraph3D.tsx) — 3D epistemic lineage and cutoff visualizer
+- [apps/web/src/components/ObservatoryFlowViz.tsx](../../apps/web/src/components/ObservatoryFlowViz.tsx) — 4-lane RRF fusion flow and budget visualizer
 - [workers/src/fel_workers/consumer.py](../../workers/src/fel_workers/consumer.py) — worker claim and dispatch loop
 - [workers/src/fel_workers/extraction/budget.py](../../workers/src/fel_workers/extraction/budget.py) — extraction hard budget caps
 - [packages/retrieval/fel_retrieval/](../../packages/retrieval/fel_retrieval/) — chunking, lanes, fusion, traces
@@ -15,13 +17,15 @@
 
 </details>
 
-Source references verified against commit `437ce55`.
+Source references verified against commit `59bbf7e`.
 
 This document describes the architecture that is present on `main`, not only
 the target product. Planned components are labeled so a new contributor can
 tell which paths are safe to run, extend, or depend on. For a leadership
 readout of the same architecture, see the
 [executive architecture brief](./executive-brief.md).
+
+![Financial Evidence Lab — System Architecture & Trust Boundaries](./assets/system-overview.svg)
 
 ## Product boundary
 
@@ -42,6 +46,8 @@ in [`system-design.md`](./system-design.md#extraction-boundary). Step 5 has a
 standalone Decimal calculation engine (`packages/calculation-engine`); the
 model composer, forecasting and release workflows that would use it are
 roadmap work.
+
+![End-to-End Epistemic Lineage Pipeline](./assets/evidence-to-model-pipeline.svg)
 
 ## System context
 
@@ -82,20 +88,30 @@ jobs, retrieval indexes, runs, and audit records live in PostgreSQL.
 The last column records what each boundary does **not** establish, so that a
 present module is not mistaken for a passed acceptance gate.
 
-| Container/package                              | Responsibility                                                                                                 | Current maturity / non-claim                                                                                                               |
-| ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `apps/web`                                     | Evidence Reader, Search Observatory, extraction review, run comparison, server-side API integration            | Implemented in fixture and HTTP modes; public deployments refuse business routes (HTTP 503) until request-scoped sessions exist (ADR-0027) |
-| `apps/api`                                     | Token verification, membership, RLS transaction setup, workspaces, corpus/reader, retrieval, extraction review | Mock and Supabase JWKS verifiers implemented (ADR-0025); a verified API token is not a per-user web session                                |
-| `workers`                                      | Durable job claiming, SEC discovery/fetch/company-facts ingestion, extraction runtime, leases and retries      | Implemented for SEC and extraction paths; not a request handler                                                                            |
-| `packages/retrieval`                           | Chunking, lane retrieval, deterministic plan/fusion, traces, claims, replay                                    | Implemented, mock-provider first; mock runs do not prove live provider quality                                                             |
-| `packages/providers`                           | Stable external-provider protocols, deterministic mocks, explicit-key adapters                                 | Interfaces/mocks implemented; an adapter is not an authorized or promoted runtime provider                                                 |
-| `packages/contracts`                           | Versioned JSON Schemas, OpenAPI descriptions, generated TypeScript types                                       | Implemented; OpenAPI and package version `0.9.0`                                                                                           |
-| `db/migrations`                                | Tenant, corpus, retrieval, extraction, review, queue, worker-role, and RLS schema                              | Implemented through migration `0011`; a table is not a hosted service                                                                      |
-| `evals`, `packages/retrieval-evals`            | Cross-stack fixtures, graders, and retrieval benchmarks                                                        | Synthetic gates implemented; live gates open                                                                                               |
-| `packages/ontology`                            | saas-metrics/v1 ontology (9 families / 14 metrics), comparability keys, unit comparison vocabulary (ADR-0019)  | Implemented                                                                                                                                |
-| Extraction runtime (`workers/.../extraction`)  | Durable worker FSM: typed roles, normalization, validators, budget enforcement, atomic persistence             | Implemented (`61058e4`, PR #145); every proposal requires human review                                                                     |
-| `packages/calculation-engine`                  | Decimal values, closed unit algebra, fiscal periods, formula ASTs, model graph, snapshots, scenarios           | Implemented as a library with property tests; no application or worker imports it yet                                                      |
-| Model composer, forecast, backtest, release UI | Integrated model and forecast product                                                                          | Planned                                                                                                                                    |
+| Container/package                              | Responsibility                                                                                                              | Current maturity / non-claim                                                                                                               |
+| ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `apps/web`                                     | Evidence Reader, Earnings Update Desk (3D/2D lineage), Search Observatory, extraction review, run comparison, API transport | Implemented in fixture and HTTP modes; public deployments refuse business routes (HTTP 503) until request-scoped sessions exist (ADR-0027) |
+| `apps/api`                                     | Token verification, membership, RLS transaction setup, workspaces, corpus/reader, retrieval, extraction review              | Mock and Supabase JWKS verifiers implemented (ADR-0025); a verified API token is not a per-user web session                                |
+| `workers`                                      | Durable job claiming, SEC discovery/fetch/company-facts ingestion, extraction runtime, leases and retries                   | Implemented for SEC and extraction paths; not a request handler                                                                            |
+| `packages/retrieval`                           | Chunking, lane retrieval, deterministic plan/fusion, traces, claims, replay                                                 | Implemented, mock-provider first; mock runs do not prove live provider quality                                                             |
+| `packages/providers`                           | Stable external-provider protocols, deterministic mocks, explicit-key adapters                                              | Interfaces/mocks implemented; an adapter is not an authorized or promoted runtime provider                                                 |
+| `packages/contracts`                           | Versioned JSON Schemas, OpenAPI descriptions, generated TypeScript types                                                    | Implemented; OpenAPI and package version `0.9.0`                                                                                           |
+| `db/migrations`                                | Tenant, corpus, retrieval, extraction, review, queue, worker-role, and RLS schema                                           | Implemented through migration `0011`; a table is not a hosted service                                                                      |
+| `evals`, `packages/retrieval-evals`            | Cross-stack fixtures, graders, and retrieval benchmarks                                                                     | Synthetic gates implemented; live gates open                                                                                               |
+| `packages/ontology`                            | saas-metrics/v1 ontology (9 families / 14 metrics), comparability keys, unit comparison vocabulary (ADR-0019)               | Implemented                                                                                                                                |
+| Extraction runtime (`workers/.../extraction`)  | Durable worker FSM: typed roles, normalization, validators, budget enforcement, atomic persistence                          | Implemented (`61058e4`, PR #145); every proposal requires human review                                                                     |
+| `packages/calculation-engine`                  | Decimal values, closed unit algebra, fiscal periods, formula ASTs, model graph, snapshots, scenarios                        | Implemented as a library with property tests; no application or worker imports it yet                                                      |
+| Model composer, forecast, backtest, release UI | Integrated model and forecast product                                                                                       | Planned                                                                                                                                    |
+
+## Subsystem architecture diagrams
+
+### Observable Hybrid Retrieval (M2) & Durable Extraction FSM (M3)
+
+![Observable Hybrid Retrieval and Durable Extraction State Machine](./assets/hybrid-retrieval-and-extraction-fsm.svg)
+
+### Deterministic Calculation DAG & Four-Way Provenance (M4)
+
+![Deterministic Calculation DAG and Four-Way Provenance](./assets/calculation-dag-and-provenance.svg)
 
 ## Architectural layers
 
@@ -270,6 +286,7 @@ read [`system-design.md`](./system-design.md).
 
 - [Executive architecture brief](executive-brief.md)
 - [System design](system-design.md)
+- [Visualization & 3D interactive design roadmap](visualization-roadmap.md)
 - [API](../../apps/api/README.md)
 - [Workers](../../workers/README.md)
 - [Ontology](../../packages/ontology/README.md)

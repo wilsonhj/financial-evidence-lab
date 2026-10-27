@@ -10,13 +10,16 @@ companies. It connects filing ingestion, point-in-time search, verifiable
 claims, structured extraction, and financial modeling without losing the
 source behind a number or conclusion.
 
-The project is deliberately **mock-first**. You can explore the reader and
-Search Observatory without credentials, then add PostgreSQL and live providers
-when you need the complete data path.
+The project is deliberately **mock-first**. You can explore the reader,
+Earnings Update Desk (with interactive 3D/2D lineage graphics), Search
+Observatory, and Extraction Review Queue without credentials, then add
+PostgreSQL and live providers when you need the complete data path.
 
 > This is active pre-release software. The reader, hybrid-retrieval, and
 > structured-extraction foundations are implemented mock-first, while financial
 > modeling and forecasting remain roadmap work.
+
+![Financial Evidence Lab — System Architecture & Trust Boundaries](./docs/architecture/assets/system-overview.svg)
 
 ## What works today
 
@@ -36,7 +39,7 @@ and the [canonical plan](./specs/001-financial-evidence-lab/plan.md#3-milestones
 | Hybrid retrieval and claims   | Dense, lexical, fact, and table lanes with deterministic planning and reciprocal-rank fusion, replayable traces, feedback, claim decomposition with citation verification, and the Search Observatory.                       |
 | Structured extraction         | The `packages/ontology` SaaS metric ontology and a durable extraction worker: typed roles, a checkpointed workflow, normalization, deterministic validators, hard budgets, atomic persistence, and human review of proposals. |
 | Providers                     | Provider protocols with deterministic mocks, plus explicit-key OpenAI structured-generation and embedding adapters and an offline credential cipher. Runtime wiring of live providers is separate work.                      |
-| Modeling and forecasting      | The `packages/calculation-engine` typed model graph and Decimal calculation engine. Model, scenario, and forecast product workflows (M4/M5) are specified but are not runnable product features.                             |
+| Modeling and forecasting      | The `packages/calculation-engine` typed model graph and Decimal calculation engine, plus the fixture Earnings Update Desk (`/desk`). Integrated model, scenario, and forecast product workflows (M4/M5) are specified but are not runnable product features. |
 
 Live acceptance gates (hosted reader smoke, live corpus and retrieval gates,
 load targets, calibration) are tracked separately from merged code; a merged
@@ -56,10 +59,14 @@ corepack pnpm install --frozen-lockfile
 FEL_DEPLOYMENT_MODE=fixture FEL_API_BEARER_TOKEN= FEL_EVIDENCE_SOURCE=fixture corepack pnpm --filter @fel/web dev
 ```
 
-Open:
+Open these interactive workspaces in your browser:
 
-- <http://localhost:3000> for the filing list and evidence reader
-- <http://localhost:3000/observatory> for retrieval inspection
+| Route | Workspace | What you can explore |
+| :--- | :--- | :--- |
+| <http://localhost:3000> | **Filings & Evidence Reader** (`/reader/[documentId]`) | Version-pinned SEC filings, global character-offset highlighting, SHA-256 span verification, duplicate/restatement detection, and amendment chains (`10-Q` → `10-Q/A`). |
+| <http://localhost:3000/desk> | **Earnings Update Desk** (`/desk`) | Interactive **3D Evidence & Calculation Lineage Constellation**, Base/Bull/Bear scenario waterfall & sensitivity charts, point-in-time cutoff scrubber, NRR conflict resolution (`108%` vs `109%`), and guidance approval gates. |
+| <http://localhost:3000/observatory> | **Search Observatory** (`/observatory`) | Interactive **4-Lane RRF Fusion Flow (`k=60`) & Budget Visualizer**, candidate rank/score inspection across Dense/Lexical/Fact/Table lanes, rejection timelines, claim entailment status, and run comparison (`/observatory/compare`). |
+| <http://localhost:3000/extractions> | **Extraction Review Queue** (`/extractions`) | Atomic batch review (`accept`, `edit`, `merge`, `reject`), ontology conflict resolution with ETag preconditions, live SSE run event streams (`/extraction-runs`), and immutable version history (`/approved-extractions`). |
 
 Fixture mode is explicit by design; there is no silent production fallback.
 If `FEL_DEPLOYMENT_MODE` is unset the web app runs in public mode, where
@@ -93,24 +100,28 @@ Three rules shape the design:
    corrupt evidence, and incomplete configuration fail closed rather than
    returning plausible-looking results.
 
+![End-to-End Epistemic Lineage Pipeline](./docs/architecture/assets/evidence-to-model-pipeline.svg)
+
 Read the [architecture overview](./docs/architecture/overview.md) for component
-boundaries and the [system design](./docs/architecture/system-design.md) for
-data flow, tenancy, temporal behavior, and failure semantics.
+boundaries, the [system design](./docs/architecture/system-design.md) for
+data flow, tenancy, temporal behavior, and failure semantics, and the
+[visualization roadmap](./docs/architecture/visualization-roadmap.md) for the
+interactive 3D/2D visual architecture.
 For a leadership readout, see the [executive architecture brief](./docs/architecture/executive-brief.md).
 
 ## Repository map
 
 ```text
 apps/api/                    FastAPI routes and database-backed services
-apps/web/                    Next.js reader and Search Observatory
+apps/web/                    Next.js reader, Update Desk (3D/2D viz), Observatory, and Review UI
 workers/                     Job consumer, ingestion pipelines, extraction runtime
 packages/calculation-engine/ Typed model graph and Decimal calculation engine
-packages/contracts/          Versioned JSON Schema/OpenAPI contracts
+packages/contracts/          Versioned JSON Schema/OpenAPI contracts (0.9.0)
 packages/ontology/           SaaS metric ontology, comparability keys, loader
 packages/providers/          Provider protocols and deterministic mocks
 packages/retrieval/          Chunking, retrieval, fusion, traces, and claims
 packages/retrieval-evals/    Retrieval benchmark and evaluation tooling
-db/migrations/               Append-only PostgreSQL migrations
+db/migrations/               Append-only PostgreSQL migrations (0001..0011)
 db/seeds/                    Seed data for local and test databases
 evals/                       Cross-stack fixtures and graders
 infra/                       Railway service definitions
@@ -119,7 +130,7 @@ specs/                       Canonical product/specification packages
 .github/                     CI workflows (ci.yml is the authoritative gate)
 .specify/                    Constitution and Spec Kit memory
 .agents/                     Spec Kit agent skills
-docs/architecture/           System overview and design
+docs/architecture/           System overview, design, visualization roadmap, and SVG diagrams
 docs/decisions/              Architecture decision records
 docs/development/            Local setup and testing guides
 docs/handoff/                Agent work queue and status snapshots
@@ -171,6 +182,7 @@ The implemented API includes:
 - workspace create/list/update with idempotency and optimistic concurrency
 - corpus, span, and version-pinned composite reader endpoints
 - retrieval query, rerun, event, result, and feedback endpoints
+- extraction run, proposal, conflict, review, and approved-version endpoints
 - health and structured error responses
 
 The API has two token verifiers. `FEL_AUTH_MODE=mock` accepts unsigned mock
@@ -217,7 +229,9 @@ public exploit report.
 ## Further reading
 
 - [Architecture overview](./docs/architecture/overview.md)
+- [Executive architecture brief](./docs/architecture/executive-brief.md)
 - [System design](./docs/architecture/system-design.md)
+- [Visualization & 3D interactive design roadmap](./docs/architecture/visualization-roadmap.md)
 - [Local development](./docs/development/local.md)
 - [Testing guide](./docs/development/testing.md)
 - [Extraction worker runbook](./docs/runbooks/extraction-worker.md)
