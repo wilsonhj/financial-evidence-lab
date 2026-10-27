@@ -1,0 +1,164 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1160 580" width="1160" height="580" role="img" aria-labelledby="title-calc-dag desc-calc-dag">
+  <title id="title-calc-dag">Deterministic Decimal Calculation DAG and Four-Way Provenance (M4)</title>
+  <desc id="desc-calc-dag">Diagram of fel_calculation_engine showing the 4-way provenance split (reported, assumption, forecast, derived), 9 frozen node kinds, Jacobi SCC fixed-point iteration, and single-edge quantization.</desc>
+
+  <defs>
+    <marker id="arrow-dag" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#79c0ff" />
+    </marker>
+    <marker id="arrow-override" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#f78166" />
+    </marker>
+    <marker id="arrow-cycle" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#d2a8ff" />
+    </marker>
+    <linearGradient id="calc-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0b1220" />
+      <stop offset="100%" stop-color="#111a2e" />
+    </linearGradient>
+  </defs>
+
+  <!-- Canvas -->
+  <g id="layer-background">
+    <rect x="0" y="0" width="1160" height="580" rx="16" fill="url(#calc-bg)" stroke="#26354d" stroke-width="2" />
+    <text x="32" y="40" fill="#f0f6fc" font-family="Inter, -apple-system, sans-serif" font-size="20" font-weight="700">M4 Calculation Engine (`fel_calculation_engine`) &#8212; 9 Node Kinds &amp; Provenance DAG</text>
+    <text x="32" y="62" fill="#8b949e" font-family="Inter, -apple-system, sans-serif" font-size="13">34-digit IEEE Decimal (`ROUND_HALF_EVEN`) &#8226; Closed unit algebra &#8226; `fel-formula/v1` ASTs &#8226; Jacobi SCC fixed-point cycles</text>
+  </g>
+
+  <!-- Column 1: Leaf Nodes (Constitution II Four-Way Provenance Leaves) -->
+  <g id="col-leaf-inputs">
+    <rect x="28" y="86" width="276" height="462" rx="12" fill="#131d31" stroke="#388bfd" stroke-width="1.5" stroke-dasharray="6 4" />
+    <text x="44" y="112" fill="#79c0ff" font-family="Inter, -apple-system, sans-serif" font-size="12" font-weight="700">1. TEMPORAL LEAF NODES (`as_of &lt;= cutoff`)</text>
+
+    <!-- Node 1: SourceFactNode -->
+    <g id="node-source-fact">
+      <rect x="44" y="128" width="244" height="88" rx="8" fill="#162925" stroke="#3fb950" stroke-width="1.5" />
+      <text x="58" y="150" fill="#56d364" font-family="Inter, -apple-system, sans-serif" font-size="12.5" font-weight="700">1. `SourceFactNode` (Reported)</text>
+      <text x="58" y="168" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="11">Immutable filing / approved fact</text>
+      <text x="58" y="185" fill="#8b949e" font-family="'JetBrains Mono', monospace" font-size="10">Lineage: source_span_id (+ fact_id)</text>
+      <text x="58" y="202" fill="#56d364" font-family="'JetBrains Mono', monospace" font-size="10">Cannot be overridden by scenarios</text>
+    </g>
+
+    <!-- Node 2: AnalystAssumptionNode -->
+    <g id="node-analyst-assumption">
+      <rect x="44" y="232" width="244" height="84" rx="8" fill="#1b263b" stroke="#58a6ff" stroke-width="1.5" />
+      <text x="58" y="254" fill="#79c0ff" font-family="Inter, -apple-system, sans-serif" font-size="12.5" font-weight="700">2. `AnalystAssumptionNode`</text>
+      <text x="58" y="272" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="11">User-supplied input (no default)</text>
+      <text x="58" y="289" fill="#8b949e" font-family="'JetBrains Mono', monospace" font-size="10">Lineage: assumption_id</text>
+      <text x="58" y="305" fill="#79c0ff" font-family="'JetBrains Mono', monospace" font-size="10">Overridable by ScenarioOverrideNode</text>
+    </g>
+
+    <!-- Node 3: ScenarioOverrideNode -->
+    <g id="node-scenario-override">
+      <rect x="44" y="332" width="244" height="88" rx="8" fill="#2b1d28" stroke="#f78166" stroke-width="1.5" />
+      <text x="58" y="354" fill="#ffa198" font-family="Inter, -apple-system, sans-serif" font-size="12.5" font-weight="700">6. `ScenarioOverrideNode`</text>
+      <text x="58" y="372" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="11">Sparse Base / Bull / Bear shadow</text>
+      <text x="58" y="389" fill="#8b949e" font-family="'JetBrains Mono', monospace" font-size="10">Re-points downstream consumers</text>
+      <text x="58" y="406" fill="#ffa198" font-family="'JetBrains Mono', monospace" font-size="10">Targets assumptions &amp; drivers only</text>
+    </g>
+
+    <!-- Node 4: ForecastModelOutputNode -->
+    <g id="node-forecast-output">
+      <rect x="44" y="436" width="244" height="94" rx="8" fill="#211f38" stroke="#a371f7" stroke-width="1.5" />
+      <text x="58" y="458" fill="#d2a8ff" font-family="Inter, -apple-system, sans-serif" font-size="12.5" font-weight="700">7. `ForecastModelOutputNode`</text>
+      <text x="58" y="476" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="11">Statistical / ML forecast leaf</text>
+      <text x="58" y="493" fill="#8b949e" font-family="'JetBrains Mono', monospace" font-size="10">Lineage: forecast_run_id</text>
+      <text x="58" y="510" fill="#d2a8ff" font-family="'JetBrains Mono', monospace" font-size="10">Requires dataset_cutoff &lt;= cutoff</text>
+    </g>
+  </g>
+
+  <!-- Column 2: Derived Calculation Core -->
+  <g id="col-derived-core">
+    <rect x="336" y="86" width="484" height="462" rx="12" fill="#131d31" stroke="#d29922" stroke-width="1.5" stroke-dasharray="6 4" />
+    <text x="352" y="112" fill="#e3b341" font-family="Inter, -apple-system, sans-serif" font-size="12" font-weight="700">2. DERIVED DAG &amp; OPT-IN ITERATION (`available_at = max(parents)`)</text>
+
+    <!-- OperationalDriverNode -->
+    <g id="node-driver">
+      <rect x="356" y="132" width="444" height="68" rx="8" fill="#1b263b" stroke="#e3b341" stroke-width="1.5" />
+      <text x="372" y="154" fill="#f0f6fc" font-family="Inter, -apple-system, sans-serif" font-size="13" font-weight="700">3. `OperationalDriverNode` (Derived)</text>
+      <text x="372" y="172" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="11">Propagates a seed assumption or fact with matching unit &amp; period; eligible for scenario override</text>
+      <text x="372" y="188" fill="#8b949e" font-family="'JetBrains Mono', monospace" font-size="10">Lineage: derived_from = (seed_result_id,)</text>
+    </g>
+
+    <!-- FormulaNode & ExpressionFormulaNode -->
+    <g id="node-formula">
+      <rect x="356" y="216" width="444" height="106" rx="8" fill="#1b263b" stroke="#58a6ff" stroke-width="1.5" />
+      <text x="372" y="238" fill="#f0f6fc" font-family="Inter, -apple-system, sans-serif" font-size="13" font-weight="700">4. `FormulaNode` &amp; `ExpressionFormulaNode` (`fel-formula/v1`)</text>
+      <text x="372" y="258" fill="#79c0ff" font-family="'JetBrains Mono', monospace" font-size="11">expression = "([principal] + [interest]) * [rate]"</text>
+      <text x="372" y="276" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="11">&#8226; Closed unit algebra (`currency * ratio &#8594; currency`, `currency / count &#8594; currency`)</text>
+      <text x="372" y="294" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="11">&#8226; Full 34-digit Decimal precision retained node-to-node (zero intermediate rounding)</text>
+      <text x="372" y="311" fill="#8b949e" font-family="Inter, -apple-system, sans-serif" font-size="10.5">&#8226; Bounded AST (max 512 nodes, depth 64); rejects executable code, calls, or floats</text>
+    </g>
+
+    <!-- Jacobi Iteration Group Box -->
+    <g id="node-iteration-group">
+      <rect x="356" y="338" width="444" height="96" rx="8" fill="#231c38" stroke="#bc8cff" stroke-width="1.5" />
+      <text x="372" y="360" fill="#d2a8ff" font-family="Inter, -apple-system, sans-serif" font-size="13" font-weight="700">Explicit Exact-SCC `IterationGroup` (Jacobi Fixed-Point Solver)</text>
+      <text x="372" y="378" fill="#c9d1d9" font-family="'JetBrains Mono', monospace" font-size="10.5">|new - old| &lt;= abs_tol + rel_tol * max(|new|, |old|)</text>
+      <text x="372" y="396" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="11">&#8226; Undeclared cycles fail closed (`CYCLE_DETECTED`); declared SCCs require external seed nodes</text>
+      <text x="372" y="414" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="11">&#8226; Non-convergence within `max_iterations` (1..1000) halts before any downstream output runs</text>
+    </g>
+
+    <!-- AggregationNode -->
+    <g id="node-aggregation">
+      <rect x="356" y="450" width="444" height="80" rx="8" fill="#1b263b" stroke="#e3b341" stroke-width="1.5" />
+      <text x="372" y="472" fill="#f0f6fc" font-family="Inter, -apple-system, sans-serif" font-size="13" font-weight="700">5. `AggregationNode` (`sum` | `rollup_year`)</text>
+      <text x="372" y="490" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="11">&#8226; `sum`: combines same-period segments with identical currency/unit</text>
+      <text x="372" y="508" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="11">&#8226; `rollup_year`: requires exact `Q1, Q2, Q3, Q4` of target `FiscalYear`</text>
+    </g>
+  </g>
+
+  <!-- Column 3: Terminal Checks & Reported Outputs -->
+  <g id="col-terminal-outputs">
+    <rect x="852" y="86" width="280" height="462" rx="12" fill="#131d31" stroke="#3fb950" stroke-width="1.5" stroke-dasharray="6 4" />
+    <text x="868" y="112" fill="#56d364" font-family="Inter, -apple-system, sans-serif" font-size="12" font-weight="700">3. VALIDATION &amp; REPORTED OUTPUTS</text>
+
+    <!-- ValidationCheckNode -->
+    <g id="node-validation-check">
+      <rect x="868" y="132" width="248" height="122" rx="8" fill="#1b2838" stroke="#58a6ff" stroke-width="1.5" />
+      <text x="882" y="154" fill="#79c0ff" font-family="Inter, -apple-system, sans-serif" font-size="13" font-weight="700">8. `ValidationCheckNode`</text>
+      <text x="882" y="174" fill="#c9d1d9" font-family="'JetBrains Mono', monospace" font-size="10.5">equals | non_negative |</text>
+      <text x="882" y="190" fill="#c9d1d9" font-family="'JetBrains Mono', monospace" font-size="10.5">less_or_equal | greater_or_equal</text>
+      <text x="882" y="210" fill="#8b949e" font-family="Inter, -apple-system, sans-serif" font-size="11">Evaluates balance-sheet &amp; model</text>
+      <text x="882" y="226" fill="#8b949e" font-family="Inter, -apple-system, sans-serif" font-size="11">invariants within explicit tolerance;</text>
+      <text x="882" y="242" fill="#8b949e" font-family="Inter, -apple-system, sans-serif" font-size="11">recorded in `failed_checks`</text>
+    </g>
+
+    <!-- ReportedFinancialOutputNode -->
+    <g id="node-reported-output">
+      <rect x="868" y="274" width="248" height="132" rx="8" fill="#162925" stroke="#3fb950" stroke-width="1.8" />
+      <text x="882" y="296" fill="#56d364" font-family="Inter, -apple-system, sans-serif" font-size="13" font-weight="700">9. `ReportedFinancialOutputNode`</text>
+      <text x="882" y="316" fill="#f0f6fc" font-family="Inter, -apple-system, sans-serif" font-size="11.5" font-weight="600">Single-Edge Quantization Boundary</text>
+      <text x="882" y="336" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="11">&#8226; Quantizes once at the reporting edge</text>
+      <text x="882" y="352" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="11">&#8226; ISO 4217 minor units (USD=2, JPY=0,</text>
+      <text x="882" y="368" fill="#c9d1d9" font-family="Inter, -apple-system, sans-serif" font-size="11">  KWD=3) or explicit `quantum`</text>
+      <text x="882" y="388" fill="#56d364" font-family="'JetBrains Mono', monospace" font-size="10">Rounding never compounds!</text>
+    </g>
+
+    <!-- Snapshot & Result Identity -->
+    <g id="node-snapshot-hash">
+      <rect x="868" y="424" width="248" height="106" rx="8" fill="#1a2234" stroke="#a371f7" stroke-width="1.5" />
+      <text x="882" y="446" fill="#d2a8ff" font-family="Inter, -apple-system, sans-serif" font-size="12.5" font-weight="700">Cryptographic Result Identity</text>
+      <text x="882" y="466" fill="#c9d1d9" font-family="'JetBrains Mono', monospace" font-size="10">snapshot_id = sha256(canonical)</text>
+      <text x="882" y="482" fill="#c9d1d9" font-family="'JetBrains Mono', monospace" font-size="10">result_id = sha256(cutoff+inputs)</text>
+      <text x="882" y="502" fill="#8b949e" font-family="Inter, -apple-system, sans-serif" font-size="10.5">Unchanged subgraphs keep byte-</text>
+      <text x="882" y="516" fill="#8b949e" font-family="Inter, -apple-system, sans-serif" font-size="10.5">identical result IDs across scenarios</text>
+    </g>
+  </g>
+
+  <!-- DAG Connectors -->
+  <g id="layer-dag-arrows" fill="none" stroke-width="2">
+    <path d="M 288 172 L 352 248" stroke="#79c0ff" marker-end="url(#arrow-dag)" />
+    <path d="M 288 268 L 352 166" stroke="#79c0ff" marker-end="url(#arrow-dag)" />
+    <path d="M 288 372 L 352 184" stroke="#f78166" stroke-dasharray="5 3" marker-end="url(#arrow-override)" />
+    <path d="M 288 476 L 352 486" stroke="#79c0ff" marker-end="url(#arrow-dag)" />
+
+    <path d="M 578 200 L 578 212" stroke="#79c0ff" marker-end="url(#arrow-dag)" />
+    <path d="M 578 322 L 578 334" stroke="#d2a8ff" marker-end="url(#arrow-cycle)" />
+    <path d="M 578 434 L 578 446" stroke="#79c0ff" marker-end="url(#arrow-dag)" />
+
+    <path d="M 800 264 L 864 196" stroke="#79c0ff" marker-end="url(#arrow-dag)" />
+    <path d="M 800 284 L 864 334" stroke="#79c0ff" marker-end="url(#arrow-dag)" />
+    <path d="M 800 490 L 864 360" stroke="#79c0ff" marker-end="url(#arrow-dag)" />
+  </g>
+</svg>

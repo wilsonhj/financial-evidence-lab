@@ -35,6 +35,7 @@ GitHub. Terms are defined in the [glossary](glossary.md).
 | [Architecture overview](architecture/overview.md) | Components, layers, trust boundaries, and invariants present on `main` | **core** |
 | [Executive architecture brief](architecture/executive-brief.md) | Leadership decision brief: system blueprint, readiness, and risks at a pinned code baseline | **supporting** |
 | [System design](architecture/system-design.md) | Tenancy, temporal model, ingestion, retrieval, extraction, and failure semantics | **core** |
+| [Visualization roadmap](architecture/visualization-roadmap.md) | Interactive 3D/2D financial visualizations and spatial UX architecture | supporting |
 
 ## Development
 
