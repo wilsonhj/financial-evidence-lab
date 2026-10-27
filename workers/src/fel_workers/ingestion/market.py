@@ -198,19 +198,32 @@ class AlphaVantageMarketDataProvider:
                     "(FOR-005 fail closed)"
                 )
             try:
-                bars.append(
-                    MarketBar(
-                        day=day,
-                        adjusted_close=Decimal(str(fields[_FIELD_ADJUSTED_CLOSE])),
-                        volume=int(str(fields[_FIELD_VOLUME])),
-                        dividend=Decimal(str(fields[_FIELD_DIVIDEND])),
-                        split_factor=Decimal(str(fields[_FIELD_SPLIT])),
-                    )
-                )
+                adjusted_close = Decimal(str(fields[_FIELD_ADJUSTED_CLOSE]))
+                dividend = Decimal(str(fields[_FIELD_DIVIDEND]))
+                split_factor = Decimal(str(fields[_FIELD_SPLIT]))
+                volume = int(str(fields[_FIELD_VOLUME]))
             except (InvalidOperation, ValueError) as exc:
                 raise MarketDataError(
                     f"Alpha Vantage bar {ticker!r}/{day_text} has unparseable values"
                 ) from exc
+            for label, magnitude in (
+                ("adjusted close", adjusted_close),
+                ("dividend", dividend),
+                ("split factor", split_factor),
+            ):
+                if not magnitude.is_finite():
+                    raise MarketDataError(
+                        f"Alpha Vantage bar {ticker!r}/{day_text} has a non-finite {label}"
+                    )
+            bars.append(
+                MarketBar(
+                    day=day,
+                    adjusted_close=adjusted_close,
+                    volume=volume,
+                    dividend=dividend,
+                    split_factor=split_factor,
+                )
+            )
         bars.sort(key=lambda bar: bar.day)
         return bars, receipt
 
@@ -244,9 +257,18 @@ def assemble_receipted_forecast_features(
             bars, receipt = provider.daily_adjusted_with_receipt(ticker, start=start, end=end)
         else:
             bars = provider.daily_adjusted(ticker, start=start, end=end)
-    except (ValueError, MarketDataError) as exc:
+    except MarketDataError as exc:
         raise FeatureAssemblyError(
-            f"FOR-005 fail closed for {ticker!r}: required adjustments are " f"unavailable ({exc})"
+            f"FOR-005 fail closed for {ticker!r}: required adjustments are unavailable ({exc})"
+        ) from exc
+    except ValueError as exc:
+        # The mock's NOADJ sentinel raises ValueError. A receipted provider's
+        # ValueError is a caller bug (for example a naive receipt clock), not
+        # missing adjustments, so it must not be rewritten as FOR-005.
+        if isinstance(provider, ReceiptedMarketDataProvider):
+            raise
+        raise FeatureAssemblyError(
+            f"FOR-005 fail closed for {ticker!r}: required adjustments are unavailable ({exc})"
         ) from exc
     return _validated_feature_rows(ticker, bars), receipt
 
@@ -264,20 +286,32 @@ def _validated_feature_rows(ticker: str, bars: list[MarketBar]) -> list[Forecast
             raise FeatureAssemblyError(
                 f"FOR-005 fail closed for {ticker!r}: duplicate bar for {bar.day}"
             )
-        if not isinstance(bar.adjusted_close, Decimal) or bar.adjusted_close <= 0:
+        if (
+            not isinstance(bar.adjusted_close, Decimal)
+            or not bar.adjusted_close.is_finite()
+            or bar.adjusted_close <= 0
+        ):
             raise FeatureAssemblyError(
                 f"FOR-005 fail closed for {ticker!r}/{bar.day}: adjusted close "
-                "is missing or non-positive"
+                "is missing, non-finite, or non-positive"
             )
-        if not isinstance(bar.dividend, Decimal) or bar.dividend < 0:
+        if (
+            not isinstance(bar.dividend, Decimal)
+            or not bar.dividend.is_finite()
+            or bar.dividend < 0
+        ):
             raise FeatureAssemblyError(
                 f"FOR-005 fail closed for {ticker!r}/{bar.day}: dividend "
-                "adjustment is missing or negative"
+                "adjustment is missing, non-finite, or negative"
             )
-        if not isinstance(bar.split_factor, Decimal) or bar.split_factor <= 0:
+        if (
+            not isinstance(bar.split_factor, Decimal)
+            or not bar.split_factor.is_finite()
+            or bar.split_factor <= 0
+        ):
             raise FeatureAssemblyError(
                 f"FOR-005 fail closed for {ticker!r}/{bar.day}: split factor "
-                "is missing or non-positive"
+                "is missing, non-finite, or non-positive"
             )
         seen.add(bar.day)
         rows.append(bar)

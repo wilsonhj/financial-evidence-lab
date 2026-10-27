@@ -38,6 +38,7 @@ Adapters may add the clocks the source itself reports (ADR-0031) with
 from __future__ import annotations
 
 import hashlib
+import re
 import time
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, replace
@@ -127,12 +128,17 @@ class RetrievalReceipt:
         return replace(self, source_clocks=clocks)
 
 
-def redact_url(url: httpx.URL, secret_params: frozenset[str]) -> str:
-    """``url`` with the values of ``secret_params`` (case-insensitive) redacted."""
-    if not secret_params or not url.query:
+def redact_url(url: httpx.URL, secret_params: Iterable[str]) -> str:
+    """``url`` with the values of ``secret_params`` (case-insensitive) redacted.
+
+    Matching lowercases both the query name and each declared secret name, so
+    a caller that passes ``API_KEY`` still redacts ``api_key``.
+    """
+    lowered = frozenset(name.lower() for name in secret_params)
+    if not lowered or not url.query:
         return str(url)
     params = [
-        (name, REDACTED if name.lower() in secret_params else value)
+        (name, REDACTED if name.lower() in lowered else value)
         for name, value in url.params.multi_items()
     ]
     return str(url.copy_with(params=params))
@@ -221,10 +227,62 @@ class ThrottledRetryingClient:
             self._sleep(wait)
         self._last_request_at = self._monotonic()
 
-    def _open(self, url: str, params: Mapping[str, str] | None, started: float) -> httpx.Response:
+    def _diagnostic_url(self, url: str, params: Mapping[str, str] | None) -> str:
+        """The request URL with secret query values redacted, for errors and receipts."""
+        return redact_url(
+            self._client.build_request("GET", url, params=params).url,
+            self._secret_query_params,
+        )
+
+    def _secret_values(self, url: str, params: Mapping[str, str] | None) -> tuple[str, ...]:
+        """Secret query values from ``url`` and ``params``, longest first.
+
+        Longest first keeps a shorter secret from cutting through a longer one
+        that contains it. Empty values are skipped so they cannot blank the text.
+        """
+        candidates: list[tuple[str, str]] = []
+        if params is not None:
+            candidates.extend(params.items())
+        candidates.extend(httpx.URL(url).params.multi_items())
+        values = {
+            value
+            for name, value in candidates
+            if name.lower() in self._secret_query_params and value
+        }
+        return tuple(sorted(values, key=len, reverse=True))
+
+    def _scrub(self, text: str, secrets: tuple[str, ...]) -> str:
+        """Remove secret query values, including ones that appear only in an error string.
+
+        Known values are replaced first. A later hop can also carry a secret under
+        a declared name whose value this client did not send, so any
+        ``name=value`` for a declared secret name is redacted too.
+        """
+        redacted = text
+        for secret in secrets:
+            redacted = redacted.replace(secret, REDACTED)
+        if not self._secret_query_params:
+            return redacted
+
+        def replace_named(match: re.Match[str]) -> str:
+            name = match.group(2)
+            if name.lower() not in self._secret_query_params:
+                return match.group(0)
+            return f"{match.group(1)}{name}={REDACTED}"
+
+        return re.sub(r"([?&])([^&=\s]+)=([^&#\s]*)", replace_named, redacted)
+
+    def _open(
+        self,
+        url: str,
+        params: Mapping[str, str] | None,
+        started: float,
+        diagnostic_url: str,
+    ) -> httpx.Response:
         """Send the GET, following redirects if enabled; the result is unread.
 
-        The caller must close the returned response.
+        The caller must close the returned response. ``diagnostic_url`` is the
+        redacted URL used in errors, so a secret in the query never reaches them.
         """
         request = self._client.build_request("GET", url, params=params)
         for _ in range(MAX_REDIRECTS + 1):
@@ -236,9 +294,11 @@ class ThrottledRetryingClient:
             if self._monotonic() - started > self._deadline_seconds:
                 raise _DeadlineExceeded
             request = next_request
-        raise HttpRequestError(f"GET {url} was redirected more than {MAX_REDIRECTS} times")
+        raise HttpRequestError(
+            f"GET {diagnostic_url} was redirected more than {MAX_REDIRECTS} times"
+        )
 
-    def _read_bounded(self, response: httpx.Response, url: str, started: float) -> bytes:
+    def _read_bounded(self, response: httpx.Response, diagnostic_url: str, started: float) -> bytes:
         declared = response.headers.get("content-length")
         if (
             "content-encoding" not in response.headers
@@ -247,7 +307,7 @@ class ThrottledRetryingClient:
             and int(declared) > self._max_response_bytes
         ):
             raise HttpRequestError(
-                f"GET {url} declared {declared} bytes, over the "
+                f"GET {diagnostic_url} declared {declared} bytes, over the "
                 f"{self._max_response_bytes}-byte response limit"
             )
         body = bytearray()
@@ -256,7 +316,8 @@ class ThrottledRetryingClient:
                 raise _DeadlineExceeded
             if len(body) + len(chunk) > self._max_response_bytes:
                 raise HttpRequestError(
-                    f"GET {url} exceeded the {self._max_response_bytes}-byte response limit"
+                    f"GET {diagnostic_url} exceeded the "
+                    f"{self._max_response_bytes}-byte response limit"
                 )
             body.extend(chunk)
         return bytes(body)
@@ -273,6 +334,8 @@ class ThrottledRetryingClient:
         self, url: str, *, params: Mapping[str, str] | None = None
     ) -> tuple[httpx.Response, RetrievalReceipt]:
         """:meth:`get`, plus the :class:`RetrievalReceipt` for its body."""
+        diagnostic_url = self._diagnostic_url(url, params)
+        secrets = self._secret_values(url, params)
         last_error = "unknown error"
         for attempt in range(self._max_retries + 1):
             if attempt > 0:
@@ -280,28 +343,25 @@ class ThrottledRetryingClient:
             self._throttle()
             started = self._monotonic()
             try:
-                response = self._open(url, params, started)
+                response = self._open(url, params, started, diagnostic_url)
                 try:
                     status = response.status_code
                     if status in RETRYABLE_STATUS:
                         last_error = f"retryable status {status}"
                         continue
                     if status >= 400:
-                        raise HttpRequestError(f"GET {url} failed with status {status}")
+                        raise HttpRequestError(f"GET {diagnostic_url} failed with status {status}")
                     if response.is_redirect:
                         raise HttpRequestError(
-                            f"GET {url} returned redirect status {status}; "
+                            f"GET {diagnostic_url} returned redirect status {status}; "
                             "redirects are not followed by this client"
                         )
-                    body = self._read_bounded(response, url, started)
+                    body = self._read_bounded(response, diagnostic_url, started)
                     retrieved_at = self._now()
                     if retrieved_at.tzinfo is None:
                         raise ValueError("the receipt clock must return timezone-aware times")
                     receipt = RetrievalReceipt(
-                        source_url=redact_url(
-                            self._client.build_request("GET", url, params=params).url,
-                            self._secret_query_params,
-                        ),
+                        source_url=diagnostic_url,
                         final_url=redact_url(response.request.url, self._secret_query_params),
                         retrieved_at=retrieved_at.astimezone(UTC),
                         status_code=status,
@@ -324,11 +384,11 @@ class ThrottledRetryingClient:
                 finally:
                     response.close()
             except httpx.TransportError as exc:
-                last_error = f"transport error: {exc}"
+                last_error = f"transport error: {self._scrub(str(exc), secrets)}"
                 continue
             except _DeadlineExceeded:
                 last_error = f"response exceeded the {self._deadline_seconds}s deadline"
                 continue
         raise HttpRequestError(
-            f"GET {url} failed after {self._max_retries + 1} attempts ({last_error})"
+            f"GET {diagnostic_url} failed after {self._max_retries + 1} attempts ({last_error})"
         )

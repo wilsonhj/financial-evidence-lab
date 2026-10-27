@@ -11,7 +11,7 @@ import httpx
 import pytest
 
 from fel_providers.mocks import MockFredClient
-from fel_workers.http import SourceClock
+from fel_workers.http import RetrievalReceipt, SourceClock
 from fel_workers.ingestion.fred import (
     FredIngestionError,
     GapReportingFredClient,
@@ -270,6 +270,7 @@ def test_no_gaps_reported_is_distinct_from_gaps_not_knowable() -> None:
         ("2026-01-01,310.5", "malformed"),
         ({"date": "2026-01-01", "value": "NaN"}, "not a finite number"),
         ({"date": "2026-01-01", "value": "Infinity"}, "not a finite number"),
+        ({"date": "2026-01-01", "value": "-Infinity"}, "not a finite number"),
         ({"date": "not-a-date", "value": "310.5"}, "unparseable"),
     ],
 )
@@ -322,3 +323,57 @@ def test_fred_response_without_clocks_reports_none_found() -> None:
     client = _gap_client([{"date": "2026-01-01", "value": "310.5"}])
     fetch = client.fetch_vintage("CPIAUCSL", as_of=_GAP_AS_OF)
     assert fetch.receipt.source_clocks == ()
+
+
+def test_series_vintage_with_receipt_matches_series_vintage() -> None:
+    """The receipted method is the same parse as series_vintage, plus the receipt."""
+    body = json.dumps({"observations": [{"date": "2026-01-01", "value": "310.1"}]}).encode()
+    client = LiveFredClient(
+        "fred-key-not-a-secret",
+        transport=httpx.MockTransport(lambda r: httpx.Response(200, content=body)),
+        now=lambda: datetime(2026, 3, 16, tzinfo=UTC),
+    )
+    as_of = datetime(2026, 3, 15, tzinfo=UTC)
+    points = client.series_vintage("CPIAUCSL", as_of=as_of)
+    with_receipt, receipt = client.series_vintage_with_receipt("CPIAUCSL", as_of=as_of)
+    assert with_receipt == points == [(date(2026, 1, 1), Decimal("310.1"))]
+    assert receipt.content_sha256 == f"sha256:{hashlib.sha256(body).hexdigest()}"
+    assert receipt.source_clocks == ()
+
+
+def test_receipt_only_client_attaches_receipt_and_leaves_gaps_unknown() -> None:
+    """ReceiptedFredClient without GapReportingFredClient is the middle branch:
+    the receipt is kept, and missing stays None because gaps were not reported."""
+    fetched_at = datetime(2026, 3, 16, tzinfo=UTC)
+    receipt = RetrievalReceipt(
+        source_url="https://api.example.test/fred?api_key=REDACTED",
+        final_url="https://api.example.test/fred?api_key=REDACTED",
+        retrieved_at=fetched_at,
+        status_code=200,
+        content_type="application/json",
+        byte_length=12,
+        content_sha256="sha256:" + "ab" * 32,
+        attempts=1,
+    )
+
+    class ReceiptOnlyFred:
+        def series_vintage(self, series_id: str, *, as_of: datetime) -> list[tuple[date, Decimal]]:
+            return [(date(2026, 2, 1), Decimal("1.25")), (date(2026, 1, 1), Decimal("1.00"))]
+
+        def series_vintage_with_receipt(
+            self, series_id: str, *, as_of: datetime
+        ) -> tuple[list[tuple[date, Decimal]], RetrievalReceipt]:
+            return self.series_vintage(series_id, as_of=as_of), receipt
+
+    client = ReceiptOnlyFred()
+    assert isinstance(client, ReceiptedFredClient)
+    assert not isinstance(client, GapReportingFredClient)
+    record = ingest_fred_vintage_record(client, "CPIAUCSL", as_of=_GAP_AS_OF)
+    assert record.missing is None
+    assert [item.observed_on for item in record.observations] == [
+        date(2026, 1, 1),
+        date(2026, 2, 1),
+    ]
+    assert all(item.receipt is receipt for item in record.observations)
+    listed = ingest_fred_vintage(client, "CPIAUCSL", as_of=_GAP_AS_OF)
+    assert listed == list(record.observations)

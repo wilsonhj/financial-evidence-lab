@@ -6,7 +6,7 @@ from __future__ import annotations
 import hashlib
 import json
 import pathlib
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 
 import httpx
@@ -238,6 +238,57 @@ def test_receipted_assembly_with_mock_has_no_receipt_and_still_fails_closed() ->
         assemble_receipted_forecast_features(
             MockMarketDataProvider(), "NOADJ", start=START, end=END
         )
+
+
+@pytest.mark.parametrize(
+    ("field", "raw", "label"),
+    [
+        ("5. adjusted close", "NaN", "adjusted close"),
+        ("5. adjusted close", "Infinity", "adjusted close"),
+        ("5. adjusted close", "-Infinity", "adjusted close"),
+        ("7. dividend amount", "NaN", "dividend"),
+        ("8. split coefficient", "Infinity", "split factor"),
+    ],
+)
+def test_non_finite_bar_fields_fail_closed(field: str, raw: str, label: str) -> None:
+    payload = json.loads(fixture_bytes("alpha_vantage_daily_adjusted.json"))
+    payload["Time Series (Daily)"]["2026-07-09"][field] = raw
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=payload)
+
+    with pytest.raises(MarketDataError, match=f"non-finite {label}"):
+        _provider(handler).daily_adjusted("SYNX", start=START, end=END)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("adjusted_close", Decimal("Infinity")),
+        ("adjusted_close", Decimal("NaN")),
+        ("adjusted_close", Decimal("-Infinity")),
+        ("dividend", Decimal("Infinity")),
+        ("dividend", Decimal("NaN")),
+        ("split_factor", Decimal("Infinity")),
+        ("split_factor", Decimal("NaN")),
+    ],
+)
+def test_feature_assembly_rejects_non_finite_decimals(field: str, value: Decimal) -> None:
+    provider = _DeficientProvider(_bar(**{field: value}))
+    with pytest.raises(FeatureAssemblyError, match="non-finite"):
+        assemble_forecast_features(provider, "SYNX", start=START, end=END)
+
+
+def test_naive_receipt_clock_is_not_reported_as_missing_adjustments() -> None:
+    """A naive receipt clock is a caller bug, not a FOR-005 adjustment failure."""
+    provider = AlphaVantageMarketDataProvider(
+        "test-key-not-a-secret",
+        transport=httpx.MockTransport(_fixture_handler),
+        now=lambda: datetime(2026, 7, 10),
+    )
+    with pytest.raises(ValueError, match="timezone-aware") as caught:
+        assemble_receipted_forecast_features(provider, "SYNX", start=START, end=END)
+    assert "FOR-005" not in str(caught.value)
 
 
 def test_market_receipt_records_meta_data_clocks() -> None:

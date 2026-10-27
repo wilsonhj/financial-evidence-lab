@@ -41,6 +41,7 @@ capture can be fixed now, before any storage depends on them.
    | `byte_length` | The length of the decoded body. |
    | `content_sha256` | The SHA-256 of the decoded body, in the repository-wide `sha256:<hex>` format. This hashes the bytes the parser saw, the same bytes `raw_store` would hash, and not the gzip wire encoding. |
    | `attempts` | How many attempts it took, so retries are visible. |
+   | `source_clocks` | Optional. Added by [ADR-0031](ADR-0031-named-source-clocks.md): the clocks the source reported in this body. `()` means an adapter looked and found none; `None` means nothing source-aware read the body. |
 
 3. **Credentials are never recorded.** Each adapter declares its secret query
    parameters: `api_key` for FRED and `apikey` for Alpha Vantage. Their values are
@@ -85,10 +86,12 @@ capture can be fixed now, before any storage depends on them.
 
 ## Out of scope
 
-- **Explicit FRED missing values.** ALFRED's `"."` placeholder is still
-  dropped. Changing that changes the `FredClient` return type and needs its own
-  ADR.
-- **Named source clocks.** Receipts record retrieval time only; source-reported
-  times such as release time and period coverage are not captured.
+- **Explicit FRED missing values.** Accepted as
+  [ADR-0030](ADR-0030-explicit-fred-missing-values.md). `series_vintage()` still
+  omits gaps. `ingest_fred_vintage_record()` keeps them, and the frozen
+  `FredClient` return type is unchanged.
+- **Named source clocks.** Accepted as
+  [ADR-0031](ADR-0031-named-source-clocks.md). They ride on this receipt's
+  `source_clocks` field. This ADR does not infer freshness from them.
 - **SEC.** Documents are already content-addressed. Adding a retrieval-time
   receipt to `documents` would need a migration.

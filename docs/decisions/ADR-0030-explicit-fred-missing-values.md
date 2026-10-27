@@ -70,8 +70,9 @@ depends on. This was recorded as an ADR candidate in
 
 ## Out of scope
 
-- **Named source clocks.** Recording release times and period coverage from the
-  payload is still an open ADR candidate.
+- **Named source clocks.** Accepted as
+  [ADR-0031](ADR-0031-named-source-clocks.md). Clocks ride on the ADR-0029
+  receipt. This ADR does not infer freshness from them.
 - **Gap semantics beyond the source's own report.** Whether a gap means "not
   yet released" or "discontinued" is not inferred. The record keeps only what
   ALFRED said.

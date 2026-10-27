@@ -18,6 +18,7 @@ from fel_workers.http import (
     base_url_host,
     json_pointer,
     read_source_clocks,
+    redact_url,
 )
 from fel_workers.ingestion.fred import LiveFredClient
 from fel_workers.ingestion.market import AlphaVantageMarketDataProvider
@@ -468,6 +469,97 @@ def test_receipt_time_is_normalized_to_utc_and_naive_clock_is_refused() -> None:
 def test_get_is_unchanged_and_returns_only_the_response() -> None:
     client = _client(lambda r: httpx.Response(200, content=b"ok"), FakeClock())
     assert client.get("https://example.invalid/x").content == b"ok"
+
+
+def test_redact_url_matches_secret_names_case_insensitively() -> None:
+    """Declared names are matched case-insensitively, including a mixed-case set."""
+    url = httpx.URL("https://api.example.test/obs?API_KEY=s3cr3t&series_id=CPI&apikey=other")
+    redacted = redact_url(url, frozenset({"api_key", "APIKEY"}))
+    assert "s3cr3t" not in redacted
+    assert "other" not in redacted
+    assert "API_KEY=REDACTED" in redacted
+    assert "apikey=REDACTED" in redacted
+    assert "series_id=CPI" in redacted
+
+
+def test_status_errors_redact_secrets_embedded_in_the_url() -> None:
+    client = _client(
+        lambda r: httpx.Response(404),
+        FakeClock(),
+        secret_query_params=("API_KEY",),
+        max_retries=0,
+    )
+    with pytest.raises(HttpRequestError, match="status 404") as caught:
+        client.get("https://api.example.test/obs?api_key=s3cr3t&series_id=CPI")
+    message = str(caught.value)
+    assert "s3cr3t" not in message
+    assert "api_key=REDACTED" in message
+
+
+def test_transport_errors_redact_secret_query_values() -> None:
+    secret = "s3cr3t-value"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError(f"boom {request.url}")
+
+    client = _client(
+        handler,
+        FakeClock(),
+        secret_query_params=("api_key",),
+        max_retries=0,
+    )
+    with pytest.raises(HttpRequestError, match="transport error") as caught:
+        client.get("https://api.example.test/obs", params={"series_id": "CPI", "api_key": secret})
+    assert secret not in str(caught.value)
+    assert "REDACTED" in str(caught.value)
+
+
+def test_transport_errors_redact_a_secret_introduced_by_a_redirect() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/old":
+            return httpx.Response(
+                302, headers={"Location": "https://data.sec.gov/new?api_key=other-secret"}
+            )
+        raise httpx.ConnectError(f"boom {request.url}")
+
+    client = _client(
+        handler,
+        FakeClock(),
+        follow_redirects=True,
+        allowed_hosts={"data.sec.gov"},
+        secret_query_params=("api_key",),
+        max_retries=0,
+    )
+    with pytest.raises(HttpRequestError, match="transport error") as caught:
+        client.get("https://data.sec.gov/old")
+    assert "other-secret" not in str(caught.value)
+    assert "api_key=REDACTED" in str(caught.value)
+
+
+def test_receipt_redacts_a_secret_carried_on_the_redirect_target() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/old":
+            return httpx.Response(
+                301, headers={"Location": "https://data.sec.gov/new?api_key=s3cr3t&k=v"}
+            )
+        return httpx.Response(200, content=b"moved")
+
+    clock = FakeClock()
+    client = ThrottledRetryingClient(
+        transport=httpx.MockTransport(handler),
+        follow_redirects=True,
+        allowed_hosts={"data.sec.gov"},
+        secret_query_params=("API_KEY",),
+        sleep=clock.sleep,
+        monotonic=clock.monotonic,
+        now=lambda: _T0,
+    )
+    _response, receipt = client.get_with_receipt(
+        "https://data.sec.gov/old", params={"api_key": "s3cr3t"}
+    )
+    assert "s3cr3t" not in repr(receipt)
+    assert "api_key=REDACTED" in receipt.source_url
+    assert "api_key=REDACTED" in receipt.final_url
 
 
 # --- Named source clocks (ADR-0031) ---------------------------------------
