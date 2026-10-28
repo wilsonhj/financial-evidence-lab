@@ -4,6 +4,8 @@
 **Date:** 2026-08-06
 **Amendment 1:** 2026-10-27 — refreshes factual premises and citations against `main`
 at `59bbf7e`; changes no decision and ratifies nothing. See the end of this file.
+Corrected 2026-10-28: the commit count, the #135 statement in correction 4, and three
+citations the table had missed.
 
 ## Context
 
@@ -165,7 +167,8 @@ The gaps, verified locally:
 
 ## Amendment 1 — premises and citations refreshed against `main` (2026-10-27)
 
-This ADR was written at `a25bf7c`. `main` has since moved by about seventy commits, and
+This ADR was written at `a25bf7c`. `main` has since moved by 125 first-parent commits (162 in
+all), and
 several statements above no longer hold. **No decision is changed, added or withdrawn, and the
 Status remains Proposed.** This amendment corrects the record so that a reader weighing the
 seven decisions is not weighing stale evidence. Every claim below was re-read from `main`.
@@ -199,12 +202,21 @@ seven decisions is not weighing stale evidence. Every claim below was re-read fr
    | `_boundary` / `_commit_fence` (`workflow.py:334-361`) | `workflow.py:213` / `workflow.py:222` |
    | `STAGE_ORDER` (`types.py:29-42`) | `types.py:55` |
    | `StageRecord.output: Any` (`types.py:114`) | `types.py:140` |
+   | Checkpoint identity (`workflow.py:477-489`) | `extraction_run_steps_success_uniq`, `db/migrations/0004_extraction_core.sql:173-175` |
+   | Terminal event before terminal status (`workflow.py:218-227`) | `workflow.py:122`, repeated at `workflow.py:142`, `164` and `438` |
+   | Principle II (`.specify/memory/constitution.md:18-19`) | `.specify/memory/constitution.md:40-41` |
 
 4. **Decision 5's premise is partly overtaken.** A live extraction event stream now exists
    (`apps/api/app/extraction/routes_events.py`): it resumes from a `Last-Event-ID` cursor and
    polls committed rows. It has no instance epoch, no reset signal and no descriptor/body
-   split, so the decision stands as design guidance for any change to that stream; the
-   replay-only description of retrieval-run events in the Context is unchanged.
+   split, so the decision stands as design guidance for any change to that stream. The
+   Context's statement that the live same-origin SSE proxy is deferred to #135 is out of
+   date: #135 is closed. The proxy is
+   `apps/web/src/app/api/extraction/runs/[runId]/events/route.ts`, which forwards through
+   `requestExtraction` in `apps/web/src/lib/extraction/transport.ts`, and the browser
+   consumer resumes with `Last-Event-ID`. #135 shipped without the instance epoch, reset
+   signal or descriptor/body split, so decision 5 was not met by the implementation that
+   closed it.
 5. **Decision 6's gates have moved unevenly.**
    - (a) Explicit-key OpenAI structured-generation and embeddings adapters merged
      (#328, #329), but the provider decision (#195, ADR-0012) is still Proposed, there is no

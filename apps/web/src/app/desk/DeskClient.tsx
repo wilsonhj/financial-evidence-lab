@@ -511,19 +511,24 @@ function Review(props: {
   );
 }
 
-function ScenarioWaterfallChart({
+// The bars and totals are static fixture geometry: nothing here is computed
+// from the selected retention rate. The NRR step names the selected source and
+// rate only, because the fixed `842.4 - 782.0` residual matches neither 108% nor
+// 109% of ARR and must not be shown as that rate's dollar effect.
+export function nrrStepLabel(decision: ReviewDecision | null): string {
+  if (decision?.sourceId === "call-turn-48") return "NRR 109% · Call";
+  if (decision?.sourceId === "sec-10q-nrr") return "NRR 108% · 10-Q";
+  return "NRR pending";
+}
+
+export function ScenarioWaterfallChart({
   scenario,
   decision,
 }: {
   scenario: string;
   decision: ReviewDecision | null;
 }) {
-  const nrrLabel =
-    decision?.sourceId === "call-turn-48"
-      ? "+$60.4m (109% Call)"
-      : decision?.sourceId === "sec-10q-nrr"
-        ? "+$60.4m (108% 10-Q)"
-        : "+$60.4m (NRR Pending)";
+  const nrrLabel = nrrStepLabel(decision);
   const scenarioDelta: Record<
     string,
     { delta: string; total: string; barHeight: number; color: string }
@@ -545,7 +550,7 @@ function ScenarioWaterfallChart({
     >
       <div className="waterfall-header">
         <div>
-          <p className="eyebrow">Deterministic Decimal Bridge · FY26 → FY27</p>
+          <p className="eyebrow">Illustrative fixture · FY26 → FY27 · not computed</p>
           <h3>Scenario Waterfall &amp; Guidance Corridor</h3>
         </div>
         <span className="waterfall-badge">{scenario} Scenario Active</span>
@@ -554,7 +559,7 @@ function ScenarioWaterfallChart({
         viewBox="0 0 640 210"
         className="waterfall-svg"
         role="img"
-        aria-label={`Waterfall chart showing Q2 ARR $782.0m building to ${active.total} under ${scenario} scenario`}
+        aria-label={`Illustrative fixture waterfall from Q2 ARR $782.0m to the static ${active.total} ${scenario} preview; the steps are not computed`}
       >
         {/* Background grid lines */}
         <line x1="40" y1="30" x2="610" y2="30" stroke="currentColor" strokeOpacity="0.12" />

@@ -176,26 +176,26 @@ export function buildEpistemicGraph(props: {
     {
       id: "sec-10q-nrr",
       label: "10-Q Span · NRR 108%",
-      sublabel: "Page 34 · sha256:9f4b..8a0",
+      sublabel: "Page 34 · fixture span",
       layer: "reported",
       x: -170,
       y: 112,
       z: -60,
       publishedStep: 1,
       publishedAt: "2026-08-14T16:05:00Z",
-      formulaOrHash: "start_char=48120..48192 · sha256=9f4b8a0e",
+      formulaOrHash: "start_char=48120..48192 · fixture, no content hash",
     },
     {
       id: "call-turn-48",
       label: "Call Turn 48 · NRR 109%",
-      sublabel: "Transcript · sha256:c25e..27b",
+      sublabel: "Transcript · fixture turn",
       layer: "reported",
       x: -58,
       y: 112,
       z: 65,
       publishedStep: 2,
       publishedAt: "2026-08-14T17:30:00Z",
-      formulaOrHash: "turn=48 · sha256=c25e27b4",
+      formulaOrHash: "turn=48 · fixture, no content hash",
     },
     {
       id: "sec-10q-guidance",
@@ -207,7 +207,7 @@ export function buildEpistemicGraph(props: {
       z: -45,
       publishedStep: 1,
       publishedAt: "2026-08-14T16:05:00Z",
-      formulaOrHash: "start_char=61004..61118 · sha256=75fad38c",
+      formulaOrHash: "start_char=61004..61118 · fixture, no content hash",
     },
     {
       id: "sec-10q-actuals",
@@ -304,7 +304,7 @@ export function buildEpistemicGraph(props: {
       label: `FY27 Revenue · ${revenueByScenario[scenario] ?? "$842.4m"}`,
       sublabel:
         applied && decisionAdmissible
-          ? "Staged with verified lineage"
+          ? "Staged in this session · fixture schematic"
           : "Preview · awaiting review gates",
       layer: "output",
       x: 12,
@@ -699,7 +699,7 @@ export function EvidenceGraph3D({
     >
       <div className="viz3d-header">
         <div>
-          <p className="eyebrow">Spatial Epistemic Graph · 4-Layer Provenance DAG</p>
+          <p className="eyebrow">Illustrative fixture schematic · 4-Layer Provenance DAG</p>
           <h3>3D Evidence &amp; Calculation Lineage Explorer</h3>
         </div>
         <div className="viz3d-controls" role="group" aria-label="3D camera presets">

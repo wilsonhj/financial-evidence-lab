@@ -272,6 +272,15 @@ def test_no_gaps_reported_is_distinct_from_gaps_not_knowable() -> None:
         ({"date": "2026-01-01", "value": "Infinity"}, "not a finite number"),
         ({"date": "2026-01-01", "value": "-Infinity"}, "not a finite number"),
         ({"date": "not-a-date", "value": "310.5"}, "unparseable"),
+        # fromisoformat() accepts these spellings; ALFRED never sends them.
+        ({"date": 20260101, "value": "310.5"}, "unparseable"),
+        ({"date": "20260101", "value": "310.5"}, "unparseable"),
+        ({"date": "2026-W01-4", "value": "310.5"}, "unparseable"),
+        ({"date": "2026-02-30", "value": "310.5"}, "unparseable"),
+        # A JSON number would pass through float before Decimal.
+        ({"date": "2026-01-01", "value": 12345678901234567.1}, "unparseable"),
+        ({"date": "2026-01-01", "value": 310}, "unparseable"),
+        ({"date": "2026-01-01", "value": None}, "unparseable"),
     ],
 )
 def test_malformed_rows_fail_closed_instead_of_being_skipped(row: object, message: str) -> None:

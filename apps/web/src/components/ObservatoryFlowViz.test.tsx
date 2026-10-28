@@ -24,8 +24,9 @@ vi.mock("react", async (load) => ({
   },
 }));
 
-import { ObservatoryFlowViz } from "./ObservatoryFlowViz";
+import { ObservatoryFlowViz, rejectionSummary } from "./ObservatoryFlowViz";
 import { MOCK_ABSTAINED_TRACE, MOCK_TRACE } from "../lib/observatory/fixtures/synthetic-trace";
+import { partitionCandidates, type RejectedCandidate } from "../lib/observatory/trace-view";
 
 const props = (node: ReactElement) => node.props as Record<string, unknown>;
 
@@ -48,6 +49,33 @@ describe("ObservatoryFlowViz", () => {
     expect(markup).toContain("Gate Rejected");
     expect(markup).toContain("Context budget utilization:");
     expect(markup).toContain("• 1 supported");
+  });
+
+  it("summarizes the rejection codes the trace carries instead of a fixed label", () => {
+    const { rejected } = partitionCandidates(MOCK_TRACE);
+    const codes = rejected.map((item) => item.code);
+    expect(codes).toEqual(["dedupe_near_duplicate", "temporal_after_cutoff", "cross_version"]);
+    const summary = rejectionSummary(rejected);
+    for (const code of codes) expect(summary.full).toContain(code);
+    expect(summary.short).toBe("dedupe, cutoff, version");
+    const markup = renderToStaticMarkup(<ObservatoryFlowViz trace={MOCK_TRACE} />);
+    expect(markup).not.toContain("Future / cross-version");
+    expect(markup).toContain(`Rejection codes: ${summary.full}`);
+    expect(markup).toContain("dedupe, cutoff, version");
+    expect(rejectionSummary([])).toEqual({ short: "none", full: "No candidates rejected" });
+  });
+
+  it("truncates the short rejection summary once more than three codes are present", () => {
+    const rejected = [
+      "temporal_after_cutoff",
+      "cross_version",
+      "dedupe_near_duplicate",
+      "budget_overflow",
+    ].map((code) => ({ code }) as RejectedCandidate);
+    expect(rejectionSummary(rejected)).toEqual({
+      short: "cutoff, version +2 more",
+      full: "temporal_after_cutoff, cross_version, dedupe_near_duplicate, budget_overflow",
+    });
   });
 
   it("renders cleanly for an abstained trace with zero claims", () => {

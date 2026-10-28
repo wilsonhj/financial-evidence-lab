@@ -32,6 +32,9 @@ jobs:
           # it needs every commit back to where the PR left the base branch.
           fetch-depth: 0
 
+      - name: Test changed-path listing
+        run: bash .github/scripts/list-changed-paths.test.sh
+
       - name: Check the label against the changed paths
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
@@ -67,7 +70,7 @@ jobs:
             echo "report success." >&2
             exit 1
           fi
-          changed=$(git diff --name-only "$merge_base" "$HEAD_SHA")
+          changed=$(bash .github/scripts/list-changed-paths.sh "$merge_base" "$HEAD_SHA")
 
           if [ -z "$changed" ]; then
             echo "No changed files; nothing to check."
