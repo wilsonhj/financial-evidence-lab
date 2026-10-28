@@ -43,5 +43,7 @@ Thumbs.db
 tmp/
 *.tmp
 
-# Claude Code session state and agent worktrees (live checkouts - never commit)
-.claude/
+# Claude Code session state and agent worktrees (live checkouts - never commit).
+# Only the shared project settings file is tracked.
+.claude/*
+!.claude/settings.json
