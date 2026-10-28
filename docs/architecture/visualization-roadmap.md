@@ -84,8 +84,7 @@ follow desk UI state, and the output sublabel switches between "Staged in this
 session · fixture schematic" and "Preview · awaiting review gates".
 Coordinates, span offsets, and the dollar figures are still fixture copy, not
 read from a trace or the calculation engine, and no node carries a real
-content hash. No node carries a real content hash, and the view does not read
-the calculation engine or a verified trace.
+content hash.
 
 - **Real-Time 3D Perspective Projection & Camera Orbit:** Drag to orbit in 3D
   (`yaw` / `pitch`), toggle between **3D Orbit**, **Layered DAG**, and
