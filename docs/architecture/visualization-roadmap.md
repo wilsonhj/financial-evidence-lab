@@ -11,7 +11,8 @@
 
 </details>
 
-Source references verified against commit `59bbf7e`.
+Source references verified against commit `59bbf7e`. Fixture-status notes in
+sections 3A–3C checked against `f3e9452`.
 
 This document audits the visual surfaces in Financial Evidence Lab, defines the
 architecture for interactive 2D charts, 3D spatial graphics, and game-like
@@ -76,9 +77,15 @@ out-of-the-box in fixture and HTTP modes:
 Mounted on the **Earnings Update Desk (`/desk`)**, `EvidenceGraph3D` provides an
 interactive, game-like 3D viewport over the CloudMetric Q2 FY26 update workflow.
 
-**Status: illustrative fixture schematic.** Node positions, labels, totals and
-span offsets are static fixture copy. No node carries a real content hash, and
-the view does not read the calculation engine or a verified trace.
+**Status: illustrative fixture schematic.** In
+`apps/web/src/components/EvidenceGraph3D.tsx` the output elevation, the
+scenario label (`ScenarioOverride · ${scenario}`), and the FY27 revenue label
+follow desk UI state, and the output sublabel switches between "Staged in this
+session · fixture schematic" and "Preview · awaiting review gates".
+Coordinates, span offsets, and the dollar figures are still fixture copy, not
+read from a trace or the calculation engine, and no node carries a real
+content hash. No node carries a real content hash, and the view does not read
+the calculation engine or a verified trace.
 
 - **Real-Time 3D Perspective Projection & Camera Orbit:** Drag to orbit in 3D
   (`yaw` / `pitch`), toggle between **3D Orbit**, **Layered DAG**, and
@@ -111,8 +118,10 @@ the view does not read the calculation engine or a verified trace.
 In the Update Desk **Model** view, an interactive SVG **Scenario Waterfall &
 Guidance Corridor** chart visualizes the following.
 
-**Status: illustrative fixture schematic.** The bars and totals are static
-fixture geometry and nothing is computed.
+**Status: illustrative fixture schematic.** Dollar amounts and bar heights are
+fixture constants. `DeskClient.tsx` derives `outputTopY`, `overrideBarY`, and
+`overrideBarHeight` from those heights. No dollar effect is computed from the
+selected retention rate.
 
 - The step-by-step buildup from **Q2 ARR Base (`$782.0m`)** → **Net
   Retention**, labelled with the selected source and rate only (`NRR 108% ·
