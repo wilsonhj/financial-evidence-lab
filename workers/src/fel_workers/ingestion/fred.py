@@ -10,6 +10,7 @@ exactly as it was published at that instant — never today's revisions
 from __future__ import annotations
 
 import os
+import re
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -40,6 +41,10 @@ FRED_SOURCE_CLOCKS: dict[str, tuple[str, ...]] = {
     "observation_end": ("observation_end",),
 }
 _MISSING_VALUE = "."
+# ALFRED sends dates as "YYYY-MM-DD" strings. date.fromisoformat() alone also
+# accepts "20260501" and ISO week dates such as "2026-W18-5", so the shape is
+# checked first.
+_ISO_DAY = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")
 
 # No-lookahead policy (spec 10.3): ALFRED realtime windows are DATE
 # granular, so pinning the window to as_of's own calendar date would
@@ -315,8 +320,19 @@ class LiveFredClient:
                 raise FredIngestionError(
                     f"FRED observation for {series_id!r} is malformed: {item!r}"
                 )
+            raw_day, raw_value = item["date"], item["value"]
+            # Both fields are JSON strings in ALFRED. A JSON number would reach
+            # Decimal through float and lose digits, so non-strings fail closed.
+            if (
+                not isinstance(raw_day, str)
+                or not isinstance(raw_value, str)
+                or _ISO_DAY.fullmatch(raw_day) is None
+            ):
+                raise FredIngestionError(
+                    f"FRED observation for {series_id!r} is unparseable: {item!r}"
+                )
             try:
-                day = date.fromisoformat(str(item["date"]))
+                day = date.fromisoformat(raw_day)
             except ValueError as exc:
                 raise FredIngestionError(
                     f"FRED observation for {series_id!r} is unparseable: {item!r}"
@@ -326,7 +342,7 @@ class LiveFredClient:
                     f"FRED payload for {series_id!r} repeats observation date {day}"
                 )
             seen.add(day)
-            value_text = str(item["value"])
+            value_text = raw_value
             if value_text == _MISSING_VALUE:
                 missing.append(day)
                 continue

@@ -9,7 +9,29 @@ import {
   laneColumns,
   partitionCandidates,
   type Lane,
+  type RejectedCandidate,
 } from "../lib/observatory/trace-view";
+
+const SHORT_REJECTION_LABELS: Record<string, string> = {
+  temporal_after_cutoff: "cutoff",
+  cross_version: "version",
+  dedupe_near_duplicate: "dedupe",
+};
+
+/**
+ * The reason codes behind the rejected candidates, in first-seen order: a short
+ * form that fits the box, and the exact codes for its tooltip.
+ */
+export function rejectionSummary(rejected: RejectedCandidate[]): { short: string; full: string } {
+  const codes = [...new Set(rejected.map((item) => item.code))];
+  if (codes.length === 0) return { short: "none", full: "No candidates rejected" };
+  const labels = codes.map((code) => SHORT_REJECTION_LABELS[code] ?? code);
+  const short =
+    labels.length > 3
+      ? `${labels.slice(0, 2).join(", ")} +${labels.length - 2} more`
+      : labels.join(", ");
+  return { short, full: codes.join(", ") };
+}
 
 function laneColor(lane: Lane): string {
   switch (lane) {
@@ -38,6 +60,7 @@ export function ObservatoryFlowViz({ trace }: { trace: RetrievalTrace }) {
   const [selectedLane, setSelectedLane] = useState<Lane | null>(null);
   const columns = laneColumns(trace);
   const { supported, rejected } = partitionCandidates(trace);
+  const rejectedReasons = rejectionSummary(rejected);
   const claims = claimViews(trace);
 
   const supportedClaims = claims.filter((c) => c.displayStatus === "supported").length;
@@ -228,6 +251,7 @@ export function ObservatoryFlowViz({ trace }: { trace: RetrievalTrace }) {
 
         {/* Center-Right Bottom: Gate-Rejected Candidates */}
         <g data-testid="obs-flow-rejected-box">
+          <title>{`Rejection codes: ${rejectedReasons.full}`}</title>
           <rect
             x="530"
             y="146"
@@ -241,8 +265,14 @@ export function ObservatoryFlowViz({ trace }: { trace: RetrievalTrace }) {
           <text x="544" y="170" fill="#ffa198" fontSize="12" fontWeight="700">
             Gate Rejected ({rejected.length})
           </text>
-          <text x="544" y="188" fill="#c9d1d9" fontSize="10">
-            Future / cross-version
+          <text
+            x="544"
+            y="188"
+            fill="#c9d1d9"
+            fontSize="10"
+            data-testid="obs-flow-rejected-reasons"
+          >
+            {rejectedReasons.short}
           </text>
         </g>
 

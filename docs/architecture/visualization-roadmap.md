@@ -47,7 +47,9 @@ obscure—those guarantees:
 
 1. **Visuals never invent numbers.** Every bar height, 3D node position, or
    scenario delta is derived deterministically from typed `Decimal` strings or
-   verified trace payloads.
+   verified trace payloads. The desk's scenario waterfall and 3D lineage graph
+   (sections 3A and 3B) do not meet this yet: they are illustrative fixture
+   schematics until they are derived from `Decimal` strings or verified traces.
 2. **Spatial depth maps to epistemic provenance.** In 3D space, the Y/Z axis
    represents the **Constitution II Four-Way Provenance Hierarchy**:
    - **Layer 0 (Bedrock):** Immutable SEC Filing Spans & XBRL Facts (`reported`)
@@ -72,7 +74,11 @@ out-of-the-box in fixture and HTTP modes:
 ### A. 3D Evidence & Calculation Lineage Explorer (`apps/web/src/components/EvidenceGraph3D.tsx`)
 
 Mounted on the **Earnings Update Desk (`/desk`)**, `EvidenceGraph3D` provides an
-interactive, game-like 3D viewport over the CloudMetric Q2 FY26 update workflow:
+interactive, game-like 3D viewport over the CloudMetric Q2 FY26 update workflow.
+
+**Status: illustrative fixture schematic.** Node positions, labels, totals and
+span offsets are static fixture copy. No node carries a real content hash, and
+the view does not read the calculation engine or a verified trace.
 
 - **Real-Time 3D Perspective Projection & Camera Orbit:** Drag to orbit in 3D
   (`yaw` / `pitch`), toggle between **3D Orbit**, **Layered DAG**, and
@@ -103,11 +109,17 @@ interactive, game-like 3D viewport over the CloudMetric Q2 FY26 update workflow:
 ### B. Interactive Scenario Waterfall & Guidance Corridor (`apps/web/src/app/desk/DeskClient.tsx`)
 
 In the Update Desk **Model** view, an interactive SVG **Scenario Waterfall &
-Guidance Corridor** chart visualizes:
+Guidance Corridor** chart visualizes the following.
+
+**Status: illustrative fixture schematic.** The bars and totals are static
+fixture geometry and nothing is computed.
 
 - The step-by-step buildup from **Q2 ARR Base (`$782.0m`)** → **Net
-  Retention Expansion (`+$60.4m`)** → **Scenario Override Delta (`Base` / `Bull`
-  / `Bear`)** → **FY27 Projected Revenue (`$823.8m` – `$857.1m`)**.
+  Retention**, labelled with the selected source and rate only (`NRR 108% ·
+  10-Q`, `NRR 109% · Call` or `NRR pending`), because no dollar effect is
+  computed from the rate → **Scenario Override Delta (`Base` / `Bull` /
+  `Bear`)** → **FY27 Projected Revenue (`$823.8m` – `$857.1m`)**, fixture
+  totals.
 - A **Review Gate Readiness HUD** in the Impact Inspector showing progress
   across Conflict Resolution (`C-104`), Revenue Guidance (`C-109-revenue`), and
   Gross Margin Guidance (`C-109-gross-margin`).
@@ -121,9 +133,11 @@ pipeline:
 - **Multi-Lane RRF Flow Diagram (Sankey-style SVG):** Visualizes candidate
   counts and score ribbons flowing from **Dense**, **Lexical**, **Facts**, and
   **Tables** lanes into the **RRF (`k=60`) Fusion Nexus**, splitting into
-  **Supported Set** versus **Gate Rejected** candidates
-  (`temporal_after_cutoff`, `cross_version`), and terminating in **Supported /
-  Flagged Claims**.
+  **Supported Set** versus **Gate Rejected** candidates, and terminating in
+  **Supported / Flagged Claims**. The rejected box summarizes the rejection
+  codes the trace actually carries (in the demo run `temporal_after_cutoff`,
+  `cross_version` and `dedupe_near_duplicate`), with the exact codes in its
+  tooltip.
 - **Interactive Lane Filter:** Clicking any lane filter button highlights its
   Sankey flow ribbon and displays per-lane hit and supported-candidate counts.
 - **Latency Stage Breakdown & Context Budget Bar:** Visualizes per-stage

@@ -143,6 +143,44 @@ describe("buildEpistemicGraph", () => {
   });
 });
 
+describe("fixture copy is not presented as evidence", () => {
+  it("carries no made-up hashes and never says verified lineage", () => {
+    for (const applied of [false, true]) {
+      for (const decision of [null, DECISION_10Q, DECISION_CALL]) {
+        const { nodes } = buildEpistemicGraph({
+          scenario: "Base",
+          source: decision?.sourceId ?? null,
+          decision,
+          approvals: COMPLETED_APPROVALS,
+          applied,
+          cutoffStep: 2,
+        });
+        for (const node of nodes) {
+          const copy = `${node.sublabel} ${node.formulaOrHash}`;
+          expect(copy, node.id).not.toMatch(/sha256/i);
+          expect(copy, node.id).not.toMatch(/verified lineage/i);
+        }
+      }
+    }
+  });
+
+  it("labels the applied, admissible view a fixture schematic in the inspector", () => {
+    const markup = renderToStaticMarkup(
+      <EvidenceGraph3D
+        scenario="Base"
+        source="sec-10q-nrr"
+        decision={DECISION_10Q}
+        approvals={COMPLETED_APPROVALS}
+        applied
+      />,
+    );
+    expect(markup).toContain("Illustrative fixture schematic");
+    expect(markup).toContain("Staged in this session · fixture schematic");
+    expect(markup).not.toContain("sha256=");
+    expect(markup).not.toContain("verified lineage");
+  });
+});
+
 describe("EvidenceGraph3D component", () => {
   it("renders the 3D canvas, camera preset controls, cutoff scrubber, and node inspector", () => {
     const markup = renderToStaticMarkup(

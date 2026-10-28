@@ -67,7 +67,12 @@ jobs:
             echo "report success." >&2
             exit 1
           fi
-          changed=$(git diff --name-only "$merge_base" "$HEAD_SHA")
+          # --no-renames lists a moved file's source path too, so moving a
+          # shared file out of a shared directory still counts as touching it.
+          # -z stops Git from C-quoting non-ASCII paths ("docs/decisions/caf\303\251.md"),
+          # which the anchored patterns below would never match. A path that
+          # itself contains a newline still splits; that case is out of scope.
+          changed=$(git diff --no-renames --name-only -z "$merge_base" "$HEAD_SHA" | tr '\0' '\n')
 
           if [ -z "$changed" ]; then
             echo "No changed files; nothing to check."

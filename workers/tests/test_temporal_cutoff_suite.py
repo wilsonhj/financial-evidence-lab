@@ -229,6 +229,10 @@ _ARCHIVE: tuple[_Revision, ...] = (
     _Revision(date(2026, 6, 2), date(2026, 3, 1), "311.5"),
 )
 
+# (published_on, observed_on) for each '.' gap ALFRED reports. A gap is part
+# of a vintage like any value: it exists only from the day it was published.
+_GAPS: tuple[tuple[date, date], ...] = ((date(2026, 5, 15), date(2026, 5, 1)),)
+
 
 def archive_state(vintage_day: date) -> list[tuple[date, str, date]]:
     """(observed_on, value, published_on) as known at the END of
@@ -254,8 +258,12 @@ def _alfred_handler(request: httpx.Request) -> httpx.Response:
         {"date": observed.isoformat(), "value": value}
         for observed, value, _ in archive_state(vintage_day)
     ]
-    # ALFRED reports gaps as '.'; include one so the missing filter runs.
-    observations.append({"date": "2026-05-01", "value": "."})
+    # ALFRED reports gaps as '.'; return each one only from its publication day.
+    observations.extend(
+        {"date": observed.isoformat(), "value": "."}
+        for published, observed in _GAPS
+        if published <= vintage_day
+    )
     return httpx.Response(200, json={"observations": observations})
 
 
@@ -328,17 +336,42 @@ def test_fred_no_lookahead_invariant(as_of: datetime, expected: list[tuple[date,
         assert day_end <= as_of, "a vintage published after the cutoff leaked"
 
 
-@pytest.mark.parametrize(("as_of", "expected"), FRED_MATRIX)
+# The gap's publication day is 2026-05-15, so it is known only from the
+# 2026-05-16 midnight cutoff onward, exactly like the values revised that day.
+_GAP_EXPECTATIONS = [
+    ([] if as_of < datetime(2026, 5, 16, tzinfo=UTC) else [date(2026, 5, 1)])
+    for as_of, _ in FRED_MATRIX
+]
+
+
+@pytest.mark.parametrize(
+    ("as_of", "expected_gaps"),
+    [(as_of, gaps) for (as_of, _), gaps in zip(FRED_MATRIX, _GAP_EXPECTATIONS, strict=True)],
+)
 def test_fred_record_surfaces_the_gap_without_changing_the_vintage(
-    as_of: datetime, expected: list[tuple[date, str]]
+    as_of: datetime, expected_gaps: list[date]
 ) -> None:
-    """ADR-0030: the archive's '.' row is an explicit gap at every cutoff,
-    and keeping it does not alter the point-in-time values."""
-    del expected
+    """ADR-0030: the archive's '.' row is an explicit gap from the cutoff at
+    which it was published, never before, and keeping it does not alter the
+    point-in-time values."""
     record = ingest_fred_vintage_record(_client(), "SYNTEST", as_of=as_of)
     assert list(record.observations) == ingest_fred_vintage(_client(), "SYNTEST", as_of=as_of)
     assert record.missing is not None
-    assert [gap.observed_on for gap in record.missing] == [date(2026, 5, 1)]
+    assert [gap.observed_on for gap in record.missing] == expected_gaps
+    published = dict((observed, day) for day, observed in _GAPS)
+    for gap in record.missing:
+        day_end = datetime(
+            published[gap.observed_on].year,
+            published[gap.observed_on].month,
+            published[gap.observed_on].day,
+            tzinfo=UTC,
+        ) + timedelta(days=1)
+        assert day_end <= as_of, "a gap published after the cutoff leaked"
+
+
+def test_fred_gap_matrix_covers_both_sides_of_publication() -> None:
+    assert [] in _GAP_EXPECTATIONS
+    assert [date(2026, 5, 1)] in _GAP_EXPECTATIONS
 
 
 @pytest.mark.parametrize(
