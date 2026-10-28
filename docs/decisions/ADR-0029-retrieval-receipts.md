@@ -1,6 +1,6 @@
 # ADR-0029: Retrieval receipts for non-SEC provider fetches
 
-Status: Accepted by the integration lead on PR #354 (2026-10-27).
+Status: Proposed. Implemented in #354 (`195443c`); acceptance needs an integration-lead authorization record on the pull request (`AGENTS.md`).
 
 Date: 2026-10-24
 
@@ -86,11 +86,11 @@ capture can be fixed now, before any storage depends on them.
 
 ## Out of scope
 
-- **Explicit FRED missing values.** Accepted as
+- **Explicit FRED missing values.** Proposed as
   [ADR-0030](ADR-0030-explicit-fred-missing-values.md). `series_vintage()` still
   omits gaps. `ingest_fred_vintage_record()` keeps them, and the frozen
   `FredClient` return type is unchanged.
-- **Named source clocks.** Accepted as
+- **Named source clocks.** Proposed as
   [ADR-0031](ADR-0031-named-source-clocks.md). They ride on this receipt's
   `source_clocks` field. This ADR does not infer freshness from them.
 - **SEC.** Documents are already content-addressed. Adding a retrieval-time
