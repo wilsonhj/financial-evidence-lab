@@ -54,11 +54,7 @@ describe("ObservatoryFlowViz", () => {
   it("summarizes the rejection codes the trace carries instead of a fixed label", () => {
     const { rejected } = partitionCandidates(MOCK_TRACE);
     const codes = rejected.map((item) => item.code);
-    expect(codes).toEqual([
-      "dedupe_near_duplicate",
-      "temporal_after_cutoff",
-      "cross_version",
-    ]);
+    expect(codes).toEqual(["dedupe_near_duplicate", "temporal_after_cutoff", "cross_version"]);
     const summary = rejectionSummary(rejected);
     for (const code of codes) expect(summary.full).toContain(code);
     expect(summary.short).toBe("dedupe, cutoff, version");
