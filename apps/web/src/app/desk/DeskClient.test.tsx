@@ -18,14 +18,21 @@ describe("scenario waterfall is labelled as a fixture", () => {
   });
 
   it("does not claim a deterministic Decimal bridge", () => {
+    const selections: ReadonlyArray<readonly [ReviewDecision | null, string]> = [
+      [null, "NRR pending"],
+      [decision("sec-10q-nrr"), "NRR 108% · 10-Q"],
+      [decision("call-turn-48"), "NRR 109% · Call"],
+    ];
     for (const scenario of ["Base", "Bull", "Bear"]) {
-      const markup = renderToStaticMarkup(
-        <ScenarioWaterfallChart scenario={scenario} decision={decision("call-turn-48")} />,
-      );
-      expect(markup).toContain("Illustrative fixture");
-      expect(markup).not.toContain("Deterministic Decimal Bridge");
-      expect(markup).not.toContain("$60.4m");
-      expect(markup).toContain("NRR 109% · Call");
+      for (const [selected, label] of selections) {
+        const markup = renderToStaticMarkup(
+          <ScenarioWaterfallChart scenario={scenario} decision={selected} />,
+        );
+        expect(markup).toContain("Illustrative fixture");
+        expect(markup).not.toContain("Deterministic Decimal Bridge");
+        expect(markup).not.toContain("$60.4m");
+        expect(markup).toContain(label);
+      }
     }
   });
 });
