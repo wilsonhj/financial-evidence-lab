@@ -64,7 +64,10 @@ Use:
 changed=$(git diff --no-renames --name-only -z "$merge_base" "$HEAD_SHA" | tr '\0' '\n')
 ```
 
-Finish line, as three local runs of the step's script in a full clone:
+Finish line, as three local runs of the step's script in a full clone.
+`set -u` aborts if `HAS_LABEL` is unset, and `HAS_LABEL=true` exits 0 as soon
+as a shared path is detected, so the exit codes below only show up with
+`HAS_LABEL=false` plus `BASE_SHA` and `HEAD_SHA` for the fixture commits:
 
 - Renaming a file out of `packages/contracts/` exits 1, and the output names
   the source path.
@@ -138,32 +141,47 @@ Files: `apps/web/src/components/EvidenceGraph3D.tsx`,
   are made up; they are not span hashes. Remove them, or bind each to a real
   record. Label the view a fixture schematic, and do not say "verified" unless
   the admissibility rule that paints the node says so.
-- The NRR step reads `+$60.4m` whichever of 108% and 109% is selected, under
-  the heading `Deterministic Decimal Bridge`. `782 × 0.08` is `62.56`, so the
-  figure follows from neither. Compute the step from the selected source, or
-  remove the bridge claim.
+- The NRR dollar amount stays `+$60.4m` for both 108% (`sec-10q-nrr`) and
+  109% (`call-turn-48`). Only the parenthetical changes (`(108% 10-Q)` versus
+  `(109% Call)`), under the heading `Deterministic Decimal Bridge`. `60.4` is
+  the residual `842.4 − 782.0` (the FY27 base total minus Q2 ARR), not either
+  retention rate: `782 × 0.08` is `62.56` and `782 × 0.09` is `70.38`.
+  Replacing only that label with `62.56` or `70.38` breaks the Base, Bull, and
+  Bear totals, which are built on `842.4`. Derive the step and those totals
+  from the selected rate, or drop the bridge claim and label the chart a
+  fixture.
 - The rejected box always says `Future / cross-version`. The demo run also
   rejects `dedupe_near_duplicate`. Summarize the reason codes that
   `partitionCandidates` already returns.
 - In the roadmap, say the desk chart and 3D graph are illustrative fixture
   schematics until they are derived from Decimal strings or verified traces.
 
-Finish line: one test that fails if the inspector contains `sha256=` or
-`verified lineage`, and one that fails if the NRR step is the same for both
-sources.
+Finish line: one test that fails if the inspector contains `sha256=`, and,
+after facts are applied with an admissible decision, if it contains
+`verified lineage` (the default sublabel is `Preview · awaiting review
+gates`). And one that fails if both NRR selections show the same dollar
+amount. Comparing the full labels already passes, because `(109% Call)` and
+`(108% 10-Q)` differ.
 
 ## Needs the integration lead
 
 This pass decides order, acceptance, and credentials. It does not implement the
 product slices below.
 
-1. **Record or withdraw the acceptance of ADR-0029, ADR-0030 and ADR-0031.**
-   Their Status lines, the `docs/decisions/README.md` index, and
-   `docs/research/financial-evidence-skills-review.md` say "Accepted by the
-   integration lead on PR #354 (2026-10-27)". AGENTS.md defines an
+1. **Decide whether ADR-0029, ADR-0030 and ADR-0031 stay Accepted.**
+   Each Status line says "Accepted by the integration lead on PR #354
+   (2026-10-27)". That sentence is not in the `docs/decisions/README.md` index
+   (those rows say Accepted, dated 2026-10-24, the ADR `Date` field) or in
+   `docs/research/financial-evidence-skills-review.md` (those say "Accepted as"
+   and "implemented", and do not name #354). #354's description, written by
+   the owner, says the integration lead accepted all three on 2026-10-27 and
+   points at `6a5af3f`. The pull request has no reviews. AGENTS.md defines an
    authorization record as a statement on the PR, by the lead, naming what is
-   authorized and why. #354 has no such statement. Either post one on #354, or
-   have an agent set the three ADRs and both indexes back to Proposed.
+   authorized and why. The description is a statement; it is not that record.
+   Either post a lead authorization on #354 that names the three ADRs and why,
+   or have an agent set the three Status lines back to Proposed and then align
+   the index and the research note with that. Do not revert those two files
+   by searching them for the Status-line sentence.
 2. **Reconcile the handoff ledger.** `docs/handoff/workstreams.yaml` still has
    `DOCS-EXECUTIVE-ARCHITECTURE` as `active` after #342 merged (`167ab22`), and
    `OFFLINE-CALIBRATION-DATASET` / `OFFLINE-ISOTONIC-CALIBRATOR` as `ready`
@@ -253,10 +271,12 @@ What is already on `main` and must not be rebuilt:
 
 Canonical tasks still unchecked, for the lead's planning pass only: `T0112`,
 `T0215`, `T0306`, `T0307`, `T0308`, `T0309`, `T0310`, `T0401`–`T0410`,
-`T0501`–`T0505`, `T0507`–`T0513`, `T0214b`. Several of `T0308`, `T0309`, and
-`T0401`–`T0403` have merged code and are open because acceptance evidence is
-missing. Read the sentence on each line in `tasks.md` before treating the box
-as "not started." `T0211`–`T0213` and `T0506` are deferred post-MVP.
+`T0501`–`T0505`, `T0507`–`T0513`, `T0214b`. `T0308`, `T0309`, and
+`T0401`–`T0403` are bare unchecked titles. Those lines do not say that code
+has merged or that acceptance evidence is missing, so there is no sentence
+there to read before treating the box as open. `T0411` and `T0412` are the
+lines that carry an acceptance sentence, and those boxes are checked.
+`T0211`–`T0213` and `T0506` are deferred post-MVP.
 
 ## Known blockers
 
@@ -270,7 +290,7 @@ as "not started." `T0211`–`T0213` and `T0506` are deferred post-MVP.
 | Live corpus and retrieval gates | T0112, T0215, release section 19.6 | #177 after credentials and the embeddings choice |
 | Human labels for calibration | T0306/T0310 | #62 after #61 and a real adjudication set. Synthetic fixtures are not that set |
 | Calculation engine not integrated | M4/M5 product | #64 after #62. Do not import the engine from a UI mock and call it done |
-| ADR-0029/0030/0031 acceptance unrecorded | Treating receipts as a settled contract for #66 | Lead posts an authorization record on #354, or the ADRs return to Proposed |
+| ADR-0029/0030/0031 have no lead authorization record | Treating receipts as a settled contract for #66 | Lead posts that record on #354, or the Status lines return to Proposed and the index and research note follow |
 | `workstreams.yaml` status drift | Safe dispatch | Lead ledger edit. Agents do not flip status |
 
 ## Do not
