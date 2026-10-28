@@ -1,6 +1,6 @@
 # ADR-0030: Explicit FRED missing values
 
-Status: Accepted by the integration lead on PR #354 (2026-10-27).
+Status: Proposed. Implemented in #354 (`195443c`); acceptance needs an integration-lead authorization record on the pull request (`AGENTS.md`).
 
 Date: 2026-10-24
 
@@ -70,7 +70,7 @@ depends on. This was recorded as an ADR candidate in
 
 ## Out of scope
 
-- **Named source clocks.** Accepted as
+- **Named source clocks.** Proposed as
   [ADR-0031](ADR-0031-named-source-clocks.md). Clocks ride on the ADR-0029
   receipt. This ADR does not infer freshness from them.
 - **Gap semantics beyond the source's own report.** Whether a gap means "not
