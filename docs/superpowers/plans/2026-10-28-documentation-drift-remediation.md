@@ -1,8 +1,9 @@
 # Documentation drift remediation
 
-Status: Draft plan for integration-lead review. Not registered as a workstream
-and not authorized for implementation. Decisions D1–D8 below carry researched
-recommendations and are awaiting the lead.
+Status: Decisions D1–D8 accepted by the integration lead on 2026-10-29 and
+recorded in #363, the requirements owner for this package. The workstream entry
+is added in S3. S1 and S2 are ready to dispatch; S3 and S4 follow the slice
+order below.
 
 Baseline: `main` @ `f4b1197` (2026-10-28). Every finding below was read
 against that commit. Recheck it against the implementation base before editing.
@@ -73,9 +74,9 @@ paths check green.
 
 ## Decisions
 
-Researched on 2026-10-29 against `main` @ `f4b1197` and GitHub. Each entry
-gives the evidence, a recommendation, and what the lead must do. A
-recommendation is not a decision until the integration lead accepts it.
+Researched on 2026-10-29 against `main` @ `f4b1197` and GitHub. The
+integration lead accepted every recommendation below on 2026-10-29; #363 holds
+the record. The D6 follow-up is #362. The D8 authorization was posted on #354.
 
 | ID | Recommendation | Lead action |
 |---|---|---|
@@ -261,8 +262,8 @@ The slices depend on each other as follows:
 - Changes: one GitHub issue listing S1–S4 with their branches and allowed
   paths (D1). The `workstreams.yaml` entry is added in S3.
 - Prerequisites: D1 and D2.
-- Done when: the issue exists. Also open the D6 follow-up infra issue, blocked
-  by #62.
+- Done when: the issue exists. Done 2026-10-29: #363 tracks this package,
+  and #362 is the D6 follow-up infra issue, blocked by #62.
 
 ### S1: Correctness fixes in non-shared docs (plain docs PR)
 
@@ -458,14 +459,11 @@ seeing mypy cover `scripts/db`.
 
 ## Blockers and next action
 
-- **Readiness: pending decision.** Every decision has a researched
-  recommendation (see Decisions). The lead must still:
-  - open the S0 issue (D1) and confirm D2 and D3 before S1 and S2 are
-    dispatched;
-  - decide D4 and D8 before S4's ADR-0032 can be written;
-  - confirm D5, D6 and D7. They have no other dependency.
+- **Readiness: ready within authorized scope.** D1–D8 are accepted (#363).
+  S0 is done. The D8 authorization is posted on #354. Readiness here is not an
+  implementation grant: each slice is dispatched under #363.
 - **Not blocked by any decision:** recheck the remaining audit findings
   read-only, and extend the index script to follow sub-indexes.
-- **Next action:** the integration lead accepts or overrides the D1–D8
-  recommendations, opens the S0 issue, and posts (or declines) the #354
-  authorization. S1 and S2 can then start in parallel.
+- **Next action:** dispatch S1 and S2 in parallel under #363. Then S3, with
+  the `STATUS.md` rewrite recording the #354 authorization, and S4 with
+  ADR-0032.
