@@ -4,7 +4,10 @@ Fable is the scheduler and recovery coordinator; Claude Code agents are isolated
 
 ## Scheduling loop
 
-1. Load `workstreams.yaml`, `STATUS.md`, and GitHub issue/PR state.
+Resume and recovery follow the single [resume sequence](README.md#resume-sequence)
+in the handoff README; this loop adds only Fable's scheduling duties.
+
+1. Load `workstreams.yaml`, `STATUS.md`, and GitHub issue/PR state (resume sequence step 1).
 2. Mark a package ready only when all dependencies are merged and paths do not overlap active work.
 3. Create one worktree and the declared branch for one Claude Code agent.
 4. Give the agent its issue, task IDs, allowed paths, frozen inputs, acceptance checks, and credential policy.
@@ -28,7 +31,8 @@ Forbidden/shared paths: <paths>
 Acceptance checks: <commands and criteria>
 Credentials: mock-only | approved env-var names
 
-Read AGENTS.md and CLAUDE.md. Implement only this package. Open a draft PR early,
+Read AGENTS.md and CLAUDE.md, then follow the resume sequence in
+docs/handoff/README.md. Implement only this package. Open a draft PR early,
 push bounded checkpoints, and leave a complete handoff if blocked. Never include secrets.
 ```
 

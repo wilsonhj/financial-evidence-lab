@@ -4,18 +4,20 @@ This directory is the restart point for all implementation agents. Fable must be
 
 > **Which entry point?** For a first session in this repository, follow the
 > reading order in [`AGENTS.md`](../../AGENTS.md#read-before-changing-code).
-> To resume assigned work, follow the resume sequence in
-> [`CLAUDE.md`](../../CLAUDE.md), which reads [`STATUS.md`](STATUS.md) and
-> [`workstreams.yaml`](workstreams.yaml) first.
+> To resume assigned work, follow the [resume sequence](#resume-sequence) in
+> this file. It is the single resume entry; [`CLAUDE.md`](../../CLAUDE.md) and
+> [`FABLE_ORCHESTRATION.md`](FABLE_ORCHESTRATION.md) link here instead of
+> repeating it.
 
 ## Current state
 
 Resolve the live queue from GitHub, then read [`STATUS.md`](STATUS.md) and
 [`workstreams.yaml`](workstreams.yaml). Those files include dated evidence;
 do not infer current dispatchability from a historical commit or issue list.
-The [September 9 issue audit](../research/2026-09-09-open-issue-audit.md) and
-[resolution plan](../superpowers/plans/2026-09-09-backlog-resolution.md) distinguish
-merged implementations from outstanding acceptance evidence.
+The newest section of `STATUS.md` is dated September 16, 2026; it is being
+refreshed under [#363](https://github.com/wilsonhj/financial-evidence-lab/issues/363)
+(slice S3). Until then, GitHub is the live record, and open lead items are
+listed in the [October 27 snapshot](remaining-work-2026-10-27.md).
 
 - `main` is the implementation base; `integration/m0` is retired. Use one
   issue/branch/worktree per implementation and required CI before merge.
@@ -40,16 +42,24 @@ merged implementations from outstanding acceptance evidence.
 
 ## Briefs in this directory
 
-Dated briefs are dispatch context, not sources of truth; the order below still
-governs. Current briefs:
+Dated briefs are dispatch context, not sources of truth; the
+[source-of-truth order](#source-of-truth) still governs. Live pointers:
 
-- [`implementation-agents-2026-09-16.md`](implementation-agents-2026-09-16.md)
-  — external implementation cards for #336 and #337 against an immutable pin.
-- [`external-agents-2026-09-16.md`](external-agents-2026-09-16.md) — bounded
-  research and review cards. For #336 and #337 only, the implementation cards
-  above replace its research-only cards.
+- [#363](https://github.com/wilsonhj/financial-evidence-lab/issues/363) —
+  tracking issue for the documentation drift remediation (slices S1–S4).
+- [`remaining-work-2026-10-27.md`](remaining-work-2026-10-27.md) — open lead
+  items as of October 27, 2026, until #363's S3 folds them into
+  [`STATUS.md`](STATUS.md).
 
 Historical records:
+
+- [`implementation-agents-2026-09-16.md`](implementation-agents-2026-09-16.md)
+  and [`external-agents-2026-09-16.md`](external-agents-2026-09-16.md) — the
+  September 16 implementation and research cards. #336 and #337 merged as
+  #340 and #339 (follow-up #351); do not dispatch from them.
+- The [September 9 issue audit](../research/2026-09-09-open-issue-audit.md) and
+  [resolution plan](../superpowers/plans/2026-09-09-backlog-resolution.md) —
+  the September backlog baseline.
 
 - [`execution-2026-09-09.md`](execution-2026-09-09.md) — per-issue execution
   evidence from the September 9 backlog run and its continuations.
@@ -66,6 +76,10 @@ Historical records:
 2. `workstreams.yaml`
 3. `STATUS.md`
 4. Spec Kit artifacts under `specs/001-financial-evidence-lab/`
+
+This list is the single statement of precedence. Other pages, including dated
+briefs and snapshots such as `remaining-work-2026-10-27.md`, defer to it
+wherever they state a different order.
 
 Only the integration lead changes bundle status to `merged`, checks tasks, changes dependencies, or updates shared contracts.
 
@@ -104,10 +118,22 @@ A package is ready only when:
 
 Cap concurrency at four packages at all times. Prefer PRs below roughly 600 changed lines and split work that cannot be reviewed independently.
 
-## Emergency resume
+## Resume sequence
 
-1. Fetch `main` and inspect `STATUS.md`.
-2. Reconcile `workstreams.yaml` against open GitHub issues and PRs.
-3. Treat pushed PR commits as authoritative over uncommitted agent work.
-4. Reassign only packages with no active heartbeat or after explicitly closing the previous attempt.
-5. Resume the lowest-numbered ready gate; do not bypass milestone exit criteria.
+This is the one resume sequence, for agents resuming assigned work and for
+Fable recovering the queue. A first session in the repository follows the
+[`AGENTS.md` reading order](../../AGENTS.md#read-before-changing-code) first.
+
+1. Fetch `main`, read `STATUS.md` and `workstreams.yaml`, and reconcile them
+   against open GitHub issues and PRs in the [source-of-truth order](#source-of-truth).
+2. Confirm the assigned GitHub issue, branch, base SHA, dependencies, and
+   allowed paths. Treat pushed PR commits as authoritative over uncommitted
+   agent work.
+3. Read only the relevant portions of the constitution, spec, plan, and task list.
+4. Check out the assigned branch in a dedicated worktree. Reassign only
+   packages with no active heartbeat or after explicitly closing the previous
+   attempt.
+5. Run the package-specific baseline checks before editing.
+6. Implement the smallest acceptance-complete change and open or update a
+   draft PR. When picking new work, resume the lowest-numbered ready gate; do
+   not bypass milestone exit criteria.
