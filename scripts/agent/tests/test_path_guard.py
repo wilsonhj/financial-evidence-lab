@@ -26,9 +26,27 @@ assert spec and spec.loader
 guard = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(guard)
 
-LANE_BRANCH = (
-    "agent/executive-architecture-docs"  # README.md, docs/architecture/**, workstreams.yaml
-)
+# The subprocess tests run against this registry, not the live one, so editing
+# docs/handoff/workstreams.yaml cannot break them.
+LANE_BRANCH = "agent/lane"
+FIXTURE_REGISTRY = """\
+version: 2
+shared_paths:
+  - .github/**
+  - .agents/**
+  - docs/handoff/workstreams.yaml
+  - AGENTS.md
+  - .gitignore
+  - tsconfig.json
+packages:
+  - id: LANE
+    branch: agent/lane
+    status: active
+    allowed_paths:
+      - README.md
+      - docs/architecture/**
+      - docs/handoff/workstreams.yaml
+"""
 
 
 # --- the two hand-maintained copies must not drift -------------------------------------------
@@ -51,10 +69,10 @@ def test_shared_list_matches_ci_workflow() -> None:
 def test_shared_list_matches_agents_md() -> None:
     agents = (REPO / "AGENTS.md").read_text(encoding="utf-8")
     section = agents.split("## Shared paths", 1)[1].split("Every change to a shared path", 1)[0]
-    listed = set(re.findall(r"^- `([^`]+)`", section, flags=re.M))
-    listed |= set(
-        re.findall(r"`(package-lock\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml)`", section)
-    )
+    # Every backticked path in the section, including the inline root-config
+    # bullet; `contract-change` is a label, not a path.
+    listed = set(re.findall(r"`([^`]+)`", section)) - {"contract-change"}
+    assert {"package.json", "pyproject.toml", "Makefile", "AGENTS.md"} <= listed
     for item in listed:
         assert guard.is_shared(item.rstrip("/") + ("/x" if item.endswith("/") else "")), item
 
@@ -66,12 +84,56 @@ def test_parser_matches_pyyaml_on_real_registry() -> None:
     yaml = pytest.importorskip("yaml")
     expected = yaml.safe_load(REGISTRY.read_text(encoding="utf-8"))["packages"]
     got = guard.parse_packages(REGISTRY.read_text(encoding="utf-8"))
-    assert len(got) == len(expected) > 50
+    assert len(got) == len(expected) > 0
     for mine, theirs in zip(got, expected, strict=True):
         assert mine["id"] == theirs["id"]
         assert mine["branch"] == theirs.get("branch", "")
         assert mine["status"] == theirs.get("status", "")
         assert mine["allowed_paths"] == theirs.get("allowed_paths", []), theirs["id"]
+
+
+def test_shared_paths_parser_matches_pyyaml_on_real_registry() -> None:
+    yaml = pytest.importorskip("yaml")
+    text = REGISTRY.read_text(encoding="utf-8")
+    assert guard.parse_shared_paths(text) == yaml.safe_load(text)["shared_paths"]
+
+
+def test_every_registry_shared_path_is_shared() -> None:
+    registry_shared = guard.parse_shared_paths(REGISTRY.read_text(encoding="utf-8"))
+    assert ".gitignore" in registry_shared and ".agents/**" in registry_shared
+    for pattern in registry_shared:
+        sample = pattern.replace("**", "x/y").replace("*", "z")
+        assert guard.is_shared(sample, registry_shared), pattern
+        assert guard.reasons_for(sample, "main", [], registry_shared), pattern
+
+
+def test_parser_reads_quoted_values_and_any_first_key() -> None:
+    text = """\
+packages:
+  - issue: 12
+    id: "Q"
+    branch: "agent/quoted"
+    status: 'active'
+    allowed_paths: ["apps/api/**", 'x.md']
+  - id: R
+    branch: agent/r # trailing comment
+    allowed_paths:
+      - "docs/**"
+"""
+    got = guard.parse_packages(text)
+    assert [(p["id"], p["branch"], p["status"]) for p in got] == [
+        ("Q", "agent/quoted", "active"),
+        ("R", "agent/r", ""),
+    ]
+    assert got[0]["allowed_paths"] == ["apps/api/**", "x.md"]
+    assert got[1]["allowed_paths"] == ["docs/**"]
+    assert len(guard.reasons_for("apps/web/a.tsx", "agent/quoted", got)) == 1
+    assert guard.reasons_for("apps/api/a.py", "agent/quoted", got) == []
+
+
+def test_parser_ignores_list_items_outside_packages() -> None:
+    text = "shared_path_exceptions:\n  - adr: ADR-0003\n    branch: nope\npackages:\n  - id: P\n"
+    assert [p["id"] for p in guard.parse_packages(text)] == ["P"]
 
 
 # --- decision logic -----------------------------------------------------------------------
@@ -103,6 +165,41 @@ def test_reasons(rel: str, branch: str, expect_reasons: int) -> None:
     assert len(guard.reasons_for(rel, branch, PACKAGES)) == expect_reasons
 
 
+@pytest.mark.parametrize(
+    "rel", ["scripts/agent/path_guard.py", ".claude/settings.json", ".claude/settings.local.json"]
+)
+def test_guard_files_always_ask(rel: str) -> None:
+    reasons = guard.reasons_for(rel, "main", PACKAGES)
+    assert reasons and "path guard" in reasons[0]
+
+
+def test_canonical_case_uses_the_on_disk_spelling(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "AGENTS.md").write_text("x", encoding="utf-8")
+    real_lexists = os.path.lexists
+
+    def case_insensitive_lexists(path: str) -> bool:
+        parent, name = os.path.split(path)
+        if real_lexists(path):
+            return True
+        return os.path.isdir(parent) and any(
+            n.casefold() == name.casefold() for n in os.listdir(parent)
+        )
+
+    monkeypatch.setattr(guard.os.path, "lexists", case_insensitive_lexists)
+    assert guard.canonical_case(str(tmp_path / "agents.md")) == str(tmp_path / "AGENTS.md")
+    assert guard.canonical_case(str(tmp_path / "DOCS" / "new.md")) == str(
+        tmp_path / "docs" / "new.md"
+    )
+
+
+def test_canonical_case_keeps_a_new_file_on_a_case_sensitive_filesystem(tmp_path: Path) -> None:
+    (tmp_path / "AGENTS.md").write_text("x", encoding="utf-8")
+    assert guard.canonical_case(str(tmp_path / "agents.md")) == str(tmp_path / "agents.md")
+
+
 def test_single_star_glob_stays_in_one_segment() -> None:
     assert guard.in_scope(
         "evals/harness/reader_prod_smoke_x.py", ["evals/harness/reader_prod_smoke*.py"]
@@ -123,22 +220,10 @@ def _git(cwd: Path, *args: str) -> None:
 def repo(tmp_path: Path) -> Path:
     root = tmp_path / "repo"
     (root / "docs" / "handoff").mkdir(parents=True)
-    (root / "docs" / "handoff" / "workstreams.yaml").write_text(
-        REGISTRY.read_text(encoding="utf-8"), encoding="utf-8"
-    )
+    (root / "docs" / "handoff" / "workstreams.yaml").write_text(FIXTURE_REGISTRY, encoding="utf-8")
     _git(root, "init", "-q", "-b", "main")
-    _git(
-        root,
-        "-c",
-        "user.name=t",
-        "-c",
-        "user.email=t@t",
-        "commit",
-        "-q",
-        "--allow-empty",
-        "-m",
-        "i",
-    )
+    _git(root, "add", "-A")  # committed, so a worktree checks the registry out too
+    _git(root, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "i")
     return root
 
 
@@ -163,8 +248,9 @@ def run_hook(
             }
         )
     )
-    full_env = {**os.environ, **(env or {})}
-    full_env.pop("FEL_PATH_GUARD", None) if env is None else None
+    full_env = dict(os.environ)
+    full_env.pop("FEL_PATH_GUARD", None)  # a developer's own setting must not leak in
+    full_env.update(env or {})
     return subprocess.run(
         [sys.executable, str(HOOK)],
         input=payload,
@@ -341,3 +427,30 @@ def test_gitignore_tracks_only_the_root_claude_settings(
     shutil.copy(GITIGNORE, root / ".gitignore")
     done = subprocess.run(["git", "-C", str(root), "check-ignore", "-q", path], check=False)
     assert (done.returncode == 0) is ignored
+
+
+def test_registry_shared_path_asks(repo: Path) -> None:
+    assert decision(run_hook(repo, "Write", ".gitignore")) == "ask"
+    assert decision(run_hook(repo, "Edit", ".agents/skills/x/SKILL.md")) == "ask"
+    assert decision(run_hook(repo, "Edit", "tsconfig.json")) == "ask"
+
+
+def test_guard_files_ask_through_the_hook(repo: Path) -> None:
+    for rel in ("scripts/agent/path_guard.py", ".claude/settings.json"):
+        assert decision(run_hook(repo, "Edit", rel)) == "ask", rel
+
+
+def test_worktree_edit_uses_the_worktree_root_and_branch(repo: Path, tmp_path: Path) -> None:
+    worktree = repo / ".claude" / "worktrees" / "lane"
+    _git(repo, "worktree", "add", "-q", "-b", LANE_BRANCH, str(worktree))
+    # The session runs in the main checkout on `main`; the edits land in the worktree.
+    out_of_lane = run_hook(repo, "Edit", str(worktree / "apps" / "api" / "main.py"))
+    assert decision(out_of_lane) == "ask"
+    assert (
+        "allowed_paths"
+        in json.loads(out_of_lane.stdout)["hookSpecificOutput"]["permissionDecisionReason"]
+    )
+    assert decision(run_hook(repo, "Edit", str(worktree / "AGENTS.md"))) == "ask"
+    assert (
+        decision(run_hook(repo, "Edit", str(worktree / "docs" / "architecture" / "a.md"))) is None
+    )
