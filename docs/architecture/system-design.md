@@ -18,7 +18,7 @@
 
 </details>
 
-Source references verified against commit `437ce55`.
+Source references verified against commit `f4b1197`.
 
 This guide explains how Financial Evidence Lab preserves tenant, temporal, and
 evidence correctness across ingestion, retrieval, and review. It is aimed at a
@@ -148,13 +148,13 @@ quarantined versions, and cross-version evidence are excluded.
 
 ```mermaid
 sequenceDiagram
-    participant Scheduler
+    participant Enqueuer as Enqueuer (no scheduler)
     participant DB as jobs table
     participant Worker
     participant Provider as SEC/provider
     participant Store as object storage
 
-    Scheduler->>DB: Enqueue idempotent job
+    Enqueuer->>DB: Enqueue idempotent job
     Worker->>DB: Claim with SKIP LOCKED + lease
     Worker->>Provider: Fetch outside transaction
     Worker->>Store: Write content-addressed object
@@ -162,9 +162,15 @@ sequenceDiagram
     Worker->>DB: Complete, retry, or dead-letter
 ```
 
+No scheduler is implemented, and no deployed component enqueues ingestion
+work. Root `sec_discovery` and company-facts jobs are enqueued by the
+evaluation harnesses (`evals/harness/corpus_qa.py`,
+`evals/harness/reader_prod_smoke.py`); the `sec_discovery` handler then
+enqueues one fetch job per filing (`fel_workers/ingestion/discovery.py`).
+
 Workers keep claim transactions short. A lease heartbeat makes abandoned jobs
-recoverable. Idempotency keys prevent repeated scheduler or webhook delivery
-from creating duplicate logical work.
+recoverable. Idempotency keys prevent repeated delivery from creating
+duplicate logical work.
 
 The deployed consumer currently dispatches SEC discovery, filing fetch, and
 company-facts ingestion. FRED and market-data adapters exist, but their live
@@ -239,6 +245,11 @@ Publishing an index pins its corpus version, provider/model identity, chunking
 configuration, and build metadata. Published inputs are immutable so replay
 does not drift.
 
+Index build and publish (`fel_retrieval/index_build.py`: `build_index`,
+`publish_index_version`) have no runtime caller. The only caller outside tests
+is the offline retrieval gate (`evals/harness/retrieval_gate.py`); neither the
+API nor the worker builds or publishes an index.
+
 ### Query execution
 
 ```mermaid
@@ -288,7 +299,12 @@ package, and a durable, checkpointed worker FSM. The runtime merged as
 `extraction_run_steps.output` (`0006`, ADR-0011) and added run cancellation
 requests, review validation context, and conflict occurrences (`0011`,
 ADR-0024). The API exposes run, step-history, event-replay, review-decision,
-correction, and approved-version routes under `apps/api/app/extraction/`. Its
+correction, and approved-version routes under `apps/api/app/extraction/`. The
+web app reaches them through server-side proxies
+(`apps/web/src/app/api/extraction/[...path]/route.ts` and
+`.../runs/[runId]/events/route.ts`, which relays the SSE stream); in HTTP
+mode they call FastAPI with the server-held bearer token and the configured
+`FEL_WORKSPACE_ID`, never the browser's credentials. Its
 genuine remaining gaps are tracked below under
 [Known gaps and open decisions](#known-gaps-and-open-decisions), not treated
 as unmerged.
@@ -327,17 +343,16 @@ This section covers the architecture.
 
 ### Typed roles (`extraction/`)
 
-`roles/` itself holds only `__init__.py` and `base.py`; the prompts, schemas and
-tool allowlist named below are its siblings under `extraction/`, which is why
-`base.py` resolves them from `_PKG = ...parent.parent`.
+`roles/` itself holds only `__init__.py` and `base.py`; the prompts and schemas
+named below are its siblings under `extraction/`, which is why `base.py`
+resolves them from `_PKG = ...parent.parent`.
 
 Exactly five roles are registered (`extraction/types.py::Role`):
 `classifier`, `fact_candidates`, `kpi`, `guidance`, `driver_mapper`. Each is a
-`RoleSpec` (`roles/base.py`) pairing a versioned prompt (`prompts/*.v1.txt`),
-a versioned JSON Schema (`schemas/*.json`), and a fixed read-only tool
-allowlist (`tools.py`: `lookup_pinned_evidence`, `lookup_ontology_metric`,
-`lookup_xbrl_facts`, `normalize_preview`, `validate_preview` — no role can
-write). Evidence text is prompt-injection-delimited before it reaches a
+`RoleSpec` (`roles/base.py`) holding the role, its versioned JSON Schema
+(`schemas/*.json`) and the instructions rendered from its versioned prompt
+(`prompts/*.v1.txt`). Roles have no tool access; a read-only tool allowlist
+is not implemented. Evidence text is prompt-injection-delimited before it reaches a
 model (`UNTRUSTED_OPEN`/`UNTRUSTED_CLOSE` markers, span markers stripped) so
 filing content cannot be mistaken for instructions. The `kpi` and `guidance`
 roles have the ontology's qualifier vocabulary rendered into their
@@ -505,7 +520,7 @@ fixed after review found the non-atomic three-write sequence could leave
 proposals durable with no conflict membership when the conflict write raised
 (`0004`'s `conflict_terminal` guard is the reachable trigger), which was
 unrepairable: `0004` forbids `DELETE` on these tables and blocks moving a
-terminal run's proposals to `rejected`. `RunPins`, read back from the row
+terminal run's proposals to `rejected`. `RunPins` (`persist_types.py`), read back from the row
 rather than trusted from the queue payload, are the authority on a run's
 cutoff, corpus, model, and budget ceilings, so a payload cannot assert its
 own identity.
@@ -517,14 +532,14 @@ now has a concrete implementation to point to.
 
 | Requirement                                                                          | How it is met                                                                                                                                                |
 | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Bind execution to immutable database-owned run/evidence inputs                       | `RunPins`/`SpanPin` (`persist.py`) read the run and cited spans back from Postgres rather than trusting the queue payload                                    |
+| Bind execution to immutable database-owned run/evidence inputs                       | `RunPins`/`SpanPin` (`persist_types.py`) read the run and cited spans back from Postgres rather than trusting the queue payload                              |
 | Validate the complete structured output, not only top-level keys                     | `validate/schema.py` closes every payload variant against the frozen contract; `accounting.py`/`range.py`/`definitions.py`/`citations.py` grade content      |
 | Persist a logical batch and its provenance atomically                                | `persist_outputs_atomic` (proposals + evidence + conflicts, one transaction); `commit_succeeded_atomic` (step row + `step_completed` event, one transaction) |
 | Fence late provider responses after lease loss/cancellation                          | `_boundary` (stage entry) and `_commit_fence` (stage exit) both check `lease_check`/`cancel_check`                                                           |
 | Enforce wall-clock, attempt, token, and cost budgets durably                         | `RunBudget.precheck`/`record` (`budget.py`), usage merged with `GREATEST` across queue attempts                                                              |
 | Treat missing/invalid citations and financial normalization as blockers              | `citations.py` (uncited/unverified proposals blocked); `normalize/payload.py` fails closed on unparseable/out-of-range values                                |
 | Preserve scale, unit, period, currency, and magnitude in duplicate/conflict identity | `duplicates.py::comparability_key_for` + `value_fingerprint`; `accounting.py::_magnitude`                                                                    |
-| Minimize sensitive/raw provider data in audit records                                | `redact.py` (queue-owned error sinks) and `events.py::redact_event_payload` (extraction event payloads); M4 settled by PR #156, see Known gaps                 |
+| Minimize sensitive/raw provider data in audit records                                | `redact.py` (queue-owned error sinks) and `events.py::redact_event_payload` (extraction event payloads); M4 settled by PR #156, see Known gaps               |
 
 ## Failure, concurrency, and idempotency semantics
 
@@ -543,13 +558,21 @@ now has a concrete implementation to point to.
 A terminal extraction run is final: it is never requeued, and a cancelled run
 never marks its job succeeded. This was the Option 1 ruling on
 [issue #146](https://github.com/wilsonhj/financial-evidence-lab/issues/146),
-implemented by PR #211 (`RunAlreadyTerminal`, `TERMINAL_RUN_STATUSES`,
-`_assert_run_open`).
+implemented by PR #211 (`RunAlreadyTerminal` and `TERMINAL_RUN_STATUSES` in
+`persist_types.py`, checked by `persist.py`; the in-memory store uses
+`persist_memory.py::_assert_run_open`).
 
 ## Cost and observability
 
-The platform stores usage events and supports user/day and organization/month
-soft and hard limits. Retrieval traces are first-class product data rather than
+Usage events and user/day and organization/month soft and hard limits
+(`apps/api/app/costs.py`) apply to retrieval only: `enforce_ceilings` and
+`record_usage` are called only from `apps/api/app/retrieval.py`. Extraction
+runs have only the per-run caps described in
+[Budget enforcement](#budget-enforcement-extractionbudgetpy) and record no
+`usage_events`. The API rate limiter (`apps/api/app/ratelimit.py`) is an
+in-process token bucket per replica, keyed by organization and route, and
+covers only the three retrieval POST routes (create query, rerun, feedback).
+Retrieval traces are first-class product data rather than
 debug logs. Audit records should answer who changed or accepted what, when,
 against which immutable inputs.
 
@@ -625,7 +648,13 @@ What remains open:
   (`FEL_ALLOW_MOCK_LLM`). #62 also covers confidence calibration and
   monetary auto-approval-prevention release gates. ADR-0028 freezes offline
   calibration interfaces (#336, #337); synthetic fixtures are not
-  human-adjudicated calibration.
+  human-adjudicated calibration, and `extraction/isotonic.py` is not imported
+  by runtime code yet.
+- Hosted extraction is intentionally not deployed. The Railway worker serves
+  the default `ingestion` queue, while the API enqueues `extraction_run` jobs
+  on `extraction`; runs created on a hosted API stay queued until a live model
+  is bound (#62) and an `extraction` worker service is added
+  ([#362](https://github.com/wilsonhj/financial-evidence-lab/issues/362)).
 - [Issue #61](https://github.com/wilsonhj/financial-evidence-lab/issues/61)
   — review, correction and approved-version history are implemented, but the
   canonical 25-active-user reference performance profile is not met.
@@ -676,8 +705,12 @@ still open in the
   separate contract/runtime work under
   [#324](https://github.com/wilsonhj/financial-evidence-lab/issues/324).
 - Hosted object storage is not implemented; `LocalDirStorageProvider` is the
-  only real storage provider.
+  only real storage provider. The reader API does not go through a storage
+  provider: it reads canonical text from `FEL_STORAGE_DIR` directly
+  (`apps/api/app/reader.py::_read_canonical_text`).
 - Railway web, API and worker service definitions exist (`infra/railway/`).
+  The API's pre-deploy command applies migrations; the worker's only checks
+  them (`migrate.py --check`). The worker serves only the `ingestion` queue.
   Sentry is opt-in through `FEL_SENTRY_DSN`; web telemetry
   ([#138](https://github.com/wilsonhj/financial-evidence-lab/issues/138),
   closed by PR #245) is off by default behind two flags.

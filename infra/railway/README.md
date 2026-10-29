@@ -3,10 +3,15 @@
 Config-as-code for the Railway services. Each service in the Railway
 dashboard points its "config file path" at the matching JSON file here.
 
-- `api.json` — FastAPI service (`uvicorn`, `/health` healthcheck).
+- `api.json` — FastAPI service (`uvicorn`, `/health` healthcheck). Its
+  pre-deploy command applies migrations; the worker's only checks them.
 - `web.json` — Next.js production server (`@fel/web`, `/api/health` healthcheck).
 - `worker.json` — job-queue consumer (the role-pinned command in `worker.json`) with a
-  `/health` startup check. Railway health checks gate deployments; they do
+  `/health` startup check. It starts `python -m fel_workers run` without
+  `--queue`, so it serves the default `ingestion` queue only. Hosted
+  extraction is intentionally not deployed: the API enqueues `extraction_run`
+  jobs on the `extraction` queue, and they stay queued until a live model is
+  bound (#62) and an `extraction` worker service is added (#362). Railway health checks gate deployments; they do
   not continuously restart an already deployed service. The worker therefore
   also runs an in-process watchdog. If neither the idle consumer loop nor a
   successful job lease heartbeat advances for 120 seconds, the process exits
