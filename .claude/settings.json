@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ -f \"$CLAUDE_PROJECT_DIR/scripts/agent/path_guard.py\" ] && python3 \"$CLAUDE_PROJECT_DIR/scripts/agent/path_guard.py\" || exit 0",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}
