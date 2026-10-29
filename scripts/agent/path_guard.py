@@ -5,7 +5,10 @@ Enforces two rules from AGENTS.md at edit time, before the agent spends a cycle:
 
 1. Shared paths (AGENTS.md "Shared paths") need the `contract-change` label and
    integration-lead review, so an edit to one asks first. This list mirrors
-   `.github/workflows/shared-paths.yml`; a test fails if the two drift.
+   `.github/workflows/shared-paths.yml`; a test fails if the two drift. The
+   `shared_paths` block in `docs/handoff/workstreams.yaml` is wider (it also names
+   `.agents/**`, `tsconfig*.json`, `.gitignore` and other root config); this hook
+   follows the CI matcher and does not cover those extras.
 2. A branch listed in `docs/handoff/workstreams.yaml` may only edit that
    package's `allowed_paths`. Nothing in CI checks this today.
 
@@ -15,6 +18,11 @@ exceptions. It is fail-open: any error, unknown branch, or unreadable registry
 exits 0 with no output, so a hook bug cannot stall a session. CI remains the
 backstop. Only Edit, Write, MultiEdit and NotebookEdit are inspected; shell
 commands that write files (sed -i, redirects, tee) are not.
+
+Threat model: this prevents accidents, it is not a security boundary. The hook,
+its tests, `.claude/settings.json`, `.claude/settings.local.json` and `CLAUDE.md`
+are not themselves guarded, the lane follows whichever branch is checked out, and
+the repo root comes from the session's cwd. CI is the enforcement point.
 
 FEL_PATH_GUARD: "ask" (default) | "deny" | "off".
 """

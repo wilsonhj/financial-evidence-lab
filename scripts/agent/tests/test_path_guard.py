@@ -6,6 +6,7 @@ import importlib.util
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -17,6 +18,8 @@ REPO = Path(__file__).resolve().parents[3]
 HOOK = REPO / "scripts" / "agent" / "path_guard.py"
 REGISTRY = REPO / "docs" / "handoff" / "workstreams.yaml"
 CI_WORKFLOW = REPO / ".github" / "workflows" / "shared-paths.yml"
+SETTINGS = REPO / ".claude" / "settings.json"
+GITIGNORE = REPO / ".gitignore"
 
 spec = importlib.util.spec_from_file_location("path_guard", HOOK)
 assert spec and spec.loader
@@ -266,3 +269,75 @@ def test_fails_open_when_git_is_unavailable(repo: Path, tmp_path: Path) -> None:
     empty.mkdir()
     done = run_hook(repo, "Write", "AGENTS.md", env={"PATH": str(empty)})
     assert done.returncode == 0 and done.stdout.strip() == ""
+
+
+# --- the wiring: settings.json command and .gitignore ---------------------------------------
+
+
+def _settings_entry() -> dict[str, Any]:
+    entry = json.loads(SETTINGS.read_text(encoding="utf-8"))["hooks"]["PreToolUse"][0]
+    assert isinstance(entry, dict)
+    return entry
+
+
+def _run_command(project_dir: Path | None, payload: str) -> subprocess.CompletedProcess[str]:
+    """Run the settings.json command through a shell, as Claude Code does."""
+    env = {k: v for k, v in os.environ.items() if k not in {"CLAUDE_PROJECT_DIR", "FEL_PATH_GUARD"}}
+    if project_dir is not None:
+        env["CLAUDE_PROJECT_DIR"] = str(project_dir)
+    command = _settings_entry()["hooks"][0]["command"]
+    return subprocess.run(
+        ["sh", "-c", command], input=payload, capture_output=True, text=True, env=env, check=False
+    )
+
+
+def test_settings_matcher_covers_every_inspected_tool() -> None:
+    assert set(_settings_entry()["matcher"].split("|")) == set(guard.PATH_ARGUMENT)
+
+
+def test_command_is_fail_open_when_the_script_is_missing(tmp_path: Path) -> None:
+    # Exit 2 is the blocking code for PreToolUse: a missing script must not block edits.
+    for project_dir in (tmp_path, None):
+        done = _run_command(project_dir, "{}")
+        assert done.returncode == 0 and done.stdout.strip() == ""
+
+
+def test_command_is_fail_open_when_the_script_crashes(tmp_path: Path) -> None:
+    script = tmp_path / "scripts" / "agent" / "path_guard.py"
+    script.parent.mkdir(parents=True)
+    script.write_text("import sys\nsys.exit(2)\n", encoding="utf-8")
+    done = _run_command(tmp_path, "{}")
+    assert done.returncode == 0
+
+
+def test_command_still_runs_the_hook_when_the_script_exists(repo: Path) -> None:
+    script_dir = repo / "scripts" / "agent"
+    script_dir.mkdir(parents=True)
+    shutil.copy(HOOK, script_dir / "path_guard.py")
+    payload = json.dumps(
+        {"cwd": str(repo), "tool_name": "Write", "tool_input": {"file_path": "AGENTS.md"}}
+    )
+    done = _run_command(repo, payload)
+    assert done.returncode == 0
+    assert json.loads(done.stdout)["hookSpecificOutput"]["permissionDecision"] == "ask"
+
+
+@pytest.mark.parametrize(
+    ("path", "ignored"),
+    [
+        (".claude/settings.json", False),
+        (".claude/settings.local.json", True),
+        (".claude/worktrees/w1/AGENTS.md", True),
+        ("apps/web/.claude/settings.local.json", True),
+        ("apps/web/.claude/settings.json", True),
+    ],
+)
+def test_gitignore_tracks_only_the_root_claude_settings(
+    tmp_path: Path, path: str, ignored: bool
+) -> None:
+    root = tmp_path / "ignore-repo"
+    root.mkdir()
+    _git(root, "init", "-q")
+    shutil.copy(GITIGNORE, root / ".gitignore")
+    done = subprocess.run(["git", "-C", str(root), "check-ignore", "-q", path], check=False)
+    assert (done.returncode == 0) is ignored
