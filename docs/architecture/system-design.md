@@ -163,10 +163,14 @@ sequenceDiagram
 ```
 
 No scheduler is implemented, and no deployed component enqueues ingestion
-work. Root `sec_discovery` and company-facts jobs are enqueued by the
-evaluation harnesses (`evals/harness/corpus_qa.py`,
-`evals/harness/reader_prod_smoke.py`); the `sec_discovery` handler then
-enqueues one fetch job per filing (`fel_workers/ingestion/discovery.py`).
+work. The evaluation harnesses are the only enqueuers outside tests:
+`evals/harness/corpus_qa.py` enqueues root `sec_discovery` jobs, and the
+`sec_discovery` handler then enqueues one `sec_filing_fetch` job per filing on
+the queue it was claimed from (`fel_workers/ingestion/discovery.py`);
+`evals/harness/reader_prod_smoke.py` enqueues `sec_filing_fetch` jobs directly
+on its own `reader-smoke` queue. Nothing outside tests calls
+`enqueue_company_facts`, so no company-facts job is enqueued in any runtime
+path.
 
 Workers keep claim transactions short. A lease heartbeat makes abandoned jobs
 recoverable. Idempotency keys prevent repeated delivery from creating

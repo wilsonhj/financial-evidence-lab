@@ -370,7 +370,7 @@ fallback value. Never commit real values.
 | `FEL_API_BASE_URL` | Web | unset | FastAPI origin in HTTP mode |
 | `FEL_API_BEARER_TOKEN` | Web | unset | Server-only API token; must be empty in `fixture` mode |
 | `FEL_ENTITY_IDS` | Web | unset | Comma-separated entity UUIDs |
-| `FEL_WORKSPACE_ID` | Web | unset | Workspace UUID for the HTTP-mode Search Observatory |
+| `FEL_WORKSPACE_ID` | Web | unset | Workspace UUID for the HTTP-mode Search Observatory and the extraction pages, which share the Observatory runtime config |
 | `FEL_AS_OF` | Web | unset | Optional RFC 3339 cutoff with explicit offset |
 | `FEL_CORPUS_VERSION_ID` | Web | unset | Optional immutable corpus version UUID |
 | `FEL_WEB_TELEMETRY` | Web | unset | `1` enables the `/api/telemetry` route (404 otherwise); the browser side reads `NEXT_PUBLIC_FEL_WEB_TELEMETRY` at build time |
@@ -401,6 +401,9 @@ deliberately. `FEL_COST_PER_1K_INPUT_USD` and `FEL_COST_PER_1K_OUTPUT_USD`
 | `FEL_REQUIRE_DB` | pytest suites | unset | `1` makes a missing `TEST_DATABASE_URL` a collection error instead of skips (CI sets it) |
 | `FEL_HARNESS_ALLOW_RESET` | `evals/harness/corpus_qa.py` | unset | `1` marks a database not ending in `_test` as disposable for `--reset-corpus` |
 | `FEL_RUN_BENCHMARKS` | calculation-engine benchmark tests | unset | `1` enables opt-in timing assertions |
+| `FEL_RUN_QUERY_BENCHMARK` | `apps/api/tests/test_retrieval_api.py` | unset | `1` runs the opt-in query p95 benchmark on a controlled host |
+| `FEL_QUERY_BENCHMARK_PROFILE` | `apps/api/tests/test_retrieval_api.py` | unset | Required with the benchmark: describes the controlled host |
+| `FEL_QUERY_BENCHMARK_P95_SECONDS` | `apps/api/tests/test_retrieval_api.py` | unset | Required with the benchmark: the declared p95 latency target in seconds |
 
 Provider credentials (SEC, FRED, market data, LLM, Supabase) are listed by name
 in [`docs/handoff/CREDENTIALS.md`](../handoff/CREDENTIALS.md); the acceptance

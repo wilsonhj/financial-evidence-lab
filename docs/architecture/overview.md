@@ -80,9 +80,11 @@ The arrows show allowed logical dependencies, not every call. PostgreSQL is
 the coordination and metadata backbone: the `jobs` table is the API/worker
 channel, extraction executes inside a worker started on the `extraction`
 queue, and retrieval executes in the API process — neither is a separately
-deployed service. No deployed component enqueues ingestion work: root
-`sec_discovery` and company-facts jobs come from the evaluation harnesses
-(`evals/harness/`), and worker handlers fan out the follow-on fetch jobs.
+deployed service. No deployed component enqueues ingestion work: only the evaluation harnesses
+(`evals/harness/`) enqueue it. The corpus-QA harness enqueues root
+`sec_discovery` jobs, whose handler fans out the filing fetch jobs; the reader
+smoke enqueues filing fetch jobs directly. Nothing outside tests enqueues a
+company-facts job.
 Immutable filing bodies live behind storage object keys; structured
 provenance, spans, facts, jobs, retrieval indexes, runs, and audit records
 live in PostgreSQL.

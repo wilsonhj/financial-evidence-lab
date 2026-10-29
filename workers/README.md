@@ -51,7 +51,8 @@ Exactly one provider mode must be set:
 ## Queues and deployment
 
 A worker serves one queue, chosen with `--queue` (default `ingestion`).
-`sec_discovery` enqueues its `sec_filing_fetch` jobs on `ingestion`, and the
+`sec_discovery` enqueues its `sec_filing_fetch` jobs on the queue the discovery
+job was claimed from (`ingestion` on the deployed worker), and the
 API enqueues every `extraction_run` on `extraction`. Model binding is scoped to the `extraction` queue: an
 `ingestion` worker binds no model, and the only model an `extraction` worker
 can bind is the deterministic mock behind `FEL_ALLOW_MOCK_LLM`.
