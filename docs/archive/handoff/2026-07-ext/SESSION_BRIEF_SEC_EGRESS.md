@@ -5,7 +5,7 @@ network allowlist was changed to Custom (`www.sec.gov`, `data.sec.gov`,
 `efts.sec.gov` + package managers) on 2026-07-13.
 **Issued by:** the integration flow (session `claude/repo-analysis-g0fvjy`).
 **Read first:** `AGENTS.md`, `CLAUDE.md`, `docs/handoff/STATUS.md`,
-`docs/handoff/EXTERNAL_AGENT_BRIEF.md` (contains the full acceptance
+`docs/archive/handoff/2026-07-ext/EXTERNAL_AGENT_BRIEF.md` (contains the full acceptance
 criteria for every item below — this brief does not repeat them).
 
 Your job in this session: verify SEC egress, then **execute the three
@@ -34,7 +34,7 @@ substitute — that violates the integrity rules below.
 ## Non-negotiable rules (carried over from the standing contract)
 
 1. **SEC fair access:** every request sets
-   `User-Agent: financial-evidence-lab research (sordidsunday@icloud.com)`
+   `User-Agent: financial-evidence-lab research ([redacted contact])`
    and stays far below SEC's 10 req/s limit — self-cap **≤2 req/s total
    across the whole session**. If you parallelize agents, split that budget
    (e.g. two fetching agents at ≤1 req/s each); the cap is global, not
@@ -57,7 +57,7 @@ substitute — that violates the integrity rules below.
 
 Each branch already contains a committed methodology README written when
 the work was parked. **Execute that methodology unchanged**; the READMEs
-plus `docs/handoff/EXTERNAL_AGENT_BRIEF.md` are the specification.
+plus `docs/archive/handoff/2026-07-ext/EXTERNAL_AGENT_BRIEF.md` are the specification.
 
 | Item | Branch | PR | Refs | Allowed paths | Methodology |
 |---|---|---|---|---|---|

@@ -21,13 +21,13 @@ by PR comments.
    the status file.
 3. **Egress check (Step 0):** verify HTTPS to `www.sec.gov`,
    `data.sec.gov`, `efts.sec.gov` per
-   `docs/handoff/SESSION_BRIEF_SEC_EGRESS.md`. If blocked, push the exact
+   `docs/archive/handoff/2026-07-ext/SESSION_BRIEF_SEC_EGRESS.md`. If blocked, push the exact
    proxy output to the status file and STOP. Never use mirrors or recall.
 
 ## Standing rules
 
 Compliant User-Agent `financial-evidence-lab research
-(sordidsunday@icloud.com)`; **≤ 2 req/s TOTAL** across everything; every
+([redacted contact])`; **≤ 2 req/s TOTAL** across everything; every
 accession/quote/sha256/URL you commit must come from bytes fetched in THIS
 session; never merge; never edit `docs/handoff/workstreams.yaml` or
 `docs/handoff/STATUS.md`; `make ci` green before every push; stay inside
