@@ -1,7 +1,8 @@
 # Documentation drift remediation
 
 Status: Draft plan for integration-lead review. Not registered as a workstream
-and not authorized for implementation. Decisions D1–D7 below are open.
+and not authorized for implementation. Decisions D1–D8 below carry researched
+recommendations and are awaiting the lead.
 
 Baseline: `main` @ `f4b1197` (2026-10-28). Every finding below was read
 against that commit. Recheck it against the implementation base before editing.
@@ -72,15 +73,177 @@ paths check green.
 
 ## Decisions
 
-| ID | Decision | Options | Recommendation | Owner |
-|---|---|---|---|---|
-| D1 | Requirements owner | (a) One GitHub issue plus a workstream entry with `allowed_paths`, per `CLAUDE.md`. (b) Proceed unregistered. | (a). (b) breaks the resume sequence and the allowed-paths rule. | Integration lead |
-| D2 | Who carries the shared-path slices (S3, S4)? | (a) The lead (CODEOWNERS shows `@wilsonhj` on `docs/decisions/` and `docs/handoff/`) authors or authorizes them. (b) An agent drafts them under a `contract-change` issue. | (b): the agent drafts, the lead reviews and labels. | Integration lead |
-| D3 | How much to archive | (a) Partial: S2 moves only files that no shared path links to; S3 moves files the ledger links to; `superpowers/plans/` and `production-auth.md` stay in place because ADRs link to them. (b) Full move, with ADR link edits in S4. | (a). Avoids ADR edits made only to fix links. | Integration lead |
-| D4 | ADR content | ADR-0014: accept, or record why it stays Proposed. ADR-0012: amend or withdraw (an OpenAI adapter now exists, and its revisit triggers have fired). ADR-0002: add a related-ADR line. | Accept ADR-0014. Amend ADR-0012 to point at ADR-0026. | Integration lead |
-| D5 | `make typecheck` omits `scripts/db`, which CI checks | (a) Add `scripts/db` to the `Makefile` in S3. (b) Document the gap only. | (a). A one-path change removes a documented trap. | Integration lead |
-| D6 | No hosted worker runs the `extraction` queue | (a) Docs state the gap and link a new infra issue. (b) Docs only. | (a) | Integration lead |
-| D7 | `evals/datasets/benchmark-seed/README.md` says the seed is not T0214a evidence, but the ledger checks T0214a | Correct the README, or annotate the ledger | Lead decides; S4 records the result | Integration lead |
+Researched on 2026-10-29 against `main` @ `f4b1197` and GitHub. Each entry
+gives the evidence, a recommendation, and what the lead must do. A
+recommendation is not a decision until the integration lead accepts it.
+
+| ID | Recommendation | Lead action |
+|---|---|---|
+| D1 | One tracking issue. Register the workstream in S3, not before. | Open the issue |
+| D2 | Agent drafts every slice. Lead labels, reviews and merges. | Confirm |
+| D3 | Partial archive as planned. Leave `superpowers/plans/` and `production-auth.md` in place. | Confirm |
+| D4 | Accept ADR-0014. Amend ADR-0012 to record that a revisit trigger fired, keep it Proposed, and cross-link ADR-0026. | Decide both |
+| D5 | Add `scripts/db` to `make typecheck`, authorized by ADR-0032 in S4. | Confirm |
+| D6 | Docs only: hosted extraction is withheld on purpose. Open a follow-up infra issue blocked by #62. | Confirm; open the issue |
+| D7 | No ledger change. Reword the benchmark-seed README in S1. | Confirm |
+| D8 | Post the missing #354 authorization (new item) | Authorize, or revert the status lines |
+
+### D1: Requirements owner
+
+- **Evidence.** `CLAUDE.md` asks for an assigned issue and a workstream
+  entry. Registering a workstream edits `workstreams.yaml`, which is itself a
+  shared path. Recent precedent is lighter: #357 (the remaining-work
+  snapshot) merged with "Package ID: none (dispatch snapshot, not a
+  workstream)". #342 and #348 were docs PRs carrying `contract-change`.
+- **Recommendation.** Open one GitHub issue that lists S1–S4 with their
+  allowed paths. Register `DOCS-DRIFT-REMEDIATION` in `workstreams.yaml` as
+  part of S3, which edits that file anyway, instead of in a separate
+  ledger-only PR first.
+- **Why.** It satisfies the resume sequence (an issue exists) without a
+  shared-path PR whose only content is the registration.
+
+### D2: Who carries S3 and S4
+
+- **Evidence.** CODEOWNERS assigns `docs/decisions/` and `docs/handoff/` to
+  `@wilsonhj`. All recent `contract-change` PRs (#338–#359) were opened under
+  that account and merged by it. #357's handoff names the lead as the one who
+  "decides … then dispatches".
+- **Recommendation.** An agent drafts all four slices as draft PRs. The lead
+  applies `contract-change`, posts the authorization record, reviews and
+  merges S3 and S4. This matches current practice.
+
+### D3: Archive scope
+
+- **Evidence.** These files link to the September cards, `production-auth.md`
+  or `superpowers/plans/`:
+  - ADR-0017, ADR-0024 and ADR-0025
+  - `STATUS.md` and `workstreams.yaml`
+
+  No shared path links to the July EXT briefs, the 10-27 snapshot,
+  `RECONCILIATION-2026-07-16.md`, the open-issue audit or the FinRobot
+  studies.
+- **Recommendation.** Keep the partial archive as planned:
+  - S2 moves the files with no shared-path referrers.
+  - S3 moves the ledger-linked files and fixes their links.
+  - `superpowers/plans/` and `production-auth.md` stay where they are.
+- **Why.** Moving the files ADRs link to would mean ADR edits made only to fix
+  links. Add a `superpowers/plans/README.md` saying the September plans are
+  historical, so readers aren't misled.
+
+### D4: ADR-0014 and ADR-0012
+
+- **ADR-0014 evidence.** The Proposed design is fully live:
+  - `scripts/db/migrate.py`
+  - `make db-migrate` / `db-check`
+  - CI migration steps (`ci.yml:185–198`)
+  - Railway `preDeployCommand` in both services
+
+  It merged via #247 at `75fad38` (`STATUS.md:307`). Its revisit triggers (a
+  no-transaction migration; more than one schema writer) have not fired; the
+  worker only runs `--check`. CLAUDE.md requires an accepted ADR for
+  migration changes, so leaving it Proposed leaves every future migration PR
+  formally unauthorized.
+- **ADR-0014 recommendation.** Accept it, effective at #247, recorded in
+  ADR-0032.
+- **ADR-0012 evidence, trigger that has fired.** The "any live provider is
+  wired" trigger (`ADR-0012:541`) has fired:
+  `git grep 'openai' -- packages/providers` matches
+  `openai_structured.py` and `openai_embeddings.py`.
+- **ADR-0012 evidence, trigger that has not.** The "Recall@10 below 90%"
+  trigger has not effectively fired. The 0.4692 in
+  `evals/reports/retrieval-gate/2026-09-01-synthetic-seed.json` was measured
+  with `provider: mock` and `embedding_model: mock-embed-retrieval-gate-v1`,
+  so it says nothing about real retrieval quality. The earlier audit
+  overstated this point.
+- **ADR-0012 evidence, other.** The Arm A / Arm B benchmark that the
+  mandatory trigger requires has not run; nothing outside the ADR mentions
+  it. ADR-0026 has since authorized OpenRouter and later direct
+  OpenAI/Anthropic keys for user-funded inference, while keeping "OpenAI
+  remains the accepted model baseline".
+- **ADR-0012 recommendation.** Do not withdraw it: the substitution question
+  it governs is still open. Add an amendment that:
+  - records that the live-provider trigger fired (an OpenAI adapter now
+    exists, so the incumbent can be measured);
+  - states that the Recall trigger has not fired on real embeddings;
+  - restates that the Arm A/B benchmark is still the ratify-or-withdraw
+    event;
+  - cross-links ADR-0026 for the BYOK scope.
+
+  Add "Related: ADR-0012 (Proposed), ADR-0026" to ADR-0002. This is a
+  premise refresh like ADR-0010 Amendment 1 (#355), not a new decision.
+
+### D5: `make typecheck` and `scripts/db`
+
+- **Evidence.**
+  - `Makefile:59–60` omits `scripts/db`; `ci.yml:129` includes it.
+  - CI's Python job, mypy included, is green on #359, so adding the path
+    cannot fail on current `main`.
+  - `AGENTS.md` lists `Makefile` as shared but places it in no class row.
+  - ADR-0003 says standalone root-config edits need `contract-change` and an
+    ADR.
+- **Recommendation.**
+  - Make the one-line fix.
+  - Move it from S3 to S4, so ADR-0032 authorizes it alongside the other
+    editorial corrections. That avoids writing an ADR for one line.
+  - In S1, `testing.md` describes `make ci` without the `scripts/db` caveat
+    if S4 merges first; otherwise it carries a one-line caveat.
+  - Verify by running `make typecheck` and confirming mypy lists
+    `scripts/db`.
+
+### D6: Hosted extraction worker
+
+- **Evidence.**
+  - `worker.json` starts with no `--queue`, so it consumes `ingestion`.
+  - The API enqueues `extraction_run` on `extraction`.
+  - `validate_extraction_model_binding` (`__main__.py:289`) refuses to start
+    an `extraction` worker unless `FEL_ALLOW_MOCK_LLM` is set.
+  - `build_structured_llm` (`__main__.py:226`) only ever binds the mock. Its
+    docstring says the live adapter replaces it in #62.
+  - #62 is open, and its allowed paths exclude `infra/`.
+
+  So omitting a hosted extraction service is deliberate fail-closed
+  behavior, not an oversight. Adding one today would either crash at start
+  or fabricate financials.
+- **Recommendation.** S1 documents this accurately: "hosted extraction is
+  intentionally not deployed; runs created on a hosted API stay queued until
+  a live model is bound (#62) and an `extraction` worker service is added."
+  Open a small follow-up issue, blocked by #62, for a second Railway service
+  (`--queue extraction`) and its acceptance smoke. Do not widen #62 into
+  `infra/`.
+- **Open point for the lead.** Should a hosted API reject extraction-run
+  creation while no extraction worker exists, instead of leaving runs
+  queued? That is a product decision for the follow-up issue, not this plan.
+
+### D7: Benchmark seed vs T0214a
+
+- **Evidence.**
+  - T0214a (`tasks.md:48`) is "Build the 50–100-question smoke benchmark and
+    automate the Section 19.6 gates". The build exists (65 questions) and
+    the gate is automated (`evals/harness/retrieval_gate.py`; the committed
+    report runs all 65).
+  - ADR-0013 records the lead's reconciliation that checked T0214a on that
+    basis.
+  - The README's caveat concerns whether the seed is *exit-gate evidence*:
+    point-in-time timestamps and reproducible source-byte checks.
+  - That is the separate M2 exit criterion (`spec.md:1113`), which has not
+    been met.
+- **Recommendation.** Leave the ledger alone. In S1, reword
+  `evals/datasets/benchmark-seed/README.md`: T0214a's build and automation
+  are complete, and the seed is not yet M2 exit-gate evidence until the
+  timestamp and byte-verification promotion checks pass. `evals/` is not a
+  shared path.
+
+### D8: ADR-0029/0030/0031 authorization (carried over from the 10-27 snapshot)
+
+- **Evidence.**
+  - All three status lines read "Accepted by the integration lead on PR #354
+    (2026-10-27)", and the index agrees.
+  - #354 has no reviews, and its only comment is from the Vercel bot.
+  - `remaining-work-2026-10-27.md` raised this item. #359 did not close it.
+- **Recommendation.** The lead posts a one-line authorization comment on #354
+  naming the three ADRs. That makes the existing status lines true with no
+  file edits. Otherwise, S4 reverts the three status lines to Proposed and
+  aligns the index. Either way, S3's `STATUS.md` records the outcome.
 
 ## Slices
 
@@ -95,10 +258,11 @@ The slices depend on each other as follows:
 
 ### S0: Registration (lead)
 
-- Changes: one GitHub issue, and a workstream entry `DOCS-DRIFT-REMEDIATION`
-  in `workstreams.yaml` covering branches and `allowed_paths` for S1–S4.
+- Changes: one GitHub issue listing S1–S4 with their branches and allowed
+  paths (D1). The `workstreams.yaml` entry is added in S3.
 - Prerequisites: D1 and D2.
-- Done when: the issue exists and the entry is merged.
+- Done when: the issue exists. Also open the D6 follow-up infra issue, blocked
+  by #62.
 
 ### S1: Correctness fixes in non-shared docs (plain docs PR)
 
@@ -149,10 +313,18 @@ fails the recheck is dropped and listed in the PR body.
     `extraction-acceptance.yml`), the `show-report` advice, the stray Testing
     Library entry, and the build env vars.
   - Remove "(T0002)" from the `local.md` title.
-  - Wording depends on D5. If S3 fixes the `Makefile` first, drop the
+  - Wording depends on D5. If S4 fixes the `Makefile` first, drop the
     `scripts/db` note.
-- **Evals: `evals/reports/corpus-qa/SCHEMA.md`.** Replace the
-  migrations-0001+0002 `psql` recipe with `scripts/db/migrate.py`.
+- **Evals: `evals/reports/corpus-qa/SCHEMA.md`,
+  `evals/datasets/benchmark-seed/README.md`.**
+  - Replace the migrations-0001+0002 `psql` recipe with
+    `scripts/db/migrate.py`.
+  - Reword the seed status per D7: T0214a's build and automation are
+    complete; the seed is not yet M2 exit-gate evidence.
+- **Hosted extraction wording (D6), in `overview.md`, `infra/railway/README.md`
+  and `OPERATOR.md`.** Hosted extraction is intentionally not deployed: no
+  live model is bound until #62, and no `extraction` worker service exists.
+  Link the follow-up issue.
 - **Handoff, non-shared files: `docs/handoff/CREDENTIALS.md`,
   `docs/handoff/README.md`, `docs/handoff/FABLE_ORCHESTRATION.md`.**
   - AC-5.
@@ -215,7 +387,8 @@ fails the recheck is dropped and listed in the PR body.
   Update the ledger's links to them in the same PR.
 - **`AGENTS.md:62`:** the label check exists in `shared-paths.yml`; replace
   the "still unbuilt (#141)" sentence.
-- **`Makefile`:** add `scripts/db` to `typecheck`, if D5 is (a).
+- **Registration:** add the `DOCS-DRIFT-REMEDIATION` entry (D1).
+- **D8:** record in `STATUS.md` whether the #354 authorization was posted.
 - **Expected result:** AC-7, AC-8, and AC-9 for the moved files.
 
 ### S4: Reconcile ADR and spec status (`contract-change`, accepted ADR, lead review)
@@ -241,6 +414,16 @@ fails the recheck is dropped and listed in the PR body.
   - Add a new `specs/README.md` lifecycle table.
 - **Other shared docs:** `packages/contracts/README.md:30` (the parity test
   exists) and `db/migrations/README.md:27` (the directory is no longer empty).
+- **`Makefile`:** add `scripts/db` to `typecheck` (D5), with ADR-0032 as the
+  authorization.
+- **D8 fallback:** if the lead does not post the #354 authorization, revert
+  the ADR-0029, ADR-0030 and ADR-0031 status lines to Proposed and align the
+  index.
+- **D4 specifics:**
+  - ADR-0014 becomes Accepted, effective at #247.
+  - ADR-0012 gets an amendment recording which revisit triggers have fired
+    and stays Proposed.
+  - ADR-0002 gains a related-ADR line.
 - **Expected result:** AC-10.
 
 ## Verification
@@ -260,7 +443,7 @@ implemented.
 | Independent review | One fresh reviewer per PR, given the findings list and the diff, not the author's verdict | All slices | Planned. S4 also needs lead review of the ADR text. |
 
 No application tests apply: S1–S4 change no executable code. The exception is
-the D5 `Makefile` line, which must be checked by running `make typecheck` and
+the D5 `Makefile` line in S4, which must be checked by running `make typecheck` and
 seeing mypy cover `scripts/db`.
 
 ## Risks
@@ -275,9 +458,14 @@ seeing mypy cover `scripts/db`.
 
 ## Blockers and next action
 
-- **Readiness: pending decision.** S0 needs D1 and D2 before any slice can be
-  dispatched under `CLAUDE.md`. S3 needs D5. S4 needs D4 and D7.
+- **Readiness: pending decision.** Every decision has a researched
+  recommendation (see Decisions). The lead must still:
+  - open the S0 issue (D1) and confirm D2 and D3 before S1 and S2 are
+    dispatched;
+  - decide D4 and D8 before S4's ADR-0032 can be written;
+  - confirm D5, D6 and D7. They have no other dependency.
 - **Not blocked by any decision:** recheck the remaining audit findings
   read-only, and extend the index script to follow sub-indexes.
-- **Next action:** the integration lead decides D1–D3 and registers S0. S1 and
-  S2 can then start in parallel.
+- **Next action:** the integration lead accepts or overrides the D1–D8
+  recommendations, opens the S0 issue, and posts (or declines) the #354
+  authorization. S1 and S2 can then start in parallel.
