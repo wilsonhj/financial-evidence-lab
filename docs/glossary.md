@@ -254,8 +254,8 @@ paths, `dense`, `lexical`, `facts` and `tables`, whose candidates are fused by
 
 Provenance for a non-SEC provider fetch (FRED, Alpha Vantage): the source and
 final URL with credentials redacted, retrieval time, status, content type, byte
-length, SHA-256 of the decoded body and attempt count. It is attached to the
-values parsed from that body and excluded from their equality. Sources:
+length, SHA-256 of the decoded body and attempt count. It travels with (or beside) the
+values parsed from that body and never counts toward their equality. Sources:
 [ADR-0029](decisions/ADR-0029-retrieval-receipts.md),
 [`workers/src/fel_workers/http.py`](../workers/src/fel_workers/http.py).
 

@@ -57,16 +57,15 @@ Historical records:
   and [`external-agents-2026-09-16.md`](external-agents-2026-09-16.md) — the
   September 16 implementation and research cards. #336 and #337 merged as
   #340 and #339 (follow-up #351); do not dispatch from them.
-- The [September 9 issue audit](../research/2026-09-09-open-issue-audit.md) and
+- The [September 9 issue audit](../archive/research/2026-09-09-open-issue-audit.md) and
   [resolution plan](../superpowers/plans/2026-09-09-backlog-resolution.md) —
-  the September backlog baseline.
-
+  the September backlog baseline (audit archived).
 - [`execution-2026-09-09.md`](execution-2026-09-09.md) — per-issue execution
   evidence from the September 9 backlog run and its continuations.
-- [`EXTERNAL_AGENT_BRIEF.md`](EXTERNAL_AGENT_BRIEF.md) (issued 2026-07-13),
-  [`SESSION_BRIEF_SEC_EGRESS.md`](SESSION_BRIEF_SEC_EGRESS.md) (2026-07-13) and
-  [`EXT_EXECUTOR_BRIEF_V2.md`](EXT_EXECUTOR_BRIEF_V2.md) (2026-07-14) — the July
-  EXT-1/2/3 briefs for PRs #74–#76. [`STATUS.md`](STATUS.md) records the
+- [`EXTERNAL_AGENT_BRIEF.md`](../archive/handoff/2026-07-ext/EXTERNAL_AGENT_BRIEF.md) (issued 2026-07-13),
+  [`SESSION_BRIEF_SEC_EGRESS.md`](../archive/handoff/2026-07-ext/SESSION_BRIEF_SEC_EGRESS.md) (2026-07-13) and
+  [`EXT_EXECUTOR_BRIEF_V2.md`](../archive/handoff/2026-07-ext/EXT_EXECUTOR_BRIEF_V2.md) (2026-07-14) — the July
+  EXT-1/2/3 briefs, now archived, for PRs #74–#76. [`STATUS.md`](STATUS.md) records the
   #74/#75 research as recovered onto `main`, and `EXTERNAL_AGENT_BRIEF.md`
   bases branches on the retired `integration/m0`; do not dispatch from them.
 
