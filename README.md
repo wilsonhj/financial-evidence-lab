@@ -151,12 +151,14 @@ Supported toolchain:
 corepack enable
 corepack pnpm install --frozen-lockfile
 
-python3.11 -m venv .venv
-.venv/bin/pip install --upgrade pip
-.venv/bin/pip install -r requirements-dev.txt
+make install-py
+.venv/bin/pip install --require-hashes -r requirements-dev.lock
 ```
 
-If `python3.11` is not on your `PATH`, do not substitute another interpreter
+`make install-py` creates `.venv` with the interpreter `.python-version` pins
+(3.11) and refuses to use any other. The second line installs the exact hashed
+versions CI installs; `requirements-dev.txt` alone lists only minimum versions.
+If Python 3.11 is not on your `PATH`, do not substitute another interpreter
 silently — `.python-version` pins 3.11 and CI builds against it.
 [`docs/development/local.md`](./docs/development/local.md) is the canonical
 source for the toolchain, including how to obtain 3.11 and what to check if

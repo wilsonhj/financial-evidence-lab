@@ -187,13 +187,19 @@ same database are never aggregated.
 
 ## Regenerating the committed synthetic report
 
-Any disposable Postgres with `db/migrations/0001` + `0002` applied works.
+Any disposable Postgres with pgvector >= 0.8.2 works, once every migration
+has been applied with `scripts/db/migrate.py` (ADR-0014). Migrations 0001 and
+0002 alone are not enough: the worker's queue claim
+(`workers/src/fel_workers/queue.py`) filters on `jobs.available_at`, which
+`0007_jobs_hardening.sql` adds, and `0003_retrieval_core.sql` needs pgvector.
 The destructive reset fails closed: it never reads `FEL_DATABASE_URL`,
 requires the explicit confirmation flag, and refuses database names not
 ending in `_test` unless `FEL_HARNESS_ALLOW_RESET=1` marks the target
 disposable — all with exit 2 before any connection.
 
 ```sh
+.venv/bin/python scripts/db/migrate.py --database-url "postgresql://.../<name>_test"
+
 TEST_DATABASE_URL="postgresql://.../<name>_test" \
 PYTHONPATH=evals:workers/src:packages/providers:apps/api \
 .venv/bin/python -m harness.corpus_qa \
@@ -224,9 +230,8 @@ report next to the synthetic one:
 # 1. Fresh dedicated database (empty queue — the gate refuses anything else).
 createdb fel_corpus_qa_live
 
-# 2. Apply the schema migrations.
-psql "postgresql://<host>/fel_corpus_qa_live" -f db/migrations/0001_platform_core.sql
-psql "postgresql://<host>/fel_corpus_qa_live" -f db/migrations/0002_corpus_core.sql
+# 2. Apply every migration with the ledger applier (needs pgvector >= 0.8.2).
+.venv/bin/python scripts/db/migrate.py --database-url "postgresql://<host>/fel_corpus_qa_live"
 
 # 3. Run the harness against that dedicated database.
 FEL_DATABASE_URL="postgresql://<host>/fel_corpus_qa_live" \

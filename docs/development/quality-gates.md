@@ -12,7 +12,7 @@
 
 </details>
 
-Source references verified against commit `437ce55`.
+Source references verified against commit `f4b1197`.
 
 Issue #203 adds regression floors to the existing required Python and JavaScript
 jobs. These are measured coverage baselines, not proof of financial accuracy or
@@ -45,8 +45,8 @@ JavaScript measured all 50 test files with production source inclusion.
 Run the same gates locally from the repository root:
 
 ```sh
-TEST_DATABASE_URL=... FEL_REQUIRE_DB=1 python -m pytest --cov --cov-report=term-missing --cov-report=json:coverage/python.json
-pnpm run test --coverage
+TEST_DATABASE_URL=... FEL_REQUIRE_DB=1 .venv/bin/pytest --cov --cov-report=term-missing --cov-report=json:coverage/python.json
+corepack pnpm run test --coverage
 ```
 
 Use an isolated migrated test database, never a deployed database. Python reads
