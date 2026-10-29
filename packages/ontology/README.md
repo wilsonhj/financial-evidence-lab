@@ -10,11 +10,12 @@
 - [fel_ontology/units.py](fel_ontology/units.py) — `unit-comparison/v1` unit canonicalization (ADR-0019)
 - [fel_ontology/data/currency-codes.json](fel_ontology/data/currency-codes.json) — pinned ISO 4217 List One codes with source and SHA-256
 - [pyproject.toml](pyproject.toml) — package metadata; ships `data/*.json`
+- [../../scripts/runtime/install.sh](../../scripts/runtime/install.sh) — deploy-time wheel build and install
 - [tests/](tests/) — loader, comparability, unit and definition-conflict tests
 
 </details>
 
-Source references verified against commit `437ce55`.
+Source references verified against commit `f4b1197`.
 
 `fel-ontology` is the machine-readable B2B SaaS metrics ontology used by the
 extraction runtime. It defines which metrics exist (ARR, MRR, NRR, GRR,
@@ -78,8 +79,13 @@ changes comparison semantics and requires a reviewed rollout; see the
   `workflow_context.py`, `roles/base.py`, `normalize/currency.py`, and the
   validators under `validate/`.
 
-Because the worker imports this package at startup, `packages/ontology` must be
-on `PYTHONPATH` for both services.
+Both services import this package, so it must be importable wherever they
+run. Deployed API and worker services install it as a wheel:
+[scripts/runtime/install.sh](../../scripts/runtime/install.sh) (the Railway
+build command for both) builds `packages/ontology` with the other first-party
+packages and installs the wheels. `requirements-dev.txt` does not install
+first-party packages, so a local checkout puts `packages/ontology` on
+`PYTHONPATH`; see [Workers, Run locally](../../workers/README.md#run-locally).
 
 ## Test
 

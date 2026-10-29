@@ -10,12 +10,14 @@
 - [packages/contracts/contracts.test.ts](../../packages/contracts/contracts.test.ts) — generated-client drift check
 - [apps/web/playwright.config.ts](../../apps/web/playwright.config.ts) — fixture-mode browser tests
 - [.github/workflows/ci.yml](../../.github/workflows/ci.yml) — CI jobs
+- [.github/required-checks.md](../../.github/required-checks.md) — the seven required pull-request checks
+- [scripts/db/migrate.py](../../scripts/db/migrate.py) — checksummed migration applier (ADR-0014)
 - [.github/workflows/advisories.yml](../../.github/workflows/advisories.yml) — scheduled advisory refresh
 - [scripts/audit-bulk.mjs](../../scripts/audit-bulk.mjs) — bulk npm advisory check
 
 </details>
 
-Source references verified against commit `437ce55`.
+Source references verified against commit `f4b1197`.
 
 Financial Evidence Lab tests correctness at several boundaries: pure domain
 logic, generated contracts, service adapters, PostgreSQL/RLS behavior,
@@ -44,7 +46,7 @@ relevant loop while developing, then the full gate before review.
 
 | Layer                     | Main tools                                            | Covers                                                           |
 | ------------------------- | ----------------------------------------------------- | ---------------------------------------------------------------- |
-| TypeScript unit/component | Vitest, Testing Library                               | contracts, web state, reader rendering, observatory behavior     |
+| TypeScript unit/component | Vitest (`node` environment)                           | contracts, web state, reader rendering, observatory behavior     |
 | Python unit               | pytest                                                | API services, worker logic, provider mocks, retrieval, graders   |
 | Database integration      | pytest + PostgreSQL/pgvector                          | migrations, RLS, queues, reader snapshots, retrieval persistence |
 | Contract drift            | repository generation scripts                         | JSON Schema/OpenAPI ↔ generated TypeScript consistency           |
@@ -59,15 +61,21 @@ relevant loop while developing, then the full gate before review.
 corepack enable
 corepack pnpm install --frozen-lockfile
 
-python3.11 -m venv .venv
-.venv/bin/pip install --upgrade pip
-.venv/bin/pip install -r requirements-dev.txt
+make install-py
+.venv/bin/pip install --require-hashes -r requirements-dev.lock
 ```
 
 Use `corepack pnpm`, especially when a globally installed pnpm has a different
 major version.
 
-If `python3.11 -m venv .venv` fails with `command not found: python3.11`, see
+`make install-py` reads `.python-version`, creates `.venv` with the matching
+interpreter (`python3.11`, or `python3` only when it reports 3.11), and refuses
+to run otherwise. It then installs `requirements-dev.txt`, whose entries are
+minimum versions. The second line pins the venv to the exact hashed versions
+CI installs (`pip install --require-hashes -r requirements-dev.lock` in
+ci.yml's `python` job), so run it after `make install-py`.
+
+If `make install-py` reports that Python 3.11 is missing, see
 [local.md's `python3.11` is not installed](./local.md#python311-is-not-installed)
 — do not substitute a newer local Python; `.python-version` stays pinned to
 3.11 because CI builds against it.
@@ -112,44 +120,50 @@ name while iterating, but run the workspace command before handoff.
 .venv/bin/pytest evals/tests
 .venv/bin/pytest packages/calculation-engine/tests
 
-# Static checks (matches the Makefile's format-check/lint/typecheck targets
-# and ci.yml's python job exactly — packages/ontology joined the tree in #145)
-.venv/bin/ruff check \
-  apps workers evals packages/providers packages/retrieval packages/retrieval-evals packages/ontology
-.venv/bin/mypy \
-  apps/api/app workers/src evals/graders \
-  packages/providers/fel_providers \
-  packages/retrieval/fel_retrieval \
-  packages/retrieval-evals/fel_retrieval_evals \
-  packages/ontology/fel_ontology
-.venv/bin/black --check \
-  apps workers evals packages/providers packages/retrieval packages/retrieval-evals packages/ontology
+# Static checks: Black, Ruff and mypy, plus the JS format/lint/typecheck
+# scripts. The Makefile owns the path lists; do not copy them here.
+make format-check lint typecheck
 
-# Security gates. CI runs these too — bandit and pip-audit in ci.yml's python
-# job, audit-bulk in its javascript job. They are the three gate commands most
-# often missed locally, because the sections above stop at the static checks.
-.venv/bin/bandit -q -r \
-  apps workers evals packages/providers packages/retrieval packages/retrieval-evals packages/ontology \
-  -c pyproject.toml
-.venv/bin/pip-audit -r requirements-dev.txt
-node scripts/audit-bulk.mjs
+# Security gates: Bandit, pip-audit and the bulk npm advisory check
+make security
 ```
+
+The Makefile's Black, Ruff and Bandit path lists match ci.yml's `python` job.
+Two Python gates differ from CI:
+
+- **mypy:** CI's mypy step also checks `scripts/db`, which `make typecheck`
+  does not yet include. Run `.venv/bin/mypy scripts/db` as well when you change
+  the migration applier.
+- **pip-audit:** `make security` audits `requirements-dev.txt`. CI audits the
+  three lock files instead: `requirements.lock`, `requirements-dev.lock` and
+  `scripts/runtime/build.lock`.
+
+[Full local gate](#full-local-gate) lists every difference between `make ci`
+and CI.
 
 ## Database-backed tests
 
-Create a dedicated PostgreSQL database with pgvector and apply every migration.
+Create a dedicated PostgreSQL database with pgvector >= 0.8.2 and apply every
+migration with the checksummed applier (`scripts/db/migrate.py`, ADR-0014). The
+applier writes the `schema_migrations` ledger; a `psql` loop over
+`db/migrations/*.sql` does not, and
+`infra/scripts/backup_restore_smoke.sh` refuses a database without a ledger.
 
 If PostgreSQL is a native install reachable over its default Unix socket,
 the bare form works:
 
 ```sh
 createdb fel_test
-for migration in db/migrations/*.sql; do
-  psql postgresql:///fel_test -v ON_ERROR_STOP=1 -f "$migration"
-done
 export TEST_DATABASE_URL=postgresql:///fel_test
+.venv/bin/python scripts/db/migrate.py --database-url "$TEST_DATABASE_URL"
 .venv/bin/pytest
 ```
+
+Pass `--database-url` explicitly. Without it, `migrate.py` uses
+`FEL_DATABASE_URL` first, then `DATABASE_URL`, then `TEST_DATABASE_URL`, so a
+shell that already exports `FEL_DATABASE_URL` would migrate that database
+instead. `migrate.py --check` exits non-zero if a migration is pending or an
+applied file changed.
 
 If you started PostgreSQL with
 [`local.md`'s Docker option](./local.md#option-b-local-postgresql-and-api),
@@ -160,23 +174,24 @@ file or directory`. Use the same host/port/credentials as
 
 ```sh
 PGPASSWORD=fel createdb -h localhost -p 5432 -U fel fel_test
-for migration in db/migrations/*.sql; do
-  psql "postgresql://fel:fel@localhost:5432/fel_test" -v ON_ERROR_STOP=1 -f "$migration"
-done
 export TEST_DATABASE_URL=postgresql://fel:fel@localhost:5432/fel_test
+.venv/bin/python scripts/db/migrate.py --database-url "$TEST_DATABASE_URL"
 .venv/bin/pytest
 ```
 
 Requirements:
 
 - the test URL must never point to production;
-- the database must support pgvector;
+- the database must have pgvector >= 0.8.2 (`0003_retrieval_core.sql` refuses
+  older versions);
 - the role must be able to run the repository's migration/setup fixtures;
 - retrieval isolation tests may create disposable sibling databases, so the
   role used for the full suite needs `CREATEDB`.
 
 When `TEST_DATABASE_URL` is absent, DB-gated suites intentionally skip. A green
 local run with skips is not equivalent to the GitHub Actions PostgreSQL jobs.
+CI sets `FEL_REQUIRE_DB=1`, which turns a missing `TEST_DATABASE_URL` into a
+collection error; set it locally to get the same guarantee.
 
 The database suites are where tenant isolation, application-role grants,
 cutoff boundaries, queue leasing, index immutability, reader snapshot
@@ -217,14 +232,21 @@ Playwright runs the Next.js app in deterministic fixture mode:
 
 ```sh
 corepack pnpm --filter @fel/web exec playwright install chromium
-FEL_EVIDENCE_SOURCE=fixture \
-  corepack pnpm --filter @fel/web run test:e2e
+corepack pnpm --filter @fel/web run test:e2e
 ```
 
-Use the Playwright report and trace for failures:
+`apps/web/playwright.config.ts` starts the server itself with
+`FEL_DEPLOYMENT_MODE=fixture`, an empty `FEL_API_BEARER_TOKEN` and
+`FEL_EVIDENCE_SOURCE=fixture`, so no variables are needed on the command line.
+
+The config uses the `list` reporter only, so there is no HTML report to open.
+Failure output goes to `apps/web/test-results/` (CI uploads that directory as
+the `playwright-results` artifact). Traces are recorded on the first retry,
+and local runs do not retry. To record one locally, rerun with
+`--trace on`:
 
 ```sh
-corepack pnpm --filter @fel/web exec playwright show-report
+corepack pnpm --filter @fel/web exec playwright test --trace on
 ```
 
 Fixture browser tests prove UI behavior, routing, accessibility hooks, and
@@ -235,11 +257,18 @@ Next.js path.
 
 ## Build verification
 
-The web runtime requires an explicit evidence mode even during build:
+Build with the same variables `apps/web/playwright.config.ts` passes to its
+server:
 
 ```sh
-FEL_EVIDENCE_SOURCE=fixture corepack pnpm --filter @fel/web build
+FEL_DEPLOYMENT_MODE=fixture FEL_API_BEARER_TOKEN= FEL_EVIDENCE_SOURCE=fixture \
+  corepack pnpm --filter @fel/web build
 ```
+
+The guarded routes (`apps/web/src/proxy.ts`) return 503 unless
+`FEL_DEPLOYMENT_MODE` is `fixture`, `reader-smoke` or `synthetic-http` and that
+mode's checks pass (`apps/web/src/lib/deployment-mode.ts`). Fixture mode also
+requires `FEL_EVIDENCE_SOURCE=fixture` and an empty `FEL_API_BEARER_TOKEN`.
 
 For HTTP-mode builds, provide all server-side runtime variables described in
 [`local.md`](./local.md). Never use a client-public bearer token to make a build
@@ -256,6 +285,19 @@ make ci
 The target runs formatting, linting, static types, JS/Python tests, Bandit,
 pip-audit, and the bulk npm advisory check. It can require registry/network
 access for dependency advisory data.
+
+### Where `make ci` and CI differ
+
+`make ci` is not a full replica of CI. As of `f4b1197`:
+
+| Area | `make ci` | CI (`.github/workflows/ci.yml`) |
+| --- | --- | --- |
+| Python install | `make install-py` installs `requirements-dev.txt` (minimum versions) | `pip install --require-hashes -r requirements-dev.lock` |
+| Coverage floors | `pytest` and `pnpm run test` with no coverage | `pytest --cov ...` and `pnpm run test --coverage`; floors in `pyproject.toml` and `vitest.config.ts` fail the job (see [quality-gates.md](quality-gates.md)) |
+| mypy | omits `scripts/db` | also checks `scripts/db` |
+| pip-audit | `requirements-dev.txt` | `requirements.lock`, `requirements-dev.lock` and `scripts/runtime/build.lock` |
+| Database suites | skip unless you set `TEST_DATABASE_URL` | PostgreSQL 17 + pgvector 0.8.5 service, `FEL_REQUIRE_DB=1` |
+| Not run by `make ci` | — | Gitleaks, Playwright (fixture and deployment-guard), the reproducible production install, the migration/backup-restore smoke, and the shared-path label check |
 
 **Known interaction if you obtained Python 3.11 through `uv`.** The `security`
 target's `pip-audit` step builds a disposable venv with
@@ -276,13 +318,30 @@ interpreter. Either run the other targets individually
 (`make format-check lint typecheck test`) and let CI cover the advisory scan, or
 use a non-standalone 3.11 for the audit step.
 
-GitHub Actions additionally runs:
+Seven checks must pass before a pull request can merge. The exact names are
+in [`.github/required-checks.md`](../../.github/required-checks.md):
 
-1. Gitleaks;
-2. the JS/TS quality and generated-client gates;
-3. Playwright browser tests;
-4. Python tests with PostgreSQL 17 + pgvector;
-5. database migration/backup/restore harnesses.
+1. `Secret scan (gitleaks)`;
+2. `JS/TS — format, lint, typecheck, test, audit` — includes the
+   generated-client drift case and the JavaScript coverage floors;
+3. `Web — Playwright E2E (fixture mode)` — the fixture suite, then the public
+   deployment-guard suite (`playwright.deployment-guard.config.ts`) over
+   production HTTP;
+4. `Python — format, lint, typecheck, test, security` — PostgreSQL 17 +
+   pgvector and the Python coverage floor;
+5. `Python — reproducible production installs` — builds the runtime closure
+   twice from `requirements.lock` and `scripts/runtime/build.lock` and diffs
+   the results;
+6. `DB — migration and backup-restore smoke` — `migrate.py`, backup/restore
+   and the migration regression harnesses;
+7. `Shared-path changes carry contract-change` (`shared-paths.yml`).
+
+These workflows also run on pull requests but are not required checks:
+
+- `extraction-acceptance.yml` — extraction HTTP API, worker and browser
+  acceptance;
+- `docs.yml` — offline relative-link and anchor check (lychee) and
+  markdownlint on changed Markdown files.
 
 Treat GitHub Actions as the final repository gate because it exercises services
 that a database-free laptop cannot.
@@ -335,9 +394,11 @@ Measured on `main` at `a25bf7c` (#152, the handoff reconciliation commit):
   `TEST_DATABASE_URL`; nothing skips for any other reason.
 - 1068 Python tests collected in total — the 881 above plus the 187 a database
   unlocks.
-- `main`'s CI run for that commit had all five jobs green — `secrets`,
+- `main`'s CI run for that commit had all five of its jobs green — `secrets`,
   `javascript`, `web-e2e`, `python`, `database`
-  (`gh run view --json conclusion,jobs`).
+  (`gh run view --json conclusion,jobs`). That is a historical record; the
+  current required set is seven checks, listed under
+  [Full local gate](#full-local-gate).
 
 The full-database pass count is deliberately **not** published here. Reaching
 it needs pgvector >= 0.8.2, because `0003_retrieval_core.sql` uses halfvec and
@@ -375,8 +436,9 @@ Check:
 
 ### Playwright cannot start
 
-Install the browser binary, verify port availability, and run the app with
-`FEL_EVIDENCE_SOURCE=fixture`. Review `playwright.config.*` before changing
+Install the browser binary, verify port availability (the fixture config uses
+port 3210), and run the app with `FEL_DEPLOYMENT_MODE=fixture`,
+`FEL_EVIDENCE_SOURCE=fixture` and an empty `FEL_API_BEARER_TOKEN`. Review `playwright.config.*` before changing
 timeouts; a startup/configuration failure is not usually fixed by a longer
 assertion timeout.
 

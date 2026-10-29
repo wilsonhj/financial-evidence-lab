@@ -17,10 +17,21 @@ Budgets default to ADR-0007 caps. Telemetry is redacted — never logs prompts o
 filing text. All proposals enter ``needs_review``; there is no auto-approve path.
 
 A job whose ``extraction_runs`` row is already ``succeeded``/``failed``/
-``cancelled`` is refused with ``queue.PermanentFailure`` before any write and
-dead-lettered by the consumer (``error.code = JOB_PERMANENT_FAILURE``): 0004
-makes a terminal run unreopenable, so no retry can help. Re-enqueue against a
-NEW run row if the work is still wanted.
+``cancelled`` is never retried: 0004 makes a terminal run unreopenable. On the
+durable path the consumer reads the run status before dispatch, and again when
+the store raises ``RunAlreadyTerminal`` or the handler fails after landing the
+row, then parks the job to MATCH the run (``consumer._park_terminal_run_job``):
+a ``succeeded`` run completes the job (its worker lost the lease after the run
+write), a ``cancelled`` run cancels it, and only a ``failed`` run dead-letters
+it. Re-enqueue against a NEW run row if the work is still wanted.
+
+Hosted extraction is intentionally not deployed. The Railway worker service
+(``infra/railway/worker.json``) starts ``python -m fel_workers run`` without
+``--queue``, so it serves the default ``ingestion`` queue, while the API
+enqueues every ``extraction_run`` on ``extraction``. The only model a worker
+can bind is the deterministic mock behind ``FEL_ALLOW_MOCK_LLM`` until a live
+model is bound (#62), and no ``extraction`` worker service exists yet (#362).
+Until both land, hosted runs stay ``queued``.
 
 Stage output is durable in ``extraction_run_steps.output`` with ``output_hash``
 over it (migration 0006, ADR-0011), written in one INSERT. A resume re-hashes

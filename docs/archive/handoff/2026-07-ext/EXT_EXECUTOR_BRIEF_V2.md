@@ -21,13 +21,13 @@ by PR comments.
    the status file.
 3. **Egress check (Step 0):** verify HTTPS to `www.sec.gov`,
    `data.sec.gov`, `efts.sec.gov` per
-   `docs/handoff/SESSION_BRIEF_SEC_EGRESS.md`. If blocked, push the exact
+   `docs/archive/handoff/2026-07-ext/SESSION_BRIEF_SEC_EGRESS.md`. If blocked, push the exact
    proxy output to the status file and STOP. Never use mirrors or recall.
 
 ## Standing rules
 
 Compliant User-Agent `financial-evidence-lab research
-(sordidsunday@icloud.com)`; **≤ 2 req/s TOTAL** across everything; every
+([redacted contact])`; **≤ 2 req/s TOTAL** across everything; every
 accession/quote/sha256/URL you commit must come from bytes fetched in THIS
 session; never merge; never edit `docs/handoff/workstreams.yaml` or
 `docs/handoff/STATUS.md`; `make ci` green before every push; stay inside
@@ -36,8 +36,10 @@ each item's allowed paths.
 ## Work items, in order
 
 ### 1. EXT-2 acceptance round — branch `agent/ext-sec-fixtures`
+
 Integration-lead rulings (previously PR #76 comments, restated here as
 canonical):
+
 - **8th stress feature:** add a deterministic byte/regex detector for at
   least one of `parenthesized_negatives`, `dash_as_zero`,
   `ixbrl_nil_facts` over the fetched primary documents; tag truthfully;
@@ -65,8 +67,10 @@ canonical):
   validator + `make ci`, push.
 
 ### 2. EXT-1 egress spot-checks — branch `agent/ext-benchmark-seed`
+
 The dataset passed full offline verification (11/11). Only egress checks
 remain (sampling; budget-light):
+
 - The six `insufficient_evidence` questions (BM-0056..0061): confirm each
   claimed-absent metric is absent from the cited 8-K AND from the
   corresponding 10-Q before `as_of`. Fix any falsified entries.
@@ -77,7 +81,9 @@ remain (sampling; budget-light):
   push.
 
 ### 3. EXT-3 corrections — branch `agent/ext-ontology-research`
+
 Offline verification passed countable bars; corrections required:
+
 - **Scan the four never-cited issuers for real** (APPF, FIVN, PAYC,
   PCTY): latest 10-K MD&A + earnings releases. FIVN "Dollar-Based
   Retention Rate" and PCTY/PAYC annual revenue-retention rates plausibly
@@ -96,6 +102,7 @@ Offline verification passed countable bars; corrections required:
 - Rebase onto `main`; push.
 
 ### 4. T0112 live corpus run — branch `agent/m1-corpus-qa` (merged; push a NEW branch `agent/t0112-live-report` from main)
+
 Follow `evals/reports/corpus-qa/SCHEMA.md` exactly: fresh dedicated
 database (`createdb fel_corpus_qa_live`, migrations 0001+0002), then the
 live harness command with `FEL_SEC_USER_AGENT`, `--mode live`,
@@ -105,12 +112,14 @@ live harness command with `FEL_SEC_USER_AGENT`, `--mode live`,
 Commit ONLY the report JSON on the new branch and push. If the run fails,
 commit the failure report + status notes instead — never edit metrics.
 
-### 5. Issue #81 (EXT-2b supplemental cohort) — only after item 1.
+### 5. Issue #81 (EXT-2b supplemental cohort) — only after item 1
+
 Scope is in the issue body (restated: 3–6 non-cohort issuers selected
 from fetched EDGAR evidence — item-4.02 8-Ks, 10-KT/QT filers — appended
 as clearly-marked supplemental entries; same fetch-verify pipeline).
 
 ## Definition of done
+
 All status-file milestones pushed; branches rebased onto main with green
 CI; the live report branch pushed. The integration lead handles all PR
 state, comments, and merges.

@@ -54,6 +54,7 @@ GitHub. Terms are defined in the [glossary](glossary.md).
 | [Unit policy migration](runbooks/unit-policy-migration.md) | Deploying the ADR-0019 unit comparison policy | supporting |
 | [Guidance range policy migration](runbooks/guidance-range-policy-migration.md) | Deploying the ADR-0022 signed guidance range policy | supporting |
 | [Extraction operator notes](../workers/src/fel_workers/extraction/OPERATOR.md) | Operator notes kept beside the extraction worker code | supporting |
+| [Isotonic calibrator notes](../workers/src/fel_workers/extraction/ISOTONIC.md) | ADR-0028 `isotonic-v1` calibrator notes kept beside the code | reference |
 
 ## Handoff and coordination
 
@@ -66,12 +67,10 @@ GitHub. Terms are defined in the [glossary](glossary.md).
 | [Contract freeze protocol](handoff/CONTRACTS.md) | What the M0 contract freeze covers | supporting |
 | [Credential registry](handoff/CREDENTIALS.md) | Credential names and ownership only, never values | supporting |
 | [Production auth notes](handoff/production-auth.md) | Configuring the ADR-0025 Supabase token verifier | supporting |
-| [Implementation agents, 2026-09-16](handoff/implementation-agents-2026-09-16.md) | Current external implementation cards for #336 and #337 | supporting |
-| [External agents, 2026-09-16](handoff/external-agents-2026-09-16.md) | Bounded external research and review cards | supporting |
+| [Remaining work, 2026-10-27](handoff/remaining-work-2026-10-27.md) | Point-in-time snapshot; its "Do now" items closed in #359, its integration-lead items move into `STATUS.md` under #363 | reference |
+| [Implementation agents, 2026-09-16](handoff/implementation-agents-2026-09-16.md) | External implementation cards for #336 and #337, both merged (historical) | reference |
+| [External agents, 2026-09-16](handoff/external-agents-2026-09-16.md) | Bounded external research and review cards (historical) | reference |
 | [Execution record, 2026-09-09](handoff/execution-2026-09-09.md) | Per-issue execution evidence from the September backlog run | reference |
-| [External agent brief](handoff/EXTERNAL_AGENT_BRIEF.md) | July 2026 EXT preparation items (historical) | reference |
-| [SEC egress session brief](handoff/SESSION_BRIEF_SEC_EGRESS.md) | July 2026 EXT execution session (historical) | reference |
-| [EXT executor brief v2](handoff/EXT_EXECUTOR_BRIEF_V2.md) | July 2026 git-only EXT executor brief (historical) | reference |
 
 ## Decisions
 
@@ -105,22 +104,33 @@ Root `SPEC.md`, `PLAN.md`, and `TASKS.md` are pointer stubs only.
 | [Completion spec, 2026-09-16](research/2026-09-16-completion-spec.md) | Owner-requested completion specification | supporting |
 | [Model and scenario design, 2026-09-11](research/2026-09-11-model-scenario-design.md) | Research note for #64 models and sparse scenarios | reference |
 | [Backlog resolution spec, 2026-09-09](research/2026-09-09-backlog-resolution-spec.md) | Open-backlog resolution specification | reference |
-| [Open issue audit, 2026-09-09](research/2026-09-09-open-issue-audit.md) | Read-only audit of 39 open issues | reference |
-| [Reconciliation, 2026-07-16](research/RECONCILIATION-2026-07-16.md) | Audit of the PR #74/#75 research recovery | reference |
 | [Deployment guard contract](research/deployment-guard-contract.md) | Frozen ADR-0027 guard implementation contract | supporting |
 | [Offline calibration contract](research/offline-calibration-contract.md) | Frozen ADR-0028 contract for #336/#337 | supporting |
 | [Public auth and BYOK contract](research/public-auth-byok-contract.md) | Proposed public-session and BYOK contract (not frozen) | reference |
 | [Evals report renderer proposal](research/evals-report-renderer-proposal.md) | Unapproved work-package draft | reference |
-| [FinRobot study: calc engine](research/finrobot-cherry-pick-calc-engine.md) | Cherry-pick study for the M4 calculation engine | reference |
-| [FinRobot study: extraction agents](research/finrobot-cherry-pick-extraction-agents.md) | Cherry-pick study for M3 extraction roles | reference |
 | [Ontology research](research/ontology/README.md) | EXT-3 SaaS disclosure research draft | reference |
 | [SaaS disclosure survey](research/ontology/saas-disclosure-survey.md) | Raw survey feeding the T0301 ontology | reference |
+| [Financial evidence skills review](research/financial-evidence-skills-review.md) | External evidence-router review; adopted items live in `workers/src/fel_workers/http.py` | reference |
 
 ## Implementation plans
 
 | Doc | Description | Tier |
 |---|---|---|
-| [`superpowers/plans/`](superpowers/plans/) | Dated step-by-step agent execution plans, subordinate to the spec and task ledger | reference |
+| [Implementation plans](superpowers/plans/README.md) | Dated step-by-step agent execution plans, subordinate to the spec and task ledger; September plans are historical | reference |
+| [Documentation drift remediation](superpowers/plans/2026-10-28-documentation-drift-remediation.md) | Current plan for #363 | supporting |
+
+## Archive
+
+| Doc | Description | Tier |
+|---|---|---|
+| [Archive index](archive/README.md) | Finished coordination and research documents; never a source of truth | reference |
+| [External agent brief](archive/handoff/2026-07-ext/EXTERNAL_AGENT_BRIEF.md) | July 2026 EXT preparation items | reference |
+| [SEC egress session brief](archive/handoff/2026-07-ext/SESSION_BRIEF_SEC_EGRESS.md) | July 2026 EXT execution session | reference |
+| [EXT executor brief v2](archive/handoff/2026-07-ext/EXT_EXECUTOR_BRIEF_V2.md) | July 2026 git-only EXT executor brief | reference |
+| [Reconciliation, 2026-07-16](archive/research/RECONCILIATION-2026-07-16.md) | Audit of the PR #74/#75 research recovery | reference |
+| [Open issue audit, 2026-09-09](archive/research/2026-09-09-open-issue-audit.md) | Read-only audit of 39 open issues | reference |
+| [FinRobot study: calc engine](archive/research/finrobot-cherry-pick-calc-engine.md) | Cherry-pick study for the M4 calculation engine | reference |
+| [FinRobot study: extraction agents](archive/research/finrobot-cherry-pick-extraction-agents.md) | Cherry-pick study for M3 extraction roles | reference |
 
 ## Packages and apps
 
@@ -160,7 +170,8 @@ Root `SPEC.md`, `PLAN.md`, and `TASKS.md` are pointer stubs only.
 | [Reader production smoke](../evals/reports/reader-prod-smoke/README.md) | #108 harness notes (not a hosted result) | reference |
 | [Local reader smoke, 2026-09-14](../evals/reports/reader-prod-smoke/2026-09-14-local-smoke.md) | Local #108 preparation evidence | reference |
 | [Synthetic corpus-QA cohort](../evals/tests/golden/corpus-qa/2026-07-14-synthetic-cohort.md) | Synthetic golden report; explicitly not acceptance-grade | reference |
-| [Benchmark seed](../evals/datasets/benchmark-seed/README.md) | EXT-1 candidate benchmark questions | reference |
+| [Benchmark seed](../evals/datasets/benchmark-seed/README.md) | T0214a smoke benchmark questions; not yet M2 exit-gate evidence | reference |
+| [Offline calibration dataset](../evals/datasets/calibration/README.md) | ADR-0028 offline calibration interchange format (#336); stores no labels or filings | reference |
 | [Reader cross-stack dataset](../evals/datasets/reader-cross-stack/README.md) | READER-CROSS-STACK (#96) verification | reference |
 | [SEC fixtures](../evals/datasets/sec-fixtures/README.md) | Historical SEC fixture manifest (unverified recovery) | reference |
 | [SEC fixture excerpts](../evals/datasets/sec-fixtures/excerpts/README.md) | Notes that no excerpt bytes were recovered | reference |

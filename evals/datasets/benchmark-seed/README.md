@@ -1,12 +1,18 @@
 # Benchmark seed questions (EXT-1, issue #71)
 
-**Status: RESEARCH DRAFT / candidate seed.** `questions.jsonl` contains 65
-structurally validated candidate questions recovered from PR #74. It is not
-yet T0214a acceptance evidence. Before promotion, every record must be checked
-against the SEC acceptance/publication timestamp used by the product's
-point-in-time policy; same-day midnight UTC cutoffs are provisional and may
-otherwise introduce look-ahead leakage. Source-byte verification was reported
-by the authoring session but is not reproducible from the committed artifacts.
+**Status: candidate seed, not yet M2 exit-gate evidence.** `questions.jsonl`
+contains 65 structurally validated candidate questions recovered from PR #74.
+T0214a's build and gate automation are complete
+(`specs/001-financial-evidence-lab/tasks.md`): `evals/harness/retrieval_gate.py`
+grades this seed through the retrieval pipeline (`make eval-retrieval-gate`),
+and its reports live in [`evals/reports/retrieval-gate/`](../../reports/retrieval-gate/).
+The seed itself becomes M2 exit-gate evidence only after two promotion checks
+pass. First, every record must be checked against the SEC
+acceptance/publication timestamp used by the product's point-in-time policy;
+same-day midnight UTC cutoffs are provisional and may otherwise introduce
+look-ahead leakage. Second, source bytes must be verified reproducibly:
+the authoring session reported source-byte verification, but it is not
+reproducible from the committed artifacts.
 
 ## Deliverable summary
 
@@ -57,9 +63,10 @@ Not yet covered (4): FIVN, APPF, PCTY, PAYC — see Known gaps.
   10-Q/A (Q1 FY2023).
 - **Verbatim-quote rule (authoring-session report):** the authoring workflow
   selected raw-document substrings and re-fetched cited documents. The
-  reconciliation branch does not include that cache or verifier, so T0214a
-  must add a sanitized provenance manifest (URL/accession, acceptance time,
-  content hash) and deterministic verification before promotion.
+  reconciliation branch does not include that cache or verifier, so a
+  sanitized provenance manifest (URL/accession, acceptance time,
+  content hash) and deterministic verification must be added before
+  promotion.
 - **Trap construction (grounded, not synthetic):**
   - *temporal_cutoff_trap* — `as_of` is set to a date **before** a
     subsequently issued guidance revision, so the correct answer is the
@@ -90,7 +97,7 @@ Not yet covered (4): FIVN, APPF, PCTY, PAYC — see Known gaps.
 
 Run from the repository root:
 
-```
+```sh
 python3 - <<'PY'
 import json, collections
 REQUIRED = {"exact_fact_lookup","filing_section_retrieval","multi_period_comparison",

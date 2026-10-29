@@ -53,7 +53,7 @@ implementation continues; no paid call or hosted mutation is justified by an
 unanswered question.
 
 Other issues retain the dependency and closure criteria in the
-[complete audit](../research/2026-09-09-open-issue-audit.md). Leaf code completion,
+[complete audit](../archive/research/2026-09-09-open-issue-audit.md). Leaf code completion,
 operational rollout and milestone live acceptance are recorded separately.
 
 September 10 dispatch ruling: #137 follows merged #248 and owns only its named
