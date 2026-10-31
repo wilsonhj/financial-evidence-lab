@@ -10,12 +10,14 @@
 - [src/fel_workers/storage.py](src/fel_workers/storage.py) — local-directory blob storage and `FEL_WORKER_DB_ROLE`
 - [src/fel_workers/ingestion/](src/fel_workers/ingestion/) — SEC discovery, fetch, company facts, parser, FRED and market adapters
 - [src/fel_workers/extraction/](src/fel_workers/extraction/) — extraction workflow, roles, normalization, validators, budget, persistence
+- [src/fel_workers/extraction/isotonic.py](src/fel_workers/extraction/isotonic.py) — offline `isotonic-v1` calibration primitive; no runtime caller yet
+- [../infra/railway/worker.json](../infra/railway/worker.json) — Railway worker service build and start command
 - [pyproject.toml](pyproject.toml) — package metadata and bundled data files
 - [tests/](tests/) — worker test suite
 
 </details>
 
-Source references verified against commit `437ce55`.
+Source references verified against commit `f4b1197`.
 
 `fel-workers` is the asynchronous side of the platform. A worker process claims
 jobs from the PostgreSQL `jobs` table and runs them outside the claim
@@ -34,11 +36,36 @@ extraction architecture is in
 | `python -m fel_workers run [--queue NAME] [--max-iterations N]` | Job consumer; `--queue` defaults to `ingestion`                 |
 
 `run` checks its configuration before connecting to the database and exits 2
-on any error. Exactly one provider mode must be set: `FEL_SEC_LIVE`,
-`FEL_MOCK_SMOKE`, or `FEL_FIXTURE_INGEST`. Flags accept `1`/`true`/`yes`/`on`
-(case-insensitive); any other non-empty value, including `0`, is rejected. The
-`extraction` queue requires `FEL_ALLOW_MOCK_LLM`, and that flag on any other
-queue is rejected too.
+on any error. Flags accept `1`/`true`/`yes`/`on` (case-insensitive); any other
+non-empty value, including `0`, is rejected. The `extraction` queue requires
+`FEL_ALLOW_MOCK_LLM`, and that flag on any other queue is rejected too.
+
+Exactly one provider mode must be set:
+
+| Mode                 | Providers                                    | Requires                                 |
+| -------------------- | -------------------------------------------- | ---------------------------------------- |
+| `FEL_SEC_LIVE`       | Live EDGAR client with durable blob storage  | `FEL_STORAGE_DIR`, `FEL_SEC_USER_AGENT`  |
+| `FEL_MOCK_SMOKE`     | Deterministic mocks; non-production smoke only | nothing else                           |
+| `FEL_FIXTURE_INGEST` | Pinned local SEC bytes through the real ingestion pipeline; isolated acceptance only | `FEL_FIXTURE_DIR`, `FEL_STORAGE_DIR` |
+
+## Queues and deployment
+
+A worker serves one queue, chosen with `--queue` (default `ingestion`).
+`sec_discovery` enqueues its `sec_filing_fetch` jobs on the queue the discovery
+job was claimed from (`ingestion` on the deployed worker), and the
+API enqueues every `extraction_run` on `extraction`. Model binding is scoped to the `extraction` queue: an
+`ingestion` worker binds no model, and the only model an `extraction` worker
+can bind is the deterministic mock behind `FEL_ALLOW_MOCK_LLM`.
+
+The Railway worker service
+([infra/railway/worker.json](../infra/railway/worker.json)) starts
+`python -m fel_workers run` without `--queue`, so it serves `ingestion` only.
+Hosted extraction is intentionally not deployed: no live model is bound until
+#62, and no `extraction` worker service exists until #362. Until then the API
+refuses to create extraction runs (503 `EXTRACTION_NOT_CONFIGURED`, no job
+inserted) unless `FEL_ALLOW_MOCK_LLM` is set. Even with it set, run creation
+can still return that 503 when no extraction policy or no active corpus
+exists (`apps/api/app/extraction/runs.py`).
 
 ## Job kinds
 
@@ -50,7 +77,11 @@ queue is rejected too.
 | `extraction_run`    | `extraction/handler.py`; queue `extraction`                        |
 
 FRED and market-data clients exist in `ingestion/`, but the consumer does not
-dispatch any job kind to them yet. `forecasting/` is an empty placeholder.
+dispatch any job kind to them yet. `extraction/isotonic.py` (the offline
+`isotonic-v1` calibration primitive, documented in
+[ISOTONIC.md](src/fel_workers/extraction/ISOTONIC.md)) is imported only by its
+tests, not by runtime code. `forecasting/` is a placeholder package with no
+code.
 
 ## Job lifecycle
 

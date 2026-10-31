@@ -17,7 +17,7 @@
 
 </details>
 
-Source references verified against commit `59bbf7e`.
+Source references verified against commit `f4b1197`.
 
 This document describes the architecture that is present on `main`, not only
 the target product. Planned components are labeled so a new contributor can
@@ -78,30 +78,36 @@ flowchart TB
 
 The arrows show allowed logical dependencies, not every call. PostgreSQL is
 the coordination and metadata backbone: the `jobs` table is the API/worker
-channel, extraction executes inside the worker, and retrieval executes in the
-API process — neither is a separately deployed service. Immutable filing
-bodies live behind storage object keys; structured provenance, spans, facts,
-jobs, retrieval indexes, runs, and audit records live in PostgreSQL.
+channel, extraction executes inside a worker started on the `extraction`
+queue, and retrieval executes in the API process — neither is a separately
+deployed service. No deployed component enqueues ingestion work: only the evaluation harnesses
+(`evals/harness/`) enqueue it. The corpus-QA harness enqueues root
+`sec_discovery` jobs, whose handler fans out the filing fetch jobs; the reader
+smoke enqueues filing fetch jobs directly. Nothing outside tests enqueues a
+company-facts job.
+Immutable filing bodies live behind storage object keys; structured
+provenance, spans, facts, jobs, retrieval indexes, runs, and audit records
+live in PostgreSQL.
 
 ## Containers and responsibilities
 
 The last column records what each boundary does **not** establish, so that a
 present module is not mistaken for a passed acceptance gate.
 
-| Container/package                              | Responsibility                                                                                                              | Current maturity / non-claim                                                                                                               |
-| ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `apps/web`                                     | Evidence Reader, Earnings Update Desk (3D/2D lineage), Search Observatory, extraction review, run comparison, API transport | Implemented in fixture and HTTP modes; public deployments refuse business routes (HTTP 503) until request-scoped sessions exist (ADR-0027) |
-| `apps/api`                                     | Token verification, membership, RLS transaction setup, workspaces, corpus/reader, retrieval, extraction review              | Mock and Supabase JWKS verifiers implemented (ADR-0025); a verified API token is not a per-user web session                                |
-| `workers`                                      | Durable job claiming, SEC discovery/fetch/company-facts ingestion, extraction runtime, leases and retries                   | Implemented for SEC and extraction paths; not a request handler                                                                            |
-| `packages/retrieval`                           | Chunking, lane retrieval, deterministic plan/fusion, traces, claims, replay                                                 | Implemented, mock-provider first; mock runs do not prove live provider quality                                                             |
-| `packages/providers`                           | Stable external-provider protocols, deterministic mocks, explicit-key adapters                                              | Interfaces/mocks implemented; an adapter is not an authorized or promoted runtime provider                                                 |
-| `packages/contracts`                           | Versioned JSON Schemas, OpenAPI descriptions, generated TypeScript types                                                    | Implemented; OpenAPI and package version `0.9.0`                                                                                           |
-| `db/migrations`                                | Tenant, corpus, retrieval, extraction, review, queue, worker-role, and RLS schema                                           | Implemented through migration `0011`; a table is not a hosted service                                                                      |
-| `evals`, `packages/retrieval-evals`            | Cross-stack fixtures, graders, and retrieval benchmarks                                                                     | Synthetic gates implemented; live gates open                                                                                               |
-| `packages/ontology`                            | saas-metrics/v1 ontology (9 families / 14 metrics), comparability keys, unit comparison vocabulary (ADR-0019)               | Implemented                                                                                                                                |
-| Extraction runtime (`workers/.../extraction`)  | Durable worker FSM: typed roles, normalization, validators, budget enforcement, atomic persistence                          | Implemented (`61058e4`, PR #145); every proposal requires human review                                                                     |
-| `packages/calculation-engine`                  | Decimal values, closed unit algebra, fiscal periods, formula ASTs, model graph, snapshots, scenarios                        | Implemented as a library with property tests; no application or worker imports it yet                                                      |
-| Model composer, forecast, backtest, release UI | Integrated model and forecast product                                                                                       | Planned                                                                                                                                    |
+| Container/package                              | Responsibility                                                                                                              | Current maturity / non-claim                                                                                                                                                                                                                                     |
+| ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/web`                                     | Evidence Reader, Earnings Update Desk (3D/2D lineage), Search Observatory, extraction review, run comparison, API transport | Reader, Observatory and extraction review implemented in fixture and HTTP modes; the Earnings Update Desk is fixture-only (static data in `DeskClient.tsx`); public deployments refuse business routes (HTTP 503) until request-scoped sessions exist (ADR-0027) |
+| `apps/api`                                     | Token verification, membership, RLS transaction setup, workspaces, corpus/reader, retrieval, extraction review              | Mock and Supabase JWKS verifiers implemented (ADR-0025); a verified API token is not a per-user web session                                                                                                                                                      |
+| `workers`                                      | Durable job claiming, SEC discovery/fetch/company-facts ingestion, extraction runtime, leases and retries                   | Implemented for SEC and extraction paths; not a request handler. The Railway worker serves only the `ingestion` queue                                                                                                                                            |
+| `packages/retrieval`                           | Chunking, lane retrieval, deterministic plan/fusion, traces, claims, replay                                                 | Implemented, mock-provider first; mock runs do not prove live provider quality                                                                                                                                                                                   |
+| `packages/providers`                           | Stable external-provider protocols, deterministic mocks, explicit-key adapters                                              | Interfaces/mocks implemented; an adapter is not an authorized or promoted runtime provider                                                                                                                                                                       |
+| `packages/contracts`                           | Versioned JSON Schemas, OpenAPI descriptions, generated TypeScript types                                                    | Implemented; OpenAPI and package version `0.9.0`                                                                                                                                                                                                                 |
+| `db/migrations`                                | Tenant, corpus, retrieval, extraction, review, queue, worker-role, and RLS schema                                           | Implemented through migration `0011`; a table is not a hosted service                                                                                                                                                                                            |
+| `evals`, `packages/retrieval-evals`            | Cross-stack fixtures, graders, and retrieval benchmarks                                                                     | Synthetic gates implemented; live gates open                                                                                                                                                                                                                     |
+| `packages/ontology`                            | saas-metrics/v1 ontology (9 families / 14 metrics), comparability keys, unit comparison vocabulary (ADR-0019)               | Implemented                                                                                                                                                                                                                                                      |
+| Extraction runtime (`workers/.../extraction`)  | Durable worker FSM: typed roles, normalization, validators, budget enforcement, atomic persistence                          | Implemented (`61058e4`, PR #145); every proposal requires human review                                                                                                                                                                                           |
+| `packages/calculation-engine`                  | Decimal values, closed unit algebra, fiscal periods, formula ASTs, model graph, snapshots, scenarios                        | Implemented as a library with property tests; no application or worker imports it yet                                                                                                                                                                            |
+| Model composer, forecast, backtest, release UI | Integrated model and forecast product                                                                                       | Planned                                                                                                                                                                                                                                                          |
 
 ## Subsystem architecture diagrams
 
@@ -119,18 +125,28 @@ present module is not mistaken for a passed acceptance gate.
 flowchart TB
     UI[Interaction layer\nNext.js]
     Service[Service layer\nFastAPI]
-    Domain[Domain packages\nretrieval / providers / contracts]
+    Domain[Domain packages\nretrieval / ontology / providers / contracts]
+    Extraction[Extraction library\nfel_workers.extraction]
     Async[Asynchronous execution\nPostgreSQL jobs + workers]
     Data[Data layer\nPostgreSQL / pgvector / object storage]
     External[External providers\nSEC / market / models]
 
     UI --> Service
     Service --> Domain
+    Service --> Extraction
     Service --> Data
+    Async --> Extraction
     Async --> Domain
     Async --> Data
+    Extraction --> Domain
     Domain --> External
 ```
+
+The API is not independent of the worker package. `apps/api/app/extraction/`
+imports `fel_workers.extraction` (hashing, request parsing, normalization,
+validation and version constants), so `scripts/runtime/install.sh` builds the
+`./workers` wheel, together with providers, ontology, retrieval and the API,
+into both the API and worker images.
 
 The layers are intentionally boring:
 
@@ -139,7 +155,17 @@ The layers are intentionally boring:
 - Workers claim jobs without holding a transaction during provider calls.
 - Provider SDKs stay behind repository-owned interfaces.
 - Contracts are versioned and generated; application packages consume them
-  rather than maintaining private mirrors.
+  rather than maintaining private mirrors. Two mirrors exist, each pinned by a
+  test:
+  - the worker vendors
+    [`extraction-payload.schema.json`](../../workers/src/fel_workers/extraction/contracts/extraction-payload.schema.json)
+    so it resolves from an installed wheel;
+    `workers/tests/extraction/test_vendored_contract_schema.py` fails unless it
+    equals the `packages/contracts` copy byte for byte;
+  - `packages/retrieval/fel_retrieval/generation.py` mirrors
+    `claims-output/v1` as `CLAIM_JSON_SCHEMA` so the package stays importable
+    without the contracts workspace; `packages/retrieval/tests/test_generation.py`
+    pins it to the contract.
 
 ## Data ownership and migration groups
 
@@ -208,9 +234,24 @@ Railway config-as-code defines web, API, and worker services
 (`infra/railway/{web,api,worker}.json`). API and worker share PostgreSQL and
 must share durable evidence storage. Sentry initializes only when
 `FEL_SENTRY_DSN` is set. The only real storage provider is
-`LocalDirStorageProvider` (`workers/src/fel_workers/storage.py`); there is no
-hosted object-storage adapter, and the hosted worker-to-reader smoke (#108)
-has not run against a dedicated target.
+`LocalDirStorageProvider` (`workers/src/fel_workers/storage.py`); the reader
+API does not use it but reads canonical text from `FEL_STORAGE_DIR` directly
+(`apps/api/app/reader.py::_read_canonical_text`). There is no hosted
+object-storage adapter, and the hosted worker-to-reader smoke (#108) has not
+run against a dedicated target. The API's pre-deploy command applies
+migrations; the worker's only checks them (`migrate.py --check`).
+
+Hosted extraction is intentionally not deployed. The Railway worker starts
+`python -m fel_workers run` without `--queue`, so it serves the default
+`ingestion` queue. The default hosted API rejects run creation with 503
+`EXTRACTION_NOT_CONFIGURED` and inserts no job
+(`apps/api/app/extraction/runs.py`); a job is inserted on the `extraction`
+queue only when `FEL_ALLOW_MOCK_LLM` is `1`, `true`, `yes`, or `on`. A
+worker started on `extraction` refuses to start without that opt-in, and
+only the mock model can be bound until
+[#62](https://github.com/wilsonhj/financial-evidence-lab/issues/62).
+Serving the job needs that opt-in plus an `extraction` worker service
+([#362](https://github.com/wilsonhj/financial-evidence-lab/issues/362)).
 
 ```mermaid
 flowchart LR
@@ -250,10 +291,12 @@ The following are compatibility requirements, not implementation preferences:
   are superseded, not overwritten in place.
 - **Fail closed:** incomplete configuration, unknown modes, corrupt evidence,
   and unsupported live providers stop execution explicitly.
-- **Bounded cost:** operations reserve/check budgets and record usage. The M3
-  extraction runtime enforces calls/tokens/cost/wall-clock hard caps
-  (`extraction/budget.py`), pre-call and post-call, carried across queue
-  retries of the same run.
+- **Bounded cost:** retrieval requests check user/day and organization/month
+  ceilings and record `usage_events` (`apps/api/app/costs.py`, called only
+  from `apps/api/app/retrieval.py`). Extraction runs have only per-run
+  calls/tokens/cost/wall-clock hard caps (`extraction/budget.py`), pre-call
+  and post-call, carried across queue retries of the same run; they record no
+  `usage_events`.
 
 ## Sources of truth
 

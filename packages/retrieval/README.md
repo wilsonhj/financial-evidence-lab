@@ -1,9 +1,27 @@
-# packages/retrieval — versioned hybrid retrieval backend (M2, #57)
+# Retrieval (`packages/retrieval`)
 
-Deterministic, mock-first retrieval core behind the v0.3.0 retrieval API:
-item building, versioned index build/publish, cutoff-safe lanes, typed
-planning, RRF fusion, and the persisted-trace query pipeline consumed by
-`apps/api/app/retrieval.py`.
+<details>
+<summary>Relevant source files</summary>
+
+- [fel_retrieval/\_\_init\_\_.py](fel_retrieval/__init__.py) — public exports
+- [fel_retrieval/planner.py](fel_retrieval/planner.py) — `plan_query` → `query-plan/v1`
+- [fel_retrieval/lanes.py](fel_retrieval/lanes.py) — dense, lexical, fact and table lanes
+- [fel_retrieval/fusion.py](fel_retrieval/fusion.py) — provenance dedupe and RRF fusion
+- [fel_retrieval/generation.py](fel_retrieval/generation.py) — structured claim generation and `CLAIM_JSON_SCHEMA`
+- [fel_retrieval/verification.py](fel_retrieval/verification.py) — citation entailment, numeric checks and integrity
+- [fel_retrieval/index_build.py](fel_retrieval/index_build.py) — versioned index build and publish
+- [pyproject.toml](pyproject.toml) — package metadata
+- [tests/](tests/) — unit and database-backed suites
+
+</details>
+
+Source references verified against commit `f4b1197`.
+
+Versioned hybrid retrieval backend (M2, #57). Deterministic, mock-first
+retrieval core behind the v0.3.0 retrieval API: item building, versioned index
+build/publish, cutoff-safe lanes, typed planning, RRF fusion, structured claim
+generation and citation verification, consumed by `apps/api/app/retrieval.py`
+and `apps/api/app/retrieval_pipeline.py`.
 
 ## Module map
 
@@ -14,6 +32,10 @@ planning, RRF fusion, and the persisted-trace query pipeline consumed by
 | `lanes.py` | M2-012 | Dense (halfvec cosine HNSW), lexical (FTS/GIN), fact, and table lanes; every lane pins `index_version_id` and enforces `documents.published_at <= as_of` plus entity/document/form/period filters in parameterized SQL |
 | `planner.py` | M2-013 | Pure deterministic `plan_query` → `query-plan/v1`: rule-based intent, curated synonym expansion (≤4 variants), fail-closed filter validation, budget derivation |
 | `fusion.py` | M2-014 | Provenance dedupe (recorded decisions), RRF k=60 with Decimal-quantized order-independent scoring, no-op reranker hook over the fused top-100, typed fusion result mapped to the trace contract |
+| `generation.py` | M2-020 | `StructuredClaimGenerator`: builds a schema-constrained request from the question and selected context items, sends it through the `fel_providers` `StructuredLLMProvider` protocol, and strictly validates the reply against `claims-output/v1` (mirrored as `CLAIM_JSON_SCHEMA`); fabricated item ids or quotes raise `GenerationContractError` |
+| `verification.py` | M2-021 | `MockCitationVerifier` entailment, `validate_numeric` (value, unit, period, sign, scale as exact `Decimal` checks), `assert_citation_integrity`, and closed-set claim classification and abstention |
+| `config.py` | M2-011 | `CHUNKER_VERSION` and `config_hash`, the canonical-JSON `sha256:` identity inputs for index-version pinning |
+| `models.py` | M2-010 | Frozen `RetrievalItemDraft` and `Rejection` dataclasses used by the item builder |
 
 ## Design invariants
 
@@ -30,9 +52,13 @@ planning, RRF fusion, and the persisted-trace query pipeline consumed by
   DDL (kind-anchor exclusivity, `sha256:` formats, composite-FK pinning).
   The DB guards re-enforce the same rules (cutoff, index agreement, seq
   ordering, terminal-event coupling), so application and schema cannot drift
-  apart silently.
+  apart silently. `generation.py` keeps its own copy of `claims-output/v1`
+  (`packages/contracts/schemas/claims-output.schema.json`) as
+  `CLAIM_JSON_SCHEMA` so the package imports without the contracts workspace;
+  the two must change together.
 - **Stdlib-only runtime.** `fel_retrieval` imports no third-party packages;
-  DB access is injected through a `DBConnection` protocol (psycopg lives in
+  its only first-party import is `fel_providers.interfaces` (in
+  `generation.py`). DB access is injected through a `DBConnection` protocol (psycopg lives in
   tests and `apps/api` only). Mock embeddings are pure functions of
   (content, model, dimensions).
 
@@ -48,4 +74,4 @@ planning, RRF fusion, and the persisted-trace query pipeline consumed by
   replay, idempotency, provider/lane failure persistence, p95 smoke) is
   tested in `apps/api/tests/test_retrieval_api.py`.
 
-See `ACCEPTANCE.md` for the #57 acceptance-criteria evidence map.
+See [ACCEPTANCE.md](ACCEPTANCE.md) for the #57 acceptance-criteria evidence map.

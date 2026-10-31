@@ -31,7 +31,7 @@
 ## Execution and evidence protocol
 
 Each issue uses this sequence, with the concrete files and acceptance cases in
-the [issue audit](../../research/2026-09-09-open-issue-audit.md) linked from the specification:
+the [issue audit](../../archive/research/2026-09-09-open-issue-audit.md) linked from the specification:
 
 1. Fetch main and the issue; confirm dependencies' merge commits and exclusive
    allowed paths. Save baseline SHA and current acceptance text in the PR.

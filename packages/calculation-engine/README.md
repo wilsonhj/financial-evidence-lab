@@ -1,8 +1,46 @@
-# `@fel/calculation-engine` (`fel_calculation_engine`)
+# Calculation engine (`fel-calculation-engine`)
 
-Server-side Decimal calculation engine for the Revenue Model Composer
+<details>
+<summary>Relevant source files</summary>
+
+- [fel_calculation_engine/engine.py](fel_calculation_engine/engine.py) — `evaluate()` and `CalcResult`
+- [fel_calculation_engine/graph.py](fel_calculation_engine/graph.py) — `ModelGraph`, cycle detection, build-time type checks
+- [fel_calculation_engine/nodes.py](fel_calculation_engine/nodes.py) — the nine frozen node kinds
+- [fel_calculation_engine/formulas.py](fel_calculation_engine/formulas.py) — user-authored formula ASTs (ADR-0018)
+- [fel_calculation_engine/iteration.py](fel_calculation_engine/iteration.py) — explicit iterative groups
+- [fel_calculation_engine/units.py](fel_calculation_engine/units.py) — closed unit algebra
+- [fel_calculation_engine/snapshot.py](fel_calculation_engine/snapshot.py) — versioned, content-addressed snapshots
+- [fel_calculation_engine/store.py](fel_calculation_engine/store.py) — `SnapshotStore` protocol and `InMemorySnapshotStore`
+- [pyproject.toml](pyproject.toml) — Python package `fel-calculation-engine`
+- [tests/](tests/) — unit, property and opt-in benchmark suites
+
+</details>
+
+Source references verified against commit `f4b1197`.
+
+The Python package `fel-calculation-engine` (import name
+`fel_calculation_engine`) is the server-side Decimal calculation engine for
+the Revenue Model Composer
 (spec §8.5, FR-MOD-001 / FR-MOD-002). Authoritative math is Decimal-only,
 typed-unit, and deterministic. Language models must not execute it.
+
+## Contents
+
+- [What it does](#what-it-does)
+- [Leaf values](#leaf-values)
+- [Tests](#tests)
+- [Module map](#module-map)
+- [Graph model](#graph-model)
+- [User-authored formulas (ADR-0018)](#user-authored-formulas-adr-0018)
+- [Explicit iterative groups (ADR-0018)](#explicit-iterative-groups-adr-0018)
+- [Unit algebra](#unit-algebra)
+- [Periods](#periods)
+- [Snapshot hashing and versioning](#snapshot-hashing-and-versioning)
+- [Evaluation](#evaluation)
+- [Scenarios](#scenarios)
+- [Telemetry](#telemetry)
+- [Benchmark method (T0410)](#benchmark-method-t0410)
+- [Limitations](#limitations)
 
 ## What it does
 
@@ -369,8 +407,8 @@ Current no-credential acceptance evidence is in
 
 ## Limitations
 
-- **No persistence.** M4 tables do not exist yet (#197) and `db/migrations`
-  is a shared path; `InMemorySnapshotStore` is the reference behaviour a
+- **No persistence.** No migration in `db/migrations` defines M4 model
+  tables yet, and `db/migrations` is a shared path; `InMemorySnapshotStore` is the reference behaviour a
   Postgres-backed store must reproduce. Adding one is a separate
   `contract-change`.
 - **Property tests use a seeded `random.Random` generator**, not

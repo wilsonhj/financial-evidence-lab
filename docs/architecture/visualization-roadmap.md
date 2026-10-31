@@ -11,7 +11,7 @@
 
 </details>
 
-Source references verified against commit `59bbf7e`. Fixture-status notes in
+Source references verified against commit `f4b1197`. Fixture-status notes in
 sections 3A–3C checked against `f3e9452`.
 
 This document audits the visual surfaces in Financial Evidence Lab, defines the
@@ -32,7 +32,7 @@ exclusively on semantic HTML tables and definition lists:
 | **Earnings Update Desk (`/desk`)** | `apps/web/src/app/desk/DeskClient.tsx` | Static text cards (`$842.4m`, `7 / 9 cells linked`) and a 1D CSS bar (`.coverage-bar`). | **3D Epistemic Lineage Constellation** + **Interactive Scenario Waterfall Bridge** + **Temporal Cutoff Scrubber** + **Gamified Review Gate HUD**. |
 | **Search Observatory (`/observatory`)** | `apps/web/src/components/ObservatoryTrace.tsx`, `RunComparison.tsx`, `EventReplay.tsx` | Five stacked HTML `<table>` / `<ol>` sections for 4-lane candidates, RRF scores, rejections, claims, and budgets. | **Interactive 4-Lane RRF Fusion Sankey / Flow Arena** + **Visual Latency & Token Budget Gauges** + **Step-Through Replay Scrubber**. |
 | **Evidence Reader (`/reader/[documentId]`)** | `apps/web/src/components/EvidenceReader.tsx`, `DocumentPane.tsx`, `FactPanel.tsx` | Left outline tree, middle text pane with `<mark>` highlights, right `FactPanel` list with duplicate tables. | **Minimap Span Density Bar**, **Amendment Diff Ribbon (`10-Q` → `10-Q/A`)**, and **Cross-Section Provenance Arcs**. |
-| **Extraction Review (`/extractions`)** | `apps/web/src/components/extraction/ReviewQueue.tsx`, `RunEvents.tsx` | Checkbox `<table>` of proposals, `<fieldset>` conflict groups, and an SSE event table. | **10-Stage FSM Progress Map**, **Side-by-Side Conflict Diff Arena**, and **Isotonic Calibration Reliability Curve**. |
+| **Extraction Review (`/extractions`)** | `apps/web/src/components/extraction/ReviewQueue.tsx`, `RunEvents.tsx` | Checkbox `<table>` of proposals, `<fieldset>` conflict groups, and an SSE event table. | **12-Stage FSM Progress Map**, **Side-by-Side Conflict Diff Arena**, and **Isotonic Calibration Reliability Curve**. |
 | **Offline Corpus QA (`evals/`)** | `evals/reporting/corpus_qa_render.py` | Byte-deterministic stdlib `xml.etree.ElementTree` horizontal stacked bar SVG (`2026-07-14-synthetic-cohort.svg`). | Extend deterministic SVG emitters to **Retrieval Recall@K Curves** and **Calibration Reliability Diagrams**. |
 
 ---

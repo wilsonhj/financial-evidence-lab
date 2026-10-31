@@ -1,4 +1,4 @@
-# Local development (T0002)
+# Local development
 
 <details>
 <summary>Relevant source files</summary>
@@ -11,12 +11,13 @@
 - [apps/api/benchmarks/synthetic_target.py](../../apps/api/benchmarks/synthetic_target.py) — `prepare_synthetic_target`
 - [workers/src/fel_workers/\_\_main\_\_.py](../../workers/src/fel_workers/__main__.py) — worker modes and startup checks
 - [apps/web/src/lib/deployment-mode.ts](../../apps/web/src/lib/deployment-mode.ts) — web deployment and evidence-source modes
+- [apps/api/app/deployment.py](../../apps/api/app/deployment.py) — API deployment-mode proof before authentication
 - [scripts/db/migrate.py](../../scripts/db/migrate.py) — checksummed migration applier (ADR-0014)
 - [db/migrations/](../../db/migrations/) — append-only SQL migrations
 
 </details>
 
-Source references verified against commit `437ce55`.
+Source references verified against commit `f4b1197`.
 
 This guide covers three useful setups:
 
@@ -48,7 +49,7 @@ behavior.
 | Node.js    | 24.20.0 (`.node-version`)  | Next.js, contracts, and JS/TS tests       |
 | pnpm       | 10.33 via Corepack        | Monorepo package management              |
 | Python     | 3.11 (`.python-version`)  | API, workers, retrieval, and evals        |
-| PostgreSQL | 16+ with pgvector         | Persistent API/worker flows and DB tests  |
+| PostgreSQL | 16+ with pgvector >= 0.8.2 | Persistent API/worker flows and DB tests  |
 
 With nvm, run `nvm install` once and `nvm use` in the project shell; `.nvmrc`
 selects the same exact Node patch as `.node-version`. Keep those pins aligned
@@ -73,15 +74,20 @@ Install repository dependencies:
 corepack enable
 corepack pnpm install --frozen-lockfile
 
-python3.11 -m venv .venv
-.venv/bin/pip install --upgrade pip
-.venv/bin/pip install -r requirements-dev.txt
+make install-py
+.venv/bin/pip install --require-hashes -r requirements-dev.lock
 ```
 
-`make install` is a convenience wrapper (it runs `python3 -m venv .venv`, so
-it inherits whatever `python3` resolves to); prefer the explicit
-`python3.11 -m venv .venv` above and confirm first with `python3 --version`
-and `command -v python3.11`. If `python3.11` is missing, see
+`make install-py` reads `.python-version` (3.11) and creates `.venv` with
+`python3.11`, or with `python3` only when `python3` reports 3.11. Any other
+interpreter makes it stop with an error instead of building a venv CI would
+not test. It then upgrades pip and installs `requirements-dev.txt`, which lists
+minimum versions. The second line installs the exact hashed versions CI uses
+(`pip install --require-hashes -r requirements-dev.lock` in
+`.github/workflows/ci.yml`). `make install` runs `make install-js` (plain
+`pnpm install`) and then `make install-py`.
+
+If `make install-py` reports that Python 3.11 is missing, see
 [`python3.11` is not installed](#python311-is-not-installed) below — do not
 substitute `python3.12`/`python3.13` for the venv; `.python-version` stays
 pinned to 3.11 because CI builds against it.
@@ -100,7 +106,8 @@ used as a silent fallback in a deployed environment.
 
 ### Start PostgreSQL
 
-Any PostgreSQL 16+ instance with pgvector works. If Docker is available, this
+Any PostgreSQL 16+ instance with pgvector >= 0.8.2 works;
+`db/migrations/0003_retrieval_core.sql` refuses older pgvector versions. If Docker is available, this
 is a disposable local option:
 
 ```sh
@@ -209,7 +216,12 @@ shared directory whenever the worker and API are separate processes.
 
 ## Run the worker
 
-The deployed worker requires exactly one explicit provider mode.
+The worker requires exactly one explicit provider mode: `FEL_SEC_LIVE`,
+`FEL_MOCK_SMOKE` or `FEL_FIXTURE_INGEST`. `FEL_FIXTURE_INGEST` runs pinned local
+SEC bytes through the real ingestion pipeline and also requires
+`FEL_FIXTURE_DIR` and `FEL_STORAGE_DIR`; it is for isolated acceptance runs
+only. Each flag accepts `1`, `true`, `yes` or `on`; any other non-empty value
+exits with status 2.
 
 Deterministic smoke mode:
 
@@ -311,27 +323,92 @@ provider calls or replace public Supabase identity.
 
 ## Useful environment variables
 
-| Variable                       | Service     | Purpose                                                                 |
-| ------------------------------ | ----------- | ----------------------------------------------------------------------- |
-| `FEL_DATABASE_URL`             | API, worker | PostgreSQL connection URL                                               |
-| `FEL_AUTH_MODE`                | API         | `mock` or `supabase` (JWKS verification, ADR-0025)                     |
-| `FEL_STORAGE_DIR`              | API, worker | Shared canonical evidence-object directory                              |
-| `FEL_MOCK_SMOKE`               | Worker      | Explicit deterministic provider mode                                    |
-| `FEL_SEC_LIVE`                 | Worker      | Explicit live SEC mode                                                  |
-| `FEL_SEC_USER_AGENT`           | Worker      | SEC fair-access identity                                                |
-| `FEL_ALLOW_MOCK_LLM`           | Worker      | Explicit opt-in to the mock model on `--queue extraction`               |
-| `FEL_EXTRACTION_MEMORY_STORES` | Worker      | Extraction smoke option: output to in-memory stores (discarded on exit) |
-| `FEL_EVIDENCE_SOURCE`          | Web         | Exactly `fixture` or `http`                                             |
-| `FEL_API_BASE_URL`             | Web         | FastAPI origin in HTTP mode                                             |
-| `FEL_API_BEARER_TOKEN`         | Web         | Server-only API token                                                   |
-| `FEL_ENTITY_IDS`               | Web         | Comma-separated entity UUIDs                                            |
-| `FEL_AS_OF`                    | Web         | Optional RFC 3339 cutoff with explicit offset                           |
-| `FEL_CORPUS_VERSION_ID`        | Web         | Optional immutable corpus version UUID                                  |
+Every `FEL_*` variable below is read from the process environment; none has a
+committed `.env` file. "Unset" in the default column means the code has no
+fallback value. Never commit real values.
 
-Cost limits are controlled by `FEL_USER_DAILY_LIMIT_USD`,
-`FEL_ORG_MONTHLY_LIMIT_USD`, `FEL_USER_DAILY_SOFT_USD`, and
-`FEL_ORG_MONTHLY_SOFT_USD`. Defaults are development-friendly; deployments
-should set them deliberately.
+### Deployment and authentication
+
+| Variable | Read by | Default | Purpose |
+| --- | --- | --- | --- |
+| `FEL_DEPLOYMENT_MODE` | API, web | API: `public`; web: unset | Operator-selected mode: `public`, `fixture` (web only), `reader-smoke` or `synthetic-http`. The API's `public` mode admits authenticated requests only with `FEL_AUTH_MODE=supabase`, so local mock-token work needs `reader-smoke` or `synthetic-http`; otherwise those requests get 503 `AUTH_UNAVAILABLE` (`apps/api/app/deployment.py`). The web app's guarded routes return 503 unless the mode is `fixture`, `reader-smoke` or `synthetic-http` and that mode's checks pass (`apps/web/src/lib/deployment-mode.ts`). |
+| `FEL_AUTH_MODE` | API, web | API: `mock`; web: unset | `mock` or `supabase` (JWKS verification, ADR-0025). The web `reader-smoke` and `synthetic-http` modes require `mock`. |
+| `FEL_AUTH_ISSUER` | API | empty | Supabase issuer whose JWKS verifies tokens in `supabase` mode |
+| `FEL_AUTH_AUDIENCE` | API | `authenticated` | Expected token audience in `supabase` mode |
+| `FEL_READER_SMOKE_TARGET` | API, web, eval harness | empty | Dedicated target name for `reader-smoke`; must match the storage marker |
+| `FEL_SYNTHETIC_HTTP_TARGET` | API, web | empty | Dedicated target name for `synthetic-http`; must match the storage marker |
+| `CROSS_STACK_MANIFEST` | Web, Playwright cross-stack config | unset | Path to the seeder's manifest; required by web `synthetic-http` mode |
+| `FEL_ALLOW_MOCK_LLM` | API, worker, web | unset | Must be `1` for `synthetic-http`; on the API, extraction run creation returns 503 `EXTRACTION_NOT_CONFIGURED` unless it is truthy (`1`/`true`/`yes`/`on`); on the worker, opts `--queue extraction` into the mock model |
+
+### Database and storage
+
+| Variable | Read by | Default | Purpose |
+| --- | --- | --- | --- |
+| `FEL_DATABASE_URL` | API, worker, `scripts/db/migrate.py` | unset | PostgreSQL connection URL. `migrate.py` falls back to `DATABASE_URL`, then `TEST_DATABASE_URL`. |
+| `FEL_DB_POOL_MIN` | API | `1` | Minimum connection-pool size |
+| `FEL_DB_POOL_MAX` | API | `10` | Maximum connection-pool size |
+| `FEL_STORAGE_DIR` | API, worker | unset | Shared canonical evidence-object directory |
+| `FEL_WORKER_DB_ROLE` | Worker | unset | `SET ROLE` after connect (for example `fel_worker`, ADR-0013); unset keeps the login role |
+
+### Worker
+
+| Variable | Read by | Default | Purpose |
+| --- | --- | --- | --- |
+| `FEL_MOCK_SMOKE` | Worker | unset | Deterministic provider mode |
+| `FEL_SEC_LIVE` | Worker | unset | Live SEC mode; needs `FEL_STORAGE_DIR` and `FEL_SEC_USER_AGENT` |
+| `FEL_FIXTURE_INGEST` | Worker | unset | Pinned local SEC bytes through the real pipeline; needs `FEL_FIXTURE_DIR` and `FEL_STORAGE_DIR` |
+| `FEL_FIXTURE_DIR` | Worker | unset | Fixture manifest and assets for `FEL_FIXTURE_INGEST` |
+| `FEL_SEC_USER_AGENT` | Worker, corpus QA harness | unset | SEC fair-access identity with a monitored contact |
+| `FEL_EXTRACTION_MEMORY_STORES` | Worker | unset | Extraction smoke option: output to in-memory stores (discarded on exit) |
+| `FEL_WORKER_HEALTH_PORT` | Worker | unset (falls back to `PORT`) | Port for `GET /health`; no socket opens when both are unset |
+
+### Web
+
+| Variable | Read by | Default | Purpose |
+| --- | --- | --- | --- |
+| `FEL_EVIDENCE_SOURCE` | Web | unset | Exactly `fixture` or `http`; unset is a configuration error |
+| `FEL_API_BASE_URL` | Web | unset | FastAPI origin in HTTP mode |
+| `FEL_API_BEARER_TOKEN` | Web | unset | Server-only API token; must be empty in `fixture` mode |
+| `FEL_ENTITY_IDS` | Web | unset | Comma-separated entity UUIDs |
+| `FEL_WORKSPACE_ID` | Web | unset | Workspace UUID for the HTTP-mode Search Observatory and the extraction pages, which share the Observatory runtime config |
+| `FEL_AS_OF` | Web | unset | Optional RFC 3339 cutoff with explicit offset |
+| `FEL_CORPUS_VERSION_ID` | Web | unset | Optional immutable corpus version UUID |
+| `FEL_WEB_TELEMETRY` | Web | unset | `1` enables the `/api/telemetry` route (404 otherwise); the browser side reads `NEXT_PUBLIC_FEL_WEB_TELEMETRY` at build time |
+
+### Limits and telemetry
+
+| Variable | Read by | Default | Purpose |
+| --- | --- | --- | --- |
+| `FEL_USER_DAILY_LIMIT_USD` | API | `25` | Per-user daily hard cost limit |
+| `FEL_ORG_MONTHLY_LIMIT_USD` | API | `1000` | Per-organization monthly hard cost limit |
+| `FEL_USER_DAILY_SOFT_USD` | API | `10` | Per-user daily soft (warning) limit |
+| `FEL_ORG_MONTHLY_SOFT_USD` | API | `500` | Per-organization monthly soft (warning) limit |
+| `FEL_RESEARCH_QUERY_COST_USD` | API | `0.25` | Cost charged against the limits before a research query runs |
+| `FEL_RATE_LIMIT_QPS` | API | `5` | In-process rate limit; `0` disables the limiter |
+| `FEL_RATE_LIMIT_BURST` | API | `20` | Rate-limiter burst size |
+| `FEL_SENTRY_DSN` | API, worker | unset | Enables Sentry with PII collection off; unset means no SDK initialization |
+| `FEL_SENTRY_TRACES_SAMPLE_RATE` | Worker | `0` | Worker performance-trace sample rate |
+
+The cost defaults are development-friendly; deployments should set them
+deliberately. `FEL_COST_PER_1K_INPUT_USD` and `FEL_COST_PER_1K_OUTPUT_USD`
+(API) hold placeholder token pricing for metering.
+
+### Tests
+
+| Variable | Read by | Default | Purpose |
+| --- | --- | --- | --- |
+| `TEST_DATABASE_URL` | pytest suites, `make eval-retrieval-gate` | unset | Migrated test database; DB-gated suites skip without it |
+| `FEL_REQUIRE_DB` | pytest suites | unset | `1` makes a missing `TEST_DATABASE_URL` a collection error instead of skips (CI sets it) |
+| `FEL_HARNESS_ALLOW_RESET` | `evals/harness/corpus_qa.py` | unset | `1` marks a database not ending in `_test` as disposable for `--reset-corpus` |
+| `FEL_RUN_BENCHMARKS` | calculation-engine benchmark tests | unset | `1` enables opt-in timing assertions |
+| `FEL_RUN_QUERY_BENCHMARK` | `apps/api/tests/test_retrieval_api.py` | unset | `1` runs the opt-in query p95 benchmark on a controlled host |
+| `FEL_QUERY_BENCHMARK_PROFILE` | `apps/api/tests/test_retrieval_api.py` | unset | Required with the benchmark: describes the controlled host |
+| `FEL_QUERY_BENCHMARK_P95_SECONDS` | `apps/api/tests/test_retrieval_api.py` | unset | Required with the benchmark: the declared p95 latency target in seconds |
+
+Provider credentials (SEC, FRED, market data, LLM, Supabase) are listed by name
+in [`docs/handoff/CREDENTIALS.md`](../handoff/CREDENTIALS.md); the acceptance
+harness variables (`READER_SMOKE_MANIFEST`, `FEL_ACCEPTANCE_PYTHON`) are set in
+[Option C](#option-c-dedicated-http-acceptance).
 
 ## Provider mocks
 
@@ -364,7 +441,7 @@ uv venv --python 3.11 --seed .venv
 already installed (`--seed`), so the rest of this guide's
 `.venv/bin/pip install ...` commands work unchanged. pyenv or asdf work too
 if you already manage Python versions that way — install/select 3.11 there
-and run the `python3.11 -m venv .venv` line above as normal.
+and run the `make install-py` and `.venv/bin/pip install --require-hashes -r requirements-dev.lock` lines above as normal.
 
 ### `pnpm` reports the wrong version
 
@@ -393,9 +470,10 @@ contain immutable object references, not the full canonical filing body.
 
 ### Worker exits during startup
 
-Set exactly one of `FEL_MOCK_SMOKE=1` or `FEL_SEC_LIVE=1`. Live SEC mode also
-requires `FEL_STORAGE_DIR` and `FEL_SEC_USER_AGENT`; invalid or ambiguous modes
-fail closed.
+Set exactly one of `FEL_MOCK_SMOKE=1`, `FEL_SEC_LIVE=1` or
+`FEL_FIXTURE_INGEST=1`. Live SEC mode also requires `FEL_STORAGE_DIR` and
+`FEL_SEC_USER_AGENT`; fixture-ingest mode also requires `FEL_FIXTURE_DIR` and
+`FEL_STORAGE_DIR`. Invalid or ambiguous modes fail closed.
 
 For test commands and CI parity, continue with
 [`testing.md`](./testing.md).
