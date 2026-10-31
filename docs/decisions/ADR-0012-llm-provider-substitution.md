@@ -1,6 +1,6 @@
 # ADR-0012: Split the AI-provider decision by role, and supersede only ADR-0002's generation-provider clause
 
-Status: Proposed
+Status: Proposed (Amendment 1, 2026-10-31, at the end of this file; status unchanged)
 Date: 2026-08-31
 Proposes to supersede: ADR-0002
 (`docs/decisions/ADR-0002-mvp-stack.md`, Status: Accepted) —
@@ -71,7 +71,7 @@ integration-lead review; the ADR comes first.
 
 No live provider of any kind is wired. This is verified, not assumed:
 
-```
+```sh
 git grep -n 'openai\|OpenAI' origin/main -- packages/providers workers/src
 ```
 
@@ -667,3 +667,45 @@ rather than inherit.
 contract, credential registry, workstream, or source file is edited by the commit
 that adds it; `docs/decisions/ADR-0012-llm-provider-substitution.md` is the only
 file it creates or touches.
+
+## Amendment 1 (2026-10-31)
+
+Recorded under [ADR-0032](ADR-0032-documentation-status-reconciliation.md)
+(issue #363, decision D4, accepted by the integration lead on 2026-10-29). This
+amendment refreshes the premises behind the "Revisit triggers" section against
+`main` @ `f4b1197`, following the precedent of ADR-0010 Amendment 1. **No
+decision point is changed, added or withdrawn, and the Status remains
+Proposed.** Line citations above are left as written; re-resolve them before
+relying on them.
+
+1. **The "any live provider is wired" trigger has fired.** The trigger's own
+   test, `git grep -n 'openai\|OpenAI\|anthropic\|Anthropic' -- packages/providers
+   workers/src apps/api/app`, is no longer empty: explicit-key OpenAI adapters
+   exist at `packages/providers/fel_providers/openai_structured.py` and
+   `packages/providers/fel_providers/openai_embeddings.py` (#328, #329, as
+   ADR-0010 Amendment 1 records). The Context's premise that no adapter exists,
+   so the incumbent has never been measured, no longer holds: the incumbent can
+   now be measured. The same search finds no match under `workers/src` or
+   `apps/api/app`, so no runtime path binds either adapter yet, and the
+   repository still contains no Anthropic adapter.
+2. **The "Recall@10 below 90%" trigger has not effectively fired.** The
+   committed report `evals/reports/retrieval-gate/2026-09-01-synthetic-seed.json`
+   records `recall_at_10` `0.4692` against the `0.9000` threshold, and its
+   reranker block reads `triggered: true`. That run used `provider: mock` and
+   `embedding_model: mock-embed-retrieval-gate-v1`: hash-based mock embeddings
+   over a corpus synthesized from the seed's own quotes. It measures the
+   pipeline, not real retrieval quality, so it is not the evidence this trigger
+   names. The trigger stays armed for the first run on real embeddings.
+3. **The Arm A / Arm B benchmark is still the ratify-or-withdraw event.** It
+   has not run. The first trigger above remains mandatory, and the Verification
+   list is unchanged; its item 6 now has a non-empty result to report.
+4. **User-funded inference is governed by ADR-0026, not this ADR.**
+   [ADR-0026](ADR-0026-public-workspaces-and-user-funded-inference.md)
+   (Accepted for bounded implementation, 2026-09-16) authorizes an OpenRouter
+   connection followed by direct OpenAI and Anthropic user keys, states that
+   "OpenAI remains the accepted model baseline", and says it "is not acceptance
+   of proposed ADR-0012 or an alternative model pin". This ADR still governs
+   only the substitution of a provider for the ADR-0002 generation baseline.
+
+[ADR-0002](ADR-0002-mvp-stack.md) now carries a "Related decisions" section
+naming this ADR and ADR-0026.

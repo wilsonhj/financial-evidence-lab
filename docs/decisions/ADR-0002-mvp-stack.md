@@ -45,3 +45,16 @@ This ADR is the single source of truth for the MVP technology stack. `specs/001-
 ## Change rule
 
 Product-scope changes require a new specification version. Implementation-stack changes require a new ADR with benchmark evidence that the current default fails a requirement.
+
+## Related decisions
+
+Added under [ADR-0032](ADR-0032-documentation-status-reconciliation.md). This
+section is appended at the end so the `ADR-0002:NN` line citations elsewhere
+stay valid; it changes nothing above.
+
+- [ADR-0012](ADR-0012-llm-provider-substitution.md) (Proposed) proposes to
+  supersede only the "OpenAI for generation" clause of the AI and retrieval
+  section. Until it is ratified, that clause stands.
+- [ADR-0026](ADR-0026-public-workspaces-and-user-funded-inference.md)
+  authorizes user-funded inference (OpenRouter first, direct OpenAI and
+  Anthropic keys later) and keeps OpenAI as the accepted model baseline.

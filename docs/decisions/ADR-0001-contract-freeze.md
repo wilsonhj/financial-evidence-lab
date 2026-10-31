@@ -1,6 +1,8 @@
 # ADR-0001: Contract-first parallel delivery
 
 Status: Accepted
+Date: 2026-07-12 (added by PR #2, commit `369777f`; recorded in
+[ADR-0032](ADR-0032-documentation-status-reconciliation.md))
 
 ## Decision
 

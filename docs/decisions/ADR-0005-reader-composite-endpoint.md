@@ -3,6 +3,9 @@
 Status: Accepted
 Date: 2026-07-15
 Accepted: 2026-07-15 by integration lead following architect endorsement of the four decision points.
+Superseded in part (oversized-reader posture) by
+[ADR-0021](ADR-0021-bounded-api-pagination-and-reader.md). Back-link added
+under [ADR-0032](ADR-0032-documentation-status-reconciliation.md).
 Occasioned by: issue #87 (M1-READER-INTEGRATION) / child issue #89 (READER-CONTRACT)
 
 ## Decision
