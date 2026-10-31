@@ -60,6 +60,8 @@ describe("ObservatoryFlowViz", () => {
     expect(summary.short).toBe("dedupe, cutoff, version");
     const markup = renderToStaticMarkup(<ObservatoryFlowViz trace={MOCK_TRACE} />);
     expect(markup).not.toContain("Future / cross-version");
+    expect(markup).not.toContain("version verified");
+    expect(markup).toContain("At or before the cutoff");
     expect(markup).toContain(`Rejection codes: ${summary.full}`);
     expect(markup).toContain("dedupe, cutoff, version");
     expect(rejectionSummary([])).toEqual({ short: "none", full: "No candidates rejected" });
