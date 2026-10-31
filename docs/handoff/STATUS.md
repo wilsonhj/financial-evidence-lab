@@ -1,425 +1,127 @@
 # Implementation status
 
-## September 16 public deployment guard and external implementation handoff
-
-PR #338 integrates the public guard, explicit synthetic-harness configuration and
-accepted ADR-0027. Missing mode is public: business web routes return 503 without
-using a deployment bearer, while health remains reachable. Public API clients
-continue through the existing Supabase verifier; mock API identity requires an
-explicit dedicated synthetic mode and matching target/storage proof. This is a
-safe unavailable state until request-scoped sessions exist, not completed signup.
-
-Local verification passed the combined API/database and harness tests, all six
-real reader browser cases (including auth failures, corruption and API outage
-recovery), the extraction HTTP/worker/review/correction/SSE workflow, and the
-production HTTP public-refusal test with zero upstream requests. Independent
-review found two malformed-input issues—BOM-prefixed canonical manifests and
-coerced array roles—which have regression-tested repairs. Required CI remains
-a merge condition. None of these local results establishes hosted #108 or #61
-performance acceptance.
-
-External agents may implement #336 (dataset validation) and #337 (pure isotonic
-calibration) concurrently using the immutable contract pin and exact exclusive
-paths in [the implementation handoff](implementation-agents-2026-09-16.md).
-Those files are reserved for external owners and are not implemented by #338.
-ADR-0028 freezes offline interfaces/numerics only; synthetic fixtures are not human
-adjudication, live calibration or runtime confidence integration. Canonical task
-states and all parent milestone dependencies remain unchanged.
-
-Next local contract work is session/identity/bootstrap/custody and durable
-user-funded admission under #324. No public shared-bearer escape, owner-key
-fallback, paid model call or alternative model promotion is authorized.
-
-## September 16 provider and public-access prerequisites
-
-The completion specification, staged implementation plan and bounded external-agent
-brief merged in #325 (`7a08df9`). PR #320's watchdog repair merged at `69ed8b9`
-after review of exact rebased head `e9ddc0b`; it preserves immediate explicit runs
-and does not establish hosted #108 acceptance.
-
-- Explicit-key OpenAI structured generation merged in #328 (`750aede`). The adapter
-  preserves known billable usage on invalid output, rejects unsafe/malformed results
-  and includes a regression for a slow-drip response deadline. It performs no
-  environment-key lookup or automatic runtime registration.
-- Explicit-key 512-dimension OpenAI embeddings merged in #329 (`05141ae`). Bounded
-  indexed batches, finite-vector validation and safe per-attempt usage reporting
-  pass 140 combined provider tests with structured generation. Both PRs passed
-  independent review, required CI and extraction HTTP/worker/browser acceptance.
-- Public-session/BYOK proposal and narrowed cipher decision merged in #330
-  (`aef6d33`). Full session, persistence and admission interfaces remain Proposed.
-  Public signup, confidential workspaces and all-user-funded inference govern;
-  no owner-key fallback, free owner-funded allowance or provider promotion exists.
-
-- Offline credential encryption merged in #331 (`450c250`). Authenticated identity
-  binding, key rotation and worst-case escaped-input bounds pass all 186 combined
-  provider tests. Independent review reproduced a round-trip size defect; its
-  regression now passes. Final required CI and HTTP/worker/browser acceptance
-  passed. No storage, caller authorization or runtime key provisioning is implied.
-
-These are prerequisites. Public web identity is not request-scoped yet; deployment
-bearer use remains a release blocker. Before dispatching the deployment guard,
-freeze an explicit mode for the existing synthetic extraction HTTP/load workflow
-and the request-boundary mechanism for literal page-level HTTP 503. Merely throwing
-from a configuration loader does not establish that response contract. Session
-custody, bootstrap, encrypted storage, PKCE, durable billable admission and hosted
-two-user isolation remain separate registered contract/runtime work.
-
-The original #61 performance threshold remains unmet and #108 needs its dedicated
-hosted target. Live corpus/provider evaluation still requires approved user-funded
-credentials, budgets and exact routes; human-adjudicated calibration and the
-model/scenario/forecast product retain their completion-plan dependencies. No
-canonical task state or release threshold changed, and no paid inference call
-was made in this implementation wave. Earlier dated claims that no OpenAI adapter
-exists are superseded by this checkpoint; runtime/live proof remains absent.
-
-
-## September 14 load and reader implementation results
-
-The spec-driven implementation and measured repair plan merged in #315/#317.
-This checkpoint supersedes the earlier September 14 implementation snapshot
-where stated below. Re-query GitHub before dispatching further work.
-
-- #108 preparation merged in #318 (`1a0de4b`). The real consumer now preserves
-  validated reporting periods and supports explicit, hash-checked committed
-  SEC transport fixtures with no network fallback. Four actual ingestion jobs
-  and six production-build Chromium tests cover citations, two amendments,
-  corpus membership/pins, anti-oracle visibility, typed authentication failures,
-  canonical corruption and real API outage/recovery. Final PR CI passed 2,365
-  Python tests with 88.84% coverage and the existing extraction HTTP workflow.
-- #108 itself stays open. No hosted run occurred: the dedicated Railway
-  target/access and protected environment are unavailable. The dispatch-only
-  workflow validates deployed revisions and bindings, uses reversible owned
-  faults, and scans public artifacts for credentials. A genuine parser or
-  normalizer release is still needed to exercise competing derived versions of
-  one accession without fabricating version metadata. Local screenshots and
-  limitations are in `evals/reports/reader-prod-smoke/2026-09-14-local-smoke.md`.
-- #61's implemented batching repair reduces a 100-item review from 829 to 37
-  SQL statements and removes unused version data from identity/head bindings.
-  Existing atomicity, concurrency, correction, ETag, provenance and tenant tests
-  pass. PR #316 contains the implementation, executable load runner and all raw
-  evidence; its final integration checks are recorded on the PR.
-- #61's load gate **remains failed**. Three unchanged 25-user profiles completed
-  all 100 measured observations per operation without errors, with actual
-  25-way overlap. Bulk p95 was 4,147.19 ms, 1,002.23 ms, then 1,501.91 ms against
-  the strict 1,000 ms limit. Create and both SSE gates passed. A separate
-  diagnostic observed WAL-write contention and roughly 1,031 ms pool/setup
-  wait p95. The shared local Docker VM is below the reference DB resources.
-  No durability setting, pool limit, threshold, retry policy or workload was
-  relaxed; no favorable run was selected to claim acceptance. See
-  `apps/api/EXTRACTION_LOAD.md` and its retained baseline/diagnostic artifacts.
-
-Both issues stay open, and canonical milestone checkboxes and credential
-policies remain unchanged. Further execution needs an appropriate dedicated
-load target and the dedicated hosted-reader environment, not another claim of
-completion based on local functional tests.
-
-## September 14 verification and ownership checkpoint
-
-Snapshot base: `df1f85a` (merged PR #311). Re-query GitHub before dispatch;
-this is evidence history, not a promise that the live tip or queue is unchanged.
-The September 9 and earlier sections below are historical and are superseded
-by this checkpoint where implementation or issue state differs.
-
-- Production token verification merged in #300 (`e66fb6b`); mock claim
-  validation was hardened in #310 (`0230338`). Issue #292 retains hosted
-  identity acceptance, not another verifier implementation.
-- Reader integrity classification merged in #304 (`5dc48f0`), historical
-  unpinned source scope in #305 (`18f510e`), and metadata overflow in #308
-  (`25a6736`). #311 (`df1f85a`) supplies Railway web configuration. None
-  establishes the hosted ingestion-to-reader smoke owned by #108/#96/#87.
-- #306 (`1b2da77`, reviewed head `deeb951`) adds the three extraction
-  acceptance-test files. Its required CI and real HTTP/worker/browser
-  acceptance passed. The clock repair is route-local and preserves the
-  process clock. PR #313 (`8c7d2d5`) strengthens disconnect proof
-  by requiring actual client and server termination before resource checks.
-- #61 remains open. Implemented review and immutable history do not certify
-  the canonical 25-active-user reference profile. Existing sequential local
-  measurements retain their original scope. Do not weaken performance gates
-  or transfer this gap to #62's calibration/live-provider package.
-- Integrated recovery is limited to the two fixture action files: endpoint
-  dispatch, requested limits and preservation of correction provenance.
-  These concern fixture/demo parity, not production authorization escapes.
-  The retired Claude branch's broad SSE retries must not be restored.
-
-Ownership and final verification are recorded in `workstreams.yaml` and the
-September 14 section of `execution-2026-09-09.md`. Existing milestone
-dependencies, credential policy and canonical task checkboxes are unchanged.
-
-## Historical status records
-
-Last updated: 2026-09-09. The dated September 6 inventory below is historical; this review and the linked issue audit supersede its open-state and gate observations. Resolve GitHub state before dispatch.
-
-## September 9 review and resolution plan
-
-The live review began with **39 open issues and four open PRs**, against
-`main` at `75fad38`. PR #250 subsequently merged at `9e59edb`, closing #249.
-The issue audit and resolution specification are in
-[`2026-09-09-backlog-resolution-spec.md`](../research/2026-09-09-backlog-resolution-spec.md);
-its dependency-ordered implementation plan is in
-[`2026-09-09-backlog-resolution.md`](../superpowers/plans/2026-09-09-backlog-resolution.md).
-They are subordinate to the canonical product requirements, not another task ledger.
-
-The owner accepted #241's ADR content and renumbering to ADR-0015 on September 7.
-That superseded the acceptance hold in the historical inventory below. Final
-review integration completed in this order:
-
-| PR   | Reviewed head | Merge     | Result                                                                                  |
-| ---- | ------------- | --------- | --------------------------------------------------------------------------------------- |
-| #250 | `961233c`     | `9e59edb` | Node 24.20.0; #249 closed                                                               |
-| #253 | `c9e9428`     | `3dfe678` | Current advisory fixes; #252 closed                                                     |
-| #232 | `96e9102`     | `eb8b7c8` | UUID rate-limit bypass and Sentry collection fixed; contract 0.5.0                      |
-| #241 | `8f3e7e9`     | `5e1faa6` | Conservative mock entailment and preserved abstention cost; contract 0.6.0; #193 closed |
-
-Every listed PR passed its required checks before merge. The final
-[#232 CI](https://github.com/wilsonhj/financial-evidence-lab/actions/runs/34426444226)
-and [#241 CI](https://github.com/wilsonhj/financial-evidence-lab/actions/runs/34426699743)
-include PostgreSQL regressions, JS/security, browser and migration/restore checks.
-#191 and #203 retain their residual work. Following these merges, 37 issues
-remained open; the audit covers all of them plus the three closed in-session.
-PR #251 carries this final documentation reconciliation. Re-query GitHub before
-execution rather than treating the dated count as a live queue.
-
-Issues #141, #157, #189, #198 and #202 were already closed at this review's
-snapshot; the historical statements below that call them open are superseded.
-#190 still needs deployed least-privilege verification. #200 still needs
-reproducible runtime dependency resolution and healthcheck deployment wiring;
-`httpx2` is already absent from main. The executable #201 gate exists, but its
-mock baseline misses Recall@10; do not lower the release threshold to close it.
-
-No dispatch dependency, credential policy, or canonical task checkbox changes
-as a result of this documentation review. An implementation marked merged does
-not certify its milestone's live acceptance gate.
-
-## Repository
-
-- Default and implementation base: `main`.
-- **Trunk tip at this revision (2026-09-06): `75fad38`** — PR #247, the checksummed migration ledger and applier plus the fix for the dangling Railway pre-deploy command (#199). Thirty-six commits landed between the previous revision's `b8dc8a6` and this one; they are enumerated under **Merged since 2026-09-03** below. Re-resolve against `origin/main` rather than trusting this line: the previous revision's equivalent sentence was stale within a day.
-- Trunk tip at the previous revision (2026-09-03) was `b8dc8a6` (PR #183, constitution 1.2.0), preceded by `fdcb3d2` (PR #173, spec 004), `f158e05` (PR #175, ADR-0011 accepted) and `ebe77af` (PR #172, this ledger's previous revision) — re-resolve against `origin/main` rather than trusting this line. Before those: `a4bb356` (PR #174, closes #171 — only an addend-shaped withheld row suppresses a segment sum). Prior notable tips: PR #162 M3 normalize wiring @ `5b4b77c`, PR #164 EVALS-REPORT-RENDER @ `a23514e`, PR #170 memory-stores contract test @ `5f4d9b9`, PR #168 handoff Current-state reconcile @ `64eb571`, PR #166 **Apache-2.0 relicense** @ `5394c64`, PR #167 js-yaml/nanoid advisory remediation @ `7eba341`, PR #165 ADR-0010 (Proposed) @ `ace7b83`, PR #163 measured test counts @ `d44bb06`, PR #152 handoff reconcile @ `a25bf7c`, PR #160 durable job-error sanitization @ `5ec4c08`, PR #149 developer onboarding + architecture guides @ `52c787a`, PR #156 M3 post-merge follow-up @ `263bff8`, PR #145 M3-EXTRACTION-CORE @ `61058e4`, PR #150 corpus-QA renderer proposal @ `21750b1`, PR #147 ADR-0008 Amendment 1 @ `355d2b6`, PR #144 postcss/brace-expansion remediation @ `eed2140`, PR #127 DB-GUARD-HARDENING @ `e55eea8`. The eight-commit sequence from `a25bf7c` to `5b4b77c` is enumerated under **Merged since 2026-08-04** — eight, not the nine of `5ec4c08..5b4b77c`, because `a25bf7c` is the range's starting point rather than one of its entries. Always resolve trunk against `origin/main`.
-- The earlier warning about local `main` sitting at `89e4363` is retired: that commit was reverted on-branch by `7f11bab` before #145 merged, so no `.specify/**` or `AGENTS.md` change landed. Verified by hash — both are byte-identical either side of `61058e4`. Re-landing it requires its own `contract-change` PR (#141).
-- **`agent/m3-extraction-core` is merged and closed.** #145 was squashed, so its branch tip `04da0fb` is **not** an ancestor of `main`. Do not push follow-up work to that branch — a merged PR cannot track it. M3 follow-ups branch from `main`.
-- **No package reads `ready`.** M4-MODEL-CALC (#63) merged via PR #212 @ `9e23c7f`; its entry read `ready` from that merge until PR #226's reconciliation flipped it to `merged`. **M3-REVIEW (#61)** still carries an explicit `status: blocked` that this reconciliation did **not** flip, but all three of its recorded holds are now cleared — see **Ready** below for what actually holds it. M3-CONFIDENCE-GATE (#62) is still not unblocked: it `depends_on: [M3-REVIEW, RELEASE-LIVE-CUTOVER]`.
-- Integration lead ruled ADR-0011 over ADR-0009; ratified by PR #175 @ `f158e05`. **Its SSE hold is cleared:** migration 0006 landed via PR #236 @ `22831da` (2026-09-05). ADR-0009 (`docs/decisions/ADR-0009-checkpoint-payload-in-event-stream.md`) landed with #145 under shared `docs/decisions/**` and now reads **Status: Superseded by ADR-0011**, set when #175 merged @ `f158e05`. PR #156 corrected four factually false statements in it, but did **not** ratify it.
-- Canonical product spec: `specs/001-financial-evidence-lab/spec.md` v1.2.
-- M2 implementation design: `specs/002-observable-hybrid-retrieval/` plus ADR-0006 (live on main).
-- M3 implementation design: `specs/003-agentic-extraction/` plus ADR-0007 (live on main).
-
-## Completed
-
-- M0 platform/contracts/CI foundations.
-- M1 ingestion, evidence UI, corpus QA, companyfacts follow-up, and worker deployment.
-- Reader contract/global offsets plus production API and HTTP web runtime:
-  - PR #92 / issue #89 — contract
-  - PR #91 / issue #90 — global offsets
-  - PR #98 / issue #94 — reader API
-  - PR #99 / issue #95 — HTTP reader runtime
-- READER-CROSS-STACK mock-first + CI stack path: PR #105 / package issue #96 (criteria 1–10).
-- M2-CONTRACT OpenAPI v0.3.0 + migration `0003_retrieval_core.sql` + pgvector CI image: PR #106 / issue #100 (closed).
-- M3-CONTRACT OpenAPI v0.4.0 + migration `0004_extraction_core.sql` + `StructuredLLMProvider` mocks: PR #112 / issue #101 (closed); review fixes included typed records, conflict identity pin, terminal-run proposal freeze, step success-demotion guard.
-- M2-RETRIEVAL-BACKEND full package: PRs #114 + #119 / issue #57 (closed) — item builder, versioned index publish + exact-vs-HNSW oracle, cutoff-safe lanes, deterministic planner, RRF k=60 fusion, query/trace/SSE/rerun/feedback API with persisted byte-stable replay; acceptance report at `packages/retrieval/ACCEPTANCE.md`.
-- M2-CLAIMS-VERIFICATION full package: PR #122 / issue #58 (merged) — atomic claim decomposition, citation entailment/verification, abstention, 50–100-question smoke gate, retrieval/performance suite; live 65-question exit gate deferred to follow-up #132.
-- M2-OBSERVATORY-UI full package: PR #123 / issue #59 (merged) — Search Observatory trace timeline, lane toggles, evidence feedback, and replay; browser E2E and live SSE deferred to follow-ups #131/#134/#135.
-- Dependency-advisory remediation chain on `main`: PRs #128 (js-yaml GHSA-52cp @ `ad1717b`), #140 (fast-uri/sharp + fail-closed audit-gate triage @ `ef13b0f`), #142 (globalize postcss override @ `1208028`), #144 (postcss floor `^8.5.23` + brace-expansion GHSA-mh99-v99m-4gvg @ `eed2140`). All four touch `shared_paths` and are the class of change #141 is about. The `brace-expansion` entry in `scripts/audit-allowlist.json` **was** package-wide with a 2026-10-24 review date; it was removed by #156 and the file is now `[]`. Scheduled refresh tracked by #143. **PR #156 @ `263bff8` extends the chain:** two incomplete-fix follow-ups (`GHSA-rgw5-rvv9-x895` brace-expansion, `GHSA-7p8r-x3mc-p8w7` fast-uri) moved the floors again, so they went to `^5.0.9` / `^2.1.4` / `^3.1.5`. Because `brace-expansion@2.1.4` now exists on the 2.x maintenance line and `minimatch@5.1.9` declares `^2.0.1`, the previously unfixable remnant is patched rather than suppressed — `scripts/audit-allowlist.json` is now `[]` and the gate is green with **zero** suppressions. Do NOT collapse the two `minimatch@^5` / `@^10` scopes into one global override: `brace-expansion` moved from a function export to an object export after 2.x, so a 5.x resolution under `minimatch@5.1.9` throws at require time — and it throws at _runtime_, so every gate including `check:generated` passes and the break ships latent (this happened once; see `eca02df`). `pnpm why` must be run with `-r` or the `@fel/contracts` instance is invisible. The chain does **not** end at #156: **#159** ([SECURITY] restore credential-safe durable job errors) was filed against it, because #156 reverted the `queue.fail` redaction, and was closed by **PR #160 @ `5ec4c08`**, which restored it via `redact_job_error_text`.
-- DB-GUARD-HARDENING: PR #127 / issue #125 (closed) — retroactive 0005 authorization record, as-fel_app guard-harness pass, superseded-pin regression, helper consolidation.
-- Migration `0005` query-guard role fix (fel_guard_query FOR SHARE vs SELECT-only fel_app): PR #118, with as-fel_app harness regression.
-- Retrieval integration suites isolated in a dedicated `<db>_retrieval` test database (cross-suite FK isolation defect found by first CI exposure): PR #119.
-- CI migration-harness gate (`db/migrations/tests/*.test.sql` run in the database job): PR #115; database job now logs `OK: 3 migration harness(es) run` (0003 + 0004 + 0005 from #118).
-- External benchmark and ontology research recovered from PRs #74/#75 onto the M2/M3 design branch without merging retired `integration/m0` history.
-- Issues #57–#62 refreshed to current `main`, concrete dependencies, bounded paths, and implementation acceptance gates.
-- Contract-change issues #100 (M2 v0.3.0) and #101 (M3 v0.4.0) created with serialized shared-path ownership.
-- M2/M3 implementation design PR #102 merged to main @ `052836d` (Spec Kit packages, ADR-0006/0007, research reconciliation, contract gates documented).
-
-### Merged since 2026-07-21
-
-- Dependency and CI-hygiene remediation: PR #140 (fast-uri/sharp advisories + fail-closed audit-gate triage), PR #142 (postcss override globalized for GHSA-r28c-9q8g-f849), PR #144 (postcss floor `^8.5.23` + brace-expansion GHSA-mh99-v99m-4gvg). Note `eca02df`: the first brace-expansion `^5.0.8` override was reverted before the scoped remediation landed — do not reinstate it without re-reading #144. Recurrence prevention is tracked on #143 (scheduled advisory refresh), still open.
-- Research recovered to trunk: PR #117 — FinRobot cherry-pick studies (M4 calc-engine port, M3 extraction-role pattern).
-- ADR-0008 Amendment 1: PR #147 @ `355d2b6` — adds `infra/railway/worker.json` to the scaffold-registration exception, install-list append only. Ratified in the carrying commit with date, actor and PR number, matching the ADR-0005/0006 convention; supersedes the earlier "Proposed, ratified on merge" wording that had reopened finding I2.
-- Corpus-QA report renderer proposal: PR #150 @ `21750b1` — `docs/research/evals-report-renderer-proposal.md`. Proposal only; authorizes no code change. Registered below as `EVALS-REPORT-RENDER`; size-lever decision recorded there.
-- **M3-EXTRACTION-CORE full package: PR #145 @ `61058e4` (2026-07-30) — issue #60, 115 files, +15,326.** SaaS ontology package, five typed extraction roles, durable workflow FSM with checkpoint/resume over the event log, normalization, deterministic validators, atomic persistence, hard budgets, and audit redaction. Ships `packages/ontology/**` (a new first-party package), `workers/src/fel_workers/extraction/**`, `docs/runbooks/extraction-worker.md` and `workers/src/fel_workers/extraction/OPERATOR.md`.
-  - Scope delivered: `packages/ontology` saas-metrics/v1 (14 metrics / 9 families), bounded durable extraction workflow (budgets, checkpoints, five typed roles), Decimal normalize/validate, `extraction_run` consumer dispatch, proposals always `needs_review`. Earlier on-branch remediation: numeric parser truncation (`4200000` → `420`), evidence truncated to 64 chars on resume, mock model bound unconditionally in the production entrypoint, worker packaging, budget reset per retry, runs stuck `running` after untyped escapes. Two defects found by first real-Postgres coverage: four of five terminal paths never wrote their terminal event (0004 rejects child inserts once a run row is terminal), and content-triggered mock controls (`ABSTAIN`/`REFUSE`) were reachable from untrusted filing text. Live OpenAI deferred to #62; terminal-run retry semantics to #146.
-  - Merged after four review rounds. Final round fixed one blocker and three majors that the suite did not catch: the gross-profit identity inverted for contra-presented COGS, a normalizer-rejected row disabling identity checks for clean siblings, `wall_seconds_used` read latest-not-greatest, and the same polarity defect unfixed in `_check_rpo_balance`. M4 (redaction inside `stage_output`) is **FIXED by PR #156** @ `263bff8`. An earlier investigation here assessed it a false positive on the grounds that the frozen schemas intersect `_REDACT_KEYS` at exactly `{"text"}`. That reasoning was computed over the schema's _enumerated_ property names, but `_redact` walks every key at **every depth**, and the frozen contract opens `dimensions` (`additionalProperties: {type: string}`) and `qualifiers` (`additionalProperties: true`) to arbitrary issuer-supplied names. A payload passing `validate_payload_item` with zero errors had `qualifiers.token` rewritten to `"[redacted]"` in the durable checkpoint, breaking `raw_payload_hash` on resume; end-to-end on real Postgres this produced two proposals with two hashes for one fact in one run. A top-level key named `raw` _is_ rejected by the schema, so that part of the original doubt was correct.
-  - Deliberately deferred out of the PR: **#153** (unify unit-case handling across identity, duplicate and definition checks — a one-sided fold was tried and reverted because it made a real break invisible) and **#154** (guidance range ordering: polarity-blind `check_range`, plus no ordering check at all for free-text `metric_id`s). Both move persisted identity keys and need an ADR.
-  - Verified at merge: 1047 passed, 0 skipped against Postgres 17 + pgvector with `TEST_DATABASE_URL` set; five CI jobs green.
-- **DOCS-ONBOARDING: PR #149 @ `52c787a` (2026-08-04) — issue #148.** Developer onboarding, architecture, system-design and testing guides. Landed after the refresh against `61058e4` and the integration-lead pass that executed every documented command; both are described under its Completed record below rather than repeated here.
-- **Durable job-error sanitization: PR #160 @ `5ec4c08`.** Extends the redaction discipline to the durable job-error column. Closes the last sink where handler exceptions could carry issuer text or credentials into storage outside the treatment the event payloads already apply.
-
-### Merged since 2026-08-04
-
-Eight commits landed on `main` between `a25bf7c` (PR #152, the reconciliation that wrote the previous revision of this file) and `5b4b77c` — the eight enumerated below. None was recorded here until now; the ledger sat at `5ec4c08` (2026-08-03) until this reconciliation, while trunk moved nine commits to `5b4b77c` and then a tenth, `a4bb356` (PR #174), which is recorded as a sub-bullet under #162 because it fixes the defect that commit introduced rather than standing on its own. **Every count in this sentence names the commit it is measured to; a count without an endpoint decays the moment trunk moves, which is how the previous revision's figures went stale when this reconciliation was retargeted from `5b4b77c` to `a4bb356`.** Listed oldest first, in trunk order — note `a25bf7c` (2026-08-04) precedes `d44bb06` (2026-08-08), which is the reverse of the order the merge dates on the PRs suggest if read casually.
-
-- **Measured test counts published: PR #163 @ `d44bb06` (2026-08-08).** `docs/development/testing.md` only. This closes the correction the DOCS-ONBOARDING record above demanded: the file said 861/186 and is now 258 JS/TS tests, **881 passed / 187 database-gated skipped** without a database, 1068 collected in total. It also disposes of the 873/187 figure quoted in #160's body, which reproduced against nothing. The counts are measured, not asserted — treat the file as the baseline and re-measure rather than quoting this bullet after further merges.
-- **ADR-0010 proposed: PR #165 @ `ace7b83` (2026-08-08)** — `docs/decisions/ADR-0010-cross-repo-pattern-adoption.md`, +162/−0, **Status: Proposed**. It is a proposal and ratifies nothing; a second unratified ADR now sits alongside ADR-0009. It landed under shared `docs/decisions/**` carrying **no** label, where PR #145 took `contract-change` for exactly that surface — more evidence for #141, recorded below.
-- **Advisory remediation: PR #167 @ `7eba341` (2026-08-11)** — js-yaml floor raised to `^4.3.1` (GHSA-5p4m-2wfm-xmqj) and nanoid patched to 3.3.18 (GHSA-2v37-7h3g-55p8), in `pnpm-lock.yaml` + `pnpm-workspace.yaml`. **This resolves the trunk red.** The `JS/TS — format, lint, typecheck, test, audit` check run is `failure` at `ace7b83` and `success` at `7eba341` and at every commit since, so the fail-closed `audit-bulk` gate that made every branch inherit a red job is cleared. Extends the #128 → #140 → #142 → #144 → #156 chain; like #165 it moves root shared paths unlabelled.
-- **Relicense MIT → Apache-2.0: PR #166 @ `5394c64` (2026-08-11).** `LICENSE` +202/−21 and a new `NOTICE` +5. **The ledger had no record that the project's license changed; this is that record.** Verified rather than assumed: `LICENSE` is **byte-identical** to GitHub's canonical Apache-2.0 text (sha256 `c95bae1d1ce0235ecccd3560b772ec1efb97f348a79f0fbe0a634f0c2ccefe2c` for both), and `gh repo view --json licenseInfo` now reports `apache-2.0`. `NOTICE` reads "Financial Evidence Lab / Copyright 2026 H.J." and points at `LICENSE` for terms. Consequences a future reader should not have to rediscover: contributions from `5394c64` onward are under Apache-2.0, which adds an express patent grant and a NOTICE-propagation obligation that MIT did not impose, so any redistribution or vendoring path that was reasoned about under MIT terms needs re-checking, and the `NOTICE` file must travel with derivative distributions.
-- **README Current-state reconcile: PR #168 @ `64eb571` (2026-08-11)** — refreshed `docs/handoff/README.md` against `ace7b83`. It was stale within hours and was stale when this entry was written: it described #162 and #164 as "in review, both unreviewed", #166 as merely _proposing_ the relicense, `EVALS-REPORT-RENDER` as still reading `ready`, and trunk as red pending #167. All four were superseded the same day by the merges below. The lesson is the one this section exists to record: a Current-state block pinned to a SHA decays the moment the next PR lands.
-- **FEL_EXTRACTION_MEMORY_STORES contract pinned: PR #170 @ `5f4d9b9` (2026-08-11) — issue #169 (closed).** +155/−1 in `workers/tests/test_entrypoint.py`. Pins the flag that discards all extraction output while jobs still report `succeeded` — the failure mode is silent data loss behind a green run, so the test is the only thing standing between that flag and a false success.
-- **EVALS-REPORT-RENDER: PR #164 @ `a23514e` (2026-08-11) — issue #151 (closed).** Stdlib-only corpus-QA Markdown + SVG renderer in `evals/reporting/**` + `evals/tests/**`; both goldens committed, per the size-lever decision recorded below. **Two things the decision record got wrong, kept here rather than silently corrected:** the package merged at **+2531/−0 across 6 files**, roughly fourfold the ~640 changed lines projected (1161 of those lines are the test module and 255 the two goldens, so the "about 150 in fixtures, ~490 hand-written" split did not survive contact either). The `README.md` "below roughly 600 changed lines" figure remains a stated preference rather than a gate, so nothing was violated — but the estimate should not be reused as a planning input.
-- **M3 normalize wiring: PR #162 @ `5b4b77c` (2026-08-11) — issue #155 (closed).** Wires `normalize/dimensions.py` and `normalize/currency.py` into the live pipeline and deletes the dead duplicate, with `extraction/types.py`, `validate/accounting.py`, `validate/pipeline.py`, `normalize/payload.py`, `normalize/pipeline.py`, `docs/architecture/system-design.md` and a new `workers/tests/extraction/test_dead_normalize_modules_wired.py` (+357) alongside. Closes the #155 entry carried under "Open issues carried but not queued" below.
-  - **It also introduced a regression, filed as #171 (2026-08-21), now FIXED by PR #174 @ `a4bb356`.** The segment-sum suppression added here to `validate/accounting.py` keyed on `(metric_id, entity_id, period, unit, currency)` and did **not** consult `dimensions`, so it was not addend-scoped. `_check_segment_sums` classifies a total as `not f.dimensions` and a segment as `len(f.dimensions) == 1`, so a row with **two or more** dimensions is neither and never enters the sum — yet withholding one suppressed the entire slice and silenced a genuine `segments_do_not_sum` for its clean siblings. It failed **open**: it hid a real finding rather than raising a false one. Verified by execution against `5b4b77c` rather than by reading — four rows where 300 + 400 contradicts a stated total of 1000 reported the break on three indices with nothing withheld, and reported **nothing** when only the two-dimension row was withheld. The identical script at pre-#162 `a23514e` — `5b4b77c^`, the state of `main` immediately before #162 merged — reported the break either way, which is what makes this a regression rather than an inherited limit. That control is unambiguous because the mechanism is **absent** there rather than merely keyed differently: `grep -nE 'suppressed|withheld'` over `validate/accounting.py` returns nothing at `a23514e`, where the signature is `_check_segment_sums(facts, out)` with no withheld argument at all, and returns `456: suppressed = {slice_of(fact) for fact in withheld}` at `5b4b77c`. #162 introduced the mechanism and the defect together. An earlier revision of this bullet cited `6320c97` as the control; that SHA is PR #170's pre-squash branch tip and is **not** on `main`'s ancestry (`git merge-base --is-ancestor 6320c97 origin/main` exits 1), so it could not serve as a main-line control even though it predates #162 and also lacks the mechanism.
-  - **#171 was reachable on trunk at `5b4b77c`; a first assessment wrongly called it latent. Closed by #174 @ `a4bb356`.** That assessment grepped only `blockers.append(` under `normalize/**`, found the two codes that sit in `NON_MAGNITUDE_NORMALIZER_BLOCKERS`, and concluded `normalizer_rejected_indices` is always empty. It missed `blockers.extend(...)` at `normalize/payload.py:199-200` and the `scale_blockers()` seed at `:158`. The scale and sign findings are **interpolated sentences** (`sign contradicts value: declared negative, value is positive`, `scale must be int`), so they can never match a frozenset of two fixed identifiers and therefore always gate — confirmed by running `normalize_payload` on ordinary rows. `types.py:31-34` and the docstring of `test_every_normalizer_blocker_code_is_deliberately_classified` both already state that these gate by design. Record the method, not just the finding: an allowlist keyed on stable identifiers cannot be audited by grepping one call form, and membership-testing an f-string against fixed codes is structurally always false. The fix (#174) scopes the suppression to addend-shaped withheld rows (`len(f.dimensions) == 1`).
-
-**Trunk health at `a4bb356`: green.** All five GitHub Actions check runs — `JS/TS`, `Python`, `DB — migration and backup-restore smoke`, `Web — Playwright E2E (fixture mode)`, `Secret scan (gitleaks)` — are `completed / success`. The `ace7b83` advisory-gate red is resolved by #167, so a red branch is now your own doing rather than inherited. One trap: the repository also carries `cursor`, `claude`, `supabase` and `vercel` check **suites** that sit permanently `queued` with a null conclusion. They are not gates and they never resolve — reading the suite list rather than the check runs will make green trunk look pending. **#171 is no longer live** — fixed by PR #174 @ `a4bb356`.
-
-**Open PRs** as of 2026-08-30 were #172 (this ledger reconcile), #173 (004-mvp-completion) and #175 (ADR-0011 ratification); all three have since merged (`ebe77af`, `fdcb3d2`, `f158e05`). Re-run `gh pr list --state open` rather than trusting any list here. Open issue count was 31 after the #171/#134 closes on 2026-08-29 and 55 on 2026-09-03; re-run `gh issue list --state open --limit 100 --json number --jq length` for the live figure.
-
-### Merged since 2026-09-03
-
-Thirty-six commits landed between `b8dc8a6` (the previous revision's tip) and `75fad38`, listed oldest first in trunk order. The count is `git log --oneline b8dc8a6..75fad38 | wc -l` and is measured to those two endpoints; it decays the moment trunk moves.
-
-Fourteen of them are a **cherry-pick recovery**: PRs #231, #235, #236–#240 and #242–#247 recovered roughly 19,400 lines of finished work from the abandoned branch `claude/repo-analysis-improvements-m25v4u`, which no pull request was ever opened from. Most of those PRs declared no closing issue, so their issues are still **open** on GitHub while the work is on trunk. Read the `workstreams.yaml` entry, not the issue state, before taking any of #189, #190, #194, #197, #198, #200, #201, #202 or #203.
-
-| SHA       | PR   | Issue      | What landed                                                                                                                                    |
-| --------- | ---- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `bed5f3e` | #207 | —          | fast-uri floor to `^3.1.6`; cleared the 2026-09-02 advisory red at `b8dc8a6`                                                                   |
-| `c149a75` | #187 | —          | reconciled spec 004, the handoff files and ADR-0011 after #173/#175                                                                            |
-| `437911d` | #185 | —          | registered `RELEASE-LIVE-CUTOVER` (#177) and the migration-0006 package (#157)                                                                 |
-| `7979985` | #206 | #180       | `tasks.md` reconciled to merged packages — 37/67 checked                                                                                       |
-| `a8886e7` | #209 | #178       | lower-bound test for segment-sum withheld-row suppression                                                                                      |
-| `5c7110d` | #210 | #133       | non-identity claim generator proves the per-edge numeric check                                                                                 |
-| `a1942a9` | #208 | #158       | restored stage checkpoints verified against their content hash before resume                                                                   |
-| `988f47a` | #211 | #146, #204 | **terminal runs are final** — never requeued; a cancelled run never marks its job succeeded                                                    |
-| `9e23c7f` | #212 | #63        | **M4-MODEL-CALC**: typed model graph and Decimal calculation engine, 33 files                                                                  |
-| `491cd67` | #186 | —          | ADR-0012 splits the AI-provider decision by role (**Proposed**; ratifies nothing)                                                              |
-| `4e91235` | #182 | —          | spec `005-m3-completion`: what remains to reach M3                                                                                             |
-| `2ea94e2` | #220 | #143       | retry transient npm bulk-advisory 503s                                                                                                         |
-| `5257df5` | #224 | —          | governance reconcile: provider gates and task-ledger authorization                                                                             |
-| `751f61b` | #222 | —          | completed the bounded bulk-advisory retries #220 started                                                                                       |
-| `9b4d982` | #223 | —          | preserved forecast provenance; redacted extraction job errors                                                                                  |
-| `83e3a3d` | #176 | —          | iPadOS 27 Earnings Update Desk (`RootLayout` becomes an async Server Component)                                                                |
-| `c763bf8` | #227 | #199, #202 | two checks that passed while verifying nothing now fail closed                                                                                 |
-| `0784cb4` | #228 | #141       | shared-path ruling codified in `AGENTS.md` + a workflow that enforces the label                                                                |
-| `443c861` | #225 | #205, #181 | publish-race lock wait scoped to its own database; three doc citations de-lined                                                                |
-| `9353a7e` | #226 | #179       | retired the self-falsifying ledger prose; added the "Reviewing ledger changes" rule                                                            |
-| `5d0b143` | #229 | #184       | `make install-py` honours `.python-version` instead of bare `python3`                                                                          |
-| `9f4b8a0` | #231 | #198       | colocated component tests, reader a11y test, skip link, keyed reader reducer                                                                   |
-| `39d130c` | #234 | —          | contract client-drift guard no longer flakes as a 5s vitest timeout                                                                            |
-| `08d66cc` | #235 | #136       | WCAG 2.2 AA fixes for Observatory and reader, plus a measured contrast guard                                                                   |
-| `22831da` | #236 | #157       | **migration 0006** — `extraction_run_steps.output`; the durable checkpoint leaves the event payload                                            |
-| `5d8ccca` | #237 | #189       | **migration 0007** — poison jobs dead-lettered, retry backoff, reaper index, `cancel_requested_at`                                             |
-| `cf532cb` | #238 | #190       | **migration 0008** — least-privilege `fel_worker` role with per-table RLS (opt-in)                                                             |
-| `d64e400` | #239 | #197       | **migration 0009** — `org_id` foreign keys on `audit_events`, `usage_events`, `jobs`                                                           |
-| `c25e27b` | #240 | #194       | NULL confidence for unscored proposals; review priority derived, not constant                                                                  |
-| `796525e` | #242 | #200, #203 | runtime/dev requirements split; worker health endpoint and worker Sentry init                                                                  |
-| `8c43877` | #243 | #201       | executable retrieval release gate over the 65-question benchmark seed                                                                          |
-| `e5b1137` | #244 | #143       | weekly scheduled dependency-advisory refresh                                                                                                   |
-| `fcbe7a9` | #245 | #138       | client telemetry channel behind `FEL_WEB_TELEMETRY`, off by default on both sides                                                              |
-| `13af8ea` | #246 | #192       | extraction schema vendored into the wheel; OpenAPI route parity test                                                                           |
-| `4a42533` | #233 | —          | desk theme scoped to the desk; silent claim fallback dropped                                                                                   |
-| `75fad38` | #247 | #199       | **checksummed migration ledger and applier**; supplies the `scripts/db/migrate.py` that #242's pre-deploy command named and that did not exist |
-
-Four sequential migrations landed in three days — `0006` through `0009` — each with its own harness. `db/migrations/README.md` and `scripts/db/migrate.py` are now the authority on applying them; the old `for f in db/migrations/*.sql` glob is gone, and ADR-0014 (`ADR-0014-migration-ledger-and-applier.md`) records the design.
-
-**Trunk health at `75fad38`: green.** All five GitHub Actions check runs — `JS/TS`, `Python`, `DB — migration and backup-restore smoke`, `Web — Playwright E2E (fixture mode)`, `Secret scan (gitleaks)` — are `completed / success`. A sixth gate now exists and is not in that list because it only runs on pull requests: `.github/workflows/shared-paths.yml` fails any PR touching a shared path without the `contract-change` label. The `cursor`, `claude`, `supabase` and `vercel` check **suites** still sit permanently `queued` and are still not gates.
-
-**Open PRs at 2026-09-06: #232 and #241.** Both are `contract-change` + `agent-task`, both are ready for review rather than draft, and **both must be serialized against each other** — they modify `apps/api/app/retrieval.py` and both target OpenAPI `0.5.0`. The gates recorded at that historical snapshot (superseded by the September 9 review above):
-
-- **#241** (`cherry/193-claims-output`, closes #193) — consumes validated `claims-output/v1` provider output instead of copying selected context, and assigns claim status and confidence only through verification. It bumps `info.version`, `package.json` and `CONTRACT_VERSION` to `0.5.0` together. **Gate A:** it proposes `docs/decisions/ADR-0014-claims-output-contract.md` with `Status: Proposed`, awaiting integration-lead acceptance. **Gate B:** that filename **collides** with `docs/decisions/ADR-0014-migration-ledger-and-applier.md`, already on trunk via PR #247 — the open PR must renumber before merge.
-- **#232** (`cherry/191-api-hardening`, refs #191 and #203) — connection pooling, durable per-organization query budgets, rate limiting, and optional API Sentry init. Its author corrected the record on 2026-09-06: the PR is **no longer blocked on the `0.5.0` release decision**, because #246 cherry-picked the #192 parity commit _without_ the four contract additions that describe behaviour existing only here. It must therefore carry its own contract half. Commit `3a8384b` on the branch (after merging `main` @ `75fad38`; push pending on credentials) adds the two 402 `COST_LIMIT_EXCEEDED` responses, the `RateLimited` response with `Retry-After`, the `0.5.0` bump and the regenerated client. It deliberately omits the `ListLimit` parameter and the 413 `READER_TOO_LARGE` that the author's comment also listed: the branch head defers list and reader caps back to #191 and serves neither, and `apps/api/tests/test_list_contract.py` asserts the list routes declare no `limit` parameter, so declaring them would be a contract path nothing serves. Note that `contracts.test.ts` asserts only that `info.version` and `CONTRACT_VERSION` _agree_; nothing asserts that adding surface requires a bump, so skipping it stays green.
-
-### Tracker note — #96 residual owned by #108
-
-Issue #96 remains **open** as a tracker only. Package `READER-CROSS-STACK` is `merged` via #105 for its `evals/**` mock/stack scope. Remaining acceptance **criterion #11** (production worker → Postgres → FastAPI → real `HttpEvidenceSource` → production Next.js reader + browser/hosted artifacts) is owned by **READER-PROD-SMOKE (#108)**. Do not re-dispatch #96; do not treat #96-open as blocking #57.
-
-## Design gate (closed)
-
-PR #102 merged to `main` @ `052836d`. Design gate is closed. Spec Kit packages, ADR-0006/0007, and recovered research are on trunk.
-
-Still research-draft (not a dispatch blocker): recovered benchmark needs SEC timestamp/provenance/negative-case/range gates in the M2 compiler; recovered ontology needs citation/provenance fixes or explicit v1 exclusion.
-
-## Active
-
-None. DOCS-ONBOARDING (#148) merged as `52c787a` while this reconciliation was open; its record moved to Completed and its `workstreams.yaml` status is now `merged`, so its paths are free to claim.
-
-Completed detail for DOCS-ONBOARDING, retained because it records what was verified rather than merely asserted:
-
-Refreshed against `61058e4`, which cleared what was previously recorded against it here: the six assertions that the M3 runtime was unmerged (including `system-design.md`'s "downstream code must not assume that PR's runtime is available on `main`"), four developer commands that could not run as written, `packages/ontology` missing from both the repository map and the static-check lists, the unreferenced `docs/runbooks/`, and the `eed2140` test-count baseline.
-
-A subsequent integration-lead pass **executed** every documented command rather than reading it, and corrected three further defects on-branch: `system-design.md` documented `available_at`, an identifier that exists nowhere in the schema or code (the real predicate is `published_at`); `local.md` claimed the HTTP source "fails startup" when it in fact fails closed at _request_ time; and the `Typed roles (extraction/roles/)` heading credited `prompts/`, `schemas/` and `tools.py` to a directory holding only `__init__.py` and `base.py`. Also added the three CI gate commands that had no copy-pasteable form (`bandit`, `pip-audit`, `audit-bulk`), the two omitted `pyproject.toml` testpaths, and `.github/` + `.agents/` in the repository map. Verified correct and left alone: both start commands, the `uv --python 3.11` fallback, the three static-check dir lists (byte-identical to `ci.yml:99-101`), all 8 mermaid blocks, and the documented test counts, which reproduced exactly at `61058e4` (258 JS/TS; 861/186 without a DB; 1047/0 with one). They went stale as that pass was written: #156 and #160 both added tests, and a run of that tree reported **881 passed / 187 skipped** without a database while `docs/development/testing.md` still said 861/186 — note #160's body reports 873/187, which reproduced against nothing either. **That correction is closed, not outstanding:** PR #163 @ `d44bb06` (2026-08-08) published the measured 881/187 to `docs/development/testing.md`, as the bullet above records. Retained for the method it demonstrates — counts asserted from a stale baseline survived two merges before anyone re-measured — and not as a live defect.
-
-## Ready
-
-**No package in `workstreams.yaml` reads `ready` at this revision.** The three that could be argued for are held by a lead decision, not by a dependency, and this reconciliation deliberately flips none of them: correcting ledger facts is a documentation fix, flipping a dispatch key is not.
-
-1. **M3-REVIEW (#61)** — carries an **explicit** `status: blocked`, so dispatching means flipping that key rather than adding one. All three holds recorded against it on 2026-09-03 are now **cleared**: ADR-0011 was ratified (PR #175 @ `f158e05`); migration 0006 landed (PR #236 @ `22831da`), which clears the SSE hold; and #146 Option 1 (terminal runs final) was **implemented** by PR #211 @ `988f47a`, which closed #146 and #204 and which #236 then preserved verbatim through a seven-conflict merge. **What holds it now is path contention alone:** its `apps/web/**`, `apps/api/**` claim collides with both open PRs, #232 and #241, which each rewrite `apps/api/app/retrieval.py`. Serialize behind them.
-2. **M3-CONFIDENCE-GATE (#62)** — still not ready. `depends_on: [M3-REVIEW, RELEASE-LIVE-CUTOVER]`, and it cannot complete mock-only: M3-304 requires a live structured-output smoke with an approved secret. It also inherits the provider question now filed as #195.
-3. **The #188 recovery packages** — nine of the architecture-review sub-issues (#189, #190, #194, #197, #198, #200, #201, #202, #203) have merged implementations while their **issue is still open**, because most recovery PRs declared no closing issue. Four of those nine are only **partially** delivered and their entries say which half is missing. Do not read an open issue as an available package; read the entry.
-
-## Blocked (registered, not dispatchable)
-
-`workstreams.yaml` holds 51 package entries at `75fad38`: 30 `merged`, 19 `blocked` (13 explicitly, 6 by inheriting `defaults.status: blocked`), 2 `review`, and none `ready`. Those counts are measured at `75fad38` and decay as soon as an entry changes. Enumerated below are only those with a live, actionable blocker that is not simply "its dependency has not merged".
-
-1. **READER-PROD-SMOKE (#108)** — branch `test/reader-prod-smoke`; child F of #87.
-   - Blocker A: hosted deployment credentials not provisioned (request by name only; never claim ready).
-   - Blocker B: known product residual — API `INTEGRITY_ERROR` classified as web `unavailable` (no integrity-alert UI kind); #108 must stop-and-escalate, not silently patch.
-   - Flip to `ready` only after integration-lead provisions hosted secrets **and** clears the integrity residual (fix landed or explicit lead waiver).
-   - Shared `.github/**` gated workflow requires separate integration-lead authorization before any smoke PR edits CI.
-2. **RELEASE-LIVE-CUTOVER (#177)** — both `depends_on` edges are merged; held by four preconditions outside the repository (credentials, the embeddings-provider question, Alpha Vantage budget authorization, adjudicator staffing). Unchanged by this reconciliation, and now also waiting on the provider ADR filed as #195.
-3. **ARCH-PROVIDER-ADR (#195)** — blocked on a **decision**, not on code. ADR-0002 (Accepted) pins OpenAI; #132 directs `claude-opus-4-8`; ADR-0012 (PR #186 @ `491cd67`) is **Proposed** and ratifies nothing. No live adapter exists for either provider, so extraction cannot run anywhere today without `FEL_ALLOW_MOCK_LLM`. This gates #177 and #62 in practice; no `depends_on` edge was added, because the decision is the lead's rather than a package.
-4. **ARCH-RETRIEVAL-GATE (#201)** — the gate is merged and **it fails**: `recall_at_10` measured `0.4692` against a `0.9000` threshold, with `temporal_validity` at `1.0`. That is the finding, not a defect in the PR: hash-based mock embeddings carry little semantic signal. CI therefore enforces byte-identity against the committed golden, not the threshold, and the threshold becomes enforcing only under `--provider live`, which exits "not provisioned, see #177". Whether `0.4692` is acceptable pre-cutover is a lead decision.
-5. **M4-FORMULA-AST (#219)** — spec §8.5 requires a formula AST and explicitly-modelled iterative cycles; PR #212 shipped neither and tracked neither. Blocked on a decision that precedes implementation: whether these belong to M4 at all. If they do, the canonical ledger needs tasks (`specs/**`, `contract-change`), and iterative cycles need an accepted ADR for the convergence contract.
-6. **ARCH-CHECKPOINT-RERUN (#221)** — a prerequisite for the live adapter and unreachable before it. It only bites when a stage re-run is not byte-identical, and every provider on trunk is a deterministic mock, which is why #208's Postgres scenarios pass. The fix touches the atomic commit path and needs a Postgres test with a non-deterministic stub provider, a shape no current test uses.
-
-## Next (after the two open PRs land)
-
-1. **Serialize #232 and #241, then decide the order.** They contend twice over: on `apps/api/app/retrieval.py`, and on OpenAPI `0.5.0`. #232 is unblocked by any ADR decision; #241 is not, which argues for #232 first — but the order is the lead's to set. Resume rule 3 forbids two concurrent owners of `packages/contracts/**` in any case.
-2. **Renumber #241's ADR before it merges.** It adds `docs/decisions/ADR-0014-claims-output-contract.md`; `docs/decisions/ADR-0014-migration-ledger-and-applier.md` is already on trunk via PR #247. Then accept or reject it — the PR cannot merge on a Proposed ADR it depends on.
-3. **M3-REVIEW (#61)** — its recorded holds are cleared; flipping the explicit `status: blocked` is the remaining step, once the two open PRs release `apps/api/**`.
-4. **Close or re-scope the nine open #188 sub-issues with merged work** (#189, #190, #194, #197, #198, #200, #201, #202, #203). Five are complete and simply never auto-closed; four carry a named residual — #194 (tool allowlist never invoked), #197 (dangling `workspaces.active_scenario_id`, absent M4/M5 tables), #200 (unlocked floors, unused `httpx2`), #203 (coverage threshold, required-checks manifest, single-person CODEOWNERS, Playwright browser cache). Leaving them open and unqualified is the #179 defect class pointing the other way: an open issue that reads as available work.
-5. **Enable the `fel_worker` role in the deployed environments.** Migration 0008 created it, but `FEL_WORKER_DB_ROLE` unset leaves the pre-existing behaviour, so workers still connect as the migration owner until a deploy sets it. That is a lead action with no package.
-6. **#153 and #154** — both deferred out of #145, both move persisted identity keys, both need an ADR before implementation.
-7. **READER-PROD-SMOKE (#108)** remains blocked until credentials and the integrity residual are cleared.
-
-### Decision record — EVALS-REPORT-RENDER size lever (2026-07-29)
-
-The proposal offers a lever: drop the committed golden SVG (−110 lines) and prove SVG determinism with a render-twice byte-equality assertion plus structural assertions instead.
-
-**Decision: leave the lever. Commit both goldens.**
-
-Rationale: render-twice equality proves the renderer is deterministic _within one process_, which is strictly weaker than a committed golden. Only the committed artifact catches cross-version serialization drift — precisely the risk the proposal itself flags when it verifies that `ET.tostring` preserves attribute insertion order on Python 3.11. A future interpreter upgrade that reorders attributes would pass render-twice and fail golden comparison, and that is the regression worth catching in an evidence product. The `docs/handoff/README.md` figure is a stated preference ("prefer PRs below roughly 600 changed lines"), not a gate; of the ~640 changed lines about 150 are golden fixtures rather than review-bearing code, leaving hand-written code near 490.
-
-Accordingly AC8 keeps both goldens and the allowed-paths list keeps the SVG.
-
-### M2 follow-ups (issues opened 2026-07-21)
-
-Tracked after the #122/#123 merges; none blocks #60.
-
-- **#132** — M2-CLAIMS live 65-question exit gate (closes M2-024).
-- **#133** — **CLOSED** by PR #210 @ `5c7110d` (2026-09-04): a non-identity claim generator proves the per-edge numeric check.
-- **#134** — M2-OBSERVATORY: run Playwright E2E in CI (closes criterion 6 browser-E2E). **CLOSED 2026-08-29, manually.** PR #131 @ `bc6a2a3` shipped the work but declared no closing issue, so this never auto-closed and read as pending for 39 days.
-- **#135** — M2-OBSERVATORY / M3: mount live same-origin SSE proxy + UI consumer (M3-deferred).
-- **#136** — **CLOSED** by PR #235 @ `08d66cc` (2026-09-04): WCAG 2.2 AA fixes for Observatory and reader, `apps/web/ACCESSIBILITY.md`, and a measured contrast guard. The recovered commit's `--color-border-strong` value was recomputed against trunk's newer ground rather than carried across, which is the semantic-drift trap in any stale cherry-pick.
-- **#137** — M2-CLAIMS fast-follow hardening (mock→live cutover hygiene).
-- **#138** — **CLOSED** by PR #245 @ `fcbe7a9` (2026-09-05): a client emitter, a server route and shared validation, off by default behind two separate flags (`FEL_WEB_TELEMETRY` server-side, `NEXT_PUBLIC_FEL_WEB_TELEMETRY` client-side), with server-side redaction proved by neutering the redactor and watching five tests fail.
-- PR **#131** — Observatory Playwright E2E in fixture mode (**merged** @ `bc6a2a3`; #59 criterion 6). Shipped the work #134 tracked but declared no closing issue, so #134 stayed open until closed by hand on 2026-08-29.
-
-### Open issues carried but not queued
-
-These are OPEN on GitHub and own no package entry in `workstreams.yaml`. Listed so resume rule 2 has something to reconcile against.
-
-- **#81** — [EXT-2b] supplemental SEC stress cohort: restore the ≥8 distinct stress-feature bar. Open since 2026-07-13, `agent-task`, appears in neither handoff file.
-- **#56** — [M1-CORPUS-QA] open; corpus QA is listed under Completed above, with the T0112 live-artifact residual tracked only as a trailing comment in `workstreams.yaml`. Needs the same explicit tracker note #96 has, or closing.
-- **#87** — [M1-READER-INTEGRATION] open, `contract-change`; referenced only as "child F of #87". Neither file states the parent is still open.
-- **#155** — **CLOSED** by PR #162 @ `5b4b77c` (2026-08-11): the two orphaned normalize modules are wired into the live pipeline and the dead duplicate is deleted. Retained here because the entry records how it was found — it was a direct #145 follow-up that appeared in _neither_ handoff file's follow-up set (#146/#62/#153/#154/#157/#158), so the gap was in the ledger, not in the tracker.
-
-### M3 / process follow-ups (opened 2026-07-24 → 2026-07-28)
-
-- **#141** — process: shared-path config changes need `contract-change` label + authorization record. **Ruled 2026-08-29: the rule splits by file class.** Contracts, migrations, `specs/**` and `docs/decisions/**` need `contract-change` + an accepted ADR + lead review; the handoff ledger (`workstreams.yaml`, `STATUS.md`) needs `contract-change` + lead review, and an ADR only when a dispatch key, dependency or credential policy changes; advisory/lockfile/workspace pins (the #128/#140 class) need the label + an authorization record on the PR, no full ADR. **All three acceptance criteria are now delivered** by PR #228 @ `0784cb4` (2026-09-04): the ruling is transcribed into `AGENTS.md`, `.github/workflows/shared-paths.yml` fails any PR touching a shared path without the label, and #140 and #128 were labelled by hand with an authorization comment. The check was validated against five real PRs in both directions. #228 declared `Refs #141` rather than `Closes`, so **#141 is still open on GitHub with nothing outstanding** — closing it is the lead's call.
-- **#143** — **CLOSED.** PR #220 @ `2ea94e2` and PR #222 @ `751f61b` made the bulk-advisory scan retry transient npm 503s, and PR #244 @ `e5b1137` added `.github/workflows/advisories.yml`, which runs Monday 06:00 UTC and on manual dispatch and opens or updates a tracking issue on failure rather than failing quietly. CI breakage is no longer the discovery mechanism for a new advisory against an unchanged lockfile.
-- **#146** — **CLOSED, and implemented.** Ruled Option 1 (terminal runs final) on 2026-08-29 and implemented by PR #211 @ `988f47a` (2026-09-04), which closed #146 and #204 together: `RunAlreadyTerminal`, `TERMINAL_RUN_STATUSES`, `_assert_run_open` and `load_run_status` enforce that a terminal run is never requeued and a cancelled run never marks its job succeeded. PR #236 resolved seven conflicts against this code a day later and preserved every guard, checked explicitly rather than assumed. This was the last producer gate recorded against M3-REVIEW (#61).
-
-### Test-isolation rule (learned from PR #145, first CI exposure)
-
-CI provisions a fresh database per **run**, but every suite shares it **within** that run. Durable `extraction_runs` rows are permanent (`extraction_runs cannot be deleted`, `extraction_proposal_evidence is append-only`) and pin their `corpus_versions` row, while the shared `corpus_conn` fixture deletes `corpus_versions` globally — so a DB-backed extraction suite on the base URL fails every later suite at fixture setup. Extraction integration tests run against an isolated `<db>_extraction` sibling (`ensure_extraction_database`), mirroring `<db>_retrieval` from #119. Apply the same pattern to any new DB-backed suite in #61/#62.
-
-## Credentials
-
-CI and package implementation remain mock-first for #57/#101. Hosted reader production smoke (#108) requires separately authorized deployment credentials — **not provisioned**; request by name only. Do not treat #108 as credential-ready. Request `FEL_OPENAI_API_KEY` only for the explicitly credentialed live retrieval/extraction smoke gates after deterministic fixtures and contracts pass. SEC source re-verification requires the configured compliant SEC identity and rate limiter; do not commit or log personal contact data.
-
-## Resume rules
-
-1. Treat GitHub merged commits, issues, and PRs as authoritative.
-2. Reconcile this file with `workstreams.yaml` before dispatch.
-3. Never run two packages that own `packages/contracts/**` / `db/migrations/**` concurrently (#101 vs any future contract owner).
-4. Do not dispatch any package whose allowed paths overlap an active package.
-5. Keep total active packages at four or fewer.
-6. `#96` open ≠ package unfinished; residual criterion #11 is #108-owned.
-7. Require tests, telemetry where applicable, documentation, acceptance evidence, and an independent PR review before merge.
+## October 31 current state
+
+Snapshot base: `main` @ `f4b1197` (#359, merged 2026-10-28). Re-query GitHub
+before dispatch; issue and PR states below were read on 2026-10-31. Sections
+dated September 16 and earlier are in the
+[archived status history](../archive/handoff/STATUS-history-2026-09.md); they
+are evidence history, not current state. The October 27 remaining-work snapshot
+is [archived](../archive/handoff/2026-10/remaining-work-2026-10-27.md); every
+open item from it is carried below or marked closed.
+
+### Merged since September 16
+
+Squash merges on `main` after #338 (`437ce55`), oldest first. Dates are
+GitHub merge times (UTC). "Refs" means the issue is cited but was not closed by
+the merge.
+
+| SHA | PR | Closes | Outcome |
+| --- | --- | --- | --- |
+| `950c486` | #343 | — | Extraction review admits TLS-terminated origins; hardened SSE stream framing (#288 review) |
+| `2ca7c7b` | #347 | — | Cleared published dependency advisories in both lockfiles |
+| `b9c3189` | #339 | Refs #337 | Deterministic weighted PAV `isotonic-v1` calibrator, offline only |
+| `bc0435b` | #340 | Refs #336 | Strict offline calibration dataset validator; #336 closed by hand on 2026-10-24 |
+| `470ef51` | #345 | — | Ingestion HTTP: per-adapter host allowlist, decoded size cap, per-attempt deadline |
+| `167ab22` | #342 | #341 | Executive architecture brief and source-linked system design |
+| `275cee6` | #348 | — | ADR index, agent entry point and docs CI checks |
+| `59bbf7e` | #349 | — | Docs made findable; stale facts corrected |
+| `bd96e63` | #353 | — | Shared-path check diffs from the merge-base, not `base.sha` |
+| `f9db6f3` | #352 | Refs #336 | Calibration dataset boundary tests (#340 review follow-up) |
+| `12c380a` | #351 | Refs #337 | Isotonic nesting bound and #339 review test gaps |
+| `195443c` | #354 | — | FRED and market provenance: receipts, explicit gaps, source clocks (ADR-0029/0030/0031) |
+| `da66969` | #355 | — | ADR-0010 Amendment 1 refreshes premises; status stays Proposed |
+| `d79eb42` | #350 | — | Editable SVG architecture diagrams and fixture 3D/2D lineage visualizations |
+| `9cd1854` | #358 | — | `msgpack` 1.2.4 in the dev lock (CVE-2026-114613) |
+| `f7fad6e` | #357 | — | Remaining-work snapshot for agents and the integration lead |
+| `f4b1197` | #359 | — | Closed the snapshot's five "Do now" items: shared-path renames and non-ASCII paths, FRED date/value parsing, temporal-suite gap timing, ADR-0010 Amendment 1 corrections, fixture copy in the Desk and Observatory |
+
+None of these wires calibration into proposal scoring, binds a live model,
+or establishes hosted #61 or #108 acceptance. `isotonic.py` and the dataset
+package stay mutually unimported.
+
+### Integration-lead decisions and open items
+
+Items 1–6 are the "Needs the integration lead" list of the October 27 snapshot,
+in its order. Items 7–9 are later decisions.
+
+| # | Item | State | Evidence or next action |
+| --- | --- | --- | --- |
+| 1 | ADR-0029/0030/0031 stay Accepted | Resolved | Lead authorization record posted on #354 on 2026-10-29 naming all three ADRs (#363 decision D8). The status lines stand. |
+| 2 | Reconcile the handoff ledger | Resolved 2026-10-31 | Under #363 slice S3, `workstreams.yaml` records `OFFLINE-CALIBRATION-DATASET` (#340), `OFFLINE-ISOTONIC-CALIBRATOR` (#339, #351) and `DOCS-EXECUTIVE-ARCHITECTURE` (#342) as merged, and this section replaces the September 16 history. |
+| 3 | Close or re-scope issues whose code is on `main` | Open | #336 and #341 are closed. #337 is still open although #339 and #351 implement it: lead closes it. #96 and #87 stay open only as #108 trackers. #61 stays open on its 25-user load gate. |
+| 4 | Freeze public sessions and user-funded inference (#324) | Open | ADR-0026 is an accepted direction; the interfaces in `docs/research/public-auth-byok-contract.md` are still Proposed. Public business routes keep returning 503 (ADR-0027). |
+| 5 | Provider direction (#195) | Open | ADR-0012 stays Proposed. Per #363 D4 it gains an amendment (S4) recording that its live-provider revisit trigger fired; the Arm A/B benchmark is still the ratify-or-withdraw event. OpenAI adapters #328/#329 are not called from `apps/api` or `workers`. |
+| 6 | Name hosted targets for #61 and #108 | Open | #61 bulk-review p95 was 4,147.19, 1,002.23 and 1,501.91 ms against 1,000 ms on a shared local VM. #108 has no hosted run. Both stay blocked until the lead provisions the database and Railway/shared-storage targets. |
+| 7 | ADR-0014 status (#363 D4) | Decided, recording in flight | Accepted effective #247 (`75fad38`); ADR-0032 records it in S4. |
+| 8 | Hosted extraction worker (#363 D6) | Blocked | #362 adds a `--queue extraction` Railway service once #62 binds a live model. Hosted extraction runs stay queued until then. Open product question for #362: reject run creation while no extraction worker exists. |
+| 9 | Benchmark seed vs T0214a (#363 D7) | Decided | No ledger change; S1 rewords the benchmark-seed README. |
+
+### Dependency order
+
+Do not start these in parallel. `packages/contracts/**` and `db/migrations/**`
+have one owner at a time; cap active packages at four. Each slice needs an
+issue, a `workstreams.yaml` branch and allowed paths.
+
+```text
+#324 public session + BYOK custody
+        |
+        +--> #292 hosted identity acceptance
+        +--> #195 provider decision --> wire OpenAI adapters
+                |
+                +--> #177 live cutover (credentials, embeddings choice, Alpha Vantage budget)
+                        |
+                        +--> #56 / T0112 live 20-issuer corpus
+                        +--> #132 / T0215 live 65-question retrieval gate
+                        +--> #191 live usage accounting
+
+#61 load gate on a dedicated database (independent of #324, blocked on a host)
+#108 hosted reader smoke (independent of #324, blocked on Railway + shared storage)
+
+#61 load accepted --> #62 wire isotonic-v1 + human labels (T0306, T0307, T0310)
+        |
+        +--> #362 hosted extraction worker service
+        +--> #64 approved facts to model nodes, sparse scenarios (T0404, T0405)
+                |
+                +--> #65 model UI (T0406–T0408)
+                +--> #66 forecast contract and baselines (T0501–T0503, T0507)
+                        |
+                        +--> #67 backtests and intervals (T0504, T0505, T0508)
+                                |
+                                +--> #68 audit, export, 300-question gate, release artifact
+                                     (T0509–T0513, T0214b)
+```
+
+### Known blockers
+
+| Blocker | What it stops | What unblocks it |
+| --- | --- | --- |
+| No per-user web session | Public business routes return 503 | Lead freezes #324, then an agent implements it |
+| ADR-0012 Proposed | Wiring a live model provider | Lead accepts or rejects #195 after the Arm A/B benchmark |
+| No user-owned credential store | Billable provider calls | #324 custody, then #191 accounting |
+| #61 load gate unmet | Checking T0308/T0309, starting #62 | Dedicated database target, same workload, no threshold change |
+| #108 hosted smoke not run | Closing the production reader path | Railway target, shared storage, lead-provisioned credentials |
+| Live corpus and retrieval gates | T0112, T0215, release section 19.6 | #177 after credentials and the embeddings choice |
+| Human labels for calibration | T0306/T0310 | #62 after #61 and a real adjudication set; synthetic fixtures are not that set |
+| No live model bound for extraction | Hosted extraction runs (#362) | #62, then the #362 Railway service |
+| Calculation engine not integrated | M4/M5 product | #64 after #62; do not import the engine from a UI mock and call it done |
+
+Resolved since the October 27 snapshot: the ADR-0029/0030/0031 authorization
+record (item 1) and `workstreams.yaml` status drift (item 2).
+
+### Documentation work in flight
+
+[#363](https://github.com/wilsonhj/financial-evidence-lab/issues/363) tracks
+the documentation drift remediation (`DOCS-DRIFT-REMEDIATION`). Plan:
+[`2026-10-28-documentation-drift-remediation.md`](../superpowers/plans/2026-10-28-documentation-drift-remediation.md).
+
+- S1 + S2, docs corrections and the first archive pass: #364, open, branch
+  `claude/trusting-brahmagupta-8vvgwi`.
+- S3, the ledger refresh that wrote this section and archived the
+  September/October handoff files: branch `claude/docs-drift-s3-ledger`,
+  stacked on #364.
+- S4, ADR-0032 recording D4/D5/D7 and the ADR/spec status lines: branch
+  `claude/docs-drift-s4-adr0032`.
+
+Canonical task checkboxes, credential policy and release thresholds are
+unchanged. No paid inference call was made.

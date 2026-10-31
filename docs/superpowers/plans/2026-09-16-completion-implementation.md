@@ -1,6 +1,6 @@
 # Spec-driven completion implementation and external-agent handoff
 
-Date: September 16, 2026. Specification: [completion specification](../../research/2026-09-16-completion-spec.md). Parent canonical specification/plan, accepted ADRs and sole task ledger govern. This is an execution plan, not a duplicate completion ledger. It introduces no claim of live acceptance. Baseline inspected: main `2551454`; resolve current heads before work.
+Date: September 16, 2026. Specification: [completion specification](../../archive/research/2026-09-16-completion-spec.md). Parent canonical specification/plan, accepted ADRs and sole task ledger govern. This is an execution plan, not a duplicate completion ledger. It introduces no claim of live acceptance. Baseline inspected: main `2551454`; resolve current heads before work.
 
 ## Execution contract
 

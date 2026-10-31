@@ -2,8 +2,8 @@
 
 Instructions for the next implementation agent and for the integration lead.
 This file is a snapshot, not a task ledger. Checkbox state lives only in
-[`specs/001-financial-evidence-lab/tasks.md`](../../specs/001-financial-evidence-lab/tasks.md).
-Package status lives only in [`workstreams.yaml`](workstreams.yaml). If either
+[`specs/001-financial-evidence-lab/tasks.md`](../../../../specs/001-financial-evidence-lab/tasks.md).
+Package status lives only in [`workstreams.yaml`](../../../handoff/workstreams.yaml). If either
 file disagrees with this page, those files win, then GitHub.
 
 **Snapshot.** `origin/main` at `d79eb42` (#350), Tuesday, October 27, 2026,

@@ -14,10 +14,10 @@ This directory is the restart point for all implementation agents. Fable must be
 Resolve the live queue from GitHub, then read [`STATUS.md`](STATUS.md) and
 [`workstreams.yaml`](workstreams.yaml). Those files include dated evidence;
 do not infer current dispatchability from a historical commit or issue list.
-The newest section of `STATUS.md` is dated September 16, 2026; it is being
-refreshed under [#363](https://github.com/wilsonhj/financial-evidence-lab/issues/363)
-(slice S3). Until then, GitHub is the live record, and open lead items are
-listed in the [October 27 snapshot](remaining-work-2026-10-27.md).
+The newest section of `STATUS.md` is dated October 31, 2026. It carries the
+merged work since September 16, the open integration-lead items, the dependency
+order and the known blockers. Earlier sections are in the
+[archived status history](../archive/handoff/STATUS-history-2026-09.md).
 
 - `main` is the implementation base; `integration/m0` is retired. Use one
   issue/branch/worktree per implementation and required CI before merge.
@@ -47,25 +47,29 @@ Dated briefs are dispatch context, not sources of truth; the
 
 - [#363](https://github.com/wilsonhj/financial-evidence-lab/issues/363) —
   tracking issue for the documentation drift remediation (slices S1–S4).
-- [`remaining-work-2026-10-27.md`](remaining-work-2026-10-27.md) — open lead
-  items as of October 27, 2026, until #363's S3 folds them into
-  [`STATUS.md`](STATUS.md).
+- [`STATUS.md`](STATUS.md) — open integration-lead items, dependency order
+  and blockers, as of its newest dated section.
 
-Historical records:
+Historical records (archived under [`docs/archive/`](../archive/README.md)):
 
-- [`implementation-agents-2026-09-16.md`](implementation-agents-2026-09-16.md)
-  and [`external-agents-2026-09-16.md`](external-agents-2026-09-16.md) — the
+- [`remaining-work-2026-10-27.md`](../archive/handoff/2026-10/remaining-work-2026-10-27.md)
+  — the October 27 snapshot. Its "Do now" items closed in #359; its
+  integration-lead items are carried in [`STATUS.md`](STATUS.md).
+- [`implementation-agents-2026-09-16.md`](../archive/handoff/2026-09/implementation-agents-2026-09-16.md)
+  and [`external-agents-2026-09-16.md`](../archive/handoff/2026-09/external-agents-2026-09-16.md) — the
   September 16 implementation and research cards. #336 and #337 merged as
   #340 and #339 (follow-up #351); do not dispatch from them.
 - The [September 9 issue audit](../archive/research/2026-09-09-open-issue-audit.md) and
   [resolution plan](../superpowers/plans/2026-09-09-backlog-resolution.md) —
-  the September backlog baseline (audit archived).
-- [`execution-2026-09-09.md`](execution-2026-09-09.md) — per-issue execution
+  the September backlog baseline (audit and its
+  [specification](../archive/research/2026-09-09-backlog-resolution-spec.md)
+  archived).
+- [`execution-2026-09-09.md`](../archive/handoff/2026-09/execution-2026-09-09.md) — per-issue execution
   evidence from the September 9 backlog run and its continuations.
 - [`EXTERNAL_AGENT_BRIEF.md`](../archive/handoff/2026-07-ext/EXTERNAL_AGENT_BRIEF.md) (issued 2026-07-13),
   [`SESSION_BRIEF_SEC_EGRESS.md`](../archive/handoff/2026-07-ext/SESSION_BRIEF_SEC_EGRESS.md) (2026-07-13) and
   [`EXT_EXECUTOR_BRIEF_V2.md`](../archive/handoff/2026-07-ext/EXT_EXECUTOR_BRIEF_V2.md) (2026-07-14) — the July
-  EXT-1/2/3 briefs, now archived, for PRs #74–#76. [`STATUS.md`](STATUS.md) records the
+  EXT-1/2/3 briefs, now archived, for PRs #74–#76. The [status history](../archive/handoff/STATUS-history-2026-09.md) records the
   #74/#75 research as recovered onto `main`, and `EXTERNAL_AGENT_BRIEF.md`
   bases branches on the retired `integration/m0`; do not dispatch from them.
 
@@ -77,7 +81,7 @@ Historical records:
 4. Spec Kit artifacts under `specs/001-financial-evidence-lab/`
 
 This list is the single statement of precedence. Other pages, including dated
-briefs and snapshots such as `remaining-work-2026-10-27.md`, defer to it
+briefs and archived snapshots, defer to it
 wherever they state a different order.
 
 Only the integration lead changes bundle status to `merged`, checks tasks, changes dependencies, or updates shared contracts.

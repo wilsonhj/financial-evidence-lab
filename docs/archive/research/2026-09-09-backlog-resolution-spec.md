@@ -10,7 +10,7 @@ This is a review specification subordinate to
 `specs/001-financial-evidence-lab/spec.md` and its implementation plan. The
 parent governs on conflict. It does not supersede an ADR, change product scope,
 authorize paid evaluations, or duplicate the canonical task ledger. The
-[resolution plan](../superpowers/plans/2026-09-09-backlog-resolution.md)
+[resolution plan](../../superpowers/plans/2026-09-09-backlog-resolution.md)
 defines execution order; the issue audit below defines coverage and closure.
 
 ## Outcome and scope
@@ -121,7 +121,7 @@ changed by this review.
 
 ## Complete issue audit
 
-[The issue-by-issue audit](../archive/research/2026-09-09-open-issue-audit.md) covers all 39 initial
+[The issue-by-issue audit](2026-09-09-open-issue-audit.md) covers all 39 initial
 issues and the newly discovered #252 security blocker: 40 distinct session
 issues. It includes exact proposed paths, existing shipped work, remaining
 acceptance cases, dependencies and closure evidence. #249 closed through #250

@@ -11,7 +11,7 @@ This repository is designed for parallel implementation by Codex, Claude Code, a
 5. `docs/handoff/README.md`
 6. `docs/handoff/workstreams.yaml`
 
-This list is the first-session reading order; resuming agents follow the resume sequence in `CLAUDE.md` (`docs/handoff/STATUS.md` and `docs/handoff/workstreams.yaml` first), humans start at `README.md` and `docs/README.md`, and project terms are defined in `docs/glossary.md`. The feature directory `specs/001-financial-evidence-lab/` holds the **sole canonical task ledger** (`tasks.md`) plus the parent `spec.md` and `plan.md`. There is exactly one ledger — never restate the `T####` list or its completion state anywhere else. Milestone and completion directories (`specs/002-*` onward) may hold subordinate `spec.md`, `plan.md`, and milestone-scoped `tasks.md` whose IDs map onto the canonical `T####` IDs; each names its parent, and the parent governs on conflict. Root `SPEC.md`, `PLAN.md`, and `TASKS.md` are pointer stubs only — never edit or cite them as sources. The locked MVP stack lives in `docs/decisions/ADR-0002-mvp-stack.md`.
+This list is the first-session reading order; resuming agents follow the resume sequence in [`docs/handoff/README.md`](docs/handoff/README.md#resume-sequence) (`docs/handoff/STATUS.md` and `docs/handoff/workstreams.yaml` first), humans start at `README.md` and `docs/README.md`, and project terms are defined in `docs/glossary.md`. The feature directory `specs/001-financial-evidence-lab/` holds the **sole canonical task ledger** (`tasks.md`) plus the parent `spec.md` and `plan.md`. There is exactly one ledger — never restate the `T####` list or its completion state anywhere else. Milestone and completion directories (`specs/002-*` onward) may hold subordinate `spec.md`, `plan.md`, and milestone-scoped `tasks.md` whose IDs map onto the canonical `T####` IDs; each names its parent, and the parent governs on conflict. Root `SPEC.md`, `PLAN.md`, and `TASKS.md` are pointer stubs only — never edit or cite them as sources. The locked MVP stack lives in `docs/decisions/ADR-0002-mvp-stack.md`.
 
 ## Working rules
 
@@ -60,8 +60,11 @@ ADR.** It is not a general `specs/**` carve-out.
 
 An "authorization record" is a statement on the PR, by the integration lead,
 naming what is being authorized and why. The label is required in every row so
-that a single CI check can enforce the whole table; that check is still unbuilt
-(#141).
+that a single CI check can enforce the whole table. That check is
+`.github/workflows/shared-paths.yml` (required check "Shared-path changes carry
+contract-change"): it fails a PR that changes a shared path without the label.
+It does not decide whether an ADR or authorization record was also needed;
+that stays with the integration lead's review.
 
 ## Completion protocol
 

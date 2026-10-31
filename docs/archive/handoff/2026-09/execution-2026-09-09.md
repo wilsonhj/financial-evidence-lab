@@ -1,6 +1,6 @@
 # Backlog execution record — September 9, 2026
 
-Plan: [backlog resolution](../superpowers/plans/2026-09-09-backlog-resolution.md).
+Plan: [backlog resolution](../../../superpowers/plans/2026-09-09-backlog-resolution.md).
 Parent specification and canonical task ledger govern; this is issue execution
 evidence, not a second task-completion checklist.
 
@@ -53,7 +53,7 @@ implementation continues; no paid call or hosted mutation is justified by an
 unanswered question.
 
 Other issues retain the dependency and closure criteria in the
-[complete audit](../archive/research/2026-09-09-open-issue-audit.md). Leaf code completion,
+[complete audit](../../research/2026-09-09-open-issue-audit.md). Leaf code completion,
 operational rollout and milestone live acceptance are recorded separately.
 
 September 10 dispatch ruling: #137 follows merged #248 and owns only its named
@@ -153,7 +153,7 @@ inferred from their closure. Keep those operational checks in #177/#108's live
 cutover, which still requires the approved environment. The current inventory
 after #270 is 27 open issues and PR #272.
 
-#196 extraction ruling: dispatch the [mechanical split plan](../superpowers/plans/2026-09-10-extraction-complexity-split.md)
+#196 extraction ruling: dispatch the [mechanical split plan](../../../superpowers/plans/2026-09-10-extraction-complexity-split.md)
 from merged #154. Retain workflow's hash construction and runtime patch lookups,
 and persist's ownership lookup. Bound both workflow.py and persist.py; leave
 tests, financial modules, versions, SQL and event order unchanged. The existing
@@ -195,7 +195,7 @@ unchanged coverage floors. No actual provider billing or hosted gate is claimed.
 The live inventory before this merge contained 25 open issues and only PR #272.
 GitHub had closed #196 at 00:18 UTC without an API implementation; its remaining
 five-file split stays in the plan, with administrative closure preserved.
-The [retrieval split plan](../superpowers/plans/2026-09-10-retrieval-complexity-split.md)
+The [retrieval split plan](../../../superpowers/plans/2026-09-10-retrieval-complexity-split.md)
 keeps all seven router endpoints and runtime patch behavior stable, with tests,
 goldens, financial calculations and SQL unchanged. Independent review and final
 required CI gate its merge. #61 remains blocked pending its concrete contract
@@ -204,7 +204,7 @@ and persistence decision, not by API path contention once this scope is narrowed
 #81 offline ruling: restore the exact final manifest and source MIT notice,
 replace historical documentation to omit its personal contact and unverified
 claims, and add an explicitly scoped structural validator. This work needs no
-SEC identity or network. The [six-file plan](../superpowers/plans/2026-09-10-sec-fixture-offline-restoration.md)
+SEC identity or network. The [six-file plan](../../../superpowers/plans/2026-09-10-sec-fixture-offline-restoration.md)
 requires default full-acceptance failure, verified_feature_count=0 and honest
 labels for the seven historical assertions. Its focused unittest suite must
 run explicitly on the final head because current pytest discovery excludes
