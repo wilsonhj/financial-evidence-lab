@@ -33,15 +33,23 @@ jobs:
           fetch-depth: 0
 
       - name: Test changed-path listing
-        run: bash .github/scripts/list-changed-paths.test.sh
+        run: |
+          bash .github/scripts/list-changed-paths.test.sh
+          bash .github/scripts/contract-change-label.test.sh
 
       - name: Check the label against the changed paths
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          HAS_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'contract-change') }}
+          EVENT_ACTION: ${{ github.event.action }}
+          EVENT_LABEL: ${{ github.event.label.name }}
+          PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
         run: |
           set -euo pipefail
+
+          # A labeled event's pull_request.labels list can omit the label that
+          # triggered the run. A unlabeled event's list can still include it.
+          HAS_LABEL=$(bash .github/scripts/contract-change-label.sh "$EVENT_ACTION" "$EVENT_LABEL" "$PR_LABELS")
 
           # Kept in sync with AGENTS.md "Shared paths" by hand. A path is shared
           # if it matches any of these prefixes or is one of the named files.

@@ -105,6 +105,9 @@ fi
 if ! grep -F -q 'list-changed-paths.sh' "$workflow"; then
   fail "workflow does not contain list-changed-paths.sh, so production could inline a diff this test does not run"
 fi
+if ! grep -F -q 'contract-change-label.sh' "$workflow"; then
+  fail "workflow does not contain contract-change-label.sh, so a labeled event can miss contract-change"
+fi
 
 echo "PASS"
 echo "rename: packages/contracts/README.md stayed listed; git diff --name-only without --no-renames omitted it"

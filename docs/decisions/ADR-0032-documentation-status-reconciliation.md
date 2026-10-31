@@ -98,6 +98,10 @@ It also records these lead decisions from #363, accepted 2026-10-29:
 - **D8.** The integration lead posted the authorization for ADR-0029, ADR-0030
   and ADR-0031 on PR #354 on 2026-10-29. Their existing "Accepted by the
   integration lead on PR #354 (2026-10-27)" status lines stand unedited.
+  *Superseded 2026-10-31:* after this ADR's acceptance record, PR #360
+  (merged 2026-10-31, `3808f3b`) returned ADR-0029, ADR-0030 and ADR-0031 to
+  Proposed. This ADR does not edit those files; their current status lines
+  govern.
 
 This ADR changes no decision content in any ADR beyond the status, date,
 back-link and amendment text above. It changes no contract, schema, migration,

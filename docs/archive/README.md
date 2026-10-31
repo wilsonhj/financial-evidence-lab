@@ -17,8 +17,9 @@ when written, and they are never a source of truth for current work. The
 source-of-truth order in [`handoff/README.md`](../handoff/README.md) governs,
 and the [documentation index](../README.md) lists every archived page.
 
-Documents move here unchanged except for relative links and redaction of
-personal contact details. Do not edit an archived document to make it current;
+Documents move here unchanged except for relative links, redaction of
+personal contact details, markdownlint whitespace fixes, and angle-bracketed
+bare URLs. Do not edit an archived document to make it current;
 write the current state where it belongs instead.
 
 ## Contents
