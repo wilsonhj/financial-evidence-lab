@@ -119,7 +119,7 @@ describe("buildEpistemicGraph", () => {
     const gateNode = atFiling.nodes.find((n) => n.id === "gate-c104");
     const outputNode = atFiling.nodes.find((n) => n.id === "output-fy27-rev");
     expect(callNode?.state).toBe("cutoff-blocked");
-    expect(filingNode?.state).toBe("verified");
+    expect(filingNode?.state).toBe("fixture");
     expect(gateNode?.state).toBe("conflict");
     expect(outputNode?.state).toBe("pending");
     const gateToArrEdge = atFiling.edges.find(
@@ -159,6 +159,9 @@ describe("fixture copy is not presented as evidence", () => {
           const copy = `${node.sublabel} ${node.formulaOrHash}`;
           expect(copy, node.id).not.toMatch(/sha256/i);
           expect(copy, node.id).not.toMatch(/verified lineage/i);
+          if (node.layer === "reported" || node.id === "calc-driver-arr") {
+            expect(node.state, node.id).not.toBe("verified");
+          }
         }
       }
     }
@@ -177,7 +180,40 @@ describe("fixture copy is not presented as evidence", () => {
     expect(markup).toContain("Illustrative fixture schematic");
     expect(markup).toContain("Staged in this session · fixture schematic");
     expect(markup).not.toContain("sha256=");
+    expect(markup).not.toContain("sha256:");
     expect(markup).not.toContain("verified lineage");
+  });
+
+  it("shows Verified only for a gate the admissibility rule painted", () => {
+    hooks.index = 0;
+    const tree = EvidenceGraph3D({
+      scenario: "Base",
+      source: "sec-10q-nrr",
+      decision: DECISION_10Q,
+      approvals: COMPLETED_APPROVALS,
+      applied: true,
+    });
+    const status = () =>
+      props(findOne(tree, (e) => props(e)["data-testid"] === "text-viz3d-selected-status"))
+        .children;
+    expect(status()).toBe("Verified");
+    const spanPill = findOne(
+      tree,
+      (e) => props(e)["data-testid"] === "button-viz3d-node-sec-10q-nrr",
+    );
+    (props(spanPill).onClick as () => void)();
+    hooks.index = 0;
+    const after = EvidenceGraph3D({
+      scenario: "Base",
+      source: "sec-10q-nrr",
+      decision: DECISION_10Q,
+      approvals: COMPLETED_APPROVALS,
+      applied: true,
+    });
+    expect(
+      props(findOne(after, (e) => props(e)["data-testid"] === "text-viz3d-selected-status"))
+        .children,
+    ).toBe("Fixture");
   });
 });
 
