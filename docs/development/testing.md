@@ -193,6 +193,16 @@ local run with skips is not equivalent to the GitHub Actions PostgreSQL jobs.
 CI sets `FEL_REQUIRE_DB=1`, which turns a missing `TEST_DATABASE_URL` into a
 collection error; set it locally to get the same guarantee.
 
+Test-isolation rule: a new DB-backed extraction suite, including any added by
+#61 or #62, must run against an isolated `<db>_extraction` sibling database
+created by `ensure_extraction_database`
+(`workers/tests/extraction/test_postgres_crash_resume.py`), never the shared
+`TEST_DATABASE_URL` database. Extraction runs are permanent rows that pin a
+`corpus_versions` row, so one committed on the shared database blocks the
+`DELETE FROM corpus_versions` cleanup that other suites rely on. The helper
+rebuilds a stale sibling against the current schema
+([ADR-0011](../decisions/ADR-0011-extraction-step-output-column.md)).
+
 The database suites are where tenant isolation, application-role grants,
 cutoff boundaries, queue leasing, index immutability, reader snapshot
 consistency, and migration behavior are verified. Do not replace them with

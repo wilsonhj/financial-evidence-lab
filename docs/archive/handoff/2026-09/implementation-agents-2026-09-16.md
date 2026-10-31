@@ -1,7 +1,7 @@
 # Ready external implementation assignments — Financial Evidence Lab
 
 Prepared September 16, 2026 for the owner's request to implement in parallel.
-Repository: https://github.com/wilsonhj/financial-evidence-lab
+Repository: <https://github.com/wilsonhj/financial-evidence-lab>
 
 **These two cards authorize implementation, not only research/review.** They replace
 the earlier research-only cards only for issues #336 and #337. Both are reserved
@@ -39,7 +39,7 @@ start duplicate owners merely because an issue remains open.
 
 ## A — #336: strict dataset validator and support report
 
-Issue: https://github.com/wilsonhj/financial-evidence-lab/issues/336
+Issue: <https://github.com/wilsonhj/financial-evidence-lab/issues/336>
 Branch: `agent/offline-calibration-dataset`
 
 Exclusive write paths:
@@ -67,7 +67,7 @@ module; do not copy private records or call synthetic labels human-adjudicated.
 
 ## B — #337: deterministic weighted PAV calibration
 
-Issue: https://github.com/wilsonhj/financial-evidence-lab/issues/337
+Issue: <https://github.com/wilsonhj/financial-evidence-lab/issues/337>
 Branch: `agent/offline-isotonic-calibrator`
 
 Exclusive write paths:

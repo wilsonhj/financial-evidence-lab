@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python 3.11 standard library (`argparse`, `collections`, `datetime`, `hashlib`, `json`, `pathlib`, `re`, `unittest`); existing locked Black/Ruff/mypy/Bandit. No dependency/configuration changes.
 
-**Spec:** issue #81 and the recovery findings in `docs/handoff/execution-2026-09-09.md`; final source `d8fd80ea3ed0f09d981b5a072e18a099f3aedd51`; current-main source examined at `3df6dec79fbb6e5397417e06ed0f388985317aa3`. The broader design's network verification and supplemental work are deliberately deferred to a separate dispatch.
+**Spec:** issue #81 and the recovery findings in `docs/archive/handoff/2026-09/execution-2026-09-09.md`; final source `d8fd80ea3ed0f09d981b5a072e18a099f3aedd51`; current-main source examined at `3df6dec79fbb6e5397417e06ed0f388985317aa3`. The broader design's network verification and supplemental work are deliberately deferred to a separate dispatch.
 
 ## Constraints and feasibility
 

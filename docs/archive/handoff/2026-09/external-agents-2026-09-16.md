@@ -1,6 +1,6 @@
 # Financial Evidence Lab: external-agent task bundle
 
-Prepared 2026-09-16. Repository: https://github.com/wilsonhj/financial-evidence-lab.
+Prepared 2026-09-16. Repository: <https://github.com/wilsonhj/financial-evidence-lab>.
 Research baseline: `255145435a88d133e5095057a3debeef08db0724` (`main`).
 Independent PR review target: #320, `e9ddc0bfe1450fc5de40987bf0fbe3f1b656e14f`.
 PR #320 has since merged as `69ed8b9`; the PR head above was independently reviewed.

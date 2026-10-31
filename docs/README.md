@@ -61,16 +61,12 @@ GitHub. Terms are defined in the [glossary](glossary.md).
 | Doc | Description | Tier |
 |---|---|---|
 | [Handoff README](handoff/README.md) | Restart point: source-of-truth order, ledger review rules, dispatch checklist | **core** |
-| [`STATUS.md`](handoff/STATUS.md) | Dated implementation status, newest section first; the live status source | **core** |
+| [`STATUS.md`](handoff/STATUS.md) | Current implementation state, open lead items and blockers; the live status source | **core** |
 | [`workstreams.yaml`](handoff/workstreams.yaml) | Work-package registry: dependencies, branches, status, `allowed_paths` | **core** |
 | [Fable orchestration](handoff/FABLE_ORCHESTRATION.md) | Scheduling loop, worker prompt, and reassignment rules | supporting |
 | [Contract freeze protocol](handoff/CONTRACTS.md) | What the M0 contract freeze covers | supporting |
 | [Credential registry](handoff/CREDENTIALS.md) | Credential names and ownership only, never values | supporting |
 | [Production auth notes](handoff/production-auth.md) | Configuring the ADR-0025 Supabase token verifier | supporting |
-| [Remaining work, 2026-10-27](handoff/remaining-work-2026-10-27.md) | Point-in-time snapshot; its "Do now" items closed in #359, its integration-lead items move into `STATUS.md` under #363 | reference |
-| [Implementation agents, 2026-09-16](handoff/implementation-agents-2026-09-16.md) | External implementation cards for #336 and #337, both merged (historical) | reference |
-| [External agents, 2026-09-16](handoff/external-agents-2026-09-16.md) | Bounded external research and review cards (historical) | reference |
-| [Execution record, 2026-09-09](handoff/execution-2026-09-09.md) | Per-issue execution evidence from the September backlog run | reference |
 
 ## Decisions
 
@@ -102,9 +98,7 @@ Root `SPEC.md`, `PLAN.md`, and `TASKS.md` are pointer stubs only.
 | Doc | Description | Tier |
 |---|---|---|
 | [Research index](research/README.md) | Every research note with its date and status | supporting |
-| [Completion spec, 2026-09-16](research/2026-09-16-completion-spec.md) | Owner-requested completion specification | supporting |
 | [Model and scenario design, 2026-09-11](research/2026-09-11-model-scenario-design.md) | Research note for #64 models and sparse scenarios | reference |
-| [Backlog resolution spec, 2026-09-09](research/2026-09-09-backlog-resolution-spec.md) | Open-backlog resolution specification | reference |
 | [Deployment guard contract](research/deployment-guard-contract.md) | Frozen ADR-0027 guard implementation contract | supporting |
 | [Offline calibration contract](research/offline-calibration-contract.md) | Frozen ADR-0028 contract for #336/#337 | supporting |
 | [Public auth and BYOK contract](research/public-auth-byok-contract.md) | Proposed public-session and BYOK contract (not frozen) | reference |
@@ -128,8 +122,15 @@ Root `SPEC.md`, `PLAN.md`, and `TASKS.md` are pointer stubs only.
 | [External agent brief](archive/handoff/2026-07-ext/EXTERNAL_AGENT_BRIEF.md) | July 2026 EXT preparation items | reference |
 | [SEC egress session brief](archive/handoff/2026-07-ext/SESSION_BRIEF_SEC_EGRESS.md) | July 2026 EXT execution session | reference |
 | [EXT executor brief v2](archive/handoff/2026-07-ext/EXT_EXECUTOR_BRIEF_V2.md) | July 2026 git-only EXT executor brief | reference |
+| [Status history to 2026-09-16](archive/handoff/STATUS-history-2026-09.md) | Every dated `STATUS.md` section from July to September 16, 2026 | reference |
+| [Execution record, 2026-09-09](archive/handoff/2026-09/execution-2026-09-09.md) | Per-issue execution evidence from the September backlog run | reference |
+| [Implementation agents, 2026-09-16](archive/handoff/2026-09/implementation-agents-2026-09-16.md) | External implementation cards for #336 and #337, both merged | reference |
+| [External agents, 2026-09-16](archive/handoff/2026-09/external-agents-2026-09-16.md) | Bounded external research and review cards | reference |
+| [Remaining work, 2026-10-27](archive/handoff/2026-10/remaining-work-2026-10-27.md) | Snapshot; "Do now" items closed in #359, lead items carried in `STATUS.md` | reference |
 | [Reconciliation, 2026-07-16](archive/research/RECONCILIATION-2026-07-16.md) | Audit of the PR #74/#75 research recovery | reference |
 | [Open issue audit, 2026-09-09](archive/research/2026-09-09-open-issue-audit.md) | Read-only audit of 39 open issues | reference |
+| [Backlog resolution spec, 2026-09-09](archive/research/2026-09-09-backlog-resolution-spec.md) | Open-backlog resolution specification | reference |
+| [Completion spec, 2026-09-16](archive/research/2026-09-16-completion-spec.md) | Owner-requested completion specification; its staged packages have merged | reference |
 | [FinRobot study: calc engine](archive/research/finrobot-cherry-pick-calc-engine.md) | Cherry-pick study for the M4 calculation engine | reference |
 | [FinRobot study: extraction agents](archive/research/finrobot-cherry-pick-extraction-agents.md) | Cherry-pick study for M3 extraction roles | reference |
 

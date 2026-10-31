@@ -98,14 +98,14 @@ packages:
     depends_on: []
     team: integration
     branch: agent/188-completion-execution
-    status: active # September 16 owner-approved completion plan; staged disjoint implementation and separately gated live acceptance.
+    status: merged # Closed 2026-10-31 under #363 S3 as a control package; this does not mean the backlog it sequenced is finished. The September 16 completion spec/plan merged in PR #325 @ 7a08df9, and these packages it staged have merged: #328 @ 750aede, #329 @ 05141ae, #330 @ aef6d33, #331 @ 450c250, #338 @ 437ce55, #339 @ b9c3189 (+#351 @ 12c380a), #340 @ bc0435b. The remaining waves (#62 and #64-#68, plus #324) are still open and continue in their own named packages, with live and hosted acceptance owned by the RELEASE-LIVE-CUTOVER, M3-REVIEW-LOAD-ACCEPTANCE, READER-PROD-SMOKE, PUBLIC-AUTH-BYOK and M3-CONFIDENCE-GATE entries, not by this one. Its spec and cards are archived (paths below updated; the plan stays at docs/superpowers/plans/ per #363 D3); issue #188 stays open as the architecture-review umbrella. Paths are free to claim again.
     allowed_paths:
-      - docs/research/2026-09-16-completion-spec.md
+      - docs/archive/research/2026-09-16-completion-spec.md
       - docs/superpowers/plans/2026-09-16-completion-implementation.md
-      - docs/handoff/external-agents-2026-09-16.md
+      - docs/archive/handoff/2026-09/external-agents-2026-09-16.md
       - docs/decisions/ADR-0026-public-workspaces-and-user-funded-inference.md
       - specs/001-financial-evidence-lab/tasks.md # Lead-only verified checkbox/annotation updates.
-      - docs/handoff/execution-2026-09-09.md
+      - docs/archive/handoff/2026-09/execution-2026-09-09.md
       - docs/handoff/STATUS.md
       - docs/handoff/workstreams.yaml
       - docs/superpowers/plans/2026-09-14-load-and-hosted-reader-acceptance.md
@@ -175,7 +175,7 @@ packages:
       - docs/decisions/ADR-0028-offline-calibration-primitives.md
       - docs/research/deployment-guard-contract.md
       - docs/research/offline-calibration-contract.md
-      - docs/handoff/implementation-agents-2026-09-16.md
+      - docs/archive/handoff/2026-09/implementation-agents-2026-09-16.md
       - docs/handoff/workstreams.yaml
       - docs/handoff/STATUS.md
       - docs/research/public-auth-byok-contract.md
@@ -252,7 +252,7 @@ packages:
     depends_on: []
     team: external-evals
     branch: agent/offline-calibration-dataset
-    status: ready # Reserved external owner; immutable ADR-0028 contract pin in implementation handoff.
+    status: merged # PR #340 @ bc0435b (2026-10-24); boundary tests followed in PR #352 @ f9db6f3 (2026-10-27). Issue #336 closed 2026-10-24. Offline validation only; no runtime or provider integration, and it does not import isotonic.py.
     allowed_paths:
       - evals/harness/calibration_dataset.py
       - evals/tests/test_calibration_dataset.py
@@ -263,7 +263,7 @@ packages:
     depends_on: []
     team: external-calibration
     branch: agent/offline-isotonic-calibrator
-    status: ready # Reserved external owner; independent of dataset implementation, consumes frozen tuples.
+    status: merged # PR #339 @ b9c3189 (2026-10-24); nesting bound and review test gaps closed in PR #351 @ 12c380a (2026-10-27). Issue #337 was still open on 2026-10-31; closing it is a lead action. Not wired into proposal scoring (#62).
     allowed_paths:
       - workers/src/fel_workers/extraction/isotonic.py
       - workers/tests/extraction/test_isotonic.py
@@ -474,7 +474,7 @@ packages:
       - infra/railway/README.md
       - docs/handoff/workstreams.yaml # Lead registration only.
       - docs/decisions/ADR-0017-parallel-backlog-execution.md # Lead authorization only.
-      - docs/handoff/execution-2026-09-09.md # Verified evidence only.
+      - docs/archive/handoff/2026-09/execution-2026-09-09.md # Verified evidence only.
   - id: INFRA-WORKER-DEPLOY # Railway worker startCommand -> consumer mode (issue #84)
     issue: 84
     tasks: []
@@ -908,11 +908,104 @@ packages:
     depends_on: [DOCS-ONBOARDING]
     team: platform
     branch: agent/executive-architecture-docs
-    status: active # Owner-requested PR, September 22; independent lead review and CI before merging.
+    status: merged # PR #342 @ 167ab22 (2026-10-24); issue #341 closed by the merge. Follow-on docs PRs #348 @ 275cee6 and #349 @ 59bbf7e merged the same day without a registered package. Paths are free to claim again.
     allowed_paths:
       - README.md
       - docs/architecture/**
       - docs/handoff/workstreams.yaml # Registration-only shared edit; contract-change label and lead review.
+  - id: DOCS-DRIFT-REMEDIATION # bring docs back in line with main; archive superseded handoff/research history
+    issue: 363
+    tasks: [] # Documentation only; restates no T#### state.
+    depends_on: [DOCS-EXECUTIVE-ARCHITECTURE]
+    team: platform
+    # One package, four slices (plan: docs/superpowers/plans/2026-10-28-documentation-drift-remediation.md;
+    # decisions D1-D8 accepted by the integration lead 2026-10-29 on #363):
+    #   S1+S2 claude/trusting-brahmagupta-8vvgwi (PR #364; plain docs, zero shared paths)
+    #   S3    claude/docs-drift-s3-ledger (contract-change, lead review; registration and status flips authorized by an integration-lead authorization record on PR #365 under #363 D1/D2; stacked on S1+S2)
+    #   S4    claude/docs-drift-s4-adr0032 (contract-change, ADR-0032, lead review)
+    branch: claude/trusting-brahmagupta-8vvgwi
+    status: active # Registered 2026-10-31 in S3 per D1. PR #364 (S1+S2) open; S3 and S4 drafted on the branches above.
+    allowed_paths:
+      # S1: correctness fixes in non-shared docs
+      - README.md
+      - CLAUDE.md
+      - apps/web/README.md
+      - docs/README.md
+      - docs/glossary.md
+      - docs/architecture/overview.md
+      - docs/architecture/system-design.md
+      - docs/architecture/visualization-roadmap.md
+      - docs/development/local.md
+      - docs/development/testing.md
+      - docs/development/quality-gates.md
+      - docs/handoff/README.md
+      - docs/handoff/CREDENTIALS.md
+      - docs/handoff/FABLE_ORCHESTRATION.md
+      - docs/research/README.md
+      - docs/superpowers/plans/README.md
+      - docs/superpowers/plans/2026-10-28-documentation-drift-remediation.md
+      - evals/datasets/benchmark-seed/README.md
+      - evals/reports/corpus-qa/SCHEMA.md
+      - infra/railway/README.md
+      - packages/calculation-engine/README.md
+      - packages/ontology/README.md
+      - packages/retrieval/README.md
+      - workers/README.md
+      - workers/src/fel_workers/extraction/OPERATOR.md
+      # S2 and S3: archive moves and their inbound/outbound link fixes
+      - docs/archive/**
+      - docs/handoff/EXTERNAL_AGENT_BRIEF.md # moved to docs/archive/handoff/2026-07-ext/
+      - docs/handoff/SESSION_BRIEF_SEC_EGRESS.md # moved
+      - docs/handoff/EXT_EXECUTOR_BRIEF_V2.md # moved
+      - docs/handoff/execution-2026-09-09.md # moved to docs/archive/handoff/2026-09/
+      - docs/handoff/external-agents-2026-09-16.md # moved
+      - docs/handoff/implementation-agents-2026-09-16.md # moved
+      - docs/handoff/remaining-work-2026-10-27.md # moved to docs/archive/handoff/2026-10/
+      - docs/research/RECONCILIATION-2026-07-16.md # moved to docs/archive/research/
+      - docs/research/2026-09-09-open-issue-audit.md # moved
+      - docs/research/finrobot-cherry-pick-calc-engine.md # moved
+      - docs/research/finrobot-cherry-pick-extraction-agents.md # moved
+      - docs/research/2026-09-09-backlog-resolution-spec.md # moved
+      - docs/research/2026-09-16-completion-spec.md # moved
+      - docs/superpowers/plans/*.md # Inbound link fixes only (D3: the directory is not moved).
+      # S3: ledger refresh (shared; contract-change + lead review)
+      - docs/handoff/STATUS.md
+      - docs/handoff/workstreams.yaml
+      - AGENTS.md # Two sentences only: the shared-paths check and the resume-sequence pointer.
+      # S4: ADR and spec status reconciliation (shared; contract-change + ADR-0032 + lead review)
+      - docs/decisions/ADR-0032-*.md
+      - docs/decisions/ADR-0001-*.md
+      - docs/decisions/ADR-0002-mvp-stack.md
+      - docs/decisions/ADR-0005-*.md
+      - docs/decisions/ADR-0012-*.md
+      - docs/decisions/ADR-0014-*.md
+      - docs/decisions/README.md
+      - specs/README.md
+      - specs/001-financial-evidence-lab/plan.md # Remove the restated stack line only.
+      - specs/002-observable-hybrid-retrieval/** # Status line, tasks.md maintenance note, quickstart fixes.
+      - specs/003-agentic-extraction/** # Status line, tasks.md maintenance note, quickstart fixes.
+      - specs/004-mvp-completion/** # Status line only.
+      - specs/005-m3-completion/** # Status line only.
+      - packages/contracts/README.md
+      - db/migrations/README.md
+      - Makefile # D5: add scripts/db to `typecheck`, authorized by ADR-0032.
+
+  # Merges after 2026-09-16 with no registered package, recorded here so the
+  # queue accounts for them (#363 S3, 2026-10-31). Each changes no dispatch key:
+  #   PR #343 @ 950c486  extraction review origin and SSE framing (#288 review follow-up)
+  #   PR #347 @ 2ca7c7b  dependency advisories in both lockfiles
+  #   PR #345 @ 470ef51  ingestion HTTP host allowlist, size cap, per-attempt deadline
+  #   PR #353 @ bd96e63  shared-paths.yml diffs from the merge-base
+  #   PR #354 @ 195443c  FRED/market receipts, gaps, source clocks; ADR-0029/0030/0031
+  #                      accepted, lead authorization record posted on #354 2026-10-29
+  #   PR #355 @ da66969  ADR-0010 Amendment 1 (ADR stays Proposed)
+  #   PR #350 @ d79eb42  SVG diagrams and fixture 3D/2D visualizations
+  #   PR #358 @ 9cd1854  msgpack CVE bump in the dev lock
+  #   PR #357 @ f7fad6e  remaining-work snapshot (archived under docs/archive/handoff/2026-10/)
+  #   PR #359 @ f4b1197  the snapshot's five "Do now" fixes, including shared-path
+  #                      rename/non-ASCII detection and FRED parsing
+  #   PR #360 @ 3808f3b  ADR-0029/0030/0031 returned to Proposed; minimatch advisory
+  #                      pin and allowlist; shared-path label-event fix
   - id: EVALS-REPORT-RENDER # stdlib-only corpus-QA report renderer (Markdown + SVG)
     issue: 151
     # Deliberately empty: no Spec Kit task covers eval-report rendering. The

@@ -32,9 +32,9 @@ date it was first committed is used and marked "(committed)".
 | [finrobot-cherry-pick-extraction-agents.md](../archive/research/finrobot-cherry-pick-extraction-agents.md) | 2026-07-20 | Archived proposal | Study of FinRobot's section agents mapped onto the frozen M3 extraction roles |
 | [evals-report-renderer-proposal.md](evals-report-renderer-proposal.md) | 2026-07-29 (committed) | Proposal | Issue draft for a stdlib-only Markdown and SVG eval report renderer |
 | [2026-09-09-open-issue-audit.md](../archive/research/2026-09-09-open-issue-audit.md) | 2026-09-09 | Archived audit | Read-only audit of the 39 open GitHub issues against trunk |
-| [2026-09-09-backlog-resolution-spec.md](2026-09-09-backlog-resolution-spec.md) | 2026-09-09 | Review specification | Coverage and closure criteria for resolving the open backlog (umbrella #188) |
+| [2026-09-09-backlog-resolution-spec.md](../archive/research/2026-09-09-backlog-resolution-spec.md) | 2026-09-09 | Archived specification | Coverage and closure criteria for resolving the open backlog (umbrella #188) |
 | [2026-09-11-model-scenario-design.md](2026-09-11-model-scenario-design.md) | 2026-09-11 | Research note | Storage boundaries for source-backed models and sparse scenarios (issue #64) |
-| [2026-09-16-completion-spec.md](2026-09-16-completion-spec.md) | 2026-09-16 | Implementation specification | Remaining work to complete the product, including public signup and user-funded AI access |
+| [2026-09-16-completion-spec.md](../archive/research/2026-09-16-completion-spec.md) | 2026-09-16 | Archived specification | Remaining work to complete the product, including public signup and user-funded AI access |
 | [public-auth-byok-contract.md](public-auth-byok-contract.md) | 2026-09-16 | Proposed contract | Public authentication sessions and bring-your-own-key inference design under ADR-0026 |
 | [deployment-guard-contract.md](deployment-guard-contract.md) | 2026-09-16 | Frozen contract | `FEL_DEPLOYMENT_MODE` guard rules for API and web under ADR-0027 |
 | [offline-calibration-contract.md](offline-calibration-contract.md) | 2026-09-16 | Frozen contract | Offline calibration dataset interchange and numerical primitives under ADR-0028 |

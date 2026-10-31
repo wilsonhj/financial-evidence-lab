@@ -8,7 +8,7 @@
 
 **Tech Stack:** The approved stack is defined by `docs/decisions/ADR-0002-mvp-stack.md`; this plan introduces no stack change.
 
-**Spec:** [Backlog resolution specification](../../research/2026-09-09-backlog-resolution-spec.md), subordinate to `specs/001-financial-evidence-lab/spec.md` and `plan.md`.
+**Spec:** [Backlog resolution specification](../../archive/research/2026-09-09-backlog-resolution-spec.md), subordinate to `specs/001-financial-evidence-lab/spec.md` and `plan.md`.
 
 ## Global constraints
 

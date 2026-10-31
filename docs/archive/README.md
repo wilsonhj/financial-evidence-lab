@@ -4,6 +4,8 @@
 <summary>Relevant source files</summary>
 
 - [handoff/2026-07-ext/](handoff/2026-07-ext/) — July 2026 external-agent (EXT) briefs
+- [handoff/2026-09/](handoff/2026-09/) and [handoff/2026-10/](handoff/2026-10/) — September and October 2026 handoff cards and snapshots
+- [handoff/STATUS-history-2026-09.md](handoff/STATUS-history-2026-09.md) — `STATUS.md` history to September 16, 2026
 - [research/](research/) — superseded research notes, audits, and proposals
 - [../handoff/README.md](../handoff/README.md) — the live restart point that replaces these documents
 
@@ -33,3 +35,10 @@ write the current state where it belongs instead.
 | [research/2026-09-09-open-issue-audit.md](research/2026-09-09-open-issue-audit.md) | Read-only audit of the 39 issues open on 2026-09-09 | #363 |
 | [research/finrobot-cherry-pick-calc-engine.md](research/finrobot-cherry-pick-calc-engine.md) | FinRobot cherry-pick study for the M4 calculation engine | #363 |
 | [research/finrobot-cherry-pick-extraction-agents.md](research/finrobot-cherry-pick-extraction-agents.md) | FinRobot cherry-pick study for the M3 extraction roles | #363 |
+| [handoff/STATUS-history-2026-09.md](handoff/STATUS-history-2026-09.md) | Every dated `STATUS.md` section from July to September 16, 2026 | #363 |
+| [handoff/2026-09/execution-2026-09-09.md](handoff/2026-09/execution-2026-09-09.md) | Per-issue execution evidence from the September 9 backlog run and its continuations | #363 |
+| [handoff/2026-09/implementation-agents-2026-09-16.md](handoff/2026-09/implementation-agents-2026-09-16.md) | September 16 implementation cards for #336 and #337, merged as #340 and #339 | #363 |
+| [handoff/2026-09/external-agents-2026-09-16.md](handoff/2026-09/external-agents-2026-09-16.md) | September 16 bounded external research and review cards | #363 |
+| [handoff/2026-10/remaining-work-2026-10-27.md](handoff/2026-10/remaining-work-2026-10-27.md) | October 27 snapshot; "Do now" items closed in #359, lead items carried in `STATUS.md` | #363 |
+| [research/2026-09-09-backlog-resolution-spec.md](research/2026-09-09-backlog-resolution-spec.md) | September 9 open-backlog resolution specification | #363 |
+| [research/2026-09-16-completion-spec.md](research/2026-09-16-completion-spec.md) | September 16 completion specification; its staged packages have merged | #363 |
