@@ -28,9 +28,10 @@ it. Re-enqueue against a NEW run row if the work is still wanted.
 Hosted extraction is intentionally not deployed. The Railway worker service
 (``infra/railway/worker.json``) starts ``python -m fel_workers run`` without
 ``--queue``, so it serves the default ``ingestion`` queue. The API enqueues an
-``extraction_run`` on ``extraction`` only when ``FEL_ALLOW_MOCK_LLM`` is set;
-otherwise run creation returns 503 ``EXTRACTION_NOT_CONFIGURED`` and inserts
-no job (``apps/api/app/extraction/runs.py``). The only model a worker can bind
+``extraction_run`` on ``extraction`` only when ``FEL_ALLOW_MOCK_LLM`` is set
+and an extraction policy and an active corpus exist; otherwise run creation
+returns 503 ``EXTRACTION_NOT_CONFIGURED`` and inserts no job
+(``apps/api/app/extraction/runs.py``). The only model a worker can bind
 is the deterministic mock behind that opt-in until a live model is bound
 (#62), and no ``extraction`` worker service exists yet (#362).
 

@@ -1,6 +1,6 @@
 # ADR-0031: Named source clocks
 
-Status: Accepted by the integration lead on PR #354 (2026-10-27).
+Status: Proposed. Implemented in #354 (`195443c`); acceptance needs an integration-lead authorization record on the pull request (`AGENTS.md`).
 
 Date: 2026-10-24
 

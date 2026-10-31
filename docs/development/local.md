@@ -338,7 +338,7 @@ fallback value. Never commit real values.
 | `FEL_READER_SMOKE_TARGET` | API, web, eval harness | empty | Dedicated target name for `reader-smoke`; must match the storage marker |
 | `FEL_SYNTHETIC_HTTP_TARGET` | API, web | empty | Dedicated target name for `synthetic-http`; must match the storage marker |
 | `CROSS_STACK_MANIFEST` | Web, Playwright cross-stack config | unset | Path to the seeder's manifest; required by web `synthetic-http` mode |
-| `FEL_ALLOW_MOCK_LLM` | API, worker, web | unset | Must be `1` for `synthetic-http`; on the worker, opts `--queue extraction` into the mock model |
+| `FEL_ALLOW_MOCK_LLM` | API, worker, web | unset | Must be `1` for `synthetic-http`; on the API, extraction run creation returns 503 `EXTRACTION_NOT_CONFIGURED` unless it is truthy (`1`/`true`/`yes`/`on`); on the worker, opts `--queue extraction` into the mock model |
 
 ### Database and storage
 

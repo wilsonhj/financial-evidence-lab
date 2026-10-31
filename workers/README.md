@@ -63,8 +63,9 @@ The Railway worker service
 Hosted extraction is intentionally not deployed: no live model is bound until
 #62, and no `extraction` worker service exists until #362. Until then the API
 refuses to create extraction runs (503 `EXTRACTION_NOT_CONFIGURED`, no job
-inserted) unless `FEL_ALLOW_MOCK_LLM` is set
-(`apps/api/app/extraction/runs.py`).
+inserted) unless `FEL_ALLOW_MOCK_LLM` is set. Even with it set, run creation
+can still return that 503 when no extraction policy or no active corpus
+exists (`apps/api/app/extraction/runs.py`).
 
 ## Job kinds
 

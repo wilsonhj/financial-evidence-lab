@@ -2,8 +2,8 @@
 
 Status: Decisions D1–D8 accepted by the integration lead on 2026-10-29 and
 recorded in #363, the requirements owner for this package. The workstream entry
-is added in S3. S1 and S2 are ready to dispatch; S3 and S4 follow the slice
-order below.
+is added in S3. S1 and S2 are delivered in #364; S3 and S4 follow in #365 and
+#366, in the slice order below.
 
 Baseline: `main` @ `f4b1197` (2026-10-28). Every finding below was read
 against that commit. Recheck it against the implementation base before editing.

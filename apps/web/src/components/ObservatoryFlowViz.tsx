@@ -245,7 +245,7 @@ export function ObservatoryFlowViz({ trace }: { trace: RetrievalTrace }) {
             Supported Set ({supported.length})
           </text>
           <text x="544" y="90" fill="#c9d1d9" fontSize="10">
-            Cutoff &amp; version verified
+            At or before the cutoff
           </text>
         </g>
 
