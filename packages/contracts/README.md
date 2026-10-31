@@ -26,9 +26,13 @@ AST comparison cover the wire types and unchanged unrelated output.
 CI runs `check:generated` (drift fails the build) and the contract tests
 (`contracts.test.ts`, via the root vitest run).
 
-Consumers: FastAPI models must round-trip these schemas (contract tests on
-the Python side arrive with M0-PLATFORM); the web app imports types from
-`@fel/contracts`.
+Consumers: FastAPI models must round-trip these schemas; the web app imports
+types from `@fel/contracts`. Python-side contract tests run in the root pytest
+suite: `apps/api/tests/test_openapi_parity.py` asserts that the unmarked
+OpenAPI paths equal the FastAPI route table in both directions,
+`apps/api/tests/test_list_contract.py` checks the pagination shapes, and
+`workers/tests/extraction/test_vendored_contract_schema.py` keeps the worker's
+vendored extraction-payload schema byte-identical to `schemas/`.
 
 ## Readable candidates 0.9.0 (ADR-0024 Amendment 1)
 

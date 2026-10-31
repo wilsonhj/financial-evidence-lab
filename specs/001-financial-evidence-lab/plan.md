@@ -7,7 +7,7 @@
 
 ## 1. Delivery strategy
 
-Build a pnpm/Python monorepo with a Next.js web process, FastAPI modular-monolith API, and one Python worker. Use Supabase for Postgres/pgvector, Auth, RLS, and Storage; Railway for runtime deployment; OpenAI for initial generation/embeddings; and Alpha Vantage for the first market-data adapter. Establish temporal semantics, immutable evidence, typed contracts, deterministic calculations, and evaluation fixtures before adding generative workflows.
+Build a pnpm/Python monorepo with a Next.js web process, FastAPI modular-monolith API, and one Python worker. The technology stack is recorded in `docs/decisions/ADR-0002-mvp-stack.md`, and later decisions that touch it are listed in the ADR index, `docs/decisions/README.md` (see §4). Establish temporal semantics, immutable evidence, typed contracts, deterministic calculations, and evaluation fixtures before adding generative workflows.
 
 Each milestone ends with a deployable increment and an objective exit gate. Tasks are defined in `tasks.md`; requirement identifiers refer to `spec.md`.
 

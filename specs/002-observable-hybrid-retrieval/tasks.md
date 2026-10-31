@@ -35,3 +35,5 @@
 - [ ] **M2-041** Meet all M2 gates, `make ci`, independent PR reviews, migration restore smoke, and publish immutable evaluation report.
 
 Parallelism: after M2-001/002 merge, A owns `packages/retrieval/**`, `apps/api/**`, migration already frozen; C may build UI against mocks in `apps/web/**` and `packages/ui/**`. B starts after A retrieval contract is stable. Do not overlap API/shared paths.
+
+> **Maintenance note (ADR-0032, 2026-10-31):** the checkboxes in this file are not maintained. Task state is governed by the canonical ledger, [`specs/001-financial-evidence-lab/tasks.md`](../001-financial-evidence-lab/tasks.md).

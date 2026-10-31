@@ -90,6 +90,7 @@ Root `SPEC.md`, `PLAN.md`, and `TASKS.md` are pointer stubs only.
 | [003 agentic extraction](../specs/003-agentic-extraction/) | M3 spec, data model, research, quickstart, tasks, clarify/analyse | supporting |
 | [004 MVP completion](../specs/004-mvp-completion/) | Release specification, plan, clarify/analyse | supporting |
 | [005 M3 completion](../specs/005-m3-completion/) | Remaining M3 work: spec, plan, clarify/analyse | supporting |
+| [Specs index](../specs/README.md) | Lifecycle table: parent, status, ratifying PR, tasks covered | reference |
 | [Constitution](../.specify/memory/constitution.md) | Project principles and Spec Kit governance | **core** |
 
 ## Research

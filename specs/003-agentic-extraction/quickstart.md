@@ -9,17 +9,20 @@
 ## Expected commands
 
 ```bash
-pnpm install --frozen-lockfile
-uv sync --all-packages --dev
+corepack pnpm install --frozen-lockfile
+make install-py
+.venv/bin/pip install --require-hashes -r requirements-dev.lock
 make db-migrate
 make ci
-# Contract tests iterate every value in contracts/fixtures/extraction-payloads.valid.json
-# against contracts/schemas/extraction-payload.schema.json and check generated drift.
-uv run pytest workers/tests/extraction -q
-uv run pytest apps/api/tests/test_extraction_api.py -q
+# Contract tests iterate every value in packages/contracts/fixtures/extraction-payloads.valid.json
+# against packages/contracts/schemas/extraction-payload.schema.json and check generated drift.
+.venv/bin/pytest workers/tests/extraction -q
+.venv/bin/pytest apps/api/tests/extraction -q
 pnpm --filter @fel/web test -- extraction
-uv run pytest evals/tests/test_extraction_gates.py -q
+.venv/bin/pytest evals/tests/test_extraction_cross_stack.py -q
 ```
+
+Install steps follow `docs/development/local.md`; the repository has no `uv` workspace. The extraction release-gate evals (`T0310`: guidance/KPI/driver F1 and numeric accuracy) are not built yet, so there is no gate test file to run.
 
 ## Mock acceptance flow
 
