@@ -8,10 +8,10 @@ dated September 16 and earlier are in the
 [archived status history](../archive/handoff/STATUS-history-2026-09.md); they
 are evidence history, not current state. The October 27 remaining-work snapshot
 is [archived](../archive/handoff/2026-10/remaining-work-2026-10-27.md); every
-open item from it is carried below or marked closed. Its standing guidance (what is
-already on `main` and must not be rebuilt, the unchecked canonical tasks, and
-its "Do not" list) was not copied here and still applies; read it in the
-archived snapshot.
+open item from it is carried below or marked closed. Its standing guidance (what
+is already on `main` and must not be rebuilt, and its "Do not" list) is copied
+into [Standing guidance](#standing-guidance) below; the archived snapshot is
+history, not a source of truth.
 
 ### Merged since September 16
 
@@ -51,13 +51,13 @@ in its order. Items 7–9 are later decisions.
 | # | Item | State | Evidence or next action |
 | --- | --- | --- | --- |
 | 1 | ADR-0029/0030/0031 status | Resolved: Proposed | #360 (merged 2026-10-31) returned all three to Proposed, superseding the lead record posted on #354 on 2026-10-29 (#363 decision D8). Re-accepting any of them needs a new authorization record on a PR and a Status line that quotes it. |
-| 2 | Reconcile the handoff ledger | Resolved 2026-10-31 | Under #363 slice S3, `workstreams.yaml` records `OFFLINE-CALIBRATION-DATASET` (#340), `OFFLINE-ISOTONIC-CALIBRATOR` (#339, #351) and `DOCS-EXECUTIVE-ARCHITECTURE` (#342) as merged, closes `BACKLOG-EXECUTION-CONTROL` (its staged packages have all merged), and this section replaces the September 16 history. |
+| 2 | Reconcile the handoff ledger | Resolved 2026-10-31 | Under #363 slice S3, `workstreams.yaml` records `OFFLINE-CALIBRATION-DATASET` (#340), `OFFLINE-ISOTONIC-CALIBRATOR` (#339, #351) and `DOCS-EXECUTIVE-ARCHITECTURE` (#342) as merged, closes `BACKLOG-EXECUTION-CONTROL` as a control package (the remaining waves #62, #64-#68 and #324 continue in their own packages), and this section replaces the September 16 history. These status flips and the `DOCS-DRIFT-REMEDIATION` registration are authorized by an integration-lead authorization record on PR #365 under #363 decisions D1 and D2, not by an ADR. |
 | 3 | Close or re-scope issues whose code is on `main` | Open | #336 and #341 are closed. #337 is still open although #339 and #351 implement it: lead closes it. #96 and #87 stay open only as #108 trackers. #61 stays open on its 25-user load gate. |
 | 4 | Freeze public sessions and user-funded inference (#324) | Open | ADR-0026 is an accepted direction; the interfaces in `docs/research/public-auth-byok-contract.md` are still Proposed. Public business routes keep returning 503 (ADR-0027); do not weaken that guard to demo a signed-in user. |
 | 5 | Provider direction (#195) | Open | ADR-0012 stays Proposed. Per #363 D4 it gains an amendment (S4) recording that its live-provider revisit trigger fired; the Arm A/B benchmark is still the ratify-or-withdraw event. OpenAI adapters #328/#329 are not called from `apps/api` or `workers`. There is no owner-key fallback. |
 | 6 | Name hosted targets for #61 and #108 | Open | #61 bulk-review p95 was 4,147.19, 1,002.23 and 1,501.91 ms against 1,000 ms on a shared local VM. #108 has no hosted run. Both stay blocked until the lead provisions the database and Railway/shared-storage targets. Credential names only, never values ([`CREDENTIALS.md`](CREDENTIALS.md)). |
 | 7 | ADR-0014 status (#363 D4) | Decided, recording in flight | Accepted effective #247 (`75fad38`); ADR-0032 records it in S4. |
-| 8 | Hosted extraction worker (#363 D6) | Blocked | #362 adds a `--queue extraction` Railway service once #62 binds a live model. Until then the API refuses run creation with 503 `EXTRACTION_NOT_CONFIGURED` and inserts no job unless `FEL_ALLOW_MOCK_LLM` is set (`apps/api/app/extraction/runs.py`). |
+| 8 | Hosted extraction worker (#363 D6) | Blocked | #362 adds a `--queue extraction` Railway service once #62 binds a live model. Until then the API refuses run creation with 503 `EXTRACTION_NOT_CONFIGURED` and inserts no job unless `FEL_ALLOW_MOCK_LLM` is truthy (`1`, `true`, `yes` or `on`; merely set is not enough), and even then an extraction policy and an active corpus must exist or it returns the same 503 (`apps/api/app/extraction/runs.py`). |
 | 9 | Benchmark seed vs T0214a (#363 D7) | Decided | No ledger change; S1 rewords the benchmark-seed README. |
 
 ### Dependency order
@@ -81,7 +81,9 @@ issue, a `workstreams.yaml` branch and allowed paths.
 #61 load gate on a dedicated database (independent of #324, blocked on a host)
 #108 hosted reader smoke (independent of #324, blocked on Railway + shared storage)
 
-#61 load accepted --> #62 wire isotonic-v1 + human labels (T0306, T0307, T0310)
+#61 load accepted --+--> #62 wire isotonic-v1 + human labels (T0306, T0307, T0310)
+#177 live cutover --+    (needs both: M3-CONFIDENCE-GATE depends on M3-REVIEW and
+                         RELEASE-LIVE-CUTOVER, hosted credentials; never #61 alone)
         |
         +--> #362 hosted extraction worker service
         +--> #64 approved facts to model nodes, sparse scenarios (T0404, T0405)
@@ -112,6 +114,46 @@ issue, a `workstreams.yaml` branch and allowed paths.
 Resolved since the October 27 snapshot: the ADR-0029/0030/0031 status
 question (item 1, settled as Proposed by #360) and `workstreams.yaml` status
 drift (item 2).
+
+### Standing guidance
+
+Carried unchanged from the October 27 remaining-work snapshot. The October 27
+list of unchecked canonical tasks is not repeated: read
+`specs/001-financial-evidence-lab/tasks.md` for task state.
+
+What is already on `main` and must not be rebuilt:
+
+- M0 platform, contracts, CI, and migrations `0001` through `0011`.
+- M1 ingestion, including the HTTP host allowlist, decoded size cap, and
+  per-attempt deadline from #345 (`470ef51`), and since #354 the retrieval
+  receipts, explicit FRED gaps and named source clocks of ADR-0029/0030/0031.
+  Nothing persists receipts yet; that is forecast storage (#66).
+- M2 retrieval, claims, and Search Observatory. Mock Recall@10 is 0.4692
+  against a 0.90 live gate. That gap is #177 / #201, not a broken mock.
+- M3 extraction runtime, review API, and approved-record history. Every
+  proposal still requires human review.
+- Offline calibration validator (#340) and weighted PAV `isotonic-v1` (#339,
+  depth bound in #351). Neither is wired into proposal scoring.
+  `workers/src/fel_workers/extraction/isotonic.py` must stay unimported by the
+  dataset package, and the reverse.
+- `packages/calculation-engine` (formula AST, cyclic groups, Decimal). Nothing
+  in `apps/api`, `apps/web`, or `workers` imports it. The 3D desk graph from
+  #350 is a fixture schematic, not an integration. The M4 UI and forecast
+  packages are unbuilt. `workers` forecasting is an empty placeholder.
+
+#### Do not
+
+- Do not edit `specs/001-financial-evidence-lab/tasks.md` checkboxes in an implementation pull request.
+- Do not deploy API and worker with different local storage directories. Citations will resolve and the bytes will not.
+- Do not lower Recall@10, the 1,000 ms review budget, or the 0.85/0.80 review thresholds to make a gate pass.
+- Do not use a shared server bearer in the public Next.js app as a stand-in for a user.
+- Do not put credential values in issues, commits, logs, fixtures, or this file.
+
+#### Test isolation
+
+Run any new DB-backed suite in #61 or #62 against an isolated `<db>_extraction`
+sibling database, not the shared base `TEST_DATABASE_URL` database; see
+[Database-backed tests](../development/testing.md#database-backed-tests).
 
 ### Documentation work in flight
 

@@ -370,7 +370,13 @@ fails the recheck is dropped and listed in the PR body.
   `f4b1197`, none did.
 - **Expected result:** AC-9 for these files. Zero shared paths changed.
 
-### S3: Ledger refresh (`contract-change`, lead review, no ADR)
+### S3: Ledger refresh (`contract-change`, lead review)
+
+The `DOCS-DRIFT-REMEDIATION` registration and the status flips
+(`OFFLINE-CALIBRATION-DATASET`, `OFFLINE-ISOTONIC-CALIBRATOR`,
+`DOCS-EXECUTIVE-ARCHITECTURE` and `BACKLOG-EXECUTION-CONTROL` to `merged`) are
+authorized by an integration-lead authorization record on PR #365 under #363
+decisions D1 and D2, not by an ADR.
 
 - **`STATUS.md`:**
   - Add one current-state section covering merged work since 2026-09-16,
