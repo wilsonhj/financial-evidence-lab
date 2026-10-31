@@ -176,11 +176,11 @@ def build_run_providers() -> tuple[SecClient, StorageProvider]:
     is set — live ingestion with in-memory mock storage would record
     storage_key/canonical_text_key rows whose blobs vanish with the process,
     silently breaking citation resolution. Raises ``RuntimeError`` naming
-    both variables when the pairing is invalid. When ``FEL_SEC_USER_AGENT``
-    is set, it is passed to :class:`LiveSecClient` as the SEC fair-access
-    identity (required on the deployment path, enforced by
-    :func:`run_entry`; the in-code default identity is for library/tests
-    only).
+    both variables when the pairing is invalid. ``FEL_SEC_USER_AGENT`` is
+    then required and validated (:func:`validate_live_user_agent`) and passed
+    to :class:`LiveSecClient` as the SEC fair-access identity — on every
+    path, not only behind :func:`run_entry`, so the in-code placeholder
+    default can never reach SEC.
     """
     from fel_providers.mocks import MockSecClient, MockStorageProvider
     from fel_workers.ingestion.sec_client import LiveSecClient
@@ -211,8 +211,7 @@ def build_run_providers() -> tuple[SecClient, StorageProvider]:
             " unresolvable when the process exits. Set FEL_STORAGE_DIR to a"
             " writable directory or unset FEL_SEC_LIVE."
         )
-    user_agent = os.environ.get("FEL_SEC_USER_AGENT", "").strip()
-    sec = LiveSecClient(user_agent=user_agent) if user_agent else LiveSecClient()
+    sec = LiveSecClient(user_agent=validate_live_user_agent())
     return sec, LocalDirStorageProvider(storage_dir)
 
 
@@ -389,7 +388,7 @@ def validate_live_user_agent() -> str:
     """Return the deployment SEC identity from ``FEL_SEC_USER_AGENT``.
 
     Live mode must not fall back to the in-code default User-Agent (a
-    personal contact literal kept only for library/tests). Raises
+    placeholder with no contact address, kept only for library/tests). Raises
     ``RuntimeError`` unless the stripped value is at least 8 characters
     long and contains a plausible contact address (``_CONTACT_MARKER_RE``:
     local part, ``@``, and a dotted domain with a >= 2-letter TLD).

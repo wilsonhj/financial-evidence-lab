@@ -37,7 +37,7 @@ from fel_providers.mocks import MockStorageProvider
 from fel_workers import queue
 from fel_workers.consumer import entity_id_for_cik, run_worker
 from fel_workers.ingestion.discovery import JOB_KIND_SEC_DISCOVERY, JOB_KIND_SEC_FILING_FETCH
-from fel_workers.ingestion.sec_client import normalize_cik
+from fel_workers.ingestion.sec_client import SEC_USER_AGENT, normalize_cik
 from harness import corpus_qa
 from harness.corpus_qa import (
     ACCEPTANCE_DEFERRED_LIVE_REASON,
@@ -1186,7 +1186,9 @@ def test_report_counts_only_this_runs_rows(
 _UNROUTABLE_DB = "postgresql://fel@sec-identity.invalid:1/fel_test"
 
 
-@pytest.mark.parametrize("user_agent", [None, "", "   ", "missing contact marker"])
+@pytest.mark.parametrize(
+    "user_agent", [None, "", "   ", "missing contact marker", SEC_USER_AGENT]
+)
 def test_live_mode_requires_sec_user_agent_before_any_network(
     tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, user_agent: str | None
 ) -> None:

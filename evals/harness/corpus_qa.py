@@ -331,8 +331,8 @@ def require_live_sec_user_agent(environ: Mapping[str, str] = os.environ) -> str:
     Mirrors the worker deployment gate: ``FEL_SEC_USER_AGENT`` must be
     non-empty and carry an ``@`` contact marker. Raises
     :class:`HarnessError` BEFORE any network access otherwise — live mode
-    never falls back to the in-code default identity (a personal contact
-    literal kept for library/tests only).
+    never falls back to the in-code default identity (a placeholder with
+    no contact address, kept for library/tests only).
     """
     user_agent = environ.get("FEL_SEC_USER_AGENT", "").strip()
     if not user_agent or "@" not in user_agent:
