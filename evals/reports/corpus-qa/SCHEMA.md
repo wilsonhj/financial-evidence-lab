@@ -21,12 +21,11 @@ mode**, enforced fail-closed in code by a two-half gate. The
 **empty-queue half** (`ensure_dedicated_queue`) needs no expected keys,
 so it runs immediately after connect (and the optional reset) and
 **BEFORE any SEC request** — a refused run burns zero fair-access
-budget: if the `jobs` table holds ANY pre-existing job, the harness
-refuses (exit 2) before enqueuing anything:
+budget: the gate requires an empty queue and an empty corpus, so if
+`jobs` or `documents` is non-empty the harness refuses (exit 2) before
+enqueuing anything:
 
-> harness requires a dedicated database with an empty ingestion queue
-> (found N pre-existing jobs); use a fresh DB or --reset-corpus on a
-> disposable one (reset clears corpus + jobs coherently)
+> harness requires a dedicated database with an empty ingestion queue and an empty corpus (found N pre-existing jobs, M pre-existing documents); use a fresh DB or --reset-corpus on a disposable one (reset clears corpus + jobs coherently)
 
 The **expected-key half** (`ensure_expected_keys_unclaimed`) runs after
 the submissions snapshot — this run's expected fetch idempotency keys do
@@ -201,7 +200,7 @@ disposable — all with exit 2 before any connection.
 .venv/bin/python scripts/db/migrate.py --database-url "postgresql://.../<name>_test"
 
 TEST_DATABASE_URL="postgresql://.../<name>_test" \
-PYTHONPATH=evals:workers/src:packages/providers:apps/api \
+PYTHONPATH=evals:workers/src:packages/providers:packages/ontology:apps/api \
 .venv/bin/python -m harness.corpus_qa \
     --mode synthetic --reset-corpus --i-know-this-destroys-data \
     --reports-dir evals/reports/corpus-qa --label <YYYY-MM-DD>-synthetic-cohort
@@ -221,9 +220,10 @@ satisfies T0112** (ingest the 20-issuer cohort + record corpus metrics)
 without touching production.
 
 Exact recipe, from an egress-enabled session. `FEL_SEC_USER_AGENT` is
-REQUIRED (non-empty, with an `@` contact marker, mirroring the worker
-deployment gate from the infra workstream); the harness exits 2 before
-any network access when it is absent or malformed. Commit the resulting
+REQUIRED: the harness requires a non-empty value containing `@`, and it
+exits 2 before any network access otherwise. The worker rule is separate
+and stricter (`validate_live_user_agent` also requires length at least 8
+and a dotted domain). Commit the resulting
 report next to the synthetic one:
 
 ```sh
@@ -236,7 +236,7 @@ createdb fel_corpus_qa_live
 # 3. Run the harness against that dedicated database.
 FEL_DATABASE_URL="postgresql://<host>/fel_corpus_qa_live" \
 FEL_SEC_USER_AGENT="financial-evidence-lab corpus-qa (<ops-contact@example.com>)" \
-PYTHONPATH=evals:workers/src:packages/providers:apps/api \
+PYTHONPATH=evals:workers/src:packages/providers:packages/ontology:apps/api \
 .venv/bin/python -m harness.corpus_qa \
     --mode live \
     --storage-dir /var/fel/storage \

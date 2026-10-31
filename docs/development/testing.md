@@ -297,7 +297,7 @@ access for dependency advisory data.
 | mypy | omits `scripts/db` | also checks `scripts/db` |
 | pip-audit | `requirements-dev.txt` | `requirements.lock`, `requirements-dev.lock` and `scripts/runtime/build.lock` |
 | Database suites | skip unless you set `TEST_DATABASE_URL` | PostgreSQL 17 + pgvector 0.8.5 service, `FEL_REQUIRE_DB=1` |
-| Not run by `make ci` | — | Gitleaks, Playwright (fixture and deployment-guard), the reproducible production install, the migration/backup-restore smoke, and the shared-path label check |
+| Not run by `make ci` | — | Gitleaks, Playwright (fixture and deployment-guard), the reproducible production install, and the migration/backup-restore smoke |
 
 **Known interaction if you obtained Python 3.11 through `uv`.** The `security`
 target's `pip-audit` step builds a disposable venv with

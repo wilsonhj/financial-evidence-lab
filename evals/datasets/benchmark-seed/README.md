@@ -91,7 +91,7 @@ Not yet covered (4): FIVN, APPF, PCTY, PAYC — see Known gaps.
   as `"low-high"` in `value`, e.g. `"2.92-2.96"`); narrative answers use
   `{"kind":"text","text"}`; unanswerable questions use `null`.
 - **Adjudication:** every record has `adjudication.status = "draft"` with an
-  empty `reviewers` list. Human adjudication happens later (T0214a/T0214b).
+  empty `reviewers` list. Human adjudication happens later (T0214b).
 
 ## Validation
 

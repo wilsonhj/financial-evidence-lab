@@ -243,13 +243,14 @@ migrations; the worker's only checks them (`migrate.py --check`).
 
 Hosted extraction is intentionally not deployed. The Railway worker starts
 `python -m fel_workers run` without `--queue`, so it serves the default
-`ingestion` queue, while the API enqueues `extraction_run` jobs on the
-`extraction` queue (`apps/api/app/extraction/runs.py`). A worker started on
-`extraction` refuses to start without `FEL_ALLOW_MOCK_LLM`, and only the mock
-model can be bound until
-[#62](https://github.com/wilsonhj/financial-evidence-lab/issues/62). Runs
-created on a hosted API therefore stay queued until a live model is bound
-(#62) and an `extraction` worker service is added
+`ingestion` queue. The default hosted API rejects run creation with 503
+`EXTRACTION_NOT_CONFIGURED` and inserts no job
+(`apps/api/app/extraction/runs.py`); a job is inserted on the `extraction`
+queue only when `FEL_ALLOW_MOCK_LLM` is `1`, `true`, `yes`, or `on`. A
+worker started on `extraction` refuses to start without that opt-in, and
+only the mock model can be bound until
+[#62](https://github.com/wilsonhj/financial-evidence-lab/issues/62).
+Serving the job needs that opt-in plus an `extraction` worker service
 ([#362](https://github.com/wilsonhj/financial-evidence-lab/issues/362)).
 
 ```mermaid
