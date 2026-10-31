@@ -1,8 +1,6 @@
 # M3 Agentic Extraction — Implementation Tasks
 
-> **Maintenance note (ADR-0032, 2026-10-31):** the checkboxes in this file are not maintained. Task state is governed by the canonical ledger, [`specs/001-financial-evidence-lab/tasks.md`](../001-financial-evidence-lab/tasks.md).
-
-Tasks are test-first. Integration lead alone marks completion after merge and evidence.
+Tasks are test-first. Integration lead alone marks completion after merge and evidence. Maintenance note (ADR-0032, 2026-10-31): the checkboxes in this file are not maintained; task state is governed by the canonical ledger, [`specs/001-financial-evidence-lab/tasks.md`](../001-financial-evidence-lab/tasks.md).
 
 ## Phase 0 — Shared contract gate (serial)
 

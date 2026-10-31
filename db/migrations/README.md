@@ -48,8 +48,8 @@ Load-bearing locks — do **not** copy the 0005 removal recipe to these:
 Both fire only on index-build writes. Those come from
 `fel_retrieval.index_build`, whose only caller outside tests is the offline
 retrieval gate (`evals/harness/retrieval_gate.py`); no API or worker runtime
-path builds indexes yet. `0008` grants the worker role (`fel_worker`) what an
-index build needs, so the `SELECT`-only grant to `fel_app` is not violated. They are correct because
+path builds indexes yet, so no `fel_app` path writes these rows and its
+`SELECT`-only grant is not violated. They are correct because
 the concurrency they guard against (publishing an index while rows are
 still being added) is real; 0005's lock was removable only because
 published index versions are immutable.

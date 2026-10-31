@@ -15,7 +15,7 @@ evidence below was read at `main` @ `f4b1197` or the PR head.
   migration steps (`.github/workflows/ci.yml:185-198`) and both Railway
   `preDeployCommand` entries (`infra/railway/api.json:8`,
   `infra/railway/worker.json:8`). It merged via PR #247 at `75fad38`
-  (`docs/handoff/STATUS.md:307`). `CLAUDE.md` requires an accepted ADR for
+  (recorded in the handoff status history). `CLAUDE.md` requires an accepted ADR for
   migration changes, so a Proposed ADR-0014 leaves every later migration PR
   formally unauthorized.
 - ADR-0012's revisit triggers have moved: OpenAI adapters now exist, while the
@@ -25,7 +25,7 @@ evidence below was read at `main` @ `f4b1197` or the PR head.
   point to ADR-0012 or ADR-0026. ADR-0001 has no `Date:` line.
 - Specs 002 and 003 still say "implementation-ready", and 005 still says
   "Draft for integration-lead ratification", though 005 merged via PR #182 at
-  `4e91235` (`docs/handoff/STATUS.md:282`). The 002 and 003 `tasks.md`
+  `4e91235` (recorded in the handoff status history). The 002 and 003 `tasks.md`
   checkboxes are all unchecked and are not maintained. The 002 and 003
   quickstarts name modules, routes and test files that do not exist.
   `specs/001-financial-evidence-lab/plan.md` §1 restates the stack, contrary
@@ -51,7 +51,8 @@ The integration lead authorizes exactly these corrections:
    - ADR-0014: `Status: Accepted`, effective at PR #247 (`75fad38`). Its
      revisit triggers (a no-transaction migration; more than one schema
      writer) have not fired: the worker service runs only `--check`.
-   - ADR-0012: an "Amendment 1 (2026-10-31)" section; Status stays Proposed.
+   - ADR-0012: an "Amendment 1 (2026-10-31)" section, and a same-line
+     note on its Status line pointing to it; Status stays Proposed.
    - ADR-0005: a "Superseded in part (oversized-reader posture) by ADR-0021"
      line under its status.
    - ADR-0002: a "Related decisions" section, appended at the end of the file
@@ -65,9 +66,12 @@ The integration lead authorizes exactly these corrections:
 2. **Specification status headers and maintenance notes.** Standing status
    lines on `specs/002-*/spec.md`, `specs/003-*/spec.md`,
    `specs/004-*/spec.md` and `specs/005-*/spec.md`, stated against the
-   canonical ledger; a one-line note atop `specs/002-*/tasks.md` and
-   `specs/003-*/tasks.md` that their checkboxes are not maintained and
-   `specs/001-financial-evidence-lab/tasks.md` governs; a new
+   canonical ledger; a note in `specs/002-*/tasks.md` (at the end) and
+   `specs/003-*/tasks.md` (appended to its existing introductory line) that
+   their checkboxes are not maintained and
+   `specs/001-financial-evidence-lab/tasks.md` governs, placed so that no
+   existing line moves, because ADR-0012 and `docs/handoff/workstreams.yaml`
+   cite `specs/003-agentic-extraction/tasks.md:36`; a new
    `specs/README.md` lifecycle table.
 3. **Quickstart and plan path fixes.** `specs/002-*/quickstart.md` and
    `specs/003-*/quickstart.md` name only commands, routes and test files that
