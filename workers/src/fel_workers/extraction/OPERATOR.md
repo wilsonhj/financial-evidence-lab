@@ -27,11 +27,12 @@ it. Re-enqueue against a NEW run row if the work is still wanted.
 
 Hosted extraction is intentionally not deployed. The Railway worker service
 (``infra/railway/worker.json``) starts ``python -m fel_workers run`` without
-``--queue``, so it serves the default ``ingestion`` queue, while the API
-enqueues every ``extraction_run`` on ``extraction``. The only model a worker
-can bind is the deterministic mock behind ``FEL_ALLOW_MOCK_LLM`` until a live
-model is bound (#62), and no ``extraction`` worker service exists yet (#362).
-Until both land, hosted runs stay ``queued``.
+``--queue``, so it serves the default ``ingestion`` queue. The API enqueues an
+``extraction_run`` on ``extraction`` only when ``FEL_ALLOW_MOCK_LLM`` is set;
+otherwise run creation returns 503 ``EXTRACTION_NOT_CONFIGURED`` and inserts
+no job (``apps/api/app/extraction/runs.py``). The only model a worker can bind
+is the deterministic mock behind that opt-in until a live model is bound
+(#62), and no ``extraction`` worker service exists yet (#362).
 
 Stage output is durable in ``extraction_run_steps.output`` with ``output_hash``
 over it (migration 0006, ADR-0011), written in one INSERT. A resume re-hashes

@@ -205,15 +205,17 @@ the record. The D6 follow-up is #362. The D8 authorization was posted on #354.
   So omitting a hosted extraction service is deliberate fail-closed
   behavior, not an oversight. Adding one today would either crash at start
   or fabricate financials.
-- **Recommendation.** S1 documents this accurately: "hosted extraction is
-  intentionally not deployed; runs created on a hosted API stay queued until
-  a live model is bound (#62) and an `extraction` worker service is added."
+- **Recommendation.** S1 documents this accurately: hosted extraction is
+  intentionally not deployed until a live model is bound (#62) and an
+  `extraction` worker service is added. (Corrected 2026-10-31: the API
+  already refuses run creation with 503 `EXTRACTION_NOT_CONFIGURED` unless
+  `FEL_ALLOW_MOCK_LLM` is set, `apps/api/app/extraction/runs.py:76-82`, so
+  hosted runs are refused rather than left queued.)
   Open a small follow-up issue, blocked by #62, for a second Railway service
   (`--queue extraction`) and its acceptance smoke. Do not widen #62 into
   `infra/`.
-- **Open point for the lead.** Should a hosted API reject extraction-run
-  creation while no extraction worker exists, instead of leaving runs
-  queued? That is a product decision for the follow-up issue, not this plan.
+- **Open point, resolved by the code.** The earlier question of whether a
+  hosted API should reject run creation is moot: it already does (see above).
 
 ### D7: Benchmark seed vs T0214a
 
