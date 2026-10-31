@@ -17,7 +17,7 @@ GitHub. Terms are defined in the [glossary](glossary.md).
   [local development](development/local.md).
 - **Agents:** [`AGENTS.md`](../AGENTS.md), which sets the reading order for a
   first session. To resume work, follow the resume sequence in
-  [`CLAUDE.md`](../CLAUDE.md).
+  [`handoff/README.md`](handoff/README.md#resume-sequence).
 
 ## By audience
 

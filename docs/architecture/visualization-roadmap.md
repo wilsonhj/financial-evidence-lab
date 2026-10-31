@@ -11,7 +11,7 @@
 
 </details>
 
-Source references verified against commit `59bbf7e`. Fixture-status notes in
+Source references verified against commit `f4b1197`. Fixture-status notes in
 sections 3A–3C checked against `f3e9452`.
 
 This document audits the visual surfaces in Financial Evidence Lab, defines the

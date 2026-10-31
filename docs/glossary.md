@@ -177,8 +177,9 @@ A golden file is committed expected output that a test compares exactly, such
 as the retrieval-gate report or `evals/tests/golden/corpus-qa/`. Exit gates are
 each milestone's objective acceptance criteria; the smoke gates are the
 checksum-frozen M2 smoke benchmark and the reader production smoke; the
-retrieval gate grades Recall@10 and temporal validity, and CI enforces its
-golden byte-for-byte rather than its threshold until a live provider exists.
+retrieval gate grades Recall@10 and temporal validity, and CI matches the
+graded section to the committed report and does not fail the build on the
+live Recall threshold.
 Sources: [plan §3](../specs/001-financial-evidence-lab/plan.md#3-milestones),
 [spec §19.6](../specs/001-financial-evidence-lab/spec.md#196-release-gates),
 [retrieval-gate schema](../evals/reports/retrieval-gate/SCHEMA.md).

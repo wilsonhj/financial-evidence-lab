@@ -9,9 +9,11 @@ dashboard points its "config file path" at the matching JSON file here.
 - `worker.json` — job-queue consumer (the role-pinned command in `worker.json`) with a
   `/health` startup check. It starts `python -m fel_workers run` without
   `--queue`, so it serves the default `ingestion` queue only. Hosted
-  extraction is intentionally not deployed: the API enqueues `extraction_run`
-  jobs on the `extraction` queue, and they stay queued until a live model is
-  bound (#62) and an `extraction` worker service is added (#362). Railway health checks gate deployments; they do
+  extraction is intentionally not deployed: without `FEL_ALLOW_MOCK_LLM` the
+  API refuses to create extraction runs (503 `EXTRACTION_NOT_CONFIGURED`, no
+  job inserted), and with it the run is enqueued on the `extraction` queue,
+  which no hosted worker serves. A live model (#62) and an `extraction`
+  worker service (#362) are both still needed. Railway health checks gate deployments; they do
   not continuously restart an already deployed service. The worker therefore
   also runs an in-process watchdog. If neither the idle consumer loop nor a
   successful job lease heartbeat advances for 120 seconds, the process exits

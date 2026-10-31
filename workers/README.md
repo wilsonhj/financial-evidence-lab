@@ -61,8 +61,10 @@ The Railway worker service
 ([infra/railway/worker.json](../infra/railway/worker.json)) starts
 `python -m fel_workers run` without `--queue`, so it serves `ingestion` only.
 Hosted extraction is intentionally not deployed: no live model is bound until
-#62, and no `extraction` worker service exists until #362. Hosted extraction
-runs stay `queued` until both land.
+#62, and no `extraction` worker service exists until #362. Until then the API
+refuses to create extraction runs (503 `EXTRACTION_NOT_CONFIGURED`, no job
+inserted) unless `FEL_ALLOW_MOCK_LLM` is set
+(`apps/api/app/extraction/runs.py`).
 
 ## Job kinds
 

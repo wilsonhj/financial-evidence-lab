@@ -57,8 +57,9 @@ Historical records (archived under [`docs/archive/`](../archive/README.md)):
   integration-lead items are carried in [`STATUS.md`](STATUS.md).
 - [`implementation-agents-2026-09-16.md`](../archive/handoff/2026-09/implementation-agents-2026-09-16.md)
   and [`external-agents-2026-09-16.md`](../archive/handoff/2026-09/external-agents-2026-09-16.md) — the
-  September 16 implementation and research cards. #336 and #337 merged as
-  #340 and #339 (follow-up #351); do not dispatch from them.
+  September 16 implementation and research cards. #340 closed #336, and
+  #339 and #351 landed the calibrator while #337 stays open for lead
+  review; do not dispatch from these cards.
 - The [September 9 issue audit](../archive/research/2026-09-09-open-issue-audit.md) and
   [resolution plan](../superpowers/plans/2026-09-09-backlog-resolution.md) —
   the September backlog baseline (audit and its

@@ -655,9 +655,10 @@ What remains open:
   human-adjudicated calibration, and `extraction/isotonic.py` is not imported
   by runtime code yet.
 - Hosted extraction is intentionally not deployed. The Railway worker serves
-  the default `ingestion` queue, while the API enqueues `extraction_run` jobs
-  on `extraction`; runs created on a hosted API stay queued until a live model
-  is bound (#62) and an `extraction` worker service is added
+  the default `ingestion` queue. The default hosted API rejects run creation
+  with 503 `EXTRACTION_NOT_CONFIGURED` and inserts no job; a job is inserted
+  on `extraction` only when `FEL_ALLOW_MOCK_LLM` is `1`, `true`, `yes`, or
+  `on`. Serving it needs that opt-in plus an `extraction` worker service
   ([#362](https://github.com/wilsonhj/financial-evidence-lab/issues/362)).
 - [Issue #61](https://github.com/wilsonhj/financial-evidence-lab/issues/61)
   — review, correction and approved-version history are implemented, but the
