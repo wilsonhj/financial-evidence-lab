@@ -2,7 +2,7 @@
 
 ## October 31 current state
 
-Snapshot base: `main` @ `3808f3b` (#360, merged 2026-10-31). Re-query GitHub
+Snapshot base: `main` @ `1e414ff` (#364, merged 2026-10-31). Re-query GitHub
 before dispatch; issue and PR states below were read on 2026-10-31. Sections
 dated September 16 and earlier are in the
 [archived status history](../archive/handoff/STATUS-history-2026-09.md); they
@@ -38,6 +38,8 @@ issue is cited but was not closed by the merge.
 | `f7fad6e` | #357 | — | Remaining-work snapshot for agents and the integration lead |
 | `f4b1197` | #359 | — | Closed the snapshot's five "Do now" items: shared-path renames and non-ASCII paths, FRED date/value parsing, temporal-suite gap timing, ADR-0010 Amendment 1 corrections, fixture copy in the Desk and Observatory |
 | `3808f3b` | #360 | — | ADR-0029/0030/0031 returned to Proposed; shared-path check counts a just-added label; `minimatch` advisory (GHSA-g3hv-75wg-m249) pinned and allowlisted until 2026-12-01 |
+| `2b11db9` | #361 | — | `PreToolUse` path guard for Claude Code edits (`scripts/agent/path_guard.py`); asks before shared-path or out-of-lane edits |
+| `1e414ff` | #364 | — | #363 S1+S2: drifted docs corrected against code; July EXT briefs and superseded research archived |
 
 None of these wires calibration into proposal scoring, binds a live model,
 or establishes hosted #61 or #108 acceptance. `isotonic.py` and the dataset
@@ -161,12 +163,11 @@ sibling database, not the shared base `TEST_DATABASE_URL` database; see
 the documentation drift remediation (`DOCS-DRIFT-REMEDIATION`). Plan:
 [`2026-10-28-documentation-drift-remediation.md`](../superpowers/plans/2026-10-28-documentation-drift-remediation.md).
 
-- S1 + S2, docs corrections and the first archive pass: #364, open, branch
-  `claude/trusting-brahmagupta-8vvgwi`.
+- S1 + S2, docs corrections and the first archive pass: merged as #364
+  (`1e414ff`).
 - S3, the ledger refresh that wrote this section and archived the
-  September/October handoff files: branch `claude/docs-drift-s3-ledger`,
-  stacked on #364.
-- S4, ADR-0032 recording D4/D5/D7 and the ADR/spec status lines: branch
+  September/October handoff files: #365, branch `claude/docs-drift-s3-ledger`.
+- S4, ADR-0032 recording D4/D5/D7 and the ADR/spec status lines: #366, branch
   `claude/docs-drift-s4-adr0032`.
 
 Canonical task checkboxes, credential policy and release thresholds are
