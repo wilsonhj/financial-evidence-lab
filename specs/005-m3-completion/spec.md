@@ -1,6 +1,6 @@
 # M3 Completion — Agentic Extraction, Remaining Work
 
-**Status:** Draft for integration-lead ratification
+**Status:** Merged as PR #182 @ `4e91235`. Its scope, `T0306`–`T0310`, is still unchecked in the canonical ledger (`specs/001-financial-evidence-lab/tasks.md`), which governs. Status line updated under ADR-0032 (2026-10-31).
 **Version:** 1.0.0
 **Date:** 2026-08-31
 **Parent specification:** `specs/001-financial-evidence-lab/spec.md` v1.2 (governs on conflict)

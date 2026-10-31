@@ -208,8 +208,10 @@ evidence. Ledger prose follows the rules in the
 The `schema_migrations` table, one row per applied migration file with its
 SHA-256 checksum, written only by `scripts/db/migrate.py`, which fails closed
 on drift. It is unrelated to the canonical task ledger and the handoff ledgers
-(see [Ledger](#ledger)). ADR-0014 is still Proposed although the design is
-live. Sources: [ADR-0014](decisions/ADR-0014-migration-ledger-and-applier.md),
+(see [Ledger](#ledger)). ADR-0014 is Accepted, effective at PR #247;
+[ADR-0032](decisions/ADR-0032-documentation-status-reconciliation.md) records
+the acceptance. Sources:
+[ADR-0014](decisions/ADR-0014-migration-ledger-and-applier.md),
 [`scripts/db/migrate.py`](../scripts/db/migrate.py).
 
 ## Milestones (M0–M5)

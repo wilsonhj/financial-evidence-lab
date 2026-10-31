@@ -1,6 +1,6 @@
 # M3 Agentic Extraction — Feature Specification
 
-**Status:** Clarified and implementation-ready  
+**Status:** Merged with PR #102 (2026-07-16). Partly implemented: in the canonical ledger (`specs/001-financial-evidence-lab/tasks.md`), `T0301`–`T0305` are checked and `T0306`–`T0310` are unchecked; the remaining work is sequenced by `specs/005-m3-completion/`. Status line updated under ADR-0032 (2026-10-31); the ledger governs.  
 **Version:** 1.0.0  
 **Date:** 2026-07-16  
 **Parent specification:** `specs/001-financial-evidence-lab/spec.md` v1.2  

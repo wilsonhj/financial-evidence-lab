@@ -23,8 +23,8 @@ Rules (see ADR-0002 and the constitution):
 - Tenant-scoped tables must ship with their row-level-security policies in
   the same migration that creates them.
 
-The first real migration lands with `M0-CONTRACTS`/`M0-PLATFORM`; the
-directory is intentionally empty until then.
+The directory holds migrations `0001` through `0011`; list it for the
+current set rather than relying on this count.
 
 ## Guard locks and role coverage
 
@@ -45,8 +45,11 @@ Load-bearing locks — do **not** copy the 0005 removal recipe to these:
 - `fel_guard_retrieval_embedding` (0003) does the same for embedding
   inserts.
 
-Both run only in worker (service-role) paths that build indexes, so the
-`SELECT`-only grant to `fel_app` is not violated. They are correct because
+Both fire only on index-build writes. Those come from
+`fel_retrieval.index_build`, whose only caller outside tests is the offline
+retrieval gate (`evals/harness/retrieval_gate.py`); no API or worker runtime
+path builds indexes yet, so no `fel_app` path writes these rows and its
+`SELECT`-only grant is not violated. They are correct because
 the concurrency they guard against (publishing an index while rows are
 still being added) is real; 0005's lock was removable only because
 published index versions are immutable.
@@ -180,7 +183,6 @@ Reaping is no longer unconditional. `queue.reap_stale` requeues a stale
 claim only while `attempts < max_attempts` and otherwise parks it as
 `failed` with a `REAPED_EXHAUSTED` error envelope — before this, a job that
 reliably killed its worker was reaped, re-claimed and killed again forever.
-
 
 ### 0011: extraction review and conflict occurrences (ADR-0024)
 

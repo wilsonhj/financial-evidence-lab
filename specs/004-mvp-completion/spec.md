@@ -1,6 +1,6 @@
 # MVP Completion — Release Specification
 
-**Status:** Ratified — merged as PR #173 @ `fdcb3d2` (2026-08-31) under the constitution-gate waiver the integration lead recorded on that PR
+**Status:** Ratified — merged as PR #173 @ `fdcb3d2` (2026-08-31) under the constitution-gate waiver the integration lead recorded on that PR. §3 "Verified state, 2026-08-31" is a dated snapshot, not current state: the ledger drift §4.2 measured was reconciled by PR #206 (ADR-0013, 2026-09-03), and the canonical ledger governs task state. Note added under ADR-0032 (2026-10-31).
 **Version:** 1.0.0
 **Date:** 2026-08-25
 **Parent specification:** `specs/001-financial-evidence-lab/spec.md` v1.2
@@ -71,6 +71,7 @@ Statements of *judgement* are not covered by that claim and are marked where the
 | #172 handoff reconciliation | **Merged** 2026-08-31 @ `ebe77af`. It flipped `EVALS-REPORT-RENDER` from `ready` to `merged`, and added `status: ready` to `M4-MODEL-CALC` — which **dispatches #63**, discharging §8 items 1 and 4 |
 
 Structural measurements were **unchanged by #174**, which touched only `workers/src/fel_workers/extraction/validate/accounting.py` and `workers/tests/extraction/test_accounting_identities.py`. **#172 moved exactly one of them** — the `merged` package count — by flipping `EVALS-REPORT-RENDER`; it also added a `status:` key to `M4-MODEL-CALC` without changing any total. The rest hold: 32 packages, 21 ledger checkboxes, 2 `credentials:` keys, 5 "Not requested". Re-run and confirmed against `a4bb356` and `ebe77af`.
+
 - Registered packages in `workstreams.yaml`: **32**
   - `status: merged` on trunk: **23** (**22** at the `a4bb356` baseline)
   - Effectively merged but stale in the queue: **0** — `EVALS-REPORT-RENDER` (#151) merged as PR #164 @ `a23514e` on 2026-08-11 but its entry read `ready` until PR #172 flipped it on 2026-08-31

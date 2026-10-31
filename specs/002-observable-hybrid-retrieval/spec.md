@@ -1,6 +1,6 @@
 # Observable Hybrid Retrieval — M2 Specification
 
-**Status:** clarified; implementation-ready  
+**Status:** Merged with PR #102 (2026-07-16). Implemented except `T0215`: in the canonical ledger (`specs/001-financial-evidence-lab/tasks.md`), `T0201`–`T0210` and `T0214a` are checked and `T0215` is unchecked with its reason. Status line updated under ADR-0032 (2026-10-31); the ledger governs.  
 **Parent:** `specs/001-financial-evidence-lab/spec.md` v1.2  
 **Scope:** T0201–T0210, T0214a, T0215. Embedding Atlas remains deferred.
 **Contract gate:** issue #100 (v0.3.0 migration/OpenAPI freeze).

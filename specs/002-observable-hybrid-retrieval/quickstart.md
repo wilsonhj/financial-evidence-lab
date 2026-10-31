@@ -7,9 +7,10 @@
 
 ## Build a deterministic fixture index
 
+Index build has no CLI. `fel_retrieval.index_build` (`build_index`, `publish_index_version`, `build_and_publish`) is a library, called today only by the retrieval gate harness (`evals/harness/retrieval_gate.py`) and by tests. Install dependencies as in `docs/development/local.md`, then:
+
 ```bash
-uv run python -m fel_retrieval.index build --corpus-version "$CORPUS_VERSION" --provider mock --publish
-uv run pytest packages/retrieval apps/api/tests -q
+.venv/bin/pytest packages/retrieval/tests apps/api/tests/test_retrieval_api.py -q
 pnpm --filter @fel/contracts test
 ```
 
@@ -23,7 +24,8 @@ curl -sS -X POST "$FEL_API_URL/v1/workspaces/$WORKSPACE_ID/queries" \
   -H "Idempotency-Key: quickstart-1" \
   -H 'Content-Type: application/json' \
   -d '{"question":"What changed in remaining performance obligations?","lanes":["dense","lexical","facts","tables"]}'
-curl -N -H "Authorization: Bearer $FEL_TOKEN" "$FEL_API_URL/v1/queries/$QUERY_ID/events"
+# The 202 response carries query_id, run_id and events_url (/v1/retrieval-runs/$RUN_ID/events).
+curl -N -H "Authorization: Bearer $FEL_TOKEN" "$FEL_API_URL/v1/retrieval-runs/$RUN_ID/events"
 curl -sS -H "Authorization: Bearer $FEL_TOKEN" "$FEL_API_URL/v1/retrieval-runs/$RUN_ID"
 ```
 
@@ -32,13 +34,14 @@ Disconnect, then reconnect with `Last-Event-ID`; no events may be skipped or dup
 ## Compile/evaluate the smoke set
 
 ```bash
-uv run python -m fel_retrieval_evals.compile evals/datasets/benchmark-seed/questions.jsonl --corpus-version "$CORPUS_VERSION" --out evals/datasets/m2-smoke/manifest.json
-uv run python -m fel_retrieval_evals.run --manifest evals/datasets/m2-smoke/manifest.json --exact-baseline --report evals/reports/m2-smoke.json
-uv run python -m fel_retrieval_evals.gate evals/reports/m2-smoke.json
+PYTHONPATH=packages/retrieval-evals .venv/bin/python -m fel_retrieval_evals.compile \
+  evals/datasets/benchmark-seed/questions.jsonl --out .local/manifest.json \
+  [--corpus corpus.json] [--corpus-version "$CORPUS_VERSION"]
+TEST_DATABASE_URL=... make eval-retrieval-gate
 make ci
 ```
 
-The compiler fails on future evidence, missing/ambiguous quote anchors, invalid numeric ranges, or insufficient-evidence records without a pinned searched corpus. The gate prints temporal validity, Recall@10, numeric accuracy, entailment precision, completeness, ablations, and latency.
+The compiler fails on future evidence, missing/ambiguous quote anchors, invalid numeric ranges, or insufficient-evidence records without a pinned searched corpus. `make eval-retrieval-gate` runs `evals/harness/retrieval_gate.py`: it builds an index over a corpus synthesized from the seed's quotes with the mock embedder, runs every seed question through planner, lanes and fusion, and writes `evals/reports/retrieval-gate/latest.json`. It computes Recall@10 and temporal validity and reports numeric accuracy, entailment precision and citation completeness as not evaluable, because retrieval alone generates no claims. There is no separate `run` or `gate` module.
 
 ## Required negative checks
 

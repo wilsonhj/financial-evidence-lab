@@ -6,7 +6,7 @@ The Status column below is abbreviated. Many ADRs qualify their status with a lo
 
 | ADR | Title | Status | Date | Supersedes / Superseded by |
 |---|---|---|---|---|
-| [ADR-0001](ADR-0001-contract-freeze.md) | Contract-first parallel delivery | Accepted | — | — |
+| [ADR-0001](ADR-0001-contract-freeze.md) | Contract-first parallel delivery | Accepted | 2026-07-12 | — |
 | [ADR-0002](ADR-0002-mvp-stack.md) | Locked MVP technology stack | Accepted | 2026-07-12 | — |
 | [ADR-0003](ADR-0003-root-config-edits.md) | Mechanical root-config edits ride with the owning package | Accepted | 2026-07-13 | — |
 | [ADR-0004](ADR-0004-public-corpus-tenancy.md) | Public corpus tables carry no org_id and no RLS | Accepted | 2026-07-13 | — |
@@ -19,7 +19,7 @@ The Status column below is abbreviated. Many ADRs qualify their status with a lo
 | [ADR-0011](ADR-0011-extraction-step-output-column.md) | Add `extraction_run_steps.output` so the checkpoint stops riding on the event payload | Accepted | 2026-08-29 | Supersedes [ADR-0009](ADR-0009-checkpoint-payload-in-event-stream.md) |
 | [ADR-0012](ADR-0012-llm-provider-substitution.md) | Split the AI-provider decision by role, and supersede only ADR-0002's generation-provider clause | Proposed | 2026-08-31 | Proposes to supersede one clause of [ADR-0002](ADR-0002-mvp-stack.md) |
 | [ADR-0013](ADR-0013-canonical-task-ledger-reconciliation.md) | Retrospectively authorize the PR #206 canonical task-ledger reconciliation | Accepted | 2026-09-03 | — |
-| [ADR-0014](ADR-0014-migration-ledger-and-applier.md) | Checksummed migration ledger and single applier | Proposed | 2026-09-02 | — |
+| [ADR-0014](ADR-0014-migration-ledger-and-applier.md) | Checksummed migration ledger and single applier | Accepted (qualified) | 2026-09-02 | — |
 | [ADR-0015](ADR-0015-claims-output-contract.md) | Structured claims output and independent numeric verification | Accepted | 2026-09-06 | — |
 | [ADR-0016](ADR-0016-api-budget-and-rate-limit-responses.md) | API budget and rate-limit responses | Accepted | 2026-09-09 | — |
 | [ADR-0017](ADR-0017-parallel-backlog-execution.md) | Bounded parallel backlog execution | Accepted (qualified) | 2026-09-09 | — |
@@ -37,3 +37,4 @@ The Status column below is abbreviated. Many ADRs qualify their status with a lo
 | [ADR-0029](ADR-0029-retrieval-receipts.md) | Retrieval receipts for non-SEC provider fetches | Proposed | 2026-10-24 | — |
 | [ADR-0030](ADR-0030-explicit-fred-missing-values.md) | Explicit FRED missing values | Proposed | 2026-10-24 | — |
 | [ADR-0031](ADR-0031-named-source-clocks.md) | Named source clocks | Proposed | 2026-10-24 | — |
+| [ADR-0032](ADR-0032-documentation-status-reconciliation.md) | Reconcile ADR and specification status with the repository | Accepted | 2026-10-31 | — |

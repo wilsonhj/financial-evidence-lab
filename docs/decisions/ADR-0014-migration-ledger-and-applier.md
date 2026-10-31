@@ -1,6 +1,7 @@
 # ADR-0014: Checksummed migration ledger and single applier
 
-Status: Proposed
+Status: Accepted, effective at PR #247 (commit `75fad38`); acceptance
+recorded in [ADR-0032](ADR-0032-documentation-status-reconciliation.md)
 Date: 2026-09-02
 Occasioned by: issue #199 (`contract-change`), part of the 2026-09-01
 architecture review (#188).

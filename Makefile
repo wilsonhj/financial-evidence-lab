@@ -57,7 +57,7 @@ lint: ## Lint all sources
 
 typecheck: ## Run static type checks
 	pnpm run typecheck
-	$(PY)/mypy apps/api/app workers/src evals/graders packages/providers/fel_providers packages/retrieval/fel_retrieval packages/retrieval-evals/fel_retrieval_evals packages/ontology/fel_ontology packages/calculation-engine/fel_calculation_engine
+	$(PY)/mypy apps/api/app workers/src evals/graders packages/providers/fel_providers packages/retrieval/fel_retrieval packages/retrieval-evals/fel_retrieval_evals packages/ontology/fel_ontology packages/calculation-engine/fel_calculation_engine scripts/db
 
 test: test-js test-py ## Run all unit tests
 
