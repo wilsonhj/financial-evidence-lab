@@ -1,6 +1,6 @@
 # ADR-0032: Reconcile ADR and specification status with the repository
 
-Status: Proposed — for integration-lead acceptance on its PR
+Status: Accepted by the integration lead on PR #366 ([authorization record](https://github.com/wilsonhj/financial-evidence-lab/pull/366#issuecomment-6549240821), 2026-10-31)
 Date: 2026-10-31
 Occasioned by: #363 (documentation drift remediation, slice S4)
 Scope: the editorial corrections listed under "Decision" and nothing else

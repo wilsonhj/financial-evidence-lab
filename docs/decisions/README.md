@@ -37,4 +37,4 @@ The Status column below is abbreviated. Many ADRs qualify their status with a lo
 | [ADR-0029](ADR-0029-retrieval-receipts.md) | Retrieval receipts for non-SEC provider fetches | Accepted | 2026-10-24 | — |
 | [ADR-0030](ADR-0030-explicit-fred-missing-values.md) | Explicit FRED missing values | Accepted | 2026-10-24 | — |
 | [ADR-0031](ADR-0031-named-source-clocks.md) | Named source clocks | Accepted | 2026-10-24 | — |
-| [ADR-0032](ADR-0032-documentation-status-reconciliation.md) | Reconcile ADR and specification status with the repository | Proposed | 2026-10-31 | — |
+| [ADR-0032](ADR-0032-documentation-status-reconciliation.md) | Reconcile ADR and specification status with the repository | Accepted | 2026-10-31 | — |
