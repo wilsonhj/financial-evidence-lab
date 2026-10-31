@@ -495,3 +495,82 @@ def test_worktree_edit_uses_the_worktree_root_and_branch(repo: Path, tmp_path: P
     assert (
         decision(run_hook(repo, "Edit", str(worktree / "docs" / "architecture" / "a.md"))) is None
     )
+
+
+# --- reviewed bypasses (PR #361) ------------------------------------------------------------
+
+
+def test_command_runs_isolated_from_modules_next_to_the_script(repo: Path) -> None:
+    """A json.py written beside the hook must not shadow the standard library."""
+    script_dir = repo / "scripts" / "agent"
+    script_dir.mkdir(parents=True)
+    shutil.copy(HOOK, script_dir / "path_guard.py")
+    (script_dir / "json.py").write_text("raise SystemExit(1)\n", encoding="utf-8")
+    payload = json.dumps(
+        {"cwd": str(repo), "tool_name": "Write", "tool_input": {"file_path": "AGENTS.md"}}
+    )
+    done = _run_command(repo, payload)
+    assert done.returncode == 0
+    assert json.loads(done.stdout)["hookSpecificOutput"]["permissionDecision"] == "ask"
+
+
+def test_command_is_fail_open_when_python3_is_missing(repo: Path, tmp_path: Path) -> None:
+    script_dir = repo / "scripts" / "agent"
+    script_dir.mkdir(parents=True)
+    shutil.copy(HOOK, script_dir / "path_guard.py")
+    empty = tmp_path / "no-python"
+    empty.mkdir()
+    env = {"CLAUDE_PROJECT_DIR": str(repo), "PATH": str(empty)}
+    command = _settings_entry()["hooks"][0]["command"]
+    done = subprocess.run(
+        ["/bin/sh", "-c", command], input="{}", capture_output=True, text=True, env=env, check=False
+    )
+    assert done.returncode == 0 and done.stdout.strip() == ""
+
+
+@pytest.mark.parametrize("rel", ["scripts/agent/json.py", "scripts/agent/re.py"])
+def test_modules_beside_the_guard_always_ask(rel: str) -> None:
+    reasons = guard.reasons_for(rel, "main", PACKAGES)
+    assert reasons and "path guard" in reasons[0]
+
+
+def test_guard_tests_are_not_guard_files() -> None:
+    assert guard.reasons_for("scripts/agent/tests/test_path_guard.py", "main", []) == []
+
+
+@pytest.mark.parametrize(
+    "rel",
+    [
+        ".claude/Settings.Local.json",
+        ".CLAUDE/settings.json",
+        "Scripts/Agent/Path_Guard.py",
+        "scripts/agent/JSON.py",
+        "makefile",
+        "agents.md",
+        "Package.json",
+        "docs/handoff/WORKSTREAMS.yaml",
+    ],
+)
+def test_case_variants_of_guard_and_shared_files_ask(rel: str) -> None:
+    """On a case-insensitive filesystem a new spelling opens the guarded file."""
+    assert guard.reasons_for(rel, "main", [])
+
+
+def test_case_variants_ask_through_the_hook(repo: Path) -> None:
+    for rel in (".claude/Settings.Local.json", "makefile"):
+        assert decision(run_hook(repo, "Write", rel)) == "ask", rel
+
+
+def test_registry_that_is_not_utf8_keeps_the_built_in_checks(repo: Path) -> None:
+    _git(repo, "checkout", "-q", "-b", LANE_BRANCH)
+    (repo / "docs/handoff/workstreams.yaml").write_bytes(b"packages:\n  - id: \xff\xfe\n")
+    assert decision(run_hook(repo, "Write", "AGENTS.md")) == "ask"
+    assert decision(run_hook(repo, "Write", ".claude/settings.json")) == "ask"
+    assert decision(run_hook(repo, "Write", "apps/web/page.tsx")) is None  # no registry, no lane
+
+
+@pytest.mark.parametrize("rel", [".git/config", ".git/hooks/pre-commit", ".GIT/info/exclude"])
+def test_git_internals_ask(repo: Path, rel: str) -> None:
+    done = run_hook(repo, "Write", rel)
+    assert decision(done) == "ask", rel
+    assert ".git" in json.loads(done.stdout)["hookSpecificOutput"]["permissionDecisionReason"]

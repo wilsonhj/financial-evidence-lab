@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "[ -f \"$CLAUDE_PROJECT_DIR/scripts/agent/path_guard.py\" ] && python3 \"$CLAUDE_PROJECT_DIR/scripts/agent/path_guard.py\" || exit 0",
+            "command": "[ -f \"$CLAUDE_PROJECT_DIR/scripts/agent/path_guard.py\" ] && python3 -I \"$CLAUDE_PROJECT_DIR/scripts/agent/path_guard.py\" || exit 0",
             "timeout": 5
           }
         ]

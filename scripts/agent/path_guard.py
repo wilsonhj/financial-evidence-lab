@@ -11,14 +11,22 @@ Enforces two rules from AGENTS.md at edit time, before the agent spends a cycle:
 2. A branch listed in `docs/handoff/workstreams.yaml` may only edit that
    package's `allowed_paths`. Nothing in CI checks this today.
 
-Edits to the guard itself (this script and the Claude Code settings files that
-register it) always ask, so the hook cannot be removed through the tools it
-inspects.
+Edits to the guard itself (any `.py` file in this directory, which the hook
+could import, and the project's `.claude/settings.json` and
+`.claude/settings.local.json` that register it) and edits inside a `.git`
+directory (config, hooks) always ask, so the hook cannot be removed or bypassed
+through the tools it inspects. Names are compared case-insensitively, because a
+new spelling opens the same file on a case-insensitive filesystem. The user's
+`~/.claude/settings.json` is outside the repository and is not inspected.
+`.claude/settings.json` runs the hook with `python3 -I`, so a module written next
+to this script cannot shadow the standard library.
 
 The hook never decides on its own authority: it answers `ask` (or `deny` when
 FEL_PATH_GUARD=deny, for unattended runs) because both rules have legitimate
-exceptions. It is fail-open: any error, unknown branch, or unreadable registry
-exits 0 with no output, so a hook bug cannot stall a session. CI remains the
+exceptions. It is fail-open, so a hook bug cannot stall a session: an unknown
+branch skips the lane check, an unreadable registry is treated as empty (the
+built-in shared list still applies), and any other error exits 0 with no
+decision, writing a "path_guard: skipped" note to stderr. CI remains the
 backstop. Only Edit, Write, MultiEdit and NotebookEdit are inspected; shell
 commands that write files (sed -i, redirects, tee) are not.
 
@@ -71,6 +79,8 @@ GUARD_FILES: frozenset[str] = frozenset(
         ".claude/settings.local.json",
     }
 )
+# Any module beside the hook: run without -I, Python would import it first.
+GUARD_GLOBS: tuple[str, ...] = ("scripts/agent/*.py",)
 WORKSTREAMS = "docs/handoff/workstreams.yaml"
 PATH_ARGUMENT = {
     "Edit": "file_path",
@@ -80,9 +90,28 @@ PATH_ARGUMENT = {
 }
 
 
+def _folded_in(rel: str, names: frozenset[str]) -> bool:
+    """`rel in names`, ignoring case: a new file can alias one on a case-insensitive disk."""
+    folded = rel.casefold()
+    return any(folded == name.casefold() for name in names)
+
+
+def is_guard_file(rel: str) -> bool:
+    return _folded_in(rel, GUARD_FILES) or in_scope(rel.casefold(), GUARD_GLOBS)
+
+
+def is_git_internal(path: str) -> bool:
+    """True when any component of `path` is a `.git` directory or file."""
+    return any(part.casefold() == ".git" for part in Path(path).parts)
+
+
 def is_shared(rel: str, registry_shared: list[str] | tuple[str, ...] = ()) -> bool:
     """True for the built-in CI list and for any registry `shared_paths` glob."""
-    return rel in SHARED_EXACT or rel.startswith(SHARED_PREFIXES) or in_scope(rel, registry_shared)
+    return (
+        _folded_in(rel, SHARED_EXACT)
+        or rel.startswith(SHARED_PREFIXES)
+        or in_scope(rel, registry_shared)
+    )
 
 
 def _strip_comment(raw: str) -> str:
@@ -204,7 +233,7 @@ def reasons_for(
     registry_shared: list[str] | tuple[str, ...] = (),
 ) -> list[str]:
     reasons: list[str] = []
-    if rel in GUARD_FILES:
+    if is_guard_file(rel):
         reasons.append(
             f"{rel} is part of the path guard. Changing it can switch the guard off, "
             "so it always needs a person's confirmation."
@@ -306,8 +335,10 @@ def _reasons_for_absolute(absolute: str) -> list[str]:
     rel = os.path.relpath(absolute, canonical_case(os.path.realpath(root))).replace(os.sep, "/")
     if rel == ".." or rel.startswith("../"):
         return []
-    registry = Path(root, WORKSTREAMS)
-    text = registry.read_text(encoding="utf-8") if registry.is_file() else ""
+    try:
+        text = Path(root, WORKSTREAMS).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):  # missing or unreadable: built-in checks still apply
+        text = ""
     return reasons_for(
         rel,
         _git(owner, "symbolic-ref", "--short", "-q", "HEAD"),
@@ -336,6 +367,13 @@ def evaluate(payload: dict[str, Any]) -> list[str]:
     if resolved != named:
         forms.append(resolved)
     reasons: list[str] = []
+    for absolute in forms:
+        if is_git_internal(absolute):
+            reasons.append(
+                f"{absolute} is inside a .git directory. Git config and hooks run code "
+                "outside the path guard, so it always needs a person's confirmation."
+            )
+            break
     for absolute in forms:
         for reason in _reasons_for_absolute(absolute):
             if reason not in reasons:
