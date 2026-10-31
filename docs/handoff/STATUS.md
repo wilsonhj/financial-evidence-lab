@@ -8,13 +8,15 @@ dated September 16 and earlier are in the
 [archived status history](../archive/handoff/STATUS-history-2026-09.md); they
 are evidence history, not current state. The October 27 remaining-work snapshot
 is [archived](../archive/handoff/2026-10/remaining-work-2026-10-27.md); every
-open item from it is carried below or marked closed.
+open item from it is carried below or marked closed. Its standing guidance (what is
+already on `main` and must not be rebuilt, the unchecked canonical tasks, and
+its "Do not" list) was not copied here and still applies; read it in the
+archived snapshot.
 
 ### Merged since September 16
 
-Squash merges on `main` after #338 (`437ce55`), oldest first. Dates are
-GitHub merge times (UTC). "Refs" means the issue is cited but was not closed by
-the merge.
+Squash merges on `main` after #338 (`437ce55`), oldest first. "Refs" means the
+issue is cited but was not closed by the merge.
 
 | SHA | PR | Closes | Outcome |
 | --- | --- | --- | --- |
@@ -48,11 +50,11 @@ in its order. Items 7–9 are later decisions.
 | # | Item | State | Evidence or next action |
 | --- | --- | --- | --- |
 | 1 | ADR-0029/0030/0031 stay Accepted | Resolved | Lead authorization record posted on #354 on 2026-10-29 naming all three ADRs (#363 decision D8). The status lines stand. |
-| 2 | Reconcile the handoff ledger | Resolved 2026-10-31 | Under #363 slice S3, `workstreams.yaml` records `OFFLINE-CALIBRATION-DATASET` (#340), `OFFLINE-ISOTONIC-CALIBRATOR` (#339, #351) and `DOCS-EXECUTIVE-ARCHITECTURE` (#342) as merged, and this section replaces the September 16 history. |
+| 2 | Reconcile the handoff ledger | Resolved 2026-10-31 | Under #363 slice S3, `workstreams.yaml` records `OFFLINE-CALIBRATION-DATASET` (#340), `OFFLINE-ISOTONIC-CALIBRATOR` (#339, #351) and `DOCS-EXECUTIVE-ARCHITECTURE` (#342) as merged, closes `BACKLOG-EXECUTION-CONTROL` (its staged packages have all merged), and this section replaces the September 16 history. |
 | 3 | Close or re-scope issues whose code is on `main` | Open | #336 and #341 are closed. #337 is still open although #339 and #351 implement it: lead closes it. #96 and #87 stay open only as #108 trackers. #61 stays open on its 25-user load gate. |
-| 4 | Freeze public sessions and user-funded inference (#324) | Open | ADR-0026 is an accepted direction; the interfaces in `docs/research/public-auth-byok-contract.md` are still Proposed. Public business routes keep returning 503 (ADR-0027). |
-| 5 | Provider direction (#195) | Open | ADR-0012 stays Proposed. Per #363 D4 it gains an amendment (S4) recording that its live-provider revisit trigger fired; the Arm A/B benchmark is still the ratify-or-withdraw event. OpenAI adapters #328/#329 are not called from `apps/api` or `workers`. |
-| 6 | Name hosted targets for #61 and #108 | Open | #61 bulk-review p95 was 4,147.19, 1,002.23 and 1,501.91 ms against 1,000 ms on a shared local VM. #108 has no hosted run. Both stay blocked until the lead provisions the database and Railway/shared-storage targets. |
+| 4 | Freeze public sessions and user-funded inference (#324) | Open | ADR-0026 is an accepted direction; the interfaces in `docs/research/public-auth-byok-contract.md` are still Proposed. Public business routes keep returning 503 (ADR-0027); do not weaken that guard to demo a signed-in user. |
+| 5 | Provider direction (#195) | Open | ADR-0012 stays Proposed. Per #363 D4 it gains an amendment (S4) recording that its live-provider revisit trigger fired; the Arm A/B benchmark is still the ratify-or-withdraw event. OpenAI adapters #328/#329 are not called from `apps/api` or `workers`. There is no owner-key fallback. |
+| 6 | Name hosted targets for #61 and #108 | Open | #61 bulk-review p95 was 4,147.19, 1,002.23 and 1,501.91 ms against 1,000 ms on a shared local VM. #108 has no hosted run. Both stay blocked until the lead provisions the database and Railway/shared-storage targets. Credential names only, never values ([`CREDENTIALS.md`](CREDENTIALS.md)). |
 | 7 | ADR-0014 status (#363 D4) | Decided, recording in flight | Accepted effective #247 (`75fad38`); ADR-0032 records it in S4. |
 | 8 | Hosted extraction worker (#363 D6) | Blocked | #362 adds a `--queue extraction` Railway service once #62 binds a live model. Hosted extraction runs stay queued until then. Open product question for #362: reject run creation while no extraction worker exists. |
 | 9 | Benchmark seed vs T0214a (#363 D7) | Decided | No ledger change; S1 rewords the benchmark-seed README. |

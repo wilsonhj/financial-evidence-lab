@@ -98,7 +98,7 @@ packages:
     depends_on: []
     team: integration
     branch: agent/188-completion-execution
-    status: merged # Closed 2026-10-31 under #363 S3: its purpose is finished. The September 16 completion spec/plan merged in PR #325 @ 7a08df9, and every package it staged has merged: #328 @ 750aede, #329 @ 05141ae, #330 @ aef6d33, #331 @ 450c250, #338 @ 437ce55, #339 @ b9c3189 (+#351 @ 12c380a), #340 @ bc0435b. The remaining live and hosted acceptance is owned by the RELEASE-LIVE-CUTOVER, M3-REVIEW-LOAD-ACCEPTANCE, READER-PROD-SMOKE, PUBLIC-AUTH-BYOK and M3-CONFIDENCE-GATE entries, not by this one. Its plan and card files are archived (paths below updated); issue #188 stays open as the architecture-review umbrella. Paths are free to claim again.
+    status: merged # Closed 2026-10-31 under #363 S3: its purpose is finished. The September 16 completion spec/plan merged in PR #325 @ 7a08df9, and every package it staged has merged: #328 @ 750aede, #329 @ 05141ae, #330 @ aef6d33, #331 @ 450c250, #338 @ 437ce55, #339 @ b9c3189 (+#351 @ 12c380a), #340 @ bc0435b. The remaining live and hosted acceptance is owned by the RELEASE-LIVE-CUTOVER, M3-REVIEW-LOAD-ACCEPTANCE, READER-PROD-SMOKE, PUBLIC-AUTH-BYOK and M3-CONFIDENCE-GATE entries, not by this one. Its spec and cards are archived (paths below updated; the plan stays at docs/superpowers/plans/ per #363 D3); issue #188 stays open as the architecture-review umbrella. Paths are free to claim again.
     allowed_paths:
       - docs/archive/research/2026-09-16-completion-spec.md
       - docs/superpowers/plans/2026-09-16-completion-implementation.md
