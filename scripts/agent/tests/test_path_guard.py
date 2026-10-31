@@ -328,6 +328,47 @@ def test_symlink_into_shared_path_is_caught(repo: Path) -> None:
     assert decision(run_hook(repo, "Write", "docs/alias/ADR-0100.md")) == "ask"
 
 
+def test_symlink_named_package_json_asks_for_the_named_path(repo: Path) -> None:
+    """The name the tool used stays a shared path when only the final component is a symlink."""
+    (repo / "NOTES.md").write_text("notes\n", encoding="utf-8")
+    (repo / "package.json").symlink_to("NOTES.md")
+    done = run_hook(repo, "Edit", "package.json")
+    assert decision(done) == "ask"
+    reason = json.loads(done.stdout)["hookSpecificOutput"]["permissionDecisionReason"]
+    assert "package.json is a shared path" in reason
+
+
+def test_in_lane_symlink_to_agents_md_asks(repo: Path) -> None:
+    """An allowed name whose target is AGENTS.md is still a shared-path edit."""
+    _git(repo, "checkout", "-q", "-b", LANE_BRANCH)
+    (repo / "AGENTS.md").write_text("# agents\n", encoding="utf-8")
+    (repo / "README.md").symlink_to("AGENTS.md")
+    done = run_hook(repo, "Edit", "README.md")
+    assert decision(done) == "ask"
+    reason = json.loads(done.stdout)["hookSpecificOutput"]["permissionDecisionReason"]
+    assert "AGENTS.md is a shared path" in reason
+
+
+def test_git_dir_and_work_tree_do_not_hide_a_worktree_shared_path(
+    repo: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """GIT_DIR and GIT_WORK_TREE must not override git -C for the worktree under edit.
+
+    monkeypatch restores both variables after the test so later cases keep a clean environment.
+    """
+    other = tmp_path / "other-checkout"
+    other.mkdir()
+    _git(other, "init", "-q", "-b", "main")
+    worktree = repo / ".claude" / "worktrees" / "lane"
+    _git(repo, "worktree", "add", "-q", "-b", LANE_BRANCH, str(worktree))
+    monkeypatch.setenv("GIT_DIR", str(other / ".git"))
+    monkeypatch.setenv("GIT_WORK_TREE", str(other))
+    done = run_hook(repo, "Edit", str(worktree / "AGENTS.md"))
+    assert decision(done) == "ask"
+    reason = json.loads(done.stdout)["hookSpecificOutput"]["permissionDecisionReason"]
+    assert "AGENTS.md is a shared path" in reason
+
+
 def test_detached_head_checks_shared_only(repo: Path) -> None:
     _git(repo, "checkout", "-q", "--detach")
     assert decision(run_hook(repo, "Write", "apps/web/page.tsx")) is None

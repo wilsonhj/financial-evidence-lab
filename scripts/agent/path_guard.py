@@ -229,8 +229,24 @@ def _git(cwd: str, *args: str) -> str:
     git = shutil.which("git")
     if git is None:
         return ""
+    # These override `git -C` and would classify a worktree path against another checkout.
+    env = os.environ.copy()
+    for key in (
+        "GIT_DIR",
+        "GIT_WORK_TREE",
+        "GIT_INDEX_FILE",
+        "GIT_NAMESPACE",
+        "GIT_COMMON_DIR",
+        "GIT_OBJECT_DIRECTORY",
+    ):
+        env.pop(key, None)
     done = subprocess.run(  # nosec B603
-        [git, "-C", cwd, *args], capture_output=True, text=True, timeout=5, check=False
+        [git, "-C", cwd, *args],
+        capture_output=True,
+        text=True,
+        timeout=5,
+        check=False,
+        env=env,
     )
     return done.stdout.strip() if done.returncode == 0 else ""
 
@@ -274,17 +290,12 @@ def _nearest_dir(path: str) -> str:
     return current
 
 
-def evaluate(payload: dict[str, Any]) -> list[str]:
-    argument = PATH_ARGUMENT.get(str(payload.get("tool_name", "")))
-    if argument is None:
-        return []
-    target = (payload.get("tool_input") or {}).get(argument)
-    cwd = str(payload.get("cwd") or os.getcwd())
-    if not isinstance(target, str) or not target:
-        return []
-    absolute = canonical_case(
-        os.path.realpath(target if os.path.isabs(target) else os.path.join(cwd, target))
-    )
+def _reasons_for_absolute(absolute: str) -> list[str]:
+    """Guard, shared-path, and lane reasons for one absolute form of a tool path.
+
+    Empty when this form has no git root or escapes the checkout (`..`), so the
+    caller can still judge the other form.
+    """
     # The checkout that owns the file, not the session's: an edit inside a
     # worktree under .claude/worktrees/ belongs to that worktree's root,
     # branch and registry.
@@ -303,6 +314,33 @@ def evaluate(payload: dict[str, Any]) -> list[str]:
         parse_packages(text),
         parse_shared_paths(text),
     )
+
+
+def evaluate(payload: dict[str, Any]) -> list[str]:
+    argument = PATH_ARGUMENT.get(str(payload.get("tool_name", "")))
+    if argument is None:
+        return []
+    target = (payload.get("tool_input") or {}).get(argument)
+    cwd = str(payload.get("cwd") or os.getcwd())
+    if not isinstance(target, str) or not target:
+        return []
+    raw = target if os.path.isabs(target) else os.path.join(cwd, target)
+    # Ancestor symlinks are resolved; the final component is kept, so a symlink
+    # named package.json is still judged as package.json. The fully resolved
+    # path is judged too. A form that leaves the repo is skipped on its own.
+    named = canonical_case(
+        os.path.join(os.path.realpath(os.path.dirname(raw)), os.path.basename(raw))
+    )
+    resolved = canonical_case(os.path.realpath(raw))
+    forms = [named]
+    if resolved != named:
+        forms.append(resolved)
+    reasons: list[str] = []
+    for absolute in forms:
+        for reason in _reasons_for_absolute(absolute):
+            if reason not in reasons:
+                reasons.append(reason)
+    return reasons
 
 
 def main() -> int:
