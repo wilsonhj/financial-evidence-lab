@@ -1,1 +1,8 @@
-[]
+[
+  {
+    "id": "GHSA-g3hv-75wg-m249",
+    "package": "minimatch",
+    "reason": "Denial of service via globparts amplification, vulnerable <11.0.1, published 2026-10-31. The eslint and typescript-eslint instance is overridden to 11.0.3 in pnpm-workspace.yaml. The remaining instance, minimatch@5.1.9, is a dev-only dependency of @redocly/openapi-core@1.34.17 (openapi-typescript, used by @fel/contracts' generator on a trusted local spec) and declares ^5.0.1. Forcing it to 11.x breaks that package at runtime: it calls require('minimatch')(url, pattern), and minimatch 11 exports an object, so utils.js match() throws. check:generated does not reach that call, so a forced upgrade would pass every gate and ship the break. The 5.x and 9.x lines have no patched release. Remove this entry when @redocly/openapi-core moves to a minimatch that ships a callable export, or when the generator no longer uses it.",
+    "reviewBy": "2026-12-01"
+  }
+]
