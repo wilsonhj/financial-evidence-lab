@@ -3,7 +3,7 @@
 Status: Accepted by the integration lead on PR #366 ([authorization record](https://github.com/wilsonhj/financial-evidence-lab/pull/366#issuecomment-6549240821), 2026-10-31)
 Date: 2026-10-31
 Occasioned by: #363 (documentation drift remediation, slice S4)
-Scope: the editorial corrections listed under "Decision" and nothing else
+Scope: the editorial corrections listed under "Decision", the consequential non-shared pointers to them in `docs/glossary.md` and `docs/README.md`, and nothing else
 
 ## Context
 
@@ -80,7 +80,7 @@ The integration lead authorizes exactly these corrections:
 4. **Maintenance notes in shared READMEs.** `packages/contracts/README.md`
    (Python contract tests) and `db/migrations/README.md` (directory contents;
    which code builds indexes).
-5. **`Makefile`.** Append `scripts/db` to the `typecheck` mypy path list so it
+5. **`Makefile` (D5).** Append `scripts/db` to the `typecheck` mypy path list so it
    matches `.github/workflows/ci.yml:129` exactly.
 6. **Lint-only formatting** in files this ADR already touches, so the changed
    files pass the `docs.yml` markdownlint job: a doubled blank line removed in
