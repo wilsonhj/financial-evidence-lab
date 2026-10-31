@@ -121,7 +121,7 @@ changed by this review.
 
 ## Complete issue audit
 
-[The issue-by-issue audit](../archive/research/2026-09-09-open-issue-audit.md) covers all 39 initial
+[The issue-by-issue audit](2026-09-09-open-issue-audit.md) covers all 39 initial
 issues and the newly discovered #252 security blocker: 40 distinct session
 issues. It includes exact proposed paths, existing shipped work, remaining
 acceptance cases, dependencies and closure evidence. #249 closed through #250
