@@ -35,52 +35,84 @@ EXCLUDE = {
 }
 # Untracked trees (node_modules, .venv) need no entry: only git ls-files counts.
 
-# A line-based approximation of CommonMark: enough to skip text that does not
-# render as a link, without a Markdown parser dependency.
-COMMENT = re.compile(r"<!--.*?(?:-->|\Z)", re.S)
+# Line-based approximation of CommonMark link rendering, stdlib only. It skips
+# fenced code (at any indent), indented code (4+ columns past the margin or the
+# open list item's content), HTML comments, code spans, escaped brackets, and
+# reference definitions that are unused or interrupt a paragraph; it strips
+# blockquote markers and accepts <angle> and balanced-parenthesis targets.
+# Exotic constructs (HTML blocks, lazy continuations, nested containers) may be
+# misjudged: the job exists to catch unlinked new docs, not to validate Markdown.
+QUOTE = re.compile(r"^ {0,3}> ?")
 FENCE = re.compile(r"^ *(`{3,}|~{3,})")
+ATX = re.compile(r"^ {0,3}#{1,6}(\s|$)")
+SETEXT = re.compile(r"^ {0,3}(=+|-+) *$")
 LIST_ITEM = re.compile(r"^( *)([-*+]|\d{1,9}[.)])( +|$)")
 CODE_SPAN = re.compile(r"(`+).+?\1")
 BRACKETS = re.compile(r"(?<!\\)\[((?:[^\[\]\\]|\\.)*)\]")
-REFDEF = re.compile(r"^ {0,3}\[((?:[^\[\]\\]|\\.)+)\]:\s*(<[^>]*>|\S+)")
+REFDEF = re.compile(r"^ *\[((?:[^\[\]\\]|\\.)+)\]:\s*(<[^>]*>|\S+)")
 SCHEME = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*:")
 
 
 def prose_lines(text):
-    """Yield lines outside HTML comments, fenced and indented code blocks."""
-    text = COMMENT.sub(lambda m: "\n" * m.group().count("\n"), text)
-    fence, blank, in_code, content = None, True, False, None
+    """Yield (line, starts_block) for prose outside code and HTML comments.
+
+    starts_block is true when the line follows a blank line, the start of the
+    file or a blockquote, a heading, or a closing fence.
+    """
+    fence, comment, in_code, content = None, False, False, None
+    blank, depth = True, 0
     for line in text.expandtabs(4).splitlines():
-        indent = len(line) - len(line.lstrip(" "))
+        quotes = 0
+        while QUOTE.match(line):
+            line, quotes = line[QUOTE.match(line).end():], quotes + 1
+        if quotes != depth:
+            blank, depth = True, quotes
         if fence:
             close = FENCE.match(line)
             if close and close.group(1)[0] == fence[0] \
                     and len(close.group(1)) >= len(fence) \
                     and not line.strip().strip(fence[0]):
-                fence = None
+                fence, blank = None, True
             continue
-        if not line.strip():
+        if comment:
+            end = line.find("-->")
+            if end < 0:
+                continue
+            line, comment = line[end + 3:], False
+        elif not line.strip():
             blank = True
             continue
-        item = LIST_ITEM.match(line)
-        # Indented code: 4+ columns past the enclosing list item's content
-        # (or the margin), after a blank line or more indented code.
-        if (indent >= (content or 0) + 4 and (blank or in_code)
-                and not item):
-            in_code, blank = True, False
-            continue
-        in_code = False
-        if FENCE.match(line):
-            fence, blank = FENCE.match(line).group(1), False
-            continue
-        if item:
-            gap = len(item.group(3))
-            content = (len(item.group(1)) + len(item.group(2))
-                       + (gap if 1 <= gap <= 4 else 1))
-        elif blank and indent < (content or 0):
-            content = None
-        blank = False
-        yield line
+        else:
+            indent = len(line) - len(line.lstrip(" "))
+            # Indented code: 4+ columns past the open list item's content (or
+            # the margin) after a blank line or more code, list marker or not.
+            if indent >= (content or 0) + 4 and (blank or in_code):
+                in_code, blank = True, False
+                continue
+            in_code = False
+            item = LIST_ITEM.match(line)
+            if item:
+                gap = len(item.group(3))
+                content = (len(item.group(1)) + len(item.group(2))
+                           + (gap if 1 <= gap <= 4 else 1))
+            elif blank and indent < (content or 0):
+                content = None
+            if FENCE.match(line):
+                fence, blank = FENCE.match(line).group(1), False
+                continue
+        # Comments open only in prose: drop code spans first.
+        line, prose = CODE_SPAN.sub("", line), ""
+        while "<!--" in line:
+            head, line = line.split("<!--", 1)
+            prose += head
+            if "-->" not in line:
+                line, comment = "", True
+                break
+            line = line.split("-->", 1)[1]
+        prose += line
+        starts_block = blank
+        blank = bool(ATX.match(prose) or SETEXT.match(prose))
+        yield prose, starts_block
 
 
 def destination(rest):
@@ -112,13 +144,15 @@ def label(text):
 
 def links(text):
     """Yield raw targets of inline links and of reference links in use."""
-    defs, used = {}, set()
-    for line in prose_lines(text):
+    defs, used, after_def = {}, set(), False
+    for line, starts_block in prose_lines(text):
         d = REFDEF.match(line)
-        if d:
+        if d and (starts_block or after_def):
             defs.setdefault(label(d.group(1)), d.group(2).strip("<>"))
+            after_def = True
             continue
-        line = CODE_SPAN.sub("", line)
+        after_def = False
+        line = line.replace("\\\\", "\0\0")  # \\ is a literal backslash
         for m in BRACKETS.finditer(line):
             rest = line[m.end():]
             if rest.startswith("("):

@@ -63,7 +63,7 @@ out=$(run_check) || fail "expected pass once docs/orphan.md is linked. Output: $
 # Each snippet links docs/orphan.md only in a way that does not render as a
 # link, so docs/orphan.md must still be reported.
 index=$(cat "$repo/docs/README.md")
-sed -i '$d' "$repo/docs/sub/README.md"
+printf '# Sub\n\n[Leaf](leaf.md#top)\n' > "$repo/docs/sub/README.md"
 expect_unindexed() {
   local name=$1 snippet=$2 out
   printf '%s\n\n%s\n' "$index" "$snippet" > "$repo/docs/README.md"
@@ -83,6 +83,17 @@ expect_unindexed "indented code" $'Para.\n\n    [x](orphan.md)'
 expect_unindexed "indented fence in list" $'1. Step\n\n    ```md\n    [x](orphan.md)\n    ```'
 expect_unindexed "escaped link" '\[x](orphan.md)'
 expect_unindexed "unused reference" '[u]: orphan.md'
+expect_unindexed "indented code after heading" $'# Heading\n    [x](orphan.md)'
+expect_unindexed "indented code after setext" $'Title\n=====\n    [x](orphan.md)'
+expect_unindexed "indented code after fence" $'```\ncode\n```\n    [x](orphan.md)'
+expect_unindexed "indented code in quote" $'> Para.\n>\n>     [x](orphan.md)'
+expect_unindexed "fence in quote" $'> ```\n> [x](orphan.md)\n> ```'
+expect_unindexed "definition interrupting paragraph" $'See [u].\n[u]: orphan.md'
+expect_unindexed "deep list marker as code" $'Para.\n\n        - [x](orphan.md)'
+expect_indexed "comment opener in code span" 'Write `<!--` then [x](orphan.md).'
+expect_indexed "comment opener in fence" $'```html\n<!--\n```\n\n[x](orphan.md)'
+expect_indexed "escaped backslash" '\\[x](orphan.md)'
+expect_indexed "consecutive definitions" $'See [u].\n\n[a]: sub/README.md\n[u]: orphan.md'
 expect_indexed "indented list continuation" $'- Item\n\n    [x](orphan.md)'
 expect_indexed "used reference" $'See [the orphan][o].\n\n[o]: orphan.md'
 expect_indexed "shortcut reference" $'See [Orphan].\n\n[orphan]: <orphan.md>'
@@ -112,7 +123,7 @@ echo "PASS"
 echo "indexed: sub-index, directory README, and excluded skill accepted"
 echo "unindexed: docs/orphan.md reported despite URL, code-span and fence links"
 echo "untracked: ignored; linked from sub-index: accepted"
-echo "not links: HTML comments, indented code, indented list fences, escaped and unused references"
-echo "links: list continuations, used references, angle and parenthesised paths"
+echo "not links: comments, indented code (after blanks, headings, fences, in quotes), quoted fences, escaped, unused or paragraph-interrupting references"
+echo "links: list continuations, used and consecutive references, escaped backslashes, comment openers in code, angle and parenthesised paths"
 echo "exclusions: deeper files under excluded directories are reported"
 echo "workflow: docs.yml runs check-docs-index.py"
