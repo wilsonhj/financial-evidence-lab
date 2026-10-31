@@ -86,10 +86,10 @@ Root `SPEC.md`, `PLAN.md`, and `TASKS.md` are pointer stubs only.
 | [001 plan](../specs/001-financial-evidence-lab/plan.md) | Workstreams, milestones M0–M5, and exit gates | **core** |
 | [001 tasks](../specs/001-financial-evidence-lab/tasks.md) | The sole canonical task ledger (`T####`) | **core** |
 | [001 requirements checklist](../specs/001-financial-evidence-lab/checklists/requirements.md) | Specification quality checklist | reference |
-| [002 observable hybrid retrieval](../specs/002-observable-hybrid-retrieval/) | M2 spec, data model, research, quickstart, tasks, clarify/analyse | supporting |
-| [003 agentic extraction](../specs/003-agentic-extraction/) | M3 spec, data model, research, quickstart, tasks, clarify/analyse | supporting |
-| [004 MVP completion](../specs/004-mvp-completion/) | Release specification, plan, clarify/analyse | supporting |
-| [005 M3 completion](../specs/005-m3-completion/) | Remaining M3 work: spec, plan, clarify/analyse | supporting |
+| [002 observable hybrid retrieval](../specs/002-observable-hybrid-retrieval/) | M2 [spec](../specs/002-observable-hybrid-retrieval/spec.md), [data model](../specs/002-observable-hybrid-retrieval/data-model.md), [research](../specs/002-observable-hybrid-retrieval/research.md), [quickstart](../specs/002-observable-hybrid-retrieval/quickstart.md), [tasks](../specs/002-observable-hybrid-retrieval/tasks.md), [clarify/analyse](../specs/002-observable-hybrid-retrieval/clarify-analyse.md) | supporting |
+| [003 agentic extraction](../specs/003-agentic-extraction/) | M3 [spec](../specs/003-agentic-extraction/spec.md), [data model](../specs/003-agentic-extraction/data-model.md), [research](../specs/003-agentic-extraction/research.md), [quickstart](../specs/003-agentic-extraction/quickstart.md), [tasks](../specs/003-agentic-extraction/tasks.md), [clarify/analyse](../specs/003-agentic-extraction/clarify-analyse.md) | supporting |
+| [004 MVP completion](../specs/004-mvp-completion/) | Release [specification](../specs/004-mvp-completion/spec.md), [plan](../specs/004-mvp-completion/plan.md), [clarify/analyse](../specs/004-mvp-completion/clarify-analyse.md) | supporting |
+| [005 M3 completion](../specs/005-m3-completion/) | Remaining M3 work: [spec](../specs/005-m3-completion/spec.md), [plan](../specs/005-m3-completion/plan.md), [clarify/analyse](../specs/005-m3-completion/clarify-analyse.md) | supporting |
 | [Specs index](../specs/README.md) | Lifecycle table: parent, status, ratifying PR, tasks covered | reference |
 | [Constitution](../.specify/memory/constitution.md) | Project principles and Spec Kit governance | **core** |
 
