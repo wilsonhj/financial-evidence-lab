@@ -441,7 +441,7 @@ uv venv --python 3.11 --seed .venv
 already installed (`--seed`), so the rest of this guide's
 `.venv/bin/pip install ...` commands work unchanged. pyenv or asdf work too
 if you already manage Python versions that way — install/select 3.11 there
-and run the `python3.11 -m venv .venv` line above as normal.
+and run the `make install-py` and `.venv/bin/pip install --require-hashes -r requirements-dev.lock` lines above as normal.
 
 ### `pnpm` reports the wrong version
 

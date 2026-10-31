@@ -119,9 +119,12 @@ same-origin routes under `/api/extraction/`:
 Both pass the request to the extraction source. `src/lib/extraction/routes.ts`
 maps the local path to one allowlisted upstream route; the browser names a
 local resource, never an upstream URL. The server adds the bearer token and
-workspace ID. A deployment-mode refusal returns 503 with
-`PUBLIC_AUTH_NOT_READY`; any other failure returns 503 with
-`EXTRACTION_UNAVAILABLE`.
+workspace ID. A thrown `DeploymentGuardError` returns 503 with
+`PUBLIC_AUTH_NOT_READY`; any other thrown error returns 503 with
+`EXTRACTION_UNAVAILABLE`. `requestExtraction` returns, without throwing,
+422 `VALIDATION_ERROR`, 403 `FORBIDDEN`, 413 `EXTRACTION_TOO_LARGE`,
+415 `VALIDATION_ERROR`, and 502 `UPSTREAM_UNAVAILABLE` or
+`INVALID_RESPONSE`, and those responses reach the browser.
 
 ## Deployment modes
 
@@ -137,7 +140,7 @@ assets and the telemetry route are not matched.
 | ---- | ------------- |
 | `fixture` | `FEL_EVIDENCE_SOURCE=fixture` and `FEL_API_BEARER_TOKEN` is empty |
 | `reader-smoke` | HTTP source, `FEL_AUTH_MODE=mock`, a valid `FEL_API_BASE_URL` and `FEL_READER_SMOKE_TARGET`, and a mock bearer token (or the literal `invalid`) |
-| `synthetic-http` | As `reader-smoke`, plus a loopback API URL, `FEL_ALLOW_MOCK_LLM=1`, `FEL_SYNTHETIC_HTTP_TARGET`, and a `CROSS_STACK_MANIFEST` whose identities match the token, `FEL_WORKSPACE_ID` and `FEL_ENTITY_IDS` |
+| `synthetic-http` | HTTP source, `FEL_AUTH_MODE=mock`, a valid loopback `FEL_API_BASE_URL`, `FEL_ALLOW_MOCK_LLM=1`, `FEL_SYNTHETIC_HTTP_TARGET`, and a `CROSS_STACK_MANIFEST` whose identities match `FEL_WORKSPACE_ID` and `FEL_ENTITY_IDS`; the mock token must parse and match the manifest, and the `invalid` sentinel is `reader-smoke` only |
 
 Any other value, including unset (which ADR-0027 defines as `public`), is
 refused with 503 until request-scoped sessions exist. The full policy is in the
