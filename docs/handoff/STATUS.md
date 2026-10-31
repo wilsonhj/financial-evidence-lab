@@ -2,7 +2,7 @@
 
 ## October 31 current state
 
-Snapshot base: `main` @ `f4b1197` (#359, merged 2026-10-28). Re-query GitHub
+Snapshot base: `main` @ `3808f3b` (#360, merged 2026-10-31). Re-query GitHub
 before dispatch; issue and PR states below were read on 2026-10-31. Sections
 dated September 16 and earlier are in the
 [archived status history](../archive/handoff/STATUS-history-2026-09.md); they
@@ -37,6 +37,7 @@ issue is cited but was not closed by the merge.
 | `9cd1854` | #358 | — | `msgpack` 1.2.4 in the dev lock (CVE-2026-114613) |
 | `f7fad6e` | #357 | — | Remaining-work snapshot for agents and the integration lead |
 | `f4b1197` | #359 | — | Closed the snapshot's five "Do now" items: shared-path renames and non-ASCII paths, FRED date/value parsing, temporal-suite gap timing, ADR-0010 Amendment 1 corrections, fixture copy in the Desk and Observatory |
+| `3808f3b` | #360 | — | ADR-0029/0030/0031 returned to Proposed; shared-path check counts a just-added label; `minimatch` advisory (GHSA-g3hv-75wg-m249) pinned and allowlisted until 2026-12-01 |
 
 None of these wires calibration into proposal scoring, binds a live model,
 or establishes hosted #61 or #108 acceptance. `isotonic.py` and the dataset
@@ -49,7 +50,7 @@ in its order. Items 7–9 are later decisions.
 
 | # | Item | State | Evidence or next action |
 | --- | --- | --- | --- |
-| 1 | ADR-0029/0030/0031 stay Accepted | Resolved | Lead authorization record posted on #354 on 2026-10-29 naming all three ADRs (#363 decision D8). The status lines stand. |
+| 1 | ADR-0029/0030/0031 status | Resolved: Proposed | #360 (merged 2026-10-31) returned all three to Proposed, superseding the lead record posted on #354 on 2026-10-29 (#363 decision D8). Re-accepting any of them needs a new authorization record on a PR and a Status line that quotes it. |
 | 2 | Reconcile the handoff ledger | Resolved 2026-10-31 | Under #363 slice S3, `workstreams.yaml` records `OFFLINE-CALIBRATION-DATASET` (#340), `OFFLINE-ISOTONIC-CALIBRATOR` (#339, #351) and `DOCS-EXECUTIVE-ARCHITECTURE` (#342) as merged, closes `BACKLOG-EXECUTION-CONTROL` (its staged packages have all merged), and this section replaces the September 16 history. |
 | 3 | Close or re-scope issues whose code is on `main` | Open | #336 and #341 are closed. #337 is still open although #339 and #351 implement it: lead closes it. #96 and #87 stay open only as #108 trackers. #61 stays open on its 25-user load gate. |
 | 4 | Freeze public sessions and user-funded inference (#324) | Open | ADR-0026 is an accepted direction; the interfaces in `docs/research/public-auth-byok-contract.md` are still Proposed. Public business routes keep returning 503 (ADR-0027); do not weaken that guard to demo a signed-in user. |
@@ -108,8 +109,9 @@ issue, a `workstreams.yaml` branch and allowed paths.
 | No live model bound for extraction | Hosted extraction runs (#362) | #62, then the #362 Railway service |
 | Calculation engine not integrated | M4/M5 product | #64 after #62; do not import the engine from a UI mock and call it done |
 
-Resolved since the October 27 snapshot: the ADR-0029/0030/0031 authorization
-record (item 1) and `workstreams.yaml` status drift (item 2).
+Resolved since the October 27 snapshot: the ADR-0029/0030/0031 status
+question (item 1, settled as Proposed by #360) and `workstreams.yaml` status
+drift (item 2).
 
 ### Documentation work in flight
 

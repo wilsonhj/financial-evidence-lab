@@ -979,9 +979,6 @@ packages:
       - docs/decisions/ADR-0005-*.md
       - docs/decisions/ADR-0012-*.md
       - docs/decisions/ADR-0014-*.md
-      - docs/decisions/ADR-0029-*.md # D8 fallback only; not needed after the 2026-10-29 #354 authorization.
-      - docs/decisions/ADR-0030-*.md # D8 fallback only.
-      - docs/decisions/ADR-0031-*.md # D8 fallback only.
       - docs/decisions/README.md
       - specs/README.md
       - specs/001-financial-evidence-lab/plan.md # Remove the restated stack line only.
@@ -1007,6 +1004,8 @@ packages:
   #   PR #357 @ f7fad6e  remaining-work snapshot (archived under docs/archive/handoff/2026-10/)
   #   PR #359 @ f4b1197  the snapshot's five "Do now" fixes, including shared-path
   #                      rename/non-ASCII detection and FRED parsing
+  #   PR #360 @ 3808f3b  ADR-0029/0030/0031 returned to Proposed; minimatch advisory
+  #                      pin and allowlist; shared-path label-event fix
   - id: EVALS-REPORT-RENDER # stdlib-only corpus-QA report renderer (Markdown + SVG)
     issue: 151
     # Deliberately empty: no Spec Kit task covers eval-report rendering. The
