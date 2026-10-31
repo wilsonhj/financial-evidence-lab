@@ -1186,9 +1186,7 @@ def test_report_counts_only_this_runs_rows(
 _UNROUTABLE_DB = "postgresql://fel@sec-identity.invalid:1/fel_test"
 
 
-@pytest.mark.parametrize(
-    "user_agent", [None, "", "   ", "missing contact marker", SEC_USER_AGENT]
-)
+@pytest.mark.parametrize("user_agent", [None, "", "   ", "missing contact marker", SEC_USER_AGENT])
 def test_live_mode_requires_sec_user_agent_before_any_network(
     tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, user_agent: str | None
 ) -> None:
