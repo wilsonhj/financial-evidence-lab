@@ -202,7 +202,11 @@ imports the sibling `packages/providers` and `packages/retrieval` packages, so
 without an explicit `PYTHONPATH`. The value above is the same one the worker
 uses below.
 
-In another terminal:
+In another terminal. The authenticated request needs the same
+`FEL_API_BEARER_TOKEN` as the first terminal: export `FEL_DEV_ORG_ID` and
+`FEL_DEV_USER_ID` there and repeat the token step above, or paste the value
+`echo "$FEL_API_BEARER_TOKEN"` prints in the first terminal. Without it the
+second request returns 401 `UNAUTHENTICATED`.
 
 ```sh
 curl http://localhost:8000/health
@@ -222,6 +226,10 @@ SEC bytes through the real ingestion pipeline and also requires
 `FEL_FIXTURE_DIR` and `FEL_STORAGE_DIR`; it is for isolated acceptance runs
 only. Each flag accepts `1`, `true`, `yes` or `on`; any other non-empty value
 exits with status 2.
+
+Run the worker in a terminal where `FEL_ALLOW_MOCK_LLM` is unset. The API
+terminal above exports it, and an ingestion-queue worker that sees it refuses
+to start (exit 2); only the extraction worker below takes it.
 
 Deterministic smoke mode:
 
