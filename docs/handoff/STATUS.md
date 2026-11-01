@@ -2,7 +2,8 @@
 
 ## October 31 current state
 
-Snapshot base: `main` @ `1e414ff` (#364, merged 2026-10-31). Re-query GitHub
+Snapshot base: `main` @ `1e414ff` (#364, merged 2026-10-31); items 3, 7 and 8
+were corrected on 2026-11-01 against `main` @ `2bdea3f`. Re-query GitHub
 before dispatch; issue and PR states below were read on 2026-10-31. Sections
 dated September 16 and earlier are in the
 [archived status history](../archive/handoff/STATUS-history-2026-09.md); they
@@ -54,12 +55,12 @@ in its order. Items 7–9 are later decisions.
 | --- | --- | --- | --- |
 | 1 | ADR-0029/0030/0031 status | Resolved: Proposed | #360 (merged 2026-10-31) returned all three to Proposed, superseding the lead record posted on #354 on 2026-10-29 (#363 decision D8). Re-accepting any of them needs a new authorization record on a PR and a Status line that quotes it. |
 | 2 | Reconcile the handoff ledger | Resolved 2026-10-31 | Under #363 slice S3, `workstreams.yaml` records `OFFLINE-CALIBRATION-DATASET` (#340), `OFFLINE-ISOTONIC-CALIBRATOR` (#339, #351) and `DOCS-EXECUTIVE-ARCHITECTURE` (#342) as merged, closes `BACKLOG-EXECUTION-CONTROL` as a control package (the remaining waves #62, #64-#68 and #324 continue in their own packages), and this section replaces the September 16 history. These status flips and the `DOCS-DRIFT-REMEDIATION` registration are authorized by an integration-lead authorization record on PR #365 under #363 decisions D1 and D2, not by an ADR. |
-| 3 | Close or re-scope issues whose code is on `main` | Open | #336 and #341 are closed. #337 is still open although #339 and #351 implement it: lead closes it. #96 and #87 stay open only as #108 trackers. #61 stays open on its 25-user load gate. |
+| 3 | Close or re-scope issues whose code is on `main` | Open | #336, #337 and #341 are closed (#337 on 2026-10-31, implemented by #339 and #351). #96 and #87 stay open only as #108 trackers. #61 stays open on its 25-user load gate. |
 | 4 | Freeze public sessions and user-funded inference (#324) | Open | ADR-0026 is an accepted direction; the interfaces in `docs/research/public-auth-byok-contract.md` are still Proposed. Public business routes keep returning 503 (ADR-0027); do not weaken that guard to demo a signed-in user. |
 | 5 | Provider direction (#195) | Open | ADR-0012 stays Proposed. Per #363 D4 it gains an amendment (S4) recording that its live-provider revisit trigger fired; the Arm A/B benchmark is still the ratify-or-withdraw event. OpenAI adapters #328/#329 are not called from `apps/api` or `workers`. There is no owner-key fallback. |
 | 6 | Name hosted targets for #61 and #108 | Open | #61 bulk-review p95 was 4,147.19, 1,002.23 and 1,501.91 ms against 1,000 ms on a shared local VM. #108 has no hosted run. Both stay blocked until the lead provisions the database and Railway/shared-storage targets. Credential names only, never values ([`CREDENTIALS.md`](CREDENTIALS.md)). |
-| 7 | ADR-0014 status (#363 D4) | Decided, recording in flight | Accepted effective #247 (`75fad38`); ADR-0032 records it in S4. |
-| 8 | Hosted extraction worker (#363 D6) | Blocked | #362 adds a `--queue extraction` Railway service once #62 binds a live model. Until then the API refuses run creation with 503 `EXTRACTION_NOT_CONFIGURED` and inserts no job unless `FEL_ALLOW_MOCK_LLM` is truthy (`1`, `true`, `yes` or `on`; merely set is not enough), and even then an extraction policy and an active corpus must exist or it returns the same 503 (`apps/api/app/extraction/runs.py`). |
+| 7 | ADR-0014 status (#363 D4) | Resolved | Accepted effective #247 (`75fad38`); ADR-0032 recorded it in S4 (PR #366, `e91610c`). |
+| 8 | Hosted extraction worker (#363 D6) | Blocked | #362 adds a `--queue extraction` Railway service once #62 binds a live model. Until then the API refuses run creation with 503 `EXTRACTION_NOT_CONFIGURED` and inserts no job unless `FEL_ALLOW_MOCK_LLM` is truthy (`1`, `true`, `yes` or `on`; merely set is not enough), and even then an extraction policy must exist, plus an active corpus when the request omits `corpus_version_id`, or it returns the same 503 (`apps/api/app/extraction/runs.py`). |
 | 9 | Benchmark seed vs T0214a (#363 D7) | Decided | No ledger change; S1 rewords the benchmark-seed README. |
 
 ### Dependency order

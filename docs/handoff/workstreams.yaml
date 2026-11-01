@@ -924,7 +924,7 @@ packages:
     #   S3    claude/docs-drift-s3-ledger (contract-change, lead review; registration and status flips authorized by an integration-lead authorization record on PR #365 under #363 D1/D2; stacked on S1+S2)
     #   S4    claude/docs-drift-s4-adr0032 (contract-change, ADR-0032, lead review)
     branch: claude/trusting-brahmagupta-8vvgwi
-    status: active # Registered 2026-10-31 in S3 per D1. PR #364 (S1+S2) open; S3 and S4 drafted on the branches above.
+    status: merged # Registered 2026-10-31 in S3 per D1. All slices merged 2026-10-31: PR #364 @ 1e414ff (S1+S2), PR #365 @ c3d6f2f (S3), PR #366 @ e91610c (S4); #363 closed 2026-10-31.
     allowed_paths:
       # S1: correctness fixes in non-shared docs
       - README.md
@@ -1006,6 +1006,7 @@ packages:
   #                      rename/non-ASCII detection and FRED parsing
   #   PR #360 @ 3808f3b  ADR-0029/0030/0031 returned to Proposed; minimatch advisory
   #                      pin and allowlist; shared-path label-event fix
+  #   PR #372 @ 2bdea3f  docs/development/local.md fixes (plain docs, no shared path)
   - id: EVALS-REPORT-RENDER # stdlib-only corpus-QA report renderer (Markdown + SVG)
     issue: 151
     # Deliberately empty: no Spec Kit task covers eval-report rendering. The

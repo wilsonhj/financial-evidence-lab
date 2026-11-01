@@ -41,7 +41,7 @@ TEST_DATABASE_URL=... make eval-retrieval-gate
 make ci
 ```
 
-The compiler fails on future evidence, missing/ambiguous quote anchors, invalid numeric ranges, or insufficient-evidence records without a pinned searched corpus. `make eval-retrieval-gate` runs `evals/harness/retrieval_gate.py`: it builds an index over a corpus synthesized from the seed's quotes with the mock embedder, runs every seed question through planner, lanes and fusion, and writes `evals/reports/retrieval-gate/latest.json`. It computes Recall@10 and temporal validity and reports numeric accuracy, entailment precision and citation completeness as not evaluable, because retrieval alone generates no claims. There is no separate `run` or `gate` module.
+The compiler fails on future evidence, missing/ambiguous quote anchors, invalid numeric ranges, or insufficient-evidence records without a pinned searched corpus. `make eval-retrieval-gate` runs `evals/harness/retrieval_gate.py`: it builds an index over a corpus synthesized from the seed's quotes with the mock embedder, runs every seed question through planner, lanes and fusion, and writes `evals/reports/retrieval-gate/latest.json`. It computes Recall@10 and temporal validity and reports numeric accuracy, entailment precision and citation completeness as not evaluable, because retrieval alone generates no claims. The gate currently fails and the command exits non-zero: with the mock embedder Recall@10 is 0.4692 against the 0.9000 threshold, while temporal validity (1.0000) passes. That is expected until live embeddings land (#177, #132); do not lower the threshold. There is no separate `run` or `gate` module.
 
 ## Required negative checks
 
