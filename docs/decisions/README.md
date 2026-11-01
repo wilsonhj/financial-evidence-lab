@@ -38,3 +38,4 @@ The Status column below is abbreviated. Many ADRs qualify their status with a lo
 | [ADR-0030](ADR-0030-explicit-fred-missing-values.md) | Explicit FRED missing values | Proposed | 2026-10-24 | — |
 | [ADR-0031](ADR-0031-named-source-clocks.md) | Named source clocks | Proposed | 2026-10-24 | — |
 | [ADR-0032](ADR-0032-documentation-status-reconciliation.md) | Reconcile ADR and specification status with the repository | Accepted | 2026-10-31 | — |
+| [ADR-0033](ADR-0033-retrieval-gate-quickstart-note.md) | Note the failing retrieval gate in the spec 002 quickstart | Proposed | 2026-11-01 | — |
