@@ -20,8 +20,11 @@ packages:
 #   Two instances resolve here (confirmed with `pnpm why -r`, which is the flag that
 #   matters: the non-recursive form shows only the root eslint tree and hides the
 #   @fel/contracts one entirely). Each is scoped to its own minimatch major:
-#     * minimatch@10.2.5 (eslint, typescript-eslint) declares ^5.0.5 — 5.0.9 lands
-#       inside its declared range, so the override is a safe pin-forward.
+#     * minimatch@10.2.5 (eslint, typescript-eslint) declared ^5.0.5 — 5.0.9 landed
+#       inside its declared range, so the override was a safe pin-forward. That
+#       `minimatch@^10>brace-expansion` entry is now removed: minimatch@^10 is
+#       overridden to 11.x (below), no 10.x remains in the lockfile, and
+#       minimatch@11.0.3 itself declares brace-expansion ^5.0.12.
 #     * minimatch@5.1.9 (@redocly/openapi-core <- openapi-typescript <- @fel/contracts)
 #       declares ^2.0.1. The 2.x maintenance line now HAS a patched release — 2.1.4,
 #       published for rgw5 — where at the time of mh99 it topped out at the vulnerable
@@ -90,7 +93,6 @@ packages:
 overrides:
   "postcss": "^8.5.23"
   "minimatch@^10": "^11.0.3"
-  "minimatch@^10>brace-expansion": "^5.0.12"
   "minimatch@^5>brace-expansion": "^2.1.7"
   "js-yaml": "^4.3.2"
   "fast-uri": "^3.1.8"

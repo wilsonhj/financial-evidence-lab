@@ -22,7 +22,11 @@ import httpx
 
 from fel_workers.http import HttpRequestError, ThrottledRetryingClient
 
-SEC_USER_AGENT = "financial-evidence-lab research (sordidsunday@icloud.com)"
+# Library/test default only: deliberately carries no contact address, so it
+# fails the live-mode identity gate (``validate_live_user_agent``) and can
+# never identify real SEC traffic. Live mode always takes the deployment
+# identity from ``FEL_SEC_USER_AGENT``.
+SEC_USER_AGENT = "financial-evidence-lab research (set FEL_SEC_USER_AGENT)"
 SUBMISSIONS_BASE_URL = "https://data.sec.gov/submissions"
 COMPANY_FACTS_BASE_URL = "https://data.sec.gov/api/xbrl/companyfacts"
 # Every hop, redirects included, must stay on EDGAR. ``fetch_document`` takes
