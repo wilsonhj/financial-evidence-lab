@@ -27,7 +27,7 @@ from fel_workers.__main__ import (
     resolve_extraction_memory_stores,
     run_main,
 )
-from fel_workers.ingestion.sec_client import LiveSecClient
+from fel_workers.ingestion.sec_client import SEC_USER_AGENT, LiveSecClient
 from fel_workers.storage import LocalDirStorageProvider
 
 
@@ -85,12 +85,30 @@ def test_live_mode_binds_local_dir_storage(
     network I/O, and no request is ever issued in this test."""
     monkeypatch.setenv("FEL_SEC_LIVE", "1")
     monkeypatch.setenv("FEL_STORAGE_DIR", str(tmp_path / "blobs"))
+    monkeypatch.setenv("FEL_SEC_USER_AGENT", "fel worker tests (ops@example.com)")
     sec, storage = build_run_providers()
     assert isinstance(sec, LiveSecClient)
     assert isinstance(storage, LocalDirStorageProvider)
     storage.put("raw/sha256/abc", b"blob")
     assert storage.get("raw/sha256/abc") == b"blob"
     assert (tmp_path / "blobs" / "raw" / "sha256" / "abc").read_bytes() == b"blob"
+
+
+@pytest.mark.parametrize("user_agent", [None, "", SEC_USER_AGENT])
+def test_live_mode_never_falls_back_to_default_user_agent(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path, user_agent: str | None
+) -> None:
+    """Called directly (without the run_entry gate), live provider wiring
+    still requires a valid FEL_SEC_USER_AGENT instead of silently using the
+    in-code placeholder default."""
+    monkeypatch.setenv("FEL_SEC_LIVE", "1")
+    monkeypatch.setenv("FEL_STORAGE_DIR", str(tmp_path / "blobs"))
+    if user_agent is None:
+        monkeypatch.delenv("FEL_SEC_USER_AGENT", raising=False)
+    else:
+        monkeypatch.setenv("FEL_SEC_USER_AGENT", user_agent)
+    with pytest.raises(RuntimeError, match="FEL_SEC_USER_AGENT"):
+        build_run_providers()
 
 
 class _StubConnection:

@@ -12,6 +12,7 @@ import pathlib
 import httpx
 import pytest
 
+from fel_workers.__main__ import validate_live_user_agent
 from fel_workers.ingestion.sec_client import (
     SEC_USER_AGENT,
     LiveSecClient,
@@ -67,11 +68,23 @@ def test_submissions_sends_compliant_user_agent_and_url() -> None:
     clock = FakeClock()
     payload = _client(handler, clock).submissions("9999999")
     assert seen[0].headers["User-Agent"] == SEC_USER_AGENT
-    assert "sordidsunday@icloud.com" in SEC_USER_AGENT
+    assert "FEL_SEC_USER_AGENT" in SEC_USER_AGENT
     assert str(seen[0].url) == "https://data.sec.gov/submissions/CIK0009999999.json"
     assert payload["cik"] == "9999999"
     recent = payload["filings"]["recent"]  # type: ignore[index]
     assert recent["accessionNumber"][0] == "0009999999-26-000010"
+
+
+def test_default_user_agent_is_rejected_by_live_mode_gate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The in-code default is a placeholder, not an identity: it carries no
+    contact address, so the live-mode gate refuses it and it can never be
+    sent as the User-Agent of real SEC traffic."""
+    assert "@" not in SEC_USER_AGENT
+    monkeypatch.setenv("FEL_SEC_USER_AGENT", SEC_USER_AGENT)
+    with pytest.raises(RuntimeError, match="FEL_SEC_USER_AGENT"):
+        validate_live_user_agent()
 
 
 def test_rate_limit_enforces_min_interval() -> None:
