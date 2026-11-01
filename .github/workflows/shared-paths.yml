@@ -16,7 +16,14 @@ on:
   pull_request:
     # `labeled`/`unlabeled` are required: without them, adding the missing
     # label does not re-run the check and the PR stays red.
-    types: [opened, synchronize, reopened, labeled, unlabeled]
+    #
+    # `edited` is required too: changing a PR's base branch fires only
+    # `edited` and keeps the head SHA, so a result computed against the old
+    # base stays green. A PR stacked on a branch with an unlabelled AGENTS.md
+    # edit, then retargeted to main, would carry that edit in unchecked.
+    # GitHub also retargets on its own when the old base is deleted after it
+    # merges. Title and body edits re-run this ~4 s job too.
+    types: [opened, synchronize, reopened, labeled, unlabeled, edited]
 
 permissions:
   contents: read
@@ -64,11 +71,16 @@ jobs:
           # A merge-base needs real history on both sides. A shallow clone, or
           # a `--depth` fetch that grafts away the base commit's parents, can
           # leave none, so refuse to run shallow and never fetch with --depth.
-          if [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then
+          #
+          # Assign first: `set -e` does not see a command substitution inside
+          # `[ ]`, so a failing rev-parse would compare "" and carry on.
+          shallow=$(git rev-parse --is-shallow-repository)
+          if [ "$shallow" = "true" ]; then
             echo "FAIL: the checkout is shallow, so the merge-base cannot be" >&2
             echo "trusted. Keep fetch-depth: 0 on actions/checkout." >&2
             exit 1
           fi
+          # fetch-depth: 0 misses base.sha if its branch was force-pushed or deleted.
           if ! git cat-file -e "$BASE_SHA^{commit}" 2>/dev/null; then
             git fetch --no-tags origin "$BASE_SHA"
           fi
