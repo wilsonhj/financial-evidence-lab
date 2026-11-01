@@ -76,7 +76,7 @@ issue, a `workstreams.yaml` branch and allowed paths.
 #324 public session + BYOK custody
         |
         +--> #292 hosted identity acceptance
-        +--> #195 provider decision --> wire OpenAI adapters
+        +--> #195 user-bound OpenAI runtime + usage wiring
                 |
                 +--> #177 live cutover (credentials, embeddings choice, Alpha Vantage budget)
                         |
@@ -108,7 +108,7 @@ issue, a `workstreams.yaml` branch and allowed paths.
 | Blocker | What it stops | What unblocks it |
 | --- | --- | --- |
 | No per-user web session | Public business routes return 503 | Lead freezes #324, then an agent implements it |
-| ADR-0012 Proposed | Wiring a live model provider | Lead accepts or rejects #195 after the Arm A/B benchmark |
+| ADR-0012 Proposed | Substituting for ADR-0002's model baseline | Benchmark evidence and an accepted substitution ADR. The OpenAI baseline remains accepted; user-bound authorization, durable usage wiring and live acceptance are still required (#324, #195, #177). |
 | No user-owned credential store | Billable provider calls | #324 custody, then #191 accounting |
 | #61 load gate unmet | Checking T0308/T0309, starting #62 | Dedicated database target, same workload, no threshold change |
 | #108 hosted smoke not run | Closing the production reader path | Railway target, shared storage, lead-provisioned credentials |

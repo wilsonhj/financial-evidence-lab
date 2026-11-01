@@ -924,7 +924,7 @@ packages:
     #   S3    claude/docs-drift-s3-ledger (contract-change, lead review; registration and status flips authorized by an integration-lead authorization record on PR #365 under #363 D1/D2; stacked on S1+S2)
     #   S4    claude/docs-drift-s4-adr0032 (contract-change, ADR-0032, lead review)
     branch: claude/trusting-brahmagupta-8vvgwi
-    status: active # Registered 2026-10-31 in S3 per D1. PR #364 (S1+S2) open; S3 and S4 drafted on the branches above.
+    status: merged # S1+S2 merged in PR #364 @ 1e414ff, S3 in #365 @ c3d6f2f and S4 in #366 @ e91610c (2026-10-31); issue #363 closed. Registration and ledger reconciliation were authorized under D1/D2 on #365; ADR-0032 records S4. Paths are free to claim again.
     allowed_paths:
       # S1: correctness fixes in non-shared docs
       - README.md
