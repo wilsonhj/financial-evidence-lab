@@ -52,11 +52,12 @@ on a disposable one:
 
 Live mode (SEC egress + fair-access compliance REQUIRED; never run from
 CI or an egress-blocked session) runs against a FRESH dedicated database
-(migrations 0001+0002 applied, empty queue — the gate refuses anything
-else) and requires ``FEL_SEC_USER_AGENT`` — a non-empty SEC fair-access
-identity containing an ``@`` contact marker, mirroring the worker
-deployment gate — failing with exit 2 BEFORE any network access when it
-is absent or malformed:
+(every db/migrations file applied by scripts/db/migrate.py, ADR-0014 — not
+just 0001+0002: the worker queue claims on ``jobs.available_at`` from 0007;
+empty queue — the gate refuses anything else) and requires
+``FEL_SEC_USER_AGENT`` — a non-empty SEC fair-access identity containing
+an ``@`` contact marker, mirroring the worker deployment gate — failing
+with exit 2 BEFORE any network access when it is absent or malformed:
 
     FEL_DATABASE_URL="postgresql://.../<fresh-dedicated-db>" \\
     FEL_SEC_USER_AGENT="org-or-app name (contact@example.com)" \\
@@ -331,8 +332,8 @@ def require_live_sec_user_agent(environ: Mapping[str, str] = os.environ) -> str:
     Mirrors the worker deployment gate: ``FEL_SEC_USER_AGENT`` must be
     non-empty and carry an ``@`` contact marker. Raises
     :class:`HarnessError` BEFORE any network access otherwise — live mode
-    never falls back to the in-code default identity (a personal contact
-    literal kept for library/tests only).
+    never falls back to the in-code default identity (a placeholder with
+    no contact address, kept for library/tests only).
     """
     user_agent = environ.get("FEL_SEC_USER_AGENT", "").strip()
     if not user_agent or "@" not in user_agent:
@@ -1356,9 +1357,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--database-url",
         default=None,
-        help="Postgres URL with db/migrations 0001+0002 applied (default:"
-        " $TEST_DATABASE_URL, then $FEL_DATABASE_URL; with --reset-corpus the"
-        " FEL_DATABASE_URL fallback is NEVER used)",
+        help="Postgres URL with every db/migrations file applied by"
+        " scripts/db/migrate.py (ADR-0014; the queue needs jobs.available_at"
+        " from 0007) (default: $TEST_DATABASE_URL, then $FEL_DATABASE_URL;"
+        " with --reset-corpus the FEL_DATABASE_URL fallback is NEVER used)",
     )
     parser.add_argument("--reports-dir", type=pathlib.Path, required=True)
     parser.add_argument("--label", required=True, help="report label; the file is <label>.json")
