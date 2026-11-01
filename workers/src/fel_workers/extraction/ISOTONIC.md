@@ -22,16 +22,17 @@ with a nonzero last digit (for example `0.1` is accepted but `0.10`,
 12-place strings such as `0.100000000000` must not be fed back as scores.
 
 Failures raise `CalibrationError` with a fixed `code`: `invalid_sample`,
-`limit_exceeded`, or `invalid_artifact`. Artifacts may nest at most 16
-dict/list containers, counting the root as 1; scalar leaves do not count.
-Deeper input raises `limit_exceeded`.
+`limit_exceeded`, or `invalid_artifact`. `limit_exceeded` covers the resource
+bounds: more than 100000 samples or counts, and artifacts nested deeper than
+16 dict/list containers (the root counts as 1; scalar leaves do not count).
 
 ## Insufficient support
 
 Per-stratum calibration support is at least 100 rows with 20 of each outcome.
 Below that, `fit` returns `status=insufficient_data` and empty blocks.
-`predict` on that artifact returns unquantized `Decimal("0")` (formats as
-`"0"`, distinct string from fitted `"0.000000000000"` though `==`-equal).
+`predict` on that artifact returns unquantized `Decimal("0")` (`str()` is
+`"0"`). A fitted zero is `Decimal("0E-12")` (`str()` is `"0E-12"`, formatted
+`"0.000000000000"`). The two compare `==`-equal.
 This is attempted but insufficient scoring, distinct from historical runtime
 `NULL` confidence, and must not be written onto existing proposals. Callers
 must branch on `status`, never on the predicted value.

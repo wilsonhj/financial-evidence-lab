@@ -55,8 +55,6 @@ _SEQUENCE_TYPES = (list, tuple)
 FitStatus = Literal["fitted", "insufficient_data"]
 EvalStatus = Literal["evaluated", "insufficient_calibration", "insufficient_evaluation"]
 ErrorCode = Literal["invalid_sample", "limit_exceeded", "invalid_artifact"]
-# Runtime accepts only a list or tuple of two-element list/tuple rows.
-Samples = Sequence[tuple[str, int] | list[str | int]]
 
 
 class CalibrationError(Exception):
@@ -106,6 +104,7 @@ def _emit12(value: Decimal) -> str:
 
 
 def _check_depth(value: object, depth: int) -> None:
+    # Only dict/list containers count toward the 16 (root = 1); a leaf may sit at depth 17.
     kind = type(value)
     if kind is not dict and kind is not list:
         return
@@ -229,7 +228,9 @@ def _validate_artifact(artifact: object) -> tuple[FitStatus, list[tuple[str, str
     if type(artifact) is not dict or set(artifact) != _ARTIFACT_KEYS:
         _fail("invalid_artifact")
     typed = cast(dict[str, object], artifact)
-    if typed["schema_version"] != _SCHEMA:
+    schema_version = typed["schema_version"]
+    # Type first: an arbitrary object's __ne__ could accept the artifact or raise raw.
+    if type(schema_version) is not str or schema_version != _SCHEMA:
         _fail("invalid_artifact")
     status_value = typed["status"]
     if type(status_value) is not str or status_value not in _FIT_STATUSES:
@@ -277,8 +278,13 @@ def _left_step(blocks: list[tuple[str, str, int, int]], score: str) -> Decimal:
     return _mean(blocks[max(index - 1, 0)])
 
 
-def fit(samples: Samples) -> dict[str, object]:
-    """Fit a weighted PAV artifact for one stratum of score/outcome tuples."""
+def fit(samples: Sequence[tuple[str, int]]) -> dict[str, object]:
+    """Fit a weighted PAV artifact for one stratum of score/outcome tuples.
+
+    At runtime ``samples`` must be exactly a list or tuple whose rows are
+    two-element lists or tuples; other sequence types, subclasses and bool
+    outcomes raise ``invalid_sample``.
+    """
     parsed = _parse_samples(samples)
     n = len(parsed)
     positive = sum(outcome for _score, outcome in parsed)
@@ -395,8 +401,11 @@ def _evaluation(
     }
 
 
-def evaluate(artifact: dict[str, object], samples: Samples) -> dict[str, object]:
-    """Evaluate a frozen artifact on held-out tuples without refitting."""
+def evaluate(artifact: dict[str, object], samples: Sequence[tuple[str, int]]) -> dict[str, object]:
+    """Evaluate a frozen artifact on held-out tuples without refitting.
+
+    ``samples`` has the same runtime shape rules as :func:`fit`.
+    """
     status, blocks = _validate_artifact(artifact)
     parsed = _parse_samples(samples)
     return _evaluation(status, blocks, parsed)
