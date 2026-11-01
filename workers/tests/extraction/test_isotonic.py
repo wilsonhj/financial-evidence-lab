@@ -179,6 +179,32 @@ def test_insufficient_calibration_precedes_insufficient_evaluation() -> None:
     assert result["ece"] is None
 
 
+def test_insufficient_evaluation_result_shape() -> None:
+    artifact = fit(_rows("0.2", 20, 80) + _rows("0.8", 80, 20))
+    assert artifact["schema_version"] == "isotonic-v1"
+    assert evaluate(artifact, _rows("0.5", 19, 81)) == {
+        "schema_version": "isotonic-evaluation/v1",
+        "status": "insufficient_evaluation",
+        "n": 100,
+        "positive": 19,
+        "negative": 81,
+        "sufficient": False,
+        "brier": None,
+        "ece": None,
+        "bins": [],
+    }
+
+
+def test_insufficient_artifact_still_validates_inputs() -> None:
+    insufficient = fit(_rows("0.5", 5, 5))
+    with pytest.raises(CalibrationError) as caught:
+        predict(insufficient, "0.10")
+    assert caught.value.code == "invalid_sample"
+    with pytest.raises(CalibrationError) as caught:
+        evaluate(insufficient, [("0.5", 2)])
+    assert caught.value.code == "invalid_sample"
+
+
 def test_exact_brier_ece_oracles_and_empty_bins() -> None:
     artifact = _fitted_constant("0.5")
     result = evaluate(artifact, _rows("0.5", 50, 50))
@@ -233,6 +259,22 @@ def test_evaluation_never_refits() -> None:
     # Frozen 0.8 against a 0.2 held-out rate; a refit would give 0.16 and 0.
     assert result["brier"] == "0.520000000000"
     assert result["ece"] == "0.600000000000"
+
+
+def test_ece_weights_each_bin_by_its_count() -> None:
+    # Bins 2 and 8 hold 20 and 80 rows with errors 0.3 and 0.05, so weighted ECE is 0.1;
+    # a global |sum p - sum y| / n gives 0.02 and an unweighted bin mean gives 0.175.
+    artifact = fit(_rows("0.2", 20, 80) + _rows("0.8", 80, 20))
+    result = evaluate(artifact, _rows("0.2", 10, 10) + _rows("0.8", 60, 20))
+    assert result["ece"] == "0.100000000000"
+    assert result["brier"] == "0.220000000000"
+    bins = result["bins"]
+    assert isinstance(bins, list)
+    assert [bin_row["count"] for bin_row in bins] == [0, 0, 20, 0, 0, 0, 0, 0, 80, 0]
+    assert bins[2]["mean_probability"] == "0.200000000000"
+    assert bins[2]["positive_rate"] == "0.500000000000"
+    assert bins[8]["mean_probability"] == "0.800000000000"
+    assert bins[8]["positive_rate"] == "0.750000000000"
 
 
 def test_ambient_decimal_context_does_not_affect_outputs() -> None:
@@ -342,6 +384,102 @@ def test_hostile_artifacts_are_rejected() -> None:
         predict(insufficient_blocks, "0.5")
 
 
+def _artifact(**fields: object) -> dict[str, object]:
+    # The two-block artifact from test_two_monotone_blocks_keep_gap_and_endpoints.
+    artifact: dict[str, object] = {
+        "schema_version": "isotonic-v1",
+        "status": "fitted",
+        "n": 160,
+        "positive": 80,
+        "negative": 80,
+        "blocks": [
+            {"lower_score": "0.2", "upper_score": "0.2", "count": 80, "positive": 20},
+            {"lower_score": "0.8", "upper_score": "0.8", "count": 80, "positive": 60},
+        ],
+    }
+    artifact.update(fields)
+    return artifact
+
+
+def _block(lower: str, upper: str, count: int, positive: int) -> dict[str, object]:
+    return {"lower_score": lower, "upper_score": upper, "count": count, "positive": positive}
+
+
+@pytest.mark.parametrize(
+    "fields",
+    [
+        # Each case breaks exactly one rule; totals and support stay consistent otherwise.
+        pytest.param(
+            {"blocks": [_block("0.2", "0.2", 110, 29), _block("0.8", "0.8", 50, 51)]},
+            id="block-positive-exceeds-count",
+        ),
+        pytest.param(
+            {
+                "n": 10,
+                "positive": 5,
+                "negative": 5,
+                "blocks": [_block("0.2", "0.2", 5, 1), _block("0.8", "0.8", 5, 4)],
+            },
+            id="fitted-without-support",
+        ),
+        pytest.param({"status": "insufficient_data", "blocks": []}, id="insufficient-with-support"),
+        pytest.param({"positive": 79, "negative": 81}, id="block-positives-disagree"),
+        pytest.param({"n": 161, "negative": 81}, id="block-counts-disagree"),
+        pytest.param(
+            {"blocks": [_block("0.25", "0.2", 80, 20), _block("0.8", "0.8", 80, 60)]},
+            id="lower-above-upper",
+        ),
+        pytest.param(
+            {
+                "n": 100001,
+                "positive": 50001,
+                "negative": 50000,
+                "blocks": [_block("0.2", "0.2", 50001, 1), _block("0.8", "0.8", 50000, 50000)],
+            },
+            id="count-above-bound",
+        ),
+        pytest.param({"schema_version": "isotonic-v2"}, id="unknown-schema-version"),
+    ],
+)
+def test_artifact_consistency_rules_are_each_enforced(fields: dict[str, object]) -> None:
+    predict(_artifact(), "0.5")  # the unmodified base is valid
+    with pytest.raises(CalibrationError) as caught:
+        predict(_artifact(**fields), "0.5")
+    assert caught.value.code == "invalid_artifact"
+
+
+class _AlwaysEqual:
+    def __eq__(self, other: object) -> bool:
+        return True
+
+    def __ne__(self, other: object) -> bool:
+        return False
+
+    __hash__ = None  # type: ignore[assignment]
+
+
+class _RaisingCompare:
+    def __ne__(self, other: object) -> bool:
+        raise ValueError("raw-value-must-not-escape")
+
+
+class _StrSubclass(str):
+    pass
+
+
+@pytest.mark.parametrize(
+    "schema_version",
+    [_AlwaysEqual(), _RaisingCompare(), _StrSubclass("isotonic-v1")],
+    ids=["always-equal", "raising-compare", "str-subclass"],
+)
+def test_schema_version_must_be_an_exact_string(schema_version: object) -> None:
+    with pytest.raises(CalibrationError) as caught:
+        predict(_artifact(schema_version=schema_version), "0.5")
+    assert caught.value.code == "invalid_artifact"
+    assert caught.value.__context__ is None
+    assert "raw-value" not in str(caught.value)
+
+
 def test_invalid_prediction_score_is_invalid_sample() -> None:
     artifact = fit(_rows("0.5", 50, 50))
     with pytest.raises(CalibrationError) as caught:
@@ -352,12 +490,13 @@ def test_invalid_prediction_score_is_invalid_sample() -> None:
     assert caught.value.code == "invalid_artifact"
 
 
+@pytest.mark.parametrize("root", ["list", "dict"])
 @pytest.mark.parametrize(("containers", "code"), [(16, "invalid_artifact"), (17, "limit_exceeded")])
-def test_nesting_limit_on_artifacts(containers: int, code: str) -> None:
+def test_nesting_limit_on_artifacts(root: str, containers: int, code: str) -> None:
     # The contract allows 16 containers counting the root as 1; scalar leaves do not count.
     nested: object = None
     for _ in range(containers):
-        nested = [nested]
+        nested = [nested] if root == "list" else {"k": nested}
     with pytest.raises(CalibrationError) as caught:
         predict(nested, "0.5")  # type: ignore[arg-type]
     assert caught.value.code == code
