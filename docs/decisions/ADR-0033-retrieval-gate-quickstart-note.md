@@ -1,6 +1,6 @@
 # ADR-0033: Note the failing retrieval gate in the spec 002 quickstart
 
-Status: Proposed
+Status: Accepted by the integration lead on PR #379 ([authorization record](https://github.com/wilsonhj/financial-evidence-lab/pull/379#issuecomment-6561855194), 2026-11-01)
 Date: 2026-11-01
 Occasioned by: the post-merge review of #364, #365 and #366 (#363 follow-up)
 Scope: one sentence group in `specs/002-observable-hybrid-retrieval/quickstart.md`, this ADR's row in `docs/decisions/README.md`, and nothing else
