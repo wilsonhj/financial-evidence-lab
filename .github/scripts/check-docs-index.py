@@ -47,10 +47,60 @@ FENCE = re.compile(r"^ *(`{3,}|~{3,})")
 ATX = re.compile(r"^ {0,3}#{1,6}(\s|$)")
 SETEXT = re.compile(r"^ {0,3}(=+|-+) *$")
 LIST_ITEM = re.compile(r"^( *)([-*+]|\d{1,9}[.)])( +|$)")
-CODE_SPAN = re.compile(r"(`+).+?\1")
+CODE_SPAN = re.compile(r"(?<!`)(`+)(?!`)(.+?)(?<!`)\1(?!`)", re.DOTALL)
 BRACKETS = re.compile(r"(?<!\\)\[((?:[^\[\]\\]|\\.)*)\]")
 REFDEF = re.compile(r"^ *\[((?:[^\[\]\\]|\\.)+)\]:\s*(<[^>]*>|\S+)")
 SCHEME = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*:")
+
+
+def mask_code_spans(text):
+    """Mask inline code across a prose block, preserving line structure.
+
+    CommonMark code spans may contain line endings, but cannot cross a blank
+    line or a new block. Keep fences intact for prose_lines to discard them.
+    Exact delimiter runs matter: one backtick cannot close two backticks.
+    NUL placeholders keep code-only continuation lines inside their paragraph.
+    """
+    pending, result, fence = [], [], None
+    depth = 0
+
+    def flush():
+        if not pending:
+            return
+        block = "\n".join(pending)
+        result.append(CODE_SPAN.sub(
+            lambda m: re.sub(r"[^\n]", lambda _: "\0", m.group()), block,
+        ))
+        pending.clear()
+
+    for line in text.expandtabs(4).splitlines():
+        content, quotes = line, 0
+        while QUOTE.match(content):
+            content, quotes = content[QUOTE.match(content).end():], quotes + 1
+        marker = FENCE.match(content)
+        if fence:
+            result.append(line)
+            if marker and marker.group(1)[0] == fence[0] \
+                    and len(marker.group(1)) >= len(fence) \
+                    and not content.strip().strip(fence[0]):
+                fence = None
+            continue
+        if marker:
+            flush()
+            fence = marker.group(1)
+            result.append(line)
+            continue
+        if not content.strip() or quotes != depth or ATX.match(content) \
+                or SETEXT.match(content) or LIST_ITEM.match(content):
+            flush()
+        depth = quotes
+        if not content.strip() or ATX.match(content) or SETEXT.match(content):
+            # Headings are blocks themselves, including their inline code.
+            result.append(CODE_SPAN.sub(lambda m: "\0" * len(m.group()), line))
+        else:
+            pending.append(line)
+    flush()
+    return "\n".join(result)
 
 
 def prose_lines(text):
@@ -61,7 +111,7 @@ def prose_lines(text):
     """
     fence, comment, in_code, content = None, False, False, None
     blank, depth = True, 0
-    for line in text.expandtabs(4).splitlines():
+    for line in mask_code_spans(text).splitlines():
         quotes = 0
         while QUOTE.match(line):
             line, quotes = line[QUOTE.match(line).end():], quotes + 1
@@ -101,7 +151,7 @@ def prose_lines(text):
                 fence, blank = FENCE.match(line).group(1), False
                 continue
         # Comments open only in prose: drop code spans first.
-        line, prose = CODE_SPAN.sub("", line), ""
+        prose = ""
         while "<!--" in line:
             head, line = line.split("<!--", 1)
             prose += head
@@ -145,16 +195,24 @@ def label(text):
 def links(text):
     """Yield raw targets of inline links and of reference links in use."""
     defs, used, after_def = {}, set(), False
+    blocks, pending = [], []
     for line, starts_block in prose_lines(text):
+        if starts_block and pending:
+            blocks.append("\n".join(pending))
+            pending.clear()
         d = REFDEF.match(line)
         if d and (starts_block or after_def):
             defs.setdefault(label(d.group(1)), d.group(2).strip("<>"))
             after_def = True
             continue
         after_def = False
-        line = line.replace("\\\\", "\0\0")  # \\ is a literal backslash
-        for m in BRACKETS.finditer(line):
-            rest = line[m.end():]
+        pending.append(line)
+    if pending:
+        blocks.append("\n".join(pending))
+    for block in blocks:
+        block = block.replace("\\\\", "\0\0")  # \\ is a literal backslash
+        for m in BRACKETS.finditer(block):
+            rest = block[m.end():]
             if rest.startswith("("):
                 target = destination(rest[1:])
                 if target:

@@ -90,6 +90,17 @@ expect_unindexed "indented code in quote" $'> Para.\n>\n>     [x](orphan.md)'
 expect_unindexed "fence in quote" $'> ```\n> [x](orphan.md)\n> ```'
 expect_unindexed "definition interrupting paragraph" $'See [u].\n[u]: orphan.md'
 expect_unindexed "deep list marker as code" $'Para.\n\n        - [x](orphan.md)'
+expect_unindexed "multiline code span" $'`example\n[x](orphan.md)\ncode`'
+expect_unindexed "multiline code span containing comment opener" $'`example\n<!-- [x](orphan.md)\ncode`'
+expect_unindexed "multiline double-backtick span" $'``example `\n[x](orphan.md)\ncode``'
+expect_indexed "multiline inline destination" $'[x](\n  orphan.md\n)'
+expect_indexed "multiline label with code-only line" $'[the\n`orphan`\n page](orphan.md)'
+expect_indexed "multiline inline label" $'[the\n orphan](orphan.md)'
+expect_indexed "shorter backtick run is not a closer" $'``example\n`\n[x](orphan.md)'
+expect_indexed "longer backtick run is not a closer" $'`example\n``\n[x](orphan.md)'
+expect_indexed "unmatched backtick" $'`example\n[x](orphan.md)'
+expect_indexed "code spans cannot cross paragraphs" $'`example\n\n[x](orphan.md)\ncode`'
+expect_indexed "code spans cannot cross fences" $'`example\n```\ncode\n```\n[x](orphan.md)\ncode`'
 expect_indexed "comment opener in code span" 'Write `<!--` then [x](orphan.md).'
 expect_indexed "comment opener in fence" $'```html\n<!--\n```\n\n[x](orphan.md)'
 expect_indexed "escaped backslash" '\\[x](orphan.md)'
@@ -125,5 +136,6 @@ echo "unindexed: docs/orphan.md reported despite URL, code-span and fence links"
 echo "untracked: ignored; linked from sub-index: accepted"
 echo "not links: comments, indented code (after blanks, headings, fences, in quotes), quoted fences, escaped, unused or paragraph-interrupting references"
 echo "links: list continuations, used and consecutive references, escaped backslashes, comment openers in code, angle and parenthesised paths"
+echo "multiline inlines: links accepted; code ignored with exact backtick runs and block boundaries"
 echo "exclusions: deeper files under excluded directories are reported"
 echo "workflow: docs.yml runs check-docs-index.py"
