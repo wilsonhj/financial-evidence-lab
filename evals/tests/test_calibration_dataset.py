@@ -6,6 +6,7 @@ import hashlib
 import json
 import uuid
 from copy import deepcopy
+from datetime import datetime, timedelta
 from typing import Any
 
 import pytest
@@ -37,6 +38,8 @@ TIMES = {
     "calibration": ("2020-09-01T00:00:00Z", "2020-09-02T00:00:00Z", "2020-09-03T00:00:00Z"),
     "evaluation": ("2021-03-01T00:00:00Z", "2021-03-02T00:00:00Z", "2021-03-03T00:00:00Z"),
 }
+# (earlier split, later split) for each max(earlier.as_of) < min(later.published_at) cutoff.
+CUTOFFS = [("train", "calibration"), ("calibration", "evaluation"), ("train", "evaluation")]
 
 
 def _uuid(tag: str) -> str:
@@ -45,6 +48,12 @@ def _uuid(tag: str) -> str:
 
 def _sha(tag: str) -> str:
     return hashlib.sha256(f"synthetic-cal:{tag}".encode()).hexdigest()
+
+
+def _shift(stamp: str, *, seconds: int) -> str:
+    """Return the canonical UTC stamp ``seconds`` after ``stamp`` (negative is before)."""
+    instant = datetime.fromisoformat(stamp.removesuffix("Z")) + timedelta(seconds=seconds)
+    return f"{instant.isoformat()}Z"
 
 
 def _pins() -> dict[str, str]:
@@ -135,6 +144,50 @@ def _ready_records(*, field: str = "arr") -> list[dict[str, object]]:
     return [
         *_rows("calibration", 100, 20, field=field),
         *_rows("evaluation", 100, 20, field=field),
+    ]
+
+
+def _cutoff_records(
+    tag: str, earlier: str, later: str, as_of: tuple[str, str]
+) -> list[dict[str, object]]:
+    """Two rows in each split of one cutoff; the third split stays empty.
+
+    The earlier rows take the given ``as_of`` values. The later rows publish at
+    ``TIMES[later][0]`` and ``TIMES[later][1]``.
+    """
+    earlier_rows = [
+        _record(
+            sample=_uuid(f"{tag}:{earlier}:{later}:earlier-{index}"),
+            split=earlier,
+            as_of=value,
+            adjudicated_at=value,
+        )
+        for index, value in enumerate(as_of)
+    ]
+    later_rows = [
+        _record(
+            sample=_uuid(f"{tag}:{earlier}:{later}:later-{index}"),
+            split=later,
+            published_at=TIMES[later][index],
+            as_of=TIMES[later][1],
+        )
+        for index in range(2)
+    ]
+    return [*earlier_rows, *later_rows]
+
+
+def _calibration_cutoff_records(as_of: str) -> list[dict[str, object]]:
+    # Train keeps its default as_of, months before both later publications, so
+    # only the calibration-to-evaluation cutoff can reject these rows.
+    return [
+        _record(sample=_uuid("cal-cutoff-train"), split="train"),
+        _record(
+            sample=_uuid("cal-cutoff-calibration"),
+            split="calibration",
+            as_of=as_of,
+            adjudicated_at=as_of,
+        ),
+        _record(sample=_uuid("cal-cutoff-evaluation"), split="evaluation"),
     ]
 
 
@@ -635,16 +688,17 @@ def test_train_as_of_crossing_evaluation_with_empty_calibration_is_rejected() ->
     _code(_dumps(_dataset([train, evaluation])), "invalid_time")
 
 
-@pytest.mark.parametrize("published_at", ["2020-01-01T00:00:00Z", "2020-06-30T23:59:59Z"])
+@pytest.mark.parametrize("published_at", [WINDOWS["train"][0], WINDOWS["train"][1]])
 def test_empty_calibration_train_row_inside_window_is_accepted(published_at: str) -> None:
     # Only publication is window-bound; as_of may run to one second before the
-    # earliest evaluation publication (2021-03-01T00:00:00Z).
+    # earliest evaluation publication.
+    as_of = _shift(TIMES["evaluation"][0], seconds=-1)
     train = _record(
         sample=_uuid(f"in-window:{published_at}"),
         split="train",
         published_at=published_at,
-        as_of="2021-02-28T23:59:59Z",
-        adjudicated_at="2021-02-28T23:59:59Z",
+        as_of=as_of,
+        adjudicated_at=as_of,
     )
     evaluation = _record(sample=_uuid("in-window-eval"), split="evaluation")
     loaded = load_dataset(_dumps(_dataset([train, evaluation])))
@@ -653,7 +707,10 @@ def test_empty_calibration_train_row_inside_window_is_accepted(published_at: str
     assert sorted(row["split"] for row in rows) == ["evaluation", "train"]
 
 
-@pytest.mark.parametrize("published_at", ["2019-12-31T23:59:59Z", "2020-07-01T00:00:00Z"])
+@pytest.mark.parametrize(
+    "published_at",
+    [_shift(WINDOWS["train"][0], seconds=-1), _shift(WINDOWS["train"][1], seconds=1)],
+)
 def test_empty_calibration_train_row_outside_window_is_rejected(published_at: str) -> None:
     # as_of stays well before evaluation publication, so only the train
     # publication window rejects this row.
@@ -672,11 +729,45 @@ def test_train_as_of_equal_to_evaluation_publication_with_empty_calibration_is_r
     train = _record(
         sample=_uuid("equal-cutoff-train"),
         split="train",
-        as_of="2021-03-01T00:00:00Z",
-        adjudicated_at="2021-03-01T00:00:00Z",
+        as_of=TIMES["evaluation"][0],
+        adjudicated_at=TIMES["evaluation"][0],
     )
     evaluation = _record(sample=_uuid("equal-cutoff-eval"), split="evaluation")
     _code(_dumps(_dataset([train, evaluation])), "invalid_time")
+
+
+def test_calibration_as_of_one_second_before_evaluation_publication_is_accepted() -> None:
+    as_of = _shift(TIMES["evaluation"][0], seconds=-1)
+    loaded = load_dataset(_dumps(_dataset(_calibration_cutoff_records(as_of))))
+    rows = loaded["records"]
+    assert isinstance(rows, list)
+    calibration = next(row for row in rows if row["split"] == "calibration")
+    assert calibration["as_of"] == as_of
+
+
+@pytest.mark.parametrize("seconds", [0, 1])
+def test_calibration_as_of_at_or_after_evaluation_publication_is_rejected(seconds: int) -> None:
+    as_of = _shift(TIMES["evaluation"][0], seconds=seconds)
+    _code(_dumps(_dataset(_calibration_cutoff_records(as_of))), "invalid_time")
+
+
+@pytest.mark.parametrize(("earlier", "later"), CUTOFFS)
+def test_cutoff_compares_latest_earlier_as_of(earlier: str, later: str) -> None:
+    # Only the second earlier row crosses, and it crosses both later
+    # publications: min() for max() over as_of would accept this, while max()
+    # for min() over published_at would not.
+    records = _cutoff_records("latest-as-of", earlier, later, (TIMES[earlier][1], TIMES[later][2]))
+    _code(_dumps(_dataset(records)), "invalid_time")
+
+
+@pytest.mark.parametrize(("earlier", "later"), CUTOFFS)
+def test_cutoff_compares_earliest_later_publication(earlier: str, later: str) -> None:
+    # Both earlier rows cross only the first later publication: max() for min()
+    # over published_at would accept this, while min() for max() over as_of
+    # would not.
+    crossing = _shift(TIMES[later][0], seconds=1)
+    records = _cutoff_records("earliest-published", earlier, later, (crossing, crossing))
+    _code(_dumps(_dataset(records)), "invalid_time")
 
 
 def test_dict_float_values_are_invalid_json() -> None:
