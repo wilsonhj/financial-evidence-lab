@@ -5,12 +5,19 @@
 #   Offline only, so external sites going down never turn a PR red.
 # - Lint: markdownlint runs on the Markdown files this PR changes, with the
 #   rules in .markdownlint-cli2.jsonc. Legacy files are fixed when touched.
+# - Index: every tracked Markdown file must be reachable by links from
+#   docs/README.md, directly or through a sub-index. New .md files trigger this
+#   workflow, which is the case the check exists for.
 name: Docs
 
 on:
   pull_request:
     branches: [main, "integration/**"]
-    paths: ["**/*.md", ".markdownlint-cli2.jsonc", ".github/workflows/docs.yml"]
+    paths:
+      - "**/*.md"
+      - ".markdownlint-cli2.jsonc"
+      - ".github/workflows/docs.yml"
+      - ".github/scripts/check-docs-index.*"
 
 concurrency:
   group: docs-${{ github.ref }}
@@ -55,3 +62,13 @@ jobs:
             exit 0
           fi
           npx --yes markdownlint-cli2@0.18.1 "${files[@]}"
+
+  index:
+    name: Docs — every Markdown file reachable from docs/README.md
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test the index check
+        run: bash .github/scripts/check-docs-index.test.sh
+      - name: Check the documentation index
+        run: python3 .github/scripts/check-docs-index.py
