@@ -119,7 +119,7 @@ describe("buildEpistemicGraph", () => {
     const gateNode = atFiling.nodes.find((n) => n.id === "gate-c104");
     const outputNode = atFiling.nodes.find((n) => n.id === "output-fy27-rev");
     expect(callNode?.state).toBe("cutoff-blocked");
-    expect(filingNode?.state).toBe("verified");
+    expect(filingNode?.state).toBe("fixture");
     expect(gateNode?.state).toBe("conflict");
     expect(outputNode?.state).toBe("pending");
     const gateToArrEdge = atFiling.edges.find(
@@ -159,6 +159,9 @@ describe("fixture copy is not presented as evidence", () => {
           const copy = `${node.sublabel} ${node.formulaOrHash}`;
           expect(copy, node.id).not.toMatch(/sha256/i);
           expect(copy, node.id).not.toMatch(/verified lineage/i);
+          if (node.layer === "reported" || node.id === "calc-driver-arr") {
+            expect(node.state, node.id).not.toBe("verified");
+          }
         }
       }
     }
@@ -177,7 +180,40 @@ describe("fixture copy is not presented as evidence", () => {
     expect(markup).toContain("Illustrative fixture schematic");
     expect(markup).toContain("Staged in this session · fixture schematic");
     expect(markup).not.toContain("sha256=");
+    expect(markup).not.toContain("sha256:");
     expect(markup).not.toContain("verified lineage");
+  });
+
+  it("shows Verified only for a gate the admissibility rule painted", () => {
+    hooks.index = 0;
+    const tree = EvidenceGraph3D({
+      scenario: "Base",
+      source: "sec-10q-nrr",
+      decision: DECISION_10Q,
+      approvals: COMPLETED_APPROVALS,
+      applied: true,
+    });
+    const status = () =>
+      props(findOne(tree, (e) => props(e)["data-testid"] === "text-viz3d-selected-status"))
+        .children;
+    expect(status()).toBe("Verified");
+    const spanPill = findOne(
+      tree,
+      (e) => props(e)["data-testid"] === "button-viz3d-node-sec-10q-nrr",
+    );
+    (props(spanPill).onClick as () => void)();
+    hooks.index = 0;
+    const after = EvidenceGraph3D({
+      scenario: "Base",
+      source: "sec-10q-nrr",
+      decision: DECISION_10Q,
+      approvals: COMPLETED_APPROVALS,
+      applied: true,
+    });
+    expect(
+      props(findOne(after, (e) => props(e)["data-testid"] === "text-viz3d-selected-status"))
+        .children,
+    ).toBe("Fixture");
   });
 });
 
@@ -198,6 +234,70 @@ describe("EvidenceGraph3D component", () => {
     expect(markup).toContain("3D Evidence &amp; Calculation Lineage Explorer");
     expect(markup).toContain("FY27 Revenue · $842.4m");
     expect(markup).toContain("C-104 conflict active");
+  });
+
+  it("does not report unlocked gates after the cutoff blocks an applied decision", () => {
+    const render = () => {
+      hooks.index = 0;
+      return EvidenceGraph3D({
+        scenario: "Base",
+        source: "sec-10q-nrr",
+        decision: DECISION_10Q,
+        approvals: COMPLETED_APPROVALS,
+        applied: true,
+      });
+    };
+    const initial = render();
+    expect(renderToStaticMarkup(initial)).toContain("All gates unlocked");
+    const slider = findOne(initial, (e) => props(e)["data-testid"] === "input-viz3d-cutoff");
+    (props(slider).onChange as (e: unknown) => void)({ target: { value: "0" } });
+    const blockedMarkup = renderToStaticMarkup(render());
+    expect(blockedMarkup).toContain("Blocked (Future)");
+    expect(blockedMarkup).toContain("Review gates blocked by cutoff");
+    expect(blockedMarkup).not.toContain("All gates unlocked");
+    (props(slider).onChange as (e: unknown) => void)({ target: { value: "2" } });
+    expect(renderToStaticMarkup(render())).toContain("All gates unlocked");
+  });
+
+  it.each([false, true])(
+    "does not report a future call decision as resolved at filing cutoff (applied=%s)",
+    (applied) => {
+      const render = () => {
+        hooks.index = 0;
+        return EvidenceGraph3D({
+          scenario: "Base",
+          source: "call-turn-48",
+          decision: DECISION_CALL,
+          approvals: COMPLETED_APPROVALS,
+          applied,
+        });
+      };
+      const slider = findOne(render(), (e) => props(e)["data-testid"] === "input-viz3d-cutoff");
+      (props(slider).onChange as (e: unknown) => void)({ target: { value: "1" } });
+      const blockedMarkup = renderToStaticMarkup(render());
+      expect(blockedMarkup).toContain("Review gates blocked by cutoff");
+      expect(blockedMarkup).not.toContain("All gates unlocked");
+      expect(blockedMarkup).not.toContain("NRR resolved · awaiting guidance");
+      (props(slider).onChange as (e: unknown) => void)({ target: { value: "2" } });
+      expect(renderToStaticMarkup(render())).toContain(
+        applied ? "All gates unlocked" : "NRR resolved · awaiting guidance",
+      );
+    },
+  );
+
+  it("does not report unlocked gates when guidance approvals are incomplete", () => {
+    const markup = renderToStaticMarkup(
+      <EvidenceGraph3D
+        scenario="Base"
+        source="sec-10q-nrr"
+        decision={DECISION_10Q}
+        approvals={PENDING_APPROVALS}
+        applied
+      />,
+    );
+    expect(markup).toContain("Pending Review");
+    expect(markup).toContain("NRR resolved · awaiting guidance");
+    expect(markup).not.toContain("All gates unlocked");
   });
 
   it("drives the 3D canvas render loop, camera presets, pointer orbit/click, cutoff slider, and node pills", () => {

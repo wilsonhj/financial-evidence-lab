@@ -5,7 +5,8 @@ import type { EvidenceSourceId, GuidanceApproval, ReviewDecision } from "../app/
 
 export type CameraPreset = "constellation" | "dag" | "temporal";
 export type ProvenanceLayer = "reported" | "extraction" | "calculation" | "output";
-export type NodeState = "verified" | "conflict" | "pending" | "override" | "cutoff-blocked";
+export type NodeState =
+  "verified" | "fixture" | "conflict" | "pending" | "override" | "cutoff-blocked";
 
 export interface GraphNode3D {
   id: string;
@@ -85,6 +86,8 @@ function nodeColor(state: NodeState): { fill: string; ring: string; badge: strin
   switch (state) {
     case "verified":
       return { fill: "#2ea043", ring: "#56d364", badge: "Verified" };
+    case "fixture":
+      return { fill: "#6e7681", ring: "#8b949e", badge: "Fixture" };
     case "conflict":
       return { fill: "#d29922", ring: "#f0c96f", badge: "Conflict / Gate" };
     case "pending":
@@ -338,7 +341,9 @@ export function buildEpistemicGraph(props: {
         state: applied && decisionAdmissible && revApproved && gmApproved ? "verified" : "pending",
       };
     }
-    return { ...n, state: "verified" };
+    // Reported spans and the driver node have no admissibility rule. "Verified"
+    // is reserved for the gates and the output, which set it above.
+    return { ...n, state: "fixture" };
   });
 
   const edges: GraphEdge3D[] = [
@@ -464,6 +469,17 @@ export function EvidenceGraph3D({
   const cutoffInfo = CUTOFF_STOPS[cutoffStep] ?? CUTOFF_STOPS[2]!;
   const blockedCount = nodes.filter((n) => n.state === "cutoff-blocked").length;
   const verifiedCount = nodes.filter((n) => n.state === "verified").length;
+  const conflictGateState = nodes.find((n) => n.id === "gate-c104")!.state;
+  const outputState = nodes.find((n) => n.id === "output-fy27-rev")!.state;
+  const lineageState =
+    conflictGateState === "cutoff-blocked" ||
+    (decision !== null && conflictGateState !== "verified")
+      ? "Review gates blocked by cutoff"
+      : outputState === "verified"
+        ? "All gates unlocked"
+        : conflictGateState === "verified"
+          ? "NRR resolved · awaiting guidance"
+          : "C-104 conflict active";
 
   const choosePreset = (next: CameraPreset) => {
     setPreset(next);
@@ -742,12 +758,7 @@ export function EvidenceGraph3D({
           <b>Active scenario:</b> {scenario}
         </span>
         <span>
-          <b>Lineage state:</b>{" "}
-          {applied
-            ? "All gates unlocked"
-            : decision
-              ? "NRR resolved · awaiting guidance"
-              : "C-104 conflict active"}
+          <b>Lineage state:</b> {lineageState}
         </span>
       </div>
 
