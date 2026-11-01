@@ -469,6 +469,17 @@ export function EvidenceGraph3D({
   const cutoffInfo = CUTOFF_STOPS[cutoffStep] ?? CUTOFF_STOPS[2]!;
   const blockedCount = nodes.filter((n) => n.state === "cutoff-blocked").length;
   const verifiedCount = nodes.filter((n) => n.state === "verified").length;
+  const conflictGateState = nodes.find((n) => n.id === "gate-c104")!.state;
+  const outputState = nodes.find((n) => n.id === "output-fy27-rev")!.state;
+  const lineageState =
+    conflictGateState === "cutoff-blocked" ||
+    (decision !== null && conflictGateState !== "verified")
+      ? "Review gates blocked by cutoff"
+      : outputState === "verified"
+        ? "All gates unlocked"
+        : conflictGateState === "verified"
+          ? "NRR resolved · awaiting guidance"
+          : "C-104 conflict active";
 
   const choosePreset = (next: CameraPreset) => {
     setPreset(next);
@@ -747,12 +758,7 @@ export function EvidenceGraph3D({
           <b>Active scenario:</b> {scenario}
         </span>
         <span>
-          <b>Lineage state:</b>{" "}
-          {applied
-            ? "All gates unlocked"
-            : decision
-              ? "NRR resolved · awaiting guidance"
-              : "C-104 conflict active"}
+          <b>Lineage state:</b> {lineageState}
         </span>
       </div>
 
